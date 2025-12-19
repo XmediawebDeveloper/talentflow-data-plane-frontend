@@ -1,0 +1,665 @@
+import { Search, Filter, X, ChevronDown, SlidersHorizontal, Calendar, MapPin, Building2, Clock, GraduationCap, Briefcase, HelpCircle, Info } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useDebounce } from '@/lib/hooks/useDebounce';
+
+interface SearchFilterBarProps {
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  filters: any;
+  onFiltersChange: (filters: any) => void;
+  sortBy: string;
+  onSortChange: (sort: string) => void;
+}
+
+export default function SearchFilterBar({
+  searchQuery,
+  onSearchChange,
+  filters,
+  onFiltersChange,
+  sortBy,
+  onSortChange,
+}: SearchFilterBarProps) {
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showSort, setShowSort] = useState(false);
+  const [showSearchTips, setShowSearchTips] = useState(false);
+  const [tempFilters, setTempFilters] = useState(filters);
+  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
+  
+  // Debounce search to improve performance (✅ Low latency optimization)
+  const debouncedSearch = useDebounce(localSearchQuery, 300);
+
+  // Update parent when debounced search changes
+  useEffect(() => {
+    onSearchChange(debouncedSearch);
+  }, [debouncedSearch, onSearchChange]);
+
+  // Sync temp filters with props
+  useEffect(() => {
+    setTempFilters(filters);
+  }, [filters]);
+
+  const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
+    if (key === 'skills' && Array.isArray(value)) return value.length > 0;
+    if (key === 'experienceRange') return value && (value.min !== undefined || value.max !== undefined);
+    if (key === 'uploadDateRange') return value && (value.start || value.end);
+    if (key === 'lastUpdatedRange') return value && (value.start || value.end);
+    return value !== null && value !== undefined && value !== '';
+  }).length;
+
+  const handleApplyFilters = () => {
+    onFiltersChange(tempFilters);
+    setShowAdvancedFilters(false);
+  };
+
+  const handleClearFilters = () => {
+    const emptyFilters = {};
+    setTempFilters(emptyFilters);
+    onFiltersChange(emptyFilters);
+    setShowAdvancedFilters(false);
+  };
+
+  const handleSkillToggle = (skill: string) => {
+    const currentSkills = tempFilters.skills || [];
+    if (currentSkills.includes(skill)) {
+      setTempFilters({
+        ...tempFilters,
+        skills: currentSkills.filter((s: string) => s !== skill)
+      });
+    } else {
+      setTempFilters({
+        ...tempFilters,
+        skills: [...currentSkills, skill]
+      });
+    }
+  };
+
+  const availableSkills = [
+    'React', 'JavaScript', 'TypeScript', 'Python', 'Java',
+    'Node.js', 'Angular', 'Vue.js', 'AWS', 'Docker',
+    'Kubernetes', 'SQL', 'MongoDB', 'REST API', 'GraphQL'
+  ];
+
+  const educationLevels = [
+    'High School',
+    'Associate Degree',
+    'Bachelor\'s Degree',
+    'Master\'s Degree',
+    'Doctorate (PhD)',
+    'Professional Certification'
+  ];
+
+  const noticePeriods = [
+    'Immediate',
+    '15 Days',
+    '30 Days',
+    '45 Days',
+    '60 Days',
+    '90 Days'
+  ];
+
+  return (
+    <div className="bg-gray-50 p-4 rounded-t-lg">
+      <div className="flex gap-3">
+        {/* Global Search Bar */}
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <input
+            type="text"
+            placeholder="Search by name, email, phone, or skills..."
+            value={localSearchQuery}
+            onChange={(e) => setLocalSearchQuery(e.target.value)}
+            className="w-full h-10 pl-10 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+          />
+          {localSearchQuery && (
+            <button
+              onClick={() => {
+                setLocalSearchQuery('');
+                onSearchChange('');
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-100 rounded-full p-1 transition-colors"
+            >
+              <X className="w-4 h-4 text-gray-500 hover:text-gray-700" />
+            </button>
+          )}
+          {localSearchQuery && localSearchQuery !== debouncedSearch && (
+            <div className="absolute right-12 top-1/2 -translate-y-1/2">
+              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+          <button
+            onClick={() => setShowSearchTips(!showSearchTips)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-100 rounded-full p-1 transition-colors"
+          >
+            <HelpCircle className="w-4 h-4 text-gray-500 hover:text-gray-700" />
+          </button>
+        </div>
+
+        {/* Advanced Filters Button */}
+        <button
+          onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+          className={`flex items-center gap-2 h-10 px-4 border rounded-md transition-colors ${
+            activeFilterCount > 0
+              ? 'border-blue-600 bg-blue-50 text-blue-600'
+              : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          Advanced Filters
+          {activeFilterCount > 0 && (
+            <span className="bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+
+        {/* Sort Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setShowSort(!showSort)}
+            className="flex items-center gap-2 h-10 px-4 border border-gray-300 bg-white rounded-md hover:bg-gray-50"
+          >
+            <span className="text-sm text-gray-700">Sort</span>
+            <ChevronDown className="w-4 h-4 text-gray-500" />
+          </button>
+
+          {showSort && (
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20">
+              {[
+                { value: 'latest', label: 'Latest Upload' },
+                { value: 'lastUpdated', label: 'Recently Updated' },
+                { value: 'name-asc', label: 'Name A-Z' },
+                { value: 'name-desc', label: 'Name Z-A' },
+                { value: 'experience-high', label: 'Experience (High to Low)' },
+                { value: 'experience-low', label: 'Experience (Low to High)' },
+              ].map(option => (
+                <button
+                  key={option.value}
+                  onClick={() => {
+                    onSortChange(option.value);
+                    setShowSort(false);
+                  }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
+                    sortBy === option.value ? 'text-blue-600 bg-blue-50' : 'text-gray-700'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Advanced Filters Panel */}
+      {showAdvancedFilters && (
+        <div className="mt-4 bg-white rounded-lg shadow-lg border border-gray-200 p-6">
+          <div className="grid grid-cols-3 gap-6">
+            {/* Skills Filter */}
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+                <Briefcase className="w-4 h-4 text-gray-500" />
+                Skills
+              </label>
+              <div className="max-h-64 overflow-y-auto space-y-2 border border-gray-200 rounded-md p-3">
+                {availableSkills.map(skill => (
+                  <label key={skill} className="flex items-center gap-2 hover:bg-gray-50 p-1 rounded cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={(tempFilters.skills || []).includes(skill)}
+                      onChange={() => handleSkillToggle(skill)}
+                      className="text-blue-600 rounded"
+                    />
+                    <span className="text-sm text-gray-700">{skill}</span>
+                  </label>
+                ))}
+              </div>
+              {(tempFilters.skills || []).length > 0 && (
+                <div className="mt-2 text-xs text-blue-600">
+                  {tempFilters.skills.length} skill{tempFilters.skills.length !== 1 ? 's' : ''} selected
+                </div>
+              )}
+            </div>
+
+            {/* Experience Range */}
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+                <Clock className="w-4 h-4 text-gray-500" />
+                Total Experience
+              </label>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Minimum Years</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="50"
+                    placeholder="Min"
+                    value={tempFilters.experienceRange?.min || ''}
+                    onChange={(e) => setTempFilters({
+                      ...tempFilters,
+                      experienceRange: {
+                        ...tempFilters.experienceRange,
+                        min: e.target.value ? parseInt(e.target.value) : undefined
+                      }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Maximum Years</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="50"
+                    placeholder="Max"
+                    value={tempFilters.experienceRange?.max || ''}
+                    onChange={(e) => setTempFilters({
+                      ...tempFilters,
+                      experienceRange: {
+                        ...tempFilters.experienceRange,
+                        max: e.target.value ? parseInt(e.target.value) : undefined
+                      }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div className="pt-2 border-t border-gray-200">
+                  <label className="block text-xs text-gray-600 mb-2">Or select range:</label>
+                  <div className="space-y-2">
+                    {[
+                      { label: '0-2 years', min: 0, max: 2 },
+                      { label: '2-5 years', min: 2, max: 5 },
+                      { label: '5-10 years', min: 5, max: 10 },
+                      { label: '10+ years', min: 10, max: 50 },
+                    ].map(range => (
+                      <button
+                        key={range.label}
+                        onClick={() => setTempFilters({
+                          ...tempFilters,
+                          experienceRange: { min: range.min, max: range.max }
+                        })}
+                        className={`w-full text-left px-3 py-2 text-xs rounded-md transition-colors ${
+                          tempFilters.experienceRange?.min === range.min && tempFilters.experienceRange?.max === range.max
+                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                            : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                        }`}
+                      >
+                        {range.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Education Level */}
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+                <GraduationCap className="w-4 h-4 text-gray-500" />
+                Education Level
+              </label>
+              <div className="space-y-2">
+                {educationLevels.map(level => (
+                  <label key={level} className="flex items-center gap-2 hover:bg-gray-50 p-2 rounded cursor-pointer">
+                    <input
+                      type="radio"
+                      name="education"
+                      checked={tempFilters.education === level}
+                      onChange={() => setTempFilters({ ...tempFilters, education: level })}
+                      className="text-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">{level}</span>
+                  </label>
+                ))}
+                {tempFilters.education && (
+                  <button
+                    onClick={() => setTempFilters({ ...tempFilters, education: null })}
+                    className="text-xs text-red-600 hover:text-red-700 ml-6"
+                  >
+                    Clear selection
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Location */}
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+                <MapPin className="w-4 h-4 text-gray-500" />
+                Current Location
+              </label>
+              <input
+                type="text"
+                placeholder="e.g., San Francisco, CA"
+                value={tempFilters.location || ''}
+                onChange={(e) => setTempFilters({ ...tempFilters, location: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+            </div>
+
+            {/* Current Company */}
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+                <Building2 className="w-4 h-4 text-gray-500" />
+                Current Company
+              </label>
+              <input
+                type="text"
+                placeholder="e.g., Google, Microsoft"
+                value={tempFilters.currentCompany || ''}
+                onChange={(e) => setTempFilters({ ...tempFilters, currentCompany: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+            </div>
+
+            {/* Previous Company */}
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+                <Building2 className="w-4 h-4 text-gray-500" />
+                Previous Company
+              </label>
+              <input
+                type="text"
+                placeholder="e.g., Amazon, Facebook"
+                value={tempFilters.previousCompany || ''}
+                onChange={(e) => setTempFilters({ ...tempFilters, previousCompany: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+            </div>
+
+            {/* Notice Period */}
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+                <Clock className="w-4 h-4 text-gray-500" />
+                Notice Period
+              </label>
+              <div className="space-y-2">
+                {noticePeriods.map(period => (
+                  <label key={period} className="flex items-center gap-2 hover:bg-gray-50 p-2 rounded cursor-pointer">
+                    <input
+                      type="radio"
+                      name="noticePeriod"
+                      checked={tempFilters.noticePeriod === period}
+                      onChange={() => setTempFilters({ ...tempFilters, noticePeriod: period })}
+                      className="text-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">{period}</span>
+                  </label>
+                ))}
+                {tempFilters.noticePeriod && (
+                  <button
+                    onClick={() => setTempFilters({ ...tempFilters, noticePeriod: null })}
+                    className="text-xs text-red-600 hover:text-red-700 ml-6"
+                  >
+                    Clear selection
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Upload Date Range */}
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+                <Calendar className="w-4 h-4 text-gray-500" />
+                Upload Date
+              </label>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">From</label>
+                  <input
+                    type="date"
+                    value={tempFilters.uploadDateRange?.start || ''}
+                    onChange={(e) => setTempFilters({
+                      ...tempFilters,
+                      uploadDateRange: {
+                        ...tempFilters.uploadDateRange,
+                        start: e.target.value
+                      }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">To</label>
+                  <input
+                    type="date"
+                    value={tempFilters.uploadDateRange?.end || ''}
+                    onChange={(e) => setTempFilters({
+                      ...tempFilters,
+                      uploadDateRange: {
+                        ...tempFilters.uploadDateRange,
+                        end: e.target.value
+                      }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Last Updated Date Range */}
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+                <Calendar className="w-4 h-4 text-gray-500" />
+                Last Updated
+              </label>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">From</label>
+                  <input
+                    type="date"
+                    value={tempFilters.lastUpdatedRange?.start || ''}
+                    onChange={(e) => setTempFilters({
+                      ...tempFilters,
+                      lastUpdatedRange: {
+                        ...tempFilters.lastUpdatedRange,
+                        start: e.target.value
+                      }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">To</label>
+                  <input
+                    type="date"
+                    value={tempFilters.lastUpdatedRange?.end || ''}
+                    onChange={(e) => setTempFilters({
+                      ...tempFilters,
+                      lastUpdatedRange: {
+                        ...tempFilters.lastUpdatedRange,
+                        end: e.target.value
+                      }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Resume Source */}
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+                <Filter className="w-4 h-4 text-gray-500" />
+                Resume Source
+              </label>
+              <div className="space-y-2">
+                {['Manual', 'TalentFlow'].map(source => (
+                  <label key={source} className="flex items-center gap-2 hover:bg-gray-50 p-2 rounded cursor-pointer">
+                    <input
+                      type="radio"
+                      name="source"
+                      checked={tempFilters.source === source}
+                      onChange={() => setTempFilters({ ...tempFilters, source: source })}
+                      className="text-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">{source}</span>
+                  </label>
+                ))}
+                {tempFilters.source && (
+                  <button
+                    onClick={() => setTempFilters({ ...tempFilters, source: null })}
+                    className="text-xs text-red-600 hover:text-red-700 ml-6"
+                  >
+                    Clear selection
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200">
+            <div className="text-sm text-gray-600">
+              {activeFilterCount > 0 ? (
+                <span className="text-blue-600">
+                  {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active
+                </span>
+              ) : (
+                <span>No filters applied</span>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={handleClearFilters}
+                className="px-6 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Clear All
+              </button>
+              <button
+                onClick={handleApplyFilters}
+                className="px-8 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search Tips Panel */}
+      {showSearchTips && (
+        <div className="mt-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-lg border-2 border-blue-200 p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-600 rounded-lg">
+                <HelpCircle className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-gray-900 mb-1">Search Accuracy & Performance Guide</h3>
+                <p className="text-xs text-gray-600">Supports partial, exact, and multiple keyword searches</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowSearchTips(false)}
+              className="text-gray-500 hover:text-gray-700 p-1 hover:bg-white rounded transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            {/* Partial Text Match */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                  <span className="text-green-700">✓</span>
+                </div>
+                <h4 className="text-sm text-gray-900">Partial Text Match</h4>
+              </div>
+              <p className="text-xs text-gray-600 mb-3">Search with partial keywords to find candidates</p>
+              <div className="space-y-2">
+                <div className="bg-gray-50 rounded p-2 border border-gray-200">
+                  <code className="text-xs text-blue-600">react</code>
+                  <p className="text-xs text-gray-500 mt-1">Finds: React, ReactJS, React Native</p>
+                </div>
+                <div className="bg-gray-50 rounded p-2 border border-gray-200">
+                  <code className="text-xs text-blue-600">john</code>
+                  <p className="text-xs text-gray-500 mt-1">Finds: John, Johnson, Johnathan</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Exact Match */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <span className="text-purple-700">""</span>
+                </div>
+                <h4 className="text-sm text-gray-900">Exact Match</h4>
+              </div>
+              <p className="text-xs text-gray-600 mb-3">Use quotes for exact phrase matching</p>
+              <div className="space-y-2">
+                <div className="bg-gray-50 rounded p-2 border border-gray-200">
+                  <code className="text-xs text-purple-600">"Senior Developer"</code>
+                  <p className="text-xs text-gray-500 mt-1">Finds only: Senior Developer</p>
+                </div>
+                <div className="bg-gray-50 rounded p-2 border border-gray-200">
+                  <code className="text-xs text-purple-600">"5+ years"</code>
+                  <p className="text-xs text-gray-500 mt-1">Finds exact: 5+ years experience</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Multiple Keywords */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <span className="text-orange-700">+</span>
+                </div>
+                <h4 className="text-sm text-gray-900">Multiple Keywords</h4>
+              </div>
+              <p className="text-xs text-gray-600 mb-3">Combine keywords with spaces (AND logic)</p>
+              <div className="space-y-2">
+                <div className="bg-gray-50 rounded p-2 border border-gray-200">
+                  <code className="text-xs text-orange-600">react python aws</code>
+                  <p className="text-xs text-gray-500 mt-1">Finds: Candidates with ALL 3 skills</p>
+                </div>
+                <div className="bg-gray-50 rounded p-2 border border-gray-200">
+                  <code className="text-xs text-orange-600">john senior</code>
+                  <p className="text-xs text-gray-500 mt-1">Finds: John + Senior level candidates</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Search Fields */}
+          <div className="mt-4 bg-white rounded-lg border border-gray-200 p-4">
+            <h4 className="text-sm text-gray-900 mb-3">Searchable Fields (High Accuracy)</h4>
+            <div className="grid grid-cols-4 gap-3">
+              {[
+                { label: 'Candidate Name', icon: '👤' },
+                { label: 'Email Address', icon: '✉️' },
+                { label: 'Phone Number', icon: '📱' },
+                { label: 'Job Title', icon: '💼' },
+                { label: 'Skills & Tech', icon: '⚡' },
+                { label: 'Experience', icon: '📊' },
+                { label: 'Resume Source', icon: '📁' },
+                { label: 'All Fields', icon: '🔍' },
+              ].map((field) => (
+                <div key={field.label} className="flex items-center gap-2 text-xs text-gray-600">
+                  <span>{field.icon}</span>
+                  <span>{field.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Performance Note */}
+          <div className="mt-4 bg-green-50 rounded-lg border border-green-200 p-3 flex items-start gap-3">
+            <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-xs">⚡</span>
+            </div>
+            <div>
+              <h4 className="text-sm text-green-900 mb-1">⚡ Low Latency Performance</h4>
+              <p className="text-xs text-green-700">
+                Search is debounced (300ms) for optimal performance even with large resume volumes (1000+ candidates).
+                Results are returned instantly with high accuracy across all fields.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
