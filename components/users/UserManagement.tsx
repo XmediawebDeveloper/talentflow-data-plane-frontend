@@ -10,9 +10,14 @@ import {
   Mail,
   Calendar,
   Loader2,
-  UserCog
+  UserCog,
+  Shield,
+  Check,
+  ChevronDown
 } from 'lucide-react';
 import { toast } from 'sonner';
+import rbacService from '@/lib/services/rbacService';
+import { RoleListItem } from '@/lib/types/rbac';
 
 // Types
 interface UserPermissions {
@@ -155,7 +160,7 @@ const mockUsers: ApiUser[] = [
   },
 ];
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 export default function UserManagement() {
   const [users, setUsers] = useState<ApiUser[]>([]);
@@ -164,6 +169,11 @@ export default function UserManagement() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [availableRoles, setAvailableRoles] = useState<RoleListItem[]>([]);
+  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
+  const [isEditRoleDropdownOpen, setIsEditRoleDropdownOpen] = useState(false);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
+  const [editSelectedRoleIds, setEditSelectedRoleIds] = useState<number[]>([]);
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
@@ -172,17 +182,58 @@ export default function UserManagement() {
     permissions: { ...defaultPermissions },
   });
 
-  // Load users
+  // Load users and roles
   useEffect(() => {
     loadUsers();
+    loadRoles();
   }, []);
+
+  const loadRoles = async () => {
+    try {
+      const data = await rbacService.getRoles();
+      setAvailableRoles(data.roles);
+    } catch (error) {
+      console.warn('Failed to load roles, using defaults:', error);
+      // Fallback to mock roles
+      setAvailableRoles([
+        { id: 1, code: 'admin', name: 'Admin', description: 'Full access', is_system: true, is_default: false, priority: 100, permission_count: 24, user_count: 2 },
+        { id: 2, code: 'recruiter', name: 'Recruiter', description: 'Recruitment tasks', is_system: true, is_default: true, priority: 50, permission_count: 16, user_count: 5 },
+        { id: 3, code: 'viewer', name: 'Viewer', description: 'Read-only access', is_system: true, is_default: false, priority: 10, permission_count: 5, user_count: 8 },
+      ]);
+    }
+  };
+
+  const toggleRoleSelection = (roleId: number, isEdit: boolean = false) => {
+    if (isEdit) {
+      setEditSelectedRoleIds(prev =>
+        prev.includes(roleId)
+          ? prev.filter(id => id !== roleId)
+          : [...prev, roleId]
+      );
+    } else {
+      setSelectedRoleIds(prev =>
+        prev.includes(roleId)
+          ? prev.filter(id => id !== roleId)
+          : [...prev, roleId]
+      );
+    }
+  };
+
+  const getSelectedRoleNames = (roleIds: number[]): string => {
+    if (roleIds.length === 0) return 'Select roles...';
+    const names = roleIds
+      .map(id => availableRoles.find(r => r.id === id)?.name)
+      .filter(Boolean);
+    if (names.length <= 2) return names.join(', ');
+    return `${names.slice(0, 2).join(', ')} +${names.length - 2} more`;
+  };
 
   const loadUsers = async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`${API_URL}/users`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
         },
       });
 
@@ -259,7 +310,7 @@ export default function UserManagement() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
         },
         body: JSON.stringify({
           name: newUser.name,
@@ -318,7 +369,7 @@ export default function UserManagement() {
       const response = await fetch(`${API_URL}/users/${id}/deactivate`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
         },
       });
 
@@ -339,7 +390,7 @@ export default function UserManagement() {
       const response = await fetch(`${API_URL}/users/${user.id}/${endpoint}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
         },
       });
 
@@ -363,7 +414,7 @@ export default function UserManagement() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
         },
         body: JSON.stringify({
           name: editingUser.name,
@@ -641,7 +692,83 @@ export default function UserManagement() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Role
+                  Roles <span className="text-xs text-gray-500">(Select multiple)</span>
+                </label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-left flex items-center justify-between"
+                  >
+                    <span className={selectedRoleIds.length === 0 ? 'text-gray-400' : 'text-gray-900'}>
+                      {getSelectedRoleNames(selectedRoleIds)}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isRoleDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isRoleDropdownOpen && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {availableRoles.map(role => (
+                        <button
+                          key={role.id}
+                          type="button"
+                          onClick={() => toggleRoleSelection(role.id)}
+                          className="w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-center gap-3"
+                        >
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                            selectedRoleIds.includes(role.id)
+                              ? 'bg-blue-600 border-blue-600'
+                              : 'border-gray-300'
+                          }`}>
+                            {selectedRoleIds.includes(role.id) && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <Shield className="w-4 h-4 text-gray-400" />
+                              <span className="text-sm font-medium text-gray-900">{role.name}</span>
+                              {role.is_system && (
+                                <span className="px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">System</span>
+                              )}
+                              {role.is_default && (
+                                <span className="px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded">Default</span>
+                              )}
+                            </div>
+                            {role.description && (
+                              <p className="text-xs text-gray-500 mt-0.5">{role.description}</p>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {selectedRoleIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {selectedRoleIds.map(roleId => {
+                      const role = availableRoles.find(r => r.id === roleId);
+                      return role ? (
+                        <span
+                          key={roleId}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"
+                        >
+                          {role.name}
+                          <button
+                            type="button"
+                            onClick={() => toggleRoleSelection(roleId)}
+                            className="hover:text-blue-900"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Legacy Role Selection (for backward compatibility) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Legacy Role <span className="text-xs text-gray-500">(For backward compatibility)</span>
                 </label>
                 <select
                   value={newUser.role}
@@ -744,7 +871,80 @@ export default function UserManagement() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Role
+                  Roles <span className="text-xs text-gray-500">(Select multiple)</span>
+                </label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditRoleDropdownOpen(!isEditRoleDropdownOpen)}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-left flex items-center justify-between"
+                  >
+                    <span className={editSelectedRoleIds.length === 0 ? 'text-gray-400' : 'text-gray-900'}>
+                      {getSelectedRoleNames(editSelectedRoleIds)}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isEditRoleDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isEditRoleDropdownOpen && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {availableRoles.map(role => (
+                        <button
+                          key={role.id}
+                          type="button"
+                          onClick={() => toggleRoleSelection(role.id, true)}
+                          className="w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-center gap-3"
+                        >
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                            editSelectedRoleIds.includes(role.id)
+                              ? 'bg-blue-600 border-blue-600'
+                              : 'border-gray-300'
+                          }`}>
+                            {editSelectedRoleIds.includes(role.id) && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <Shield className="w-4 h-4 text-gray-400" />
+                              <span className="text-sm font-medium text-gray-900">{role.name}</span>
+                              {role.is_system && (
+                                <span className="px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">System</span>
+                              )}
+                            </div>
+                            {role.description && (
+                              <p className="text-xs text-gray-500 mt-0.5">{role.description}</p>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {editSelectedRoleIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {editSelectedRoleIds.map(roleId => {
+                      const role = availableRoles.find(r => r.id === roleId);
+                      return role ? (
+                        <span
+                          key={roleId}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"
+                        >
+                          {role.name}
+                          <button
+                            type="button"
+                            onClick={() => toggleRoleSelection(roleId, true)}
+                            className="hover:text-blue-900"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Legacy Role Selection (for backward compatibility) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Legacy Role
                 </label>
                 <select
                   value={editingUser.role}

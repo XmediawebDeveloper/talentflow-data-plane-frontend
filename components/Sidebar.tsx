@@ -106,6 +106,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
         { id: 'company-profile', label: 'Company Profile', icon: Building2, adminOnly: true },
         { id: 'team-management', label: 'Team Management', icon: Users, adminOnly: true },
         { id: 'user-management', label: 'User Management', icon: UserCog, adminOnly: true },
+        { id: 'role-management', label: 'Role Management', icon: Shield, adminOnly: true },
       ]
     },
 
