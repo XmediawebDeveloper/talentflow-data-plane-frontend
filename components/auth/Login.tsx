@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, Globe, ArrowLeft } from 'lucide-react';
+import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft } from 'lucide-react';
 import { User } from '@/lib/types/tenant';
 import { authService } from '@/lib/services';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -17,7 +17,6 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const router = useRouter();
   const { login } = useAuth();
 
-  const [subdomain, setSubdomain] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -35,16 +34,10 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    if (!subdomain.trim()) {
-      setError('Please enter your company subdomain');
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      const response = await authService.login({ subdomain: subdomain.toLowerCase(), email, password });
+      const response = await authService.login({ email, password });
 
       const user: User = {
         id: response.user.id,
@@ -74,7 +67,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       router.push('/dashboard');
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'Invalid subdomain, email or password. Please check your credentials.');
+      setError(err.message || 'Invalid email or password. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -274,20 +267,6 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     transition: 'all 0.2s',
   };
 
-  const subdomainInputStyle: React.CSSProperties = {
-    ...inputStyle,
-    paddingRight: '130px',
-  };
-
-  const subdomainSuffixStyle: React.CSSProperties = {
-    position: 'absolute',
-    right: '16px',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    color: '#9CA3AF',
-    fontSize: '14px',
-  };
-
   const eyeButtonStyle: React.CSSProperties = {
     position: 'absolute',
     right: '16px',
@@ -462,24 +441,6 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
             )}
 
             <form onSubmit={handleSubmit}>
-              {/* Subdomain */}
-              <div style={inputGroupStyle}>
-                <label style={labelStyle}>Company Subdomain</label>
-                <div style={inputContainerStyle}>
-                  <Globe style={{ ...inputIconStyle, width: 20, height: 20 }} />
-                  <input
-                    type="text"
-                    value={subdomain}
-                    onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                    placeholder="your-company"
-                    required
-                    style={subdomainInputStyle}
-                  />
-                  <div style={subdomainSuffixStyle}>.talentflow.com</div>
-                </div>
-                <p style={{ marginTop: 6, fontSize: 12, color: '#6B7280' }}>Enter your company's subdomain to sign in</p>
-              </div>
-
               {/* Email */}
               <div style={inputGroupStyle}>
                 <label style={labelStyle}>Email Address</label>

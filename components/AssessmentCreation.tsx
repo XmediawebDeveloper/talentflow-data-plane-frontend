@@ -275,7 +275,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 <div className="flex items-center gap-3 text-sm text-gray-600">
                   <span>{selectedJob?.department}</span>
                   <span>•</span>
-                  <span>{selectedJob?.experienceLevel}</span>
+                  <span>{selectedJob?.experience}</span>
                   <span>•</span>
                   <span>{selectedJob?.employmentType}</span>
                 </div>
