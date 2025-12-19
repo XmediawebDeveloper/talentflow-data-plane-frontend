@@ -50,11 +50,17 @@ export const authService = {
    */
   async login(data: LoginRequest): Promise<LoginResponse> {
     try {
+      console.log('[AUTH] Attempting login for:', data.email);
       const response = await api.post<LoginResponse>('/auth/login', data);
+      console.log('[AUTH] Login response status:', response.status);
+      console.log('[AUTH] Login response data:', response.data);
       const { tokens } = response.data;
       setTokens(tokens.access_token, tokens.refresh_token);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
+      console.error('[AUTH] Login error:', error);
+      console.error('[AUTH] Error response:', error.response?.data);
+      console.error('[AUTH] Error status:', error.response?.status);
       throw new Error(handleApiError(error));
     }
   },

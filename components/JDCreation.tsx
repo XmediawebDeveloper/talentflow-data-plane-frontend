@@ -6,7 +6,7 @@ import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
-import { jdService } from '@/lib/services';
+import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -248,6 +248,85 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
   const [showDragTips, setShowDragTips] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
+
+  // Master data state
+  const [experienceLevels, setExperienceLevels] = useState<ExperienceLevel[]>([]);
+  const [educationLevels, setEducationLevels] = useState<EducationLevel[]>([]);
+  const [industryTypes, setIndustryTypes] = useState<IndustryType[]>([]);
+  const [masterDataLoading, setMasterDataLoading] = useState(true);
+
+  // Create new modal state
+  const [showCreateModal, setShowCreateModal] = useState<'experience' | 'education' | 'industry' | null>(null);
+  const [newItemLabel, setNewItemLabel] = useState('');
+  const [newItemCode, setNewItemCode] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+
+  // Fetch master data on mount
+  useEffect(() => {
+    const fetchMasterData = async () => {
+      try {
+        const data = await masterDataService.getAll();
+        setExperienceLevels(data.experience_levels);
+        setEducationLevels(data.education_levels);
+        setIndustryTypes(data.industry_types);
+      } catch (error) {
+        console.log('[TalentFlow] Failed to fetch master data, using fallback:', error);
+        // Fallback to empty arrays - dropdowns will show "No options"
+      } finally {
+        setMasterDataLoading(false);
+      }
+    };
+
+    fetchMasterData();
+  }, []);
+
+  // Handle create new master data item
+  const handleCreateNewItem = async () => {
+    if (!newItemLabel.trim() || !showCreateModal) return;
+
+    setIsCreating(true);
+    const code = newItemCode.trim() || newItemLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+    try {
+      if (showCreateModal === 'experience') {
+        const newItem = await masterDataService.createExperienceLevel({
+          code,
+          label: newItemLabel.trim(),
+          sort_order: experienceLevels.length + 1,
+        });
+        setExperienceLevels(prev => [...prev, newItem]);
+        setExtractedData(prev => ({ ...prev, experience: code }));
+        toast.success({ title: 'Experience level created', description: `"${newItemLabel}" has been added.` });
+      } else if (showCreateModal === 'education') {
+        const newItem = await masterDataService.createEducationLevel({
+          code,
+          label: newItemLabel.trim(),
+          sort_order: educationLevels.length + 1,
+        });
+        setEducationLevels(prev => [...prev, newItem]);
+        setExtractedData(prev => ({ ...prev, education: code }));
+        toast.success({ title: 'Education level created', description: `"${newItemLabel}" has been added.` });
+      } else if (showCreateModal === 'industry') {
+        const newItem = await masterDataService.createIndustryType({
+          code,
+          label: newItemLabel.trim(),
+          sort_order: industryTypes.length + 1,
+        });
+        setIndustryTypes(prev => [...prev, newItem]);
+        setExtractedData(prev => ({ ...prev, industryType: code }));
+        toast.success({ title: 'Industry type created', description: `"${newItemLabel}" has been added.` });
+      }
+
+      setShowCreateModal(null);
+      setNewItemLabel('');
+      setNewItemCode('');
+    } catch (error) {
+      console.error('Failed to create item:', error);
+      toast.error({ title: 'Failed to create', description: 'Please try again.' });
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   const handleGenerateJD = async () => {
     setIsGenerating(true);
@@ -1313,19 +1392,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
               <div className="grid grid-cols-3 gap-6 mb-8">
                 {/* Experience */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Experience</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-900">Experience</h3>
+                    <button
+                      onClick={() => setShowCreateModal('experience')}
+                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add New
+                    </button>
+                  </div>
                   <select
                     value={extractedData.experience}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, experience: e.target.value }))}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm mb-3"
+                    disabled={masterDataLoading}
                   >
-                    <option value="">Select experience level</option>
-                    <option value="0-1">0-1 years</option>
-                    <option value="1-3">1-3 years</option>
-                    <option value="3-5">3-5 years</option>
-                    <option value="5-7">5-7 years</option>
-                    <option value="7-10">7-10 years</option>
-                    <option value="10+">10+ years</option>
+                    <option value="">{masterDataLoading ? 'Loading...' : 'Select experience level'}</option>
+                    {experienceLevels.map((level) => (
+                      <option key={level.id} value={level.code}>{level.label}</option>
+                    ))}
                   </select>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -1340,19 +1426,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
 
                 {/* Education */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Education</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-900">Education</h3>
+                    <button
+                      onClick={() => setShowCreateModal('education')}
+                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add New
+                    </button>
+                  </div>
                   <select
                     value={extractedData.education}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, education: e.target.value }))}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm mb-3"
+                    disabled={masterDataLoading}
                   >
-                    <option value="">Select education level</option>
-                    <option value="high-school">High School</option>
-                    <option value="associate">Associate Degree</option>
-                    <option value="bachelors">Bachelor's Degree</option>
-                    <option value="masters">Master's Degree</option>
-                    <option value="phd">PhD</option>
-                    <option value="any">Any</option>
+                    <option value="">{masterDataLoading ? 'Loading...' : 'Select education level'}</option>
+                    {educationLevels.map((level) => (
+                      <option key={level.id} value={level.code}>{level.label}</option>
+                    ))}
                   </select>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -1367,34 +1460,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
 
                 {/* Industry Type */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Industry Type</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-900">Industry Type</h3>
+                    <button
+                      onClick={() => setShowCreateModal('industry')}
+                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add New
+                    </button>
+                  </div>
                   <select
                     value={extractedData.industryType}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, industryType: e.target.value }))}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm mb-3"
+                    disabled={masterDataLoading}
                   >
-                    <option value="">Select industry type</option>
-                    <option value="technology">Technology</option>
-                    <option value="healthcare">Healthcare</option>
-                    <option value="finance">Finance & Banking</option>
-                    <option value="retail">Retail & E-commerce</option>
-                    <option value="manufacturing">Manufacturing</option>
-                    <option value="education">Education</option>
-                    <option value="consulting">Consulting</option>
-                    <option value="real-estate">Real Estate</option>
-                    <option value="hospitality">Hospitality & Tourism</option>
-                    <option value="media">Media & Entertainment</option>
-                    <option value="telecommunications">Telecommunications</option>
-                    <option value="automotive">Automotive</option>
-                    <option value="energy">Energy & Utilities</option>
-                    <option value="government">Government & Public Sector</option>
-                    <option value="nonprofit">Non-Profit</option>
-                    <option value="legal">Legal Services</option>
-                    <option value="insurance">Insurance</option>
-                    <option value="transportation">Transportation & Logistics</option>
-                    <option value="agriculture">Agriculture</option>
-                    <option value="construction">Construction</option>
-                    <option value="other">Other</option>
+                    <option value="">{masterDataLoading ? 'Loading...' : 'Select industry type'}</option>
+                    {industryTypes.map((type) => (
+                      <option key={type.id} value={type.code}>{type.label}</option>
+                    ))}
                   </select>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -2032,6 +2117,117 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
         )}
         </div>
       </div>
+
+      {/* Create New Master Data Modal */}
+      {showCreateModal && (
+        <>
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
+            onClick={() => {
+              setShowCreateModal(null);
+              setNewItemLabel('');
+              setNewItemCode('');
+            }}
+          >
+            <div
+              className="bg-white rounded-lg shadow-xl w-full max-w-md p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-medium text-gray-900">
+                  {showCreateModal === 'experience' && 'Add New Experience Level'}
+                  {showCreateModal === 'education' && 'Add New Education Level'}
+                  {showCreateModal === 'industry' && 'Add New Industry Type'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(null);
+                    setNewItemLabel('');
+                    setNewItemCode('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Label <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newItemLabel}
+                    onChange={(e) => setNewItemLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newItemLabel.trim()) handleCreateNewItem();
+                      if (e.key === 'Escape') {
+                        setShowCreateModal(null);
+                        setNewItemLabel('');
+                        setNewItemCode('');
+                      }
+                    }}
+                    placeholder={
+                      showCreateModal === 'experience' ? 'e.g., 8-12 years' :
+                      showCreateModal === 'education' ? 'e.g., Diploma' :
+                      'e.g., Aerospace'
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Code <span className="text-gray-400">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newItemCode}
+                    onChange={(e) => setNewItemCode(e.target.value)}
+                    placeholder="Auto-generated from label if empty"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Unique identifier used in the system
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowCreateModal(null);
+                    setNewItemLabel('');
+                    setNewItemCode('');
+                  }}
+                  className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateNewItem}
+                  disabled={!newItemLabel.trim() || isCreating}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isCreating ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Create
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </DndProvider>
   );
 }
