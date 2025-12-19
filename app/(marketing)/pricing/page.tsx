@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Check, Sparkles, Building2, Users, Zap, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 
 const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://talentflowapi.mo.vc/api/v1';
 
@@ -66,6 +65,27 @@ interface DisplayPlan {
   quotas?: PlanQuotas;
 }
 
+interface Addon {
+  id: number;
+  name: string;
+  addon_name?: string;
+  addon_slug?: string;
+  addon_type?: string;
+  description?: string;
+  unit_price?: number;
+  price?: number;
+  currency?: string;
+  billing_unit?: string;
+  credit_amount?: number;
+  min_quantity?: number;
+  max_quantity?: number;
+  is_active?: boolean;
+  is_public?: boolean;
+  display_order?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 const getIconForPlan = (planName: string, tier: string): typeof Users | typeof Building2 | typeof Zap => {
   const name = planName.toLowerCase();
   const tierLower = tier.toLowerCase();
@@ -84,7 +104,10 @@ const getGradientForPlan = (planName: string, tier: string): string => {
 };
 
 // Format currency based on currency code
-const formatCurrency = (amount: number, currency: string): string => {
+const formatCurrency = (amount: number | undefined | null, currency: string): string => {
+  if (amount === undefined || amount === null) {
+    return 'Contact us';
+  }
   const currencySymbols: Record<string, string> = {
     'USD': '$',
     'INR': '₹',
@@ -95,11 +118,16 @@ const formatCurrency = (amount: number, currency: string): string => {
   return `${symbol}${amount.toLocaleString()}`;
 };
 
+const ADDONS_API_URL = 'https://talentflowapi.mo.vc/api/v1';
+
 export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(false);
   const [plans, setPlans] = useState<DisplayPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [addons, setAddons] = useState<Addon[]>([]);
+  const [addonsLoading, setAddonsLoading] = useState(true);
+  const [addonsError, setAddonsError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -134,12 +162,16 @@ export default function PricingPage() {
               ?.filter(f => f.is_enabled)
               ?.map(f => f.feature_name) || [];
 
+            const monthlyPrice = plan.monthly_price > 0 ? plan.monthly_price : (plan.base_price > 0 ? plan.base_price : null);
+            // Yearly = monthly * 12 * 0.8 (20% discount)
+            const yearlyPrice = monthlyPrice ? Math.round(monthlyPrice * 12 * 0.8) : null;
+
             return {
               id: String(plan.id),
               name: plan.plan_name,
               description: plan.description,
-              monthlyPrice: plan.monthly_price > 0 ? plan.monthly_price : (plan.base_price > 0 ? plan.base_price : null),
-              yearlyPrice: plan.monthly_price > 0 ? Math.round(plan.monthly_price * 10) : null, // Yearly = monthly * 12 * 0.8 (20% off)
+              monthlyPrice,
+              yearlyPrice,
               currency: plan.currency || 'INR',
               icon: getIconForPlan(plan.plan_name, plan.plan_tier),
               gradient: getGradientForPlan(plan.plan_name, plan.plan_tier),
@@ -160,6 +192,37 @@ export default function PricingPage() {
     };
 
     fetchPlans();
+  }, []);
+
+  // Fetch addons from API
+  useEffect(() => {
+    const fetchAddons = async () => {
+      try {
+        setAddonsLoading(true);
+        setAddonsError(null);
+
+        const response = await fetch(`${ADDONS_API_URL}/addons?active_only=false&public_only=false`);
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch addons: ${response.status}`);
+        }
+
+        const result = await response.json();
+        const data: Addon[] = result.data || result;
+
+        // Sort by display_order
+        const sortedAddons = data.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+
+        setAddons(sortedAddons);
+      } catch (err) {
+        console.error('Error fetching addons:', err);
+        setAddonsError(err instanceof Error ? err.message : 'Failed to load addons');
+      } finally {
+        setAddonsLoading(false);
+      }
+    };
+
+    fetchAddons();
   }, []);
 
   if (isLoading) {
@@ -202,11 +265,25 @@ export default function PricingPage() {
 
           {/* Billing Toggle */}
           <div className="flex items-center justify-center gap-4 mt-8">
-            <span className={`text-lg ${!isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500"}`}>
+            <span className={`text-lg ${!isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
               Monthly
             </span>
-            <Switch checked={isYearly} onCheckedChange={setIsYearly} />
-            <span className={`text-lg ${isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500"}`}>
+            <button
+              onClick={() => setIsYearly(!isYearly)}
+              className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+                isYearly
+                  ? "bg-purple-600"
+                  : "bg-gray-300 dark:bg-gray-600"
+              }`}
+              aria-label="Toggle billing period"
+            >
+              <span
+                className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                  isYearly ? "translate-x-6" : "translate-x-0"
+                }`}
+              />
+            </button>
+            <span className={`text-lg ${isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
               Yearly
             </span>
             {isYearly && (
@@ -270,23 +347,30 @@ export default function PricingPage() {
 
                 <div className="mb-6">
                   {price ? (
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                        {formatCurrency(price, plan.currency)}
-                      </span>
-                      <span className="text-gray-600 dark:text-gray-400">
-                        /{isYearly ? 'year' : 'month'}
-                      </span>
-                    </div>
+                    <>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-4xl font-bold text-gray-900 dark:text-white">
+                          {formatCurrency(price, plan.currency)}
+                        </span>
+                        <span className="text-gray-600 dark:text-gray-400">
+                          /{isYearly ? 'year' : 'month'}
+                        </span>
+                      </div>
+                      {isYearly && plan.monthlyPrice && (
+                        <div className="mt-2">
+                          <span className="text-sm text-gray-400 line-through">
+                            {formatCurrency(plan.monthlyPrice * 12, plan.currency)}
+                          </span>
+                          <span className="ml-2 text-sm font-medium text-green-600 dark:text-green-400">
+                            Save {formatCurrency(plan.monthlyPrice * 12 - price, plan.currency)}
+                          </span>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="text-4xl font-bold text-gray-900 dark:text-white">
                       Custom
                     </div>
-                  )}
-                  {isYearly && price && (
-                    <p className="text-sm text-green-600 mt-1">
-                      Save 20% with annual billing
-                    </p>
                   )}
                 </div>
 
@@ -378,6 +462,76 @@ export default function PricingPage() {
               </Card>
             );
           })}
+        </div>
+
+        {/* Addons Section */}
+        <div className="mt-24">
+          <div className="text-center mb-12">
+            <Badge className="mb-4 px-4 py-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0">
+              <Zap className="w-4 h-4 mr-2" />
+              Add-ons
+            </Badge>
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+              Enhance your plan with add-ons
+            </h2>
+            <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+              Need more? Extend your capabilities with our flexible add-ons.
+            </p>
+          </div>
+
+          {addonsLoading && (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+              <p className="mt-4 text-gray-600 dark:text-gray-400">Loading add-ons...</p>
+            </div>
+          )}
+
+          {addonsError && (
+            <div className="text-center mb-8 p-6 bg-red-50 dark:bg-red-900/20 rounded-xl">
+              <p className="text-red-600 dark:text-red-400">Failed to load add-ons</p>
+              <p className="text-sm text-gray-500 mt-2">{addonsError}</p>
+            </div>
+          )}
+
+          {!addonsLoading && !addonsError && addons.length === 0 && (
+            <div className="text-center py-12 text-gray-600 dark:text-gray-400">
+              <p>No add-ons available at the moment.</p>
+            </div>
+          )}
+
+          {!addonsLoading && !addonsError && addons.length > 0 && (
+            <div className="max-w-3xl mx-auto space-y-4">
+              {addons.map((addon) => (
+                <div
+                  key={addon.id}
+                  className="flex items-center justify-between p-5 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 transition-colors"
+                >
+                  {/* Feature Name */}
+                  <div className="flex items-center gap-3">
+                    <Sparkles className="w-5 h-5 text-purple-500 flex-shrink-0" />
+                    <span className="font-semibold text-gray-900 dark:text-white">
+                      {addon.name || addon.addon_name || 'Unnamed Add-on'}
+                    </span>
+                  </div>
+
+                  {/* Credit & Pricing */}
+                  <div className="flex items-center gap-8">
+                    <div className="text-right">
+                      <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {addon.credit_amount ?? addon.min_quantity ?? 0}
+                      </span>
+                      <span className="ml-1 text-sm text-gray-500 dark:text-gray-400">credits</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                        ₹{addon.price ?? addon.unit_price ?? 0}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* FAQ Section */}
