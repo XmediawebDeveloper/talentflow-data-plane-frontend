@@ -5,7 +5,6 @@
 import api, { setTokens, clearTokens, handleApiError } from './api';
 
 export interface LoginRequest {
-  subdomain: string;
   email: string;
   password: string;
 }
