@@ -253,12 +253,33 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
     setIsGenerating(true);
 
     try {
-      // Try real API first
+      // Call real API for AI JD generation
       const prompt = `${jobTitle}${aiPrompt ? ` - ${aiPrompt}` : ''}`;
       const response = await jdService.generate(prompt);
 
       if (response?.description) {
+        // Update job title if AI provided a better one
+        if (response.title && !jobTitle) {
+          setJobTitle(response.title);
+        }
         setGeneratedJD(response.description);
+
+        // If extracted_params are returned, pre-populate the extracted data
+        if (response.extracted_params) {
+          const params = response.extracted_params;
+          setExtractedData(prev => ({
+            ...prev,
+            mustHaveSkills: params.must_have_skills || [],
+            niceToHaveSkills: params.nice_to_have_skills || [],
+            education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
+            experience: params.experience_min && params.experience_max
+              ? `${params.experience_min}-${params.experience_max}`
+              : prev.experience,
+            industryType: params.industry_type?.toLowerCase() || '',
+            allowOverqualified: false,
+          }));
+        }
+
         toast.success({
           title: 'JD Generated Successfully',
           description: 'AI has created a comprehensive job description.'
@@ -267,99 +288,64 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
         throw new Error('No description in response');
       }
     } catch (error) {
-      console.log('[TalentFlow] API JD generation failed, using mock fallback:', error);
-
-      // Fallback to mock generation
-      const mockJD = `Job Title: ${jobTitle || 'Senior Software Engineer'}
-
-${aiPrompt ? `Based on your requirements: ${aiPrompt}\n` : ''}
-Job Summary:
-We are seeking a talented ${jobTitle || 'Senior Software Engineer'} to join our team. This role offers an exciting opportunity to work on cutting-edge technologies and contribute to innovative solutions.
-
-Key Responsibilities:
-• Design, develop, and maintain high-quality software applications
-• Collaborate with cross-functional teams to define and implement new features
-• Write clean, maintainable, and efficient code
-• Participate in code reviews and provide constructive feedback
-• Mentor junior developers and contribute to team growth
-• Stay updated with emerging technologies and industry trends
-
-Required Skills:
-• Programming languages: Java, Python, JavaScript
-• Framework expertise: Spring Boot, React, Node.js
-• Database knowledge: PostgreSQL, MongoDB
-• Cloud platforms: AWS, Azure
-• Agile methodologies and DevOps practices
-
-Qualifications:
-• Bachelor's degree in Computer Science or related field
-• 5-7 years of professional software development experience
-• Strong problem-solving and analytical skills
-• Excellent communication and teamwork abilities
-• Experience with version control systems (Git)
-
-What We Offer:
-• Competitive salary and benefits package
-• Flexible work arrangements
-• Professional development opportunities
-• Collaborative and innovative work environment
-• Health insurance and wellness programs
-• Stock options and performance bonuses
-
-How to Apply:
-Interested candidates should submit their resume and cover letter through our application portal.`;
-
-      setGeneratedJD(mockJD);
-      toast.info({
-        title: 'Demo Mode',
-        description: 'Using sample JD. Connect to backend for AI generation.'
+      console.error('[TalentFlow] API JD generation failed:', error);
+      toast.error({
+        title: 'Generation Failed',
+        description: 'Could not generate JD. Please check your connection and try again.'
       });
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     setIsExtracting(true);
-    
-    // Simulate LLM extraction
-    setTimeout(() => {
+
+    try {
       const jdText = mode === 'ai' ? generatedJD : manualJD;
-      
-      // Mock extraction based on JD content
-      const mockExtraction: ExtractedData = {
-        mustHaveSkills: ['Java', 'Spring Boot', 'REST APIs', 'PostgreSQL', 'Git'],
-        mustHaveComments: [
-          'Strong proficiency in backend development with proven track record',
-          'Must demonstrate hands-on experience with microservices architecture'
-        ],
-        niceToHaveSkills: ['Docker', 'Kubernetes', 'AWS', 'Redis', 'GraphQL'],
-        education: 'bachelors',
+
+      // Call real API to extract parameters using AI
+      const params = await jdService.extractParamsFromText(jdText);
+
+      // Map API response to component's ExtractedData format
+      const extraction: ExtractedData = {
+        mustHaveSkills: params.must_have_skills || [],
+        mustHaveComments: [],
+        niceToHaveSkills: params.nice_to_have_skills || [],
+        education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
         educationRequired: true,
-        experience: '5-7',
+        experience: params.experience_min && params.experience_max
+          ? `${params.experience_min}-${params.experience_max}`
+          : '',
         experienceRequired: true,
-        industryType: 'technology',
-        industryTypeRequired: true,
+        industryType: params.industry_type?.toLowerCase() || '',
+        industryTypeRequired: false,
         allowOverqualified: false,
-        salaryFrom: '120000',
-        salaryTo: '150000',
+        salaryFrom: '',
+        salaryTo: '',
         compensationType: 'yearly',
-        locations: [
-          { city: 'San Francisco, CA', radius: '50' },
-          { city: 'New York, NY', radius: '30' }
-        ],
-        locationsRequired: true,
-        assessmentGuidance: 'Focus on practical coding challenges and system design. Include questions about microservices, API design, and database optimization.',
-        internalRecruiterComments: [
-          'High priority role - senior leadership is involved in final interviews',
-          'Looking for someone who can mentor junior developers'
-        ],
+        locations: [],
+        locationsRequired: false,
+        assessmentGuidance: '',
+        internalRecruiterComments: [],
       };
-      
-      setExtractedData(mockExtraction);
-      setIsExtracting(false);
+
+      setExtractedData(extraction);
       setStep('extract');
-    }, 1500);
+
+      toast.success({
+        title: 'Data Extracted',
+        description: 'AI has analyzed your JD and extracted key requirements.'
+      });
+    } catch (error) {
+      console.error('[TalentFlow] Extraction failed:', error);
+      toast.error({
+        title: 'Extraction Failed',
+        description: 'Could not extract data. Please check your connection and try again.'
+      });
+    } finally {
+      setIsExtracting(false);
+    }
   };
 
   const handleAddSkill = (category: 'mustHaveSkills' | 'niceToHaveSkills') => {
@@ -525,26 +511,68 @@ Interested candidates should submit their resume and cover letter through our ap
     setStep('review');
   };
 
-  const handleConfirmPublish = () => {
+  const handleConfirmPublish = async () => {
+    console.log('[DEBUG] handleConfirmPublish called');
     setIsPublishing(true);
-    
-    // Simulate publishing process
-    setTimeout(() => {
+
+    try {
+      // Parse experience values
+      const experienceMatch = extractedData.experience.match(/(\d+)/);
+      const experienceMin = experienceMatch ? parseInt(experienceMatch[1]) : undefined;
+
+      // Build the JD data for backend
+      const jdData = {
+        title: jobTitle,
+        description: generatedJD || manualJD,
+        department: 'Engineering',
+        location: extractedData.locations.length > 0
+          ? extractedData.locations[0].city
+          : 'Remote',
+        employment_type: 'full_time',
+        must_have_skills: extractedData.mustHaveSkills,
+        nice_to_have_skills: extractedData.niceToHaveSkills,
+        education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
+        experience_min: experienceMin,
+        industry_type: extractedData.industryType || undefined,
+        salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9]/g, '')) : undefined,
+        salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9]/g, '')) : undefined,
+        compensation_type: extractedData.compensationType,
+        assessment_guidance: extractedData.assessmentGuidance || undefined,
+        internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
+        allow_overqualified: extractedData.allowOverqualified,
+        locations: extractedData.locations.map(loc => ({
+          city: loc.city,
+          is_required: extractedData.locationsRequired,
+        })),
+      };
+
+      console.log('[DEBUG] Calling jdService.create with data:', jdData);
+
+      // Create JD in backend
+      const createdJd = await jdService.create(jdData);
+      console.log('[DEBUG] JD created successfully:', createdJd.id);
+
+      console.log('[DEBUG] Calling jdService.publish for ID:', createdJd.id);
+
+      // Publish the JD
+      const publishedJd = await jdService.publish(createdJd.id);
+      console.log('[DEBUG] JD published successfully:', publishedJd.id);
+
       setIsPublishing(false);
       setIsPublished(true);
-      
-      // Create the job object
+
+      // Create the job object for UI
       if (onPublish) {
         const newJob: Job = {
-          id: selectedJob?.id || `job-${Date.now()}`,
+          id: publishedJd.id,
           title: jobTitle,
-          department: 'Engineering', // Default value
-          location: extractedData.locations.length > 0 
-            ? extractedData.locations[0].city 
+          department: 'Engineering',
+          location: extractedData.locations.length > 0
+            ? extractedData.locations[0].city
             : 'Remote',
-          type: 'Full-time', // Default value
+          type: 'Full-time',
           postedDate: new Date().toISOString(),
-          applicants: selectedJob?.applicants || 0,
+          applicants: 0,
           status: 'active' as const,
           description: generatedJD || manualJD,
           requirements: [
@@ -559,10 +587,9 @@ Interested candidates should submit their resume and cover letter through our ap
             ? `${extractedData.salaryFrom} - ${extractedData.salaryTo} (${extractedData.compensationType})`
             : undefined,
         };
-        
+
         onPublish(newJob);
-        
-        // ✅ JOB PUBLISHED SUCCESS FEEDBACK
+
         toast.success({
           title: selectedJob ? 'Job description updated!' : 'Job description published!',
           description: `"${jobTitle}" is now live and accepting applications.`,
@@ -574,7 +601,14 @@ Interested candidates should submit their resume and cover letter through our ap
           }
         });
       }
-    }, 2000);
+    } catch (error) {
+      console.error('[ERROR] Failed to publish JD:', error);
+      setIsPublishing(false);
+      toast.error({
+        title: 'Failed to publish job description',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+      });
+    }
   };
 
   const renderStepIndicator = () => (
@@ -798,15 +832,30 @@ Interested candidates should submit their resume and cover letter through our ap
                   {((mode === 'ai' && generatedJD) || (mode === 'manual' && manualJD)) && (
                     <div className="flex gap-2">
                       <button
-                        onClick={() => navigator.clipboard.writeText(mode === 'ai' ? generatedJD : manualJD)}
+                        onClick={() => {
+                          const text = mode === 'ai' ? generatedJD : manualJD;
+                          navigator.clipboard.writeText(text);
+                          toast.success({ title: 'Copied!', description: 'Job description copied to clipboard' });
+                        }}
                         className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
                         title="Copy to clipboard"
                       >
                         <Copy className="w-4 h-4" />
                       </button>
                       <button
+                        onClick={() => {
+                          const text = mode === 'ai' ? generatedJD : manualJD;
+                          const blob = new Blob([`${jobTitle}\n\n${text}`], { type: 'text/plain' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${jobTitle.replace(/[^a-z0-9]/gi, '_')}_JD.txt`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          toast.success({ title: 'Downloaded!', description: 'Job description saved as text file' });
+                        }}
                         className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
-                        title="Download as PDF"
+                        title="Download as text file"
                       >
                         <Download className="w-4 h-4" />
                       </button>
@@ -1595,15 +1644,33 @@ Interested candidates should submit their resume and cover letter through our ap
                     <p className="text-sm text-gray-600 mt-1">This is the job description that will be published</p>
                   </div>
                   <div className="flex gap-2">
-                    <button 
-                      onClick={() => navigator.clipboard.writeText(mode === 'ai' ? generatedJD : manualJD)}
+                    <button
+                      onClick={() => {
+                        const text = mode === 'ai' ? generatedJD : manualJD;
+                        navigator.clipboard.writeText(text);
+                        toast.success({ title: 'Copied!', description: 'Job description copied to clipboard' });
+                      }}
                       className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm"
                       title="Copy to clipboard"
                     >
                       <Copy className="w-4 h-4" />
                       Copy
                     </button>
-                    <button className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm">
+                    <button
+                      onClick={() => {
+                        const text = mode === 'ai' ? generatedJD : manualJD;
+                        const fullContent = `${jobTitle}\n\n${text}\n\n--- Skills ---\nMust Have: ${extractedData.mustHaveSkills.join(', ')}\nNice to Have: ${extractedData.niceToHaveSkills.join(', ')}\n\nExperience: ${extractedData.experience}\nEducation: ${extractedData.education}`;
+                        const blob = new Blob([fullContent], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${jobTitle.replace(/[^a-z0-9]/gi, '_')}_JD.txt`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        toast.success({ title: 'Downloaded!', description: 'Job description saved as text file' });
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm"
+                    >
                       <Download className="w-4 h-4" />
                       Download
                     </button>

@@ -66,7 +66,10 @@ export interface JDListResponse {
 export interface JDExtractedParams {
   must_have_skills: string[];
   nice_to_have_skills: string[];
-  education_requirements?: Record<string, any>;
+  education_requirements?: {
+    degree?: string;
+    field?: string;
+  };
   certifications: string[];
   experience_min?: number;
   experience_max?: number;
@@ -80,7 +83,7 @@ export interface JDExtractedParams {
 export interface JDGenerateResponse {
   title: string;
   description: string;
-  extracted_params: JDExtractedParams;
+  extracted_params?: JDExtractedParams;
 }
 
 export const jdService = {
@@ -111,6 +114,13 @@ export const jdService = {
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  /**
+   * Get single JD by ID (alias for get)
+   */
+  async getById(id: string): Promise<JDResponse> {
+    return this.get(id);
   },
 
   /**
@@ -150,11 +160,35 @@ export const jdService = {
   },
 
   /**
+   * Extract parameters from JD text using LLM (for manual mode)
+   */
+  async extractParamsFromText(description: string): Promise<JDExtractedParams> {
+    try {
+      const response = await api.post<JDExtractedParams>('/jd/extract-params-text', { description });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Update JD
    */
   async update(id: string, data: Partial<JDCreate>): Promise<JDResponse> {
     try {
       const response = await api.put<JDResponse>(`/jd/${id}`, data);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Update JD status
+   */
+  async updateStatus(id: string, status: string): Promise<JDResponse> {
+    try {
+      const response = await api.put<JDResponse>(`/jd/${id}`, { status });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
