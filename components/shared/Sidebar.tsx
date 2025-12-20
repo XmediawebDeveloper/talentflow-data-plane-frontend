@@ -28,7 +28,13 @@ import {
   TrendingUp,
   ChevronDown,
   ChevronRight,
-  Briefcase
+  Briefcase,
+  Layers,
+  GraduationCap,
+  Clock,
+  Factory,
+  History,
+  ScrollText
 } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -52,7 +58,7 @@ interface NavItem {
 
 export default function Sidebar({ user, tenant }: SidebarProps) {
   const pathname = usePathname();
-  const [expandedSections, setExpandedSections] = useState<string[]>(['recruitment-tools', 'organization', 'subscription', 'settings', 'reports']);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['recruitment-tools', 'organization', 'masters', 'subscription', 'settings', 'reports', 'audits']);
 
   const roleLabels = {
     tenant_admin: 'Admin',
@@ -117,6 +123,19 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       ]
     },
 
+    // Masters - Admin only (Experience, Education, Industry)
+    {
+      id: 'masters',
+      label: 'Masters',
+      icon: Layers,
+      adminOnly: true,
+      children: [
+        { id: 'experience-levels', label: 'Experience Levels', icon: Clock, href: '/masters/experience-levels', adminOnly: true },
+        { id: 'education-levels', label: 'Education Levels', icon: GraduationCap, href: '/masters/education-levels', adminOnly: true },
+        { id: 'industry-types', label: 'Industry Types', icon: Factory, href: '/masters/industry-types', adminOnly: true },
+      ]
+    },
+
     // Subscription & Billing - Admin only
     {
       id: 'subscription',
@@ -157,7 +176,18 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       children: [
         { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, href: '/reports/team-usage', adminOnly: true },
         { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, href: '/reports/performance-reports', permission: 'canViewAnalytics' },
-        { id: 'activity-logs', label: 'Activity Logs', icon: BarChart3, href: '/reports/activity-logs', adminOnly: true },
+      ]
+    },
+
+    // Audits & Trail - Admin only
+    {
+      id: 'audits',
+      label: 'Audits & Trail',
+      icon: History,
+      adminOnly: true,
+      children: [
+        { id: 'audit-trail', label: 'Audit Trail', icon: ScrollText, href: '/audits/trail', adminOnly: true },
+        { id: 'activity-logs', label: 'Activity Logs', icon: Activity, href: '/audits/activity', adminOnly: true },
       ]
     },
 
