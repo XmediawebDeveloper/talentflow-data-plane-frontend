@@ -6,7 +6,7 @@ import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
-import { jdService } from '@/lib/services';
+import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -249,16 +249,116 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
 
+  // Master data state
+  const [experienceLevels, setExperienceLevels] = useState<ExperienceLevel[]>([]);
+  const [educationLevels, setEducationLevels] = useState<EducationLevel[]>([]);
+  const [industryTypes, setIndustryTypes] = useState<IndustryType[]>([]);
+  const [masterDataLoading, setMasterDataLoading] = useState(true);
+
+  // Create new modal state
+  const [showCreateModal, setShowCreateModal] = useState<'experience' | 'education' | 'industry' | null>(null);
+  const [newItemLabel, setNewItemLabel] = useState('');
+  const [newItemCode, setNewItemCode] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+
+  // Fetch master data on mount
+  useEffect(() => {
+    const fetchMasterData = async () => {
+      try {
+        const data = await masterDataService.getAll();
+        setExperienceLevels(data.experience_levels);
+        setEducationLevels(data.education_levels);
+        setIndustryTypes(data.industry_types);
+      } catch (error) {
+        console.log('[TalentFlow] Failed to fetch master data, using fallback:', error);
+        // Fallback to empty arrays - dropdowns will show "No options"
+      } finally {
+        setMasterDataLoading(false);
+      }
+    };
+
+    fetchMasterData();
+  }, []);
+
+  // Handle create new master data item
+  const handleCreateNewItem = async () => {
+    if (!newItemLabel.trim() || !showCreateModal) return;
+
+    setIsCreating(true);
+    const code = newItemCode.trim() || newItemLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+    try {
+      if (showCreateModal === 'experience') {
+        const newItem = await masterDataService.createExperienceLevel({
+          code,
+          label: newItemLabel.trim(),
+          sort_order: experienceLevels.length + 1,
+        });
+        setExperienceLevels(prev => [...prev, newItem]);
+        setExtractedData(prev => ({ ...prev, experience: code }));
+        toast.success({ title: 'Experience level created', description: `"${newItemLabel}" has been added.` });
+      } else if (showCreateModal === 'education') {
+        const newItem = await masterDataService.createEducationLevel({
+          code,
+          label: newItemLabel.trim(),
+          sort_order: educationLevels.length + 1,
+        });
+        setEducationLevels(prev => [...prev, newItem]);
+        setExtractedData(prev => ({ ...prev, education: code }));
+        toast.success({ title: 'Education level created', description: `"${newItemLabel}" has been added.` });
+      } else if (showCreateModal === 'industry') {
+        const newItem = await masterDataService.createIndustryType({
+          code,
+          label: newItemLabel.trim(),
+          sort_order: industryTypes.length + 1,
+        });
+        setIndustryTypes(prev => [...prev, newItem]);
+        setExtractedData(prev => ({ ...prev, industryType: code }));
+        toast.success({ title: 'Industry type created', description: `"${newItemLabel}" has been added.` });
+      }
+
+      setShowCreateModal(null);
+      setNewItemLabel('');
+      setNewItemCode('');
+    } catch (error) {
+      console.error('Failed to create item:', error);
+      toast.error({ title: 'Failed to create', description: 'Please try again.' });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const handleGenerateJD = async () => {
     setIsGenerating(true);
 
     try {
-      // Try real API first
+      // Call real API for AI JD generation
       const prompt = `${jobTitle}${aiPrompt ? ` - ${aiPrompt}` : ''}`;
       const response = await jdService.generate(prompt);
 
       if (response?.description) {
+        // Update job title if AI provided a better one
+        if (response.title && !jobTitle) {
+          setJobTitle(response.title);
+        }
         setGeneratedJD(response.description);
+
+        // If extracted_params are returned, pre-populate the extracted data
+        if (response.extracted_params) {
+          const params = response.extracted_params;
+          setExtractedData(prev => ({
+            ...prev,
+            mustHaveSkills: params.must_have_skills || [],
+            niceToHaveSkills: params.nice_to_have_skills || [],
+            education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
+            experience: params.experience_min && params.experience_max
+              ? `${params.experience_min}-${params.experience_max}`
+              : prev.experience,
+            industryType: params.industry_type?.toLowerCase() || '',
+            allowOverqualified: false,
+          }));
+        }
+
         toast.success({
           title: 'JD Generated Successfully',
           description: 'AI has created a comprehensive job description.'
@@ -267,99 +367,64 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
         throw new Error('No description in response');
       }
     } catch (error) {
-      console.log('[TalentFlow] API JD generation failed, using mock fallback:', error);
-
-      // Fallback to mock generation
-      const mockJD = `Job Title: ${jobTitle || 'Senior Software Engineer'}
-
-${aiPrompt ? `Based on your requirements: ${aiPrompt}\n` : ''}
-Job Summary:
-We are seeking a talented ${jobTitle || 'Senior Software Engineer'} to join our team. This role offers an exciting opportunity to work on cutting-edge technologies and contribute to innovative solutions.
-
-Key Responsibilities:
-• Design, develop, and maintain high-quality software applications
-• Collaborate with cross-functional teams to define and implement new features
-• Write clean, maintainable, and efficient code
-• Participate in code reviews and provide constructive feedback
-• Mentor junior developers and contribute to team growth
-• Stay updated with emerging technologies and industry trends
-
-Required Skills:
-• Programming languages: Java, Python, JavaScript
-• Framework expertise: Spring Boot, React, Node.js
-• Database knowledge: PostgreSQL, MongoDB
-• Cloud platforms: AWS, Azure
-• Agile methodologies and DevOps practices
-
-Qualifications:
-• Bachelor's degree in Computer Science or related field
-• 5-7 years of professional software development experience
-• Strong problem-solving and analytical skills
-• Excellent communication and teamwork abilities
-• Experience with version control systems (Git)
-
-What We Offer:
-• Competitive salary and benefits package
-• Flexible work arrangements
-• Professional development opportunities
-• Collaborative and innovative work environment
-• Health insurance and wellness programs
-• Stock options and performance bonuses
-
-How to Apply:
-Interested candidates should submit their resume and cover letter through our application portal.`;
-
-      setGeneratedJD(mockJD);
-      toast.info({
-        title: 'Demo Mode',
-        description: 'Using sample JD. Connect to backend for AI generation.'
+      console.error('[TalentFlow] API JD generation failed:', error);
+      toast.error({
+        title: 'Generation Failed',
+        description: 'Could not generate JD. Please check your connection and try again.'
       });
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     setIsExtracting(true);
-    
-    // Simulate LLM extraction
-    setTimeout(() => {
+
+    try {
       const jdText = mode === 'ai' ? generatedJD : manualJD;
-      
-      // Mock extraction based on JD content
-      const mockExtraction: ExtractedData = {
-        mustHaveSkills: ['Java', 'Spring Boot', 'REST APIs', 'PostgreSQL', 'Git'],
-        mustHaveComments: [
-          'Strong proficiency in backend development with proven track record',
-          'Must demonstrate hands-on experience with microservices architecture'
-        ],
-        niceToHaveSkills: ['Docker', 'Kubernetes', 'AWS', 'Redis', 'GraphQL'],
-        education: 'bachelors',
+
+      // Call real API to extract parameters using AI
+      const params = await jdService.extractParamsFromText(jdText);
+
+      // Map API response to component's ExtractedData format
+      const extraction: ExtractedData = {
+        mustHaveSkills: params.must_have_skills || [],
+        mustHaveComments: [],
+        niceToHaveSkills: params.nice_to_have_skills || [],
+        education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
         educationRequired: true,
-        experience: '5-7',
+        experience: params.experience_min && params.experience_max
+          ? `${params.experience_min}-${params.experience_max}`
+          : '',
         experienceRequired: true,
-        industryType: 'technology',
-        industryTypeRequired: true,
+        industryType: params.industry_type?.toLowerCase() || '',
+        industryTypeRequired: false,
         allowOverqualified: false,
-        salaryFrom: '120000',
-        salaryTo: '150000',
+        salaryFrom: '',
+        salaryTo: '',
         compensationType: 'yearly',
-        locations: [
-          { city: 'San Francisco, CA', radius: '50' },
-          { city: 'New York, NY', radius: '30' }
-        ],
-        locationsRequired: true,
-        assessmentGuidance: 'Focus on practical coding challenges and system design. Include questions about microservices, API design, and database optimization.',
-        internalRecruiterComments: [
-          'High priority role - senior leadership is involved in final interviews',
-          'Looking for someone who can mentor junior developers'
-        ],
+        locations: [],
+        locationsRequired: false,
+        assessmentGuidance: '',
+        internalRecruiterComments: [],
       };
-      
-      setExtractedData(mockExtraction);
-      setIsExtracting(false);
+
+      setExtractedData(extraction);
       setStep('extract');
-    }, 1500);
+
+      toast.success({
+        title: 'Data Extracted',
+        description: 'AI has analyzed your JD and extracted key requirements.'
+      });
+    } catch (error) {
+      console.error('[TalentFlow] Extraction failed:', error);
+      toast.error({
+        title: 'Extraction Failed',
+        description: 'Could not extract data. Please check your connection and try again.'
+      });
+    } finally {
+      setIsExtracting(false);
+    }
   };
 
   const handleAddSkill = (category: 'mustHaveSkills' | 'niceToHaveSkills') => {
@@ -525,26 +590,68 @@ Interested candidates should submit their resume and cover letter through our ap
     setStep('review');
   };
 
-  const handleConfirmPublish = () => {
+  const handleConfirmPublish = async () => {
+    console.log('[DEBUG] handleConfirmPublish called');
     setIsPublishing(true);
-    
-    // Simulate publishing process
-    setTimeout(() => {
+
+    try {
+      // Parse experience values
+      const experienceMatch = extractedData.experience.match(/(\d+)/);
+      const experienceMin = experienceMatch ? parseInt(experienceMatch[1]) : undefined;
+
+      // Build the JD data for backend
+      const jdData = {
+        title: jobTitle,
+        description: generatedJD || manualJD,
+        department: 'Engineering',
+        location: extractedData.locations.length > 0
+          ? extractedData.locations[0].city
+          : 'Remote',
+        employment_type: 'full_time',
+        must_have_skills: extractedData.mustHaveSkills,
+        nice_to_have_skills: extractedData.niceToHaveSkills,
+        education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
+        experience_min: experienceMin,
+        industry_type: extractedData.industryType || undefined,
+        salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9]/g, '')) : undefined,
+        salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9]/g, '')) : undefined,
+        compensation_type: extractedData.compensationType,
+        assessment_guidance: extractedData.assessmentGuidance || undefined,
+        internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
+        allow_overqualified: extractedData.allowOverqualified,
+        locations: extractedData.locations.map(loc => ({
+          city: loc.city,
+          is_required: extractedData.locationsRequired,
+        })),
+      };
+
+      console.log('[DEBUG] Calling jdService.create with data:', jdData);
+
+      // Create JD in backend
+      const createdJd = await jdService.create(jdData);
+      console.log('[DEBUG] JD created successfully:', createdJd.id);
+
+      console.log('[DEBUG] Calling jdService.publish for ID:', createdJd.id);
+
+      // Publish the JD
+      const publishedJd = await jdService.publish(createdJd.id);
+      console.log('[DEBUG] JD published successfully:', publishedJd.id);
+
       setIsPublishing(false);
       setIsPublished(true);
-      
-      // Create the job object
+
+      // Create the job object for UI
       if (onPublish) {
         const newJob: Job = {
-          id: selectedJob?.id || `job-${Date.now()}`,
+          id: publishedJd.id,
           title: jobTitle,
-          department: 'Engineering', // Default value
-          location: extractedData.locations.length > 0 
-            ? extractedData.locations[0].city 
+          department: 'Engineering',
+          location: extractedData.locations.length > 0
+            ? extractedData.locations[0].city
             : 'Remote',
-          type: 'Full-time', // Default value
+          type: 'Full-time',
           postedDate: new Date().toISOString(),
-          applicants: selectedJob?.applicants || 0,
+          applicants: 0,
           status: 'active' as const,
           description: generatedJD || manualJD,
           requirements: [
@@ -559,10 +666,9 @@ Interested candidates should submit their resume and cover letter through our ap
             ? `${extractedData.salaryFrom} - ${extractedData.salaryTo} (${extractedData.compensationType})`
             : undefined,
         };
-        
+
         onPublish(newJob);
-        
-        // ✅ JOB PUBLISHED SUCCESS FEEDBACK
+
         toast.success({
           title: selectedJob ? 'Job description updated!' : 'Job description published!',
           description: `"${jobTitle}" is now live and accepting applications.`,
@@ -574,7 +680,14 @@ Interested candidates should submit their resume and cover letter through our ap
           }
         });
       }
-    }, 2000);
+    } catch (error) {
+      console.error('[ERROR] Failed to publish JD:', error);
+      setIsPublishing(false);
+      toast.error({
+        title: 'Failed to publish job description',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+      });
+    }
   };
 
   const renderStepIndicator = () => (
@@ -798,15 +911,30 @@ Interested candidates should submit their resume and cover letter through our ap
                   {((mode === 'ai' && generatedJD) || (mode === 'manual' && manualJD)) && (
                     <div className="flex gap-2">
                       <button
-                        onClick={() => navigator.clipboard.writeText(mode === 'ai' ? generatedJD : manualJD)}
+                        onClick={() => {
+                          const text = mode === 'ai' ? generatedJD : manualJD;
+                          navigator.clipboard.writeText(text);
+                          toast.success({ title: 'Copied!', description: 'Job description copied to clipboard' });
+                        }}
                         className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
                         title="Copy to clipboard"
                       >
                         <Copy className="w-4 h-4" />
                       </button>
                       <button
+                        onClick={() => {
+                          const text = mode === 'ai' ? generatedJD : manualJD;
+                          const blob = new Blob([`${jobTitle}\n\n${text}`], { type: 'text/plain' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${jobTitle.replace(/[^a-z0-9]/gi, '_')}_JD.txt`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          toast.success({ title: 'Downloaded!', description: 'Job description saved as text file' });
+                        }}
                         className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
-                        title="Download as PDF"
+                        title="Download as text file"
                       >
                         <Download className="w-4 h-4" />
                       </button>
@@ -1264,19 +1392,26 @@ Interested candidates should submit their resume and cover letter through our ap
               <div className="grid grid-cols-3 gap-6 mb-8">
                 {/* Experience */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Experience</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-900">Experience</h3>
+                    <button
+                      onClick={() => setShowCreateModal('experience')}
+                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add New
+                    </button>
+                  </div>
                   <select
                     value={extractedData.experience}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, experience: e.target.value }))}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm mb-3"
+                    disabled={masterDataLoading}
                   >
-                    <option value="">Select experience level</option>
-                    <option value="0-1">0-1 years</option>
-                    <option value="1-3">1-3 years</option>
-                    <option value="3-5">3-5 years</option>
-                    <option value="5-7">5-7 years</option>
-                    <option value="7-10">7-10 years</option>
-                    <option value="10+">10+ years</option>
+                    <option value="">{masterDataLoading ? 'Loading...' : 'Select experience level'}</option>
+                    {experienceLevels.map((level) => (
+                      <option key={level.id} value={level.code}>{level.label}</option>
+                    ))}
                   </select>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -1291,19 +1426,26 @@ Interested candidates should submit their resume and cover letter through our ap
 
                 {/* Education */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Education</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-900">Education</h3>
+                    <button
+                      onClick={() => setShowCreateModal('education')}
+                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add New
+                    </button>
+                  </div>
                   <select
                     value={extractedData.education}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, education: e.target.value }))}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm mb-3"
+                    disabled={masterDataLoading}
                   >
-                    <option value="">Select education level</option>
-                    <option value="high-school">High School</option>
-                    <option value="associate">Associate Degree</option>
-                    <option value="bachelors">Bachelor's Degree</option>
-                    <option value="masters">Master's Degree</option>
-                    <option value="phd">PhD</option>
-                    <option value="any">Any</option>
+                    <option value="">{masterDataLoading ? 'Loading...' : 'Select education level'}</option>
+                    {educationLevels.map((level) => (
+                      <option key={level.id} value={level.code}>{level.label}</option>
+                    ))}
                   </select>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -1318,34 +1460,26 @@ Interested candidates should submit their resume and cover letter through our ap
 
                 {/* Industry Type */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Industry Type</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-900">Industry Type</h3>
+                    <button
+                      onClick={() => setShowCreateModal('industry')}
+                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add New
+                    </button>
+                  </div>
                   <select
                     value={extractedData.industryType}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, industryType: e.target.value }))}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm mb-3"
+                    disabled={masterDataLoading}
                   >
-                    <option value="">Select industry type</option>
-                    <option value="technology">Technology</option>
-                    <option value="healthcare">Healthcare</option>
-                    <option value="finance">Finance & Banking</option>
-                    <option value="retail">Retail & E-commerce</option>
-                    <option value="manufacturing">Manufacturing</option>
-                    <option value="education">Education</option>
-                    <option value="consulting">Consulting</option>
-                    <option value="real-estate">Real Estate</option>
-                    <option value="hospitality">Hospitality & Tourism</option>
-                    <option value="media">Media & Entertainment</option>
-                    <option value="telecommunications">Telecommunications</option>
-                    <option value="automotive">Automotive</option>
-                    <option value="energy">Energy & Utilities</option>
-                    <option value="government">Government & Public Sector</option>
-                    <option value="nonprofit">Non-Profit</option>
-                    <option value="legal">Legal Services</option>
-                    <option value="insurance">Insurance</option>
-                    <option value="transportation">Transportation & Logistics</option>
-                    <option value="agriculture">Agriculture</option>
-                    <option value="construction">Construction</option>
-                    <option value="other">Other</option>
+                    <option value="">{masterDataLoading ? 'Loading...' : 'Select industry type'}</option>
+                    {industryTypes.map((type) => (
+                      <option key={type.id} value={type.code}>{type.label}</option>
+                    ))}
                   </select>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -1595,15 +1729,33 @@ Interested candidates should submit their resume and cover letter through our ap
                     <p className="text-sm text-gray-600 mt-1">This is the job description that will be published</p>
                   </div>
                   <div className="flex gap-2">
-                    <button 
-                      onClick={() => navigator.clipboard.writeText(mode === 'ai' ? generatedJD : manualJD)}
+                    <button
+                      onClick={() => {
+                        const text = mode === 'ai' ? generatedJD : manualJD;
+                        navigator.clipboard.writeText(text);
+                        toast.success({ title: 'Copied!', description: 'Job description copied to clipboard' });
+                      }}
                       className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm"
                       title="Copy to clipboard"
                     >
                       <Copy className="w-4 h-4" />
                       Copy
                     </button>
-                    <button className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm">
+                    <button
+                      onClick={() => {
+                        const text = mode === 'ai' ? generatedJD : manualJD;
+                        const fullContent = `${jobTitle}\n\n${text}\n\n--- Skills ---\nMust Have: ${extractedData.mustHaveSkills.join(', ')}\nNice to Have: ${extractedData.niceToHaveSkills.join(', ')}\n\nExperience: ${extractedData.experience}\nEducation: ${extractedData.education}`;
+                        const blob = new Blob([fullContent], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${jobTitle.replace(/[^a-z0-9]/gi, '_')}_JD.txt`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        toast.success({ title: 'Downloaded!', description: 'Job description saved as text file' });
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm"
+                    >
                       <Download className="w-4 h-4" />
                       Download
                     </button>
@@ -1965,6 +2117,117 @@ Interested candidates should submit their resume and cover letter through our ap
         )}
         </div>
       </div>
+
+      {/* Create New Master Data Modal */}
+      {showCreateModal && (
+        <>
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
+            onClick={() => {
+              setShowCreateModal(null);
+              setNewItemLabel('');
+              setNewItemCode('');
+            }}
+          >
+            <div
+              className="bg-white rounded-lg shadow-xl w-full max-w-md p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-medium text-gray-900">
+                  {showCreateModal === 'experience' && 'Add New Experience Level'}
+                  {showCreateModal === 'education' && 'Add New Education Level'}
+                  {showCreateModal === 'industry' && 'Add New Industry Type'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(null);
+                    setNewItemLabel('');
+                    setNewItemCode('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Label <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newItemLabel}
+                    onChange={(e) => setNewItemLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newItemLabel.trim()) handleCreateNewItem();
+                      if (e.key === 'Escape') {
+                        setShowCreateModal(null);
+                        setNewItemLabel('');
+                        setNewItemCode('');
+                      }
+                    }}
+                    placeholder={
+                      showCreateModal === 'experience' ? 'e.g., 8-12 years' :
+                      showCreateModal === 'education' ? 'e.g., Diploma' :
+                      'e.g., Aerospace'
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Code <span className="text-gray-400">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newItemCode}
+                    onChange={(e) => setNewItemCode(e.target.value)}
+                    placeholder="Auto-generated from label if empty"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Unique identifier used in the system
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowCreateModal(null);
+                    setNewItemLabel('');
+                    setNewItemCode('');
+                  }}
+                  className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateNewItem}
+                  disabled={!newItemLabel.trim() || isCreating}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isCreating ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Create
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </DndProvider>
   );
 }

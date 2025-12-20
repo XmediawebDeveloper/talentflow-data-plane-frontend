@@ -27,7 +27,8 @@ import {
   Activity,
   TrendingUp,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Briefcase
 } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -91,6 +92,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       label: 'Recruitment Tools',
       icon: FileText,
       children: [
+        { id: 'job-openings', label: 'Job Openings', icon: Briefcase, href: '/recruitment/job-openings', permission: 'canCreateJD' },
         { id: 'jd-creation', label: 'JD Creation', icon: FileText, href: '/recruitment/jd-creation', permission: 'canCreateJD' },
         { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permission: 'canViewResumes' },
         { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permission: 'canViewResumes' },
@@ -111,6 +113,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
         { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', adminOnly: true },
         { id: 'team-management', label: 'Team Management', icon: Users, href: '/organization/team-management', adminOnly: true },
         { id: 'user-management', label: 'User Management', icon: UserCog, href: '/organization/user-management', adminOnly: true },
+        { id: 'role-management', label: 'Role Management', icon: Shield, href: '/organization/role-management', adminOnly: true },
       ]
     },
 

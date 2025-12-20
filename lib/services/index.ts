@@ -70,3 +70,15 @@ export type {
   CreateUserRequest,
   UpdateUserRequest,
 } from './userService';
+
+// Master Data
+export { masterDataService } from './masterDataService';
+export type {
+  ExperienceLevel,
+  EducationLevel,
+  IndustryType,
+  MasterDataResponse,
+  ExperienceLevelCreate,
+  EducationLevelCreate,
+  IndustryTypeCreate,
+} from './masterDataService';
