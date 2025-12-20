@@ -14,13 +14,17 @@ export default function DashboardLayout({
   const { user, tenant, isAuthenticated, isLoading, logout } = useAuth();
   const router = useRouter();
 
+  console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
+      console.log('[DASHBOARD] Not authenticated, redirecting to login');
       router.push('/login');
     }
   }, [isAuthenticated, isLoading, router]);
 
   if (isLoading) {
+    console.log('[DASHBOARD] Still loading...');
     return (
       <div className="flex h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-blue-50">
         <div className="text-center">
@@ -32,8 +36,11 @@ export default function DashboardLayout({
   }
 
   if (!isAuthenticated) {
+    console.log('[DASHBOARD] Not authenticated, returning null');
     return null;
   }
+
+  console.log('[DASHBOARD] Authenticated, rendering dashboard');
 
   return (
     <div className="flex h-screen bg-gray-50">
