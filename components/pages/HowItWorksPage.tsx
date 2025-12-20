@@ -1,0 +1,366 @@
+import { useState, useEffect } from "react";
+import {
+  Upload,
+  Brain,
+  Send,
+  Video,
+  CheckCircle2,
+  ArrowRight,
+  Clock,
+  FileText,
+  Users,
+  BarChart3,
+  Zap,
+  Target,
+} from "lucide-react";
+
+interface HowItWorksPageProps {
+  onNavigate: (page: string) => void;
+}
+
+export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
+  const [isMobile, setIsMobile] = useState(false);
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    setIsDark(document.documentElement.classList.contains('dark'));
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const pageStyle: React.CSSProperties = {
+    minHeight: '100vh',
+    backgroundColor: isDark ? '#0F172A' : '#ffffff',
+    color: isDark ? '#ffffff' : '#111827',
+  };
+
+  const containerStyle: React.CSSProperties = {
+    maxWidth: '1400px',
+    margin: '0 auto',
+    padding: '80px 24px',
+  };
+
+  const headerStyle: React.CSSProperties = {
+    textAlign: 'center',
+    marginBottom: '80px',
+  };
+
+  const badgeStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 16px',
+    borderRadius: '9999px',
+    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : '#DCFCE7',
+    color: isDark ? '#86EFAC' : '#16A34A',
+    fontSize: '14px',
+    fontWeight: 600,
+    marginBottom: '16px',
+  };
+
+  const titleStyle: React.CSSProperties = {
+    fontSize: isMobile ? '36px' : '56px',
+    fontWeight: 700,
+    color: isDark ? '#ffffff' : '#111827',
+    marginBottom: '16px',
+    lineHeight: 1.1,
+  };
+
+  const subtitleStyle: React.CSSProperties = {
+    fontSize: '20px',
+    color: isDark ? '#94A3B8' : '#6B7280',
+    maxWidth: '672px',
+    margin: '0 auto',
+    lineHeight: 1.6,
+  };
+
+  const stepsContainerStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '64px',
+    marginBottom: '80px',
+  };
+
+  const stepRowStyle = (reverse: boolean): React.CSSProperties => ({
+    display: 'flex',
+    flexDirection: isMobile ? 'column' : (reverse ? 'row-reverse' : 'row'),
+    alignItems: 'center',
+    gap: '48px',
+  });
+
+  const stepContentStyle: React.CSSProperties = {
+    flex: 1,
+  };
+
+  const stepNumberStyle = (gradient: string): React.CSSProperties => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '48px',
+    height: '48px',
+    borderRadius: '12px',
+    background: gradient,
+    color: '#ffffff',
+    fontSize: '20px',
+    fontWeight: 700,
+    marginBottom: '16px',
+  });
+
+  const stepTitleStyle: React.CSSProperties = {
+    fontSize: '32px',
+    fontWeight: 700,
+    color: isDark ? '#ffffff' : '#111827',
+    marginBottom: '16px',
+  };
+
+  const stepDescStyle: React.CSSProperties = {
+    fontSize: '18px',
+    color: isDark ? '#94A3B8' : '#6B7280',
+    lineHeight: 1.6,
+    marginBottom: '24px',
+  };
+
+  const stepFeaturesStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  };
+
+  const stepFeatureItemStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    color: isDark ? '#CBD5E1' : '#374151',
+  };
+
+  const stepImageStyle: React.CSSProperties = {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+
+  const imageBoxStyle = (gradient: string): React.CSSProperties => ({
+    width: '100%',
+    maxWidth: '500px',
+    aspectRatio: '4/3',
+    borderRadius: '24px',
+    background: gradient,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+  });
+
+  const statsGridStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+    gap: '24px',
+    marginBottom: '80px',
+    padding: '48px',
+    borderRadius: '24px',
+    backgroundColor: isDark ? '#1E293B' : '#F9FAFB',
+  };
+
+  const statStyle: React.CSSProperties = {
+    textAlign: 'center',
+  };
+
+  const statNumberStyle: React.CSSProperties = {
+    fontSize: '48px',
+    fontWeight: 700,
+    background: 'linear-gradient(135deg, #667EEA, #764BA2)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    backgroundClip: 'text',
+    marginBottom: '8px',
+  };
+
+  const statLabelStyle: React.CSSProperties = {
+    color: isDark ? '#94A3B8' : '#6B7280',
+    fontSize: '16px',
+  };
+
+  const ctaSectionStyle: React.CSSProperties = {
+    textAlign: 'center',
+    padding: '80px 40px',
+    borderRadius: '24px',
+    background: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+  };
+
+  const ctaTitleStyle: React.CSSProperties = {
+    fontSize: isMobile ? '32px' : '48px',
+    fontWeight: 700,
+    color: '#ffffff',
+    marginBottom: '16px',
+  };
+
+  const ctaSubtitleStyle: React.CSSProperties = {
+    fontSize: '20px',
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: '32px',
+    maxWidth: '600px',
+    margin: '0 auto 32px',
+  };
+
+  const ctaButtonStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '16px 32px',
+    fontSize: '18px',
+    fontWeight: 500,
+    borderRadius: '12px',
+    backgroundColor: '#ffffff',
+    color: '#7C3AED',
+    border: 'none',
+    cursor: 'pointer',
+    boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+  };
+
+  const steps = [
+    {
+      number: "1",
+      title: "Upload Resumes",
+      description: "Bulk upload resumes in any format - PDF, Word, or even images. Our AI instantly parses and organizes candidate data.",
+      gradient: "linear-gradient(135deg, #3B82F6, #8B5CF6)",
+      icon: Upload,
+      features: [
+        "Drag & drop bulk upload",
+        "Automatic data extraction",
+        "Duplicate detection",
+        "Smart categorization",
+      ],
+    },
+    {
+      number: "2",
+      title: "AI Screening",
+      description: "Our AI analyzes each resume against your job requirements, scoring and ranking candidates automatically.",
+      gradient: "linear-gradient(135deg, #8B5CF6, #EC4899)",
+      icon: Brain,
+      features: [
+        "Skills matching",
+        "Experience validation",
+        "Cultural fit analysis",
+        "Red flag detection",
+      ],
+    },
+    {
+      number: "3",
+      title: "Send Assessments",
+      description: "Create custom assessments and send them to shortlisted candidates with one click.",
+      gradient: "linear-gradient(135deg, #F97316, #EF4444)",
+      icon: Send,
+      features: [
+        "Custom test builder",
+        "Automated invitations",
+        "Progress tracking",
+        "Auto-grading",
+      ],
+    },
+    {
+      number: "4",
+      title: "Video Interviews",
+      description: "Conduct live or async video interviews with AI-powered insights and automatic transcription.",
+      gradient: "linear-gradient(135deg, #22C55E, #14B8A6)",
+      icon: Video,
+      features: [
+        "One-way video",
+        "Live interviews",
+        "AI sentiment analysis",
+        "Interview scorecards",
+      ],
+    },
+    {
+      number: "5",
+      title: "Hire the Best",
+      description: "Make data-driven hiring decisions with comprehensive candidate profiles and team feedback.",
+      gradient: "linear-gradient(135deg, #EC4899, #8B5CF6)",
+      icon: Target,
+      features: [
+        "Complete candidate profiles",
+        "Team collaboration",
+        "Offer management",
+        "Onboarding prep",
+      ],
+    },
+  ];
+
+  const stats = [
+    { number: "75%", label: "Faster Screening" },
+    { number: "40%", label: "Better Hires" },
+    { number: "15hrs", label: "Saved Weekly" },
+    { number: "98%", label: "Satisfaction" },
+  ];
+
+  return (
+    <div style={pageStyle}>
+      <div style={containerStyle}>
+        {/* Header */}
+        <div style={headerStyle}>
+          <div style={badgeStyle}>
+            <Clock style={{ width: 16, height: 16 }} />
+            Simple Process
+          </div>
+          <h1 style={titleStyle}>How TalentFlow Works</h1>
+          <p style={subtitleStyle}>
+            From resume upload to final hire, our 5-step process streamlines your entire recruitment workflow.
+          </p>
+        </div>
+
+        {/* Steps */}
+        <div style={stepsContainerStyle}>
+          {steps.map((step, index) => {
+            const Icon = step.icon;
+            return (
+              <div key={index} style={stepRowStyle(index % 2 === 1)}>
+                <div style={stepContentStyle}>
+                  <div style={stepNumberStyle(step.gradient)}>{step.number}</div>
+                  <h2 style={stepTitleStyle}>{step.title}</h2>
+                  <p style={stepDescStyle}>{step.description}</p>
+                  <div style={stepFeaturesStyle}>
+                    {step.features.map((feature, idx) => (
+                      <div key={idx} style={stepFeatureItemStyle}>
+                        <CheckCircle2 style={{ width: 20, height: 20, color: '#22C55E', flexShrink: 0 }} />
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={stepImageStyle}>
+                  <div style={imageBoxStyle(step.gradient)}>
+                    <Icon style={{ width: 80, height: 80, color: '#ffffff' }} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Stats */}
+        <div style={statsGridStyle}>
+          {stats.map((stat, index) => (
+            <div key={index} style={statStyle}>
+              <div style={statNumberStyle}>{stat.number}</div>
+              <div style={statLabelStyle}>{stat.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* CTA Section */}
+        <div style={ctaSectionStyle}>
+          <h2 style={ctaTitleStyle}>Ready to streamline your hiring?</h2>
+          <p style={ctaSubtitleStyle}>
+            Join thousands of companies using TalentFlow to build amazing teams.
+          </p>
+          <button onClick={() => onNavigate("signup")} style={ctaButtonStyle}>
+            Start Free Trial
+            <ArrowRight style={{ width: 20, height: 20 }} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
