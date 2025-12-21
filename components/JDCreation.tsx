@@ -255,12 +255,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
   const [industryTypes, setIndustryTypes] = useState<IndustryType[]>([]);
   const [masterDataLoading, setMasterDataLoading] = useState(true);
 
-  // Create new modal state
-  const [showCreateModal, setShowCreateModal] = useState<'experience' | 'education' | 'industry' | null>(null);
-  const [newItemLabel, setNewItemLabel] = useState('');
-  const [newItemCode, setNewItemCode] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
-
   // Fetch master data on mount
   useEffect(() => {
     const fetchMasterData = async () => {
@@ -271,7 +265,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
         setIndustryTypes(data.industry_types);
       } catch (error) {
         console.log('[TalentFlow] Failed to fetch master data, using fallback:', error);
-        // Fallback to empty arrays - dropdowns will show "No options"
       } finally {
         setMasterDataLoading(false);
       }
@@ -279,54 +272,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
 
     fetchMasterData();
   }, []);
-
-  // Handle create new master data item
-  const handleCreateNewItem = async () => {
-    if (!newItemLabel.trim() || !showCreateModal) return;
-
-    setIsCreating(true);
-    const code = newItemCode.trim() || newItemLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-
-    try {
-      if (showCreateModal === 'experience') {
-        const newItem = await masterDataService.createExperienceLevel({
-          code,
-          label: newItemLabel.trim(),
-          sort_order: experienceLevels.length + 1,
-        });
-        setExperienceLevels(prev => [...prev, newItem]);
-        setExtractedData(prev => ({ ...prev, experience: code }));
-        toast.success({ title: 'Experience level created', description: `"${newItemLabel}" has been added.` });
-      } else if (showCreateModal === 'education') {
-        const newItem = await masterDataService.createEducationLevel({
-          code,
-          label: newItemLabel.trim(),
-          sort_order: educationLevels.length + 1,
-        });
-        setEducationLevels(prev => [...prev, newItem]);
-        setExtractedData(prev => ({ ...prev, education: code }));
-        toast.success({ title: 'Education level created', description: `"${newItemLabel}" has been added.` });
-      } else if (showCreateModal === 'industry') {
-        const newItem = await masterDataService.createIndustryType({
-          code,
-          label: newItemLabel.trim(),
-          sort_order: industryTypes.length + 1,
-        });
-        setIndustryTypes(prev => [...prev, newItem]);
-        setExtractedData(prev => ({ ...prev, industryType: code }));
-        toast.success({ title: 'Industry type created', description: `"${newItemLabel}" has been added.` });
-      }
-
-      setShowCreateModal(null);
-      setNewItemLabel('');
-      setNewItemCode('');
-    } catch (error) {
-      console.error('Failed to create item:', error);
-      toast.error({ title: 'Failed to create', description: 'Please try again.' });
-    } finally {
-      setIsCreating(false);
-    }
-  };
 
   const handleGenerateJD = async () => {
     setIsGenerating(true);
@@ -1392,16 +1337,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
               <div className="grid grid-cols-3 gap-6 mb-8">
                 {/* Experience */}
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-gray-900">Experience</h3>
-                    <button
-                      onClick={() => setShowCreateModal('experience')}
-                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add New
-                    </button>
-                  </div>
+                  <h3 className="text-gray-900 mb-4">Experience</h3>
                   <select
                     value={extractedData.experience}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, experience: e.target.value }))}
@@ -1426,16 +1362,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
 
                 {/* Education */}
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-gray-900">Education</h3>
-                    <button
-                      onClick={() => setShowCreateModal('education')}
-                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add New
-                    </button>
-                  </div>
+                  <h3 className="text-gray-900 mb-4">Education</h3>
                   <select
                     value={extractedData.education}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, education: e.target.value }))}
@@ -1460,16 +1387,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
 
                 {/* Industry Type */}
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-gray-900">Industry Type</h3>
-                    <button
-                      onClick={() => setShowCreateModal('industry')}
-                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add New
-                    </button>
-                  </div>
+                  <h3 className="text-gray-900 mb-4">Industry Type</h3>
                   <select
                     value={extractedData.industryType}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, industryType: e.target.value }))}
@@ -2117,117 +2035,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
         )}
         </div>
       </div>
-
-      {/* Create New Master Data Modal */}
-      {showCreateModal && (
-        <>
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
-            onClick={() => {
-              setShowCreateModal(null);
-              setNewItemLabel('');
-              setNewItemCode('');
-            }}
-          >
-            <div
-              className="bg-white rounded-lg shadow-xl w-full max-w-md p-6"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-medium text-gray-900">
-                  {showCreateModal === 'experience' && 'Add New Experience Level'}
-                  {showCreateModal === 'education' && 'Add New Education Level'}
-                  {showCreateModal === 'industry' && 'Add New Industry Type'}
-                </h3>
-                <button
-                  onClick={() => {
-                    setShowCreateModal(null);
-                    setNewItemLabel('');
-                    setNewItemCode('');
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Label <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={newItemLabel}
-                    onChange={(e) => setNewItemLabel(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newItemLabel.trim()) handleCreateNewItem();
-                      if (e.key === 'Escape') {
-                        setShowCreateModal(null);
-                        setNewItemLabel('');
-                        setNewItemCode('');
-                      }
-                    }}
-                    placeholder={
-                      showCreateModal === 'experience' ? 'e.g., 8-12 years' :
-                      showCreateModal === 'education' ? 'e.g., Diploma' :
-                      'e.g., Aerospace'
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
-                    autoFocus
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Code <span className="text-gray-400">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={newItemCode}
-                    onChange={(e) => setNewItemCode(e.target.value)}
-                    placeholder="Auto-generated from label if empty"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Unique identifier used in the system
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowCreateModal(null);
-                    setNewItemLabel('');
-                    setNewItemCode('');
-                  }}
-                  className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateNewItem}
-                  disabled={!newItemLabel.trim() || isCreating}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {isCreating ? (
-                    <>
-                      <span className="animate-spin">⏳</span>
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4" />
-                      Create
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
     </DndProvider>
   );
 }
