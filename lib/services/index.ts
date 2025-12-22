@@ -82,3 +82,20 @@ export type {
   EducationLevelCreate,
   IndustryTypeCreate,
 } from './masterDataService';
+
+// Usage Tracking
+export {
+  default as usageTrackingService,
+  recordUsage,
+  recordResumeUpload,
+  recordResumeScoring,
+  recordAssessment,
+  recordAIInterview,
+  recordStorageUsage,
+  QUOTA_TYPE_LABELS,
+} from './usageTrackingService';
+export type {
+  QuotaType,
+  RecordUsageRequest,
+  RecordUsageResponse,
+} from './usageTrackingService';

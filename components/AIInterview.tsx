@@ -2,9 +2,30 @@
 
 import { Video, Calendar, Users, CheckCircle, Play, MoreVertical, Settings, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
+import { recordAIInterview } from '@/lib/services/usageTrackingService';
 
 export default function AIInterview() {
   const [activeTab, setActiveTab] = useState<'scheduled' | 'completed' | 'settings'>('scheduled');
+
+  // Handler for scheduling an interview - tracks usage
+  const handleScheduleInterview = () => {
+    // In a real app, this would open a modal to schedule
+    // For now, track the usage when scheduling
+    recordAIInterview(`interview-${Date.now()}`, {
+      action: 'schedule',
+      type: 'new_interview'
+    });
+    alert('Interview scheduling feature coming soon!');
+  };
+
+  // Handler for starting an interview - tracks usage
+  const handleStartInterview = (interviewId: number, candidateName: string) => {
+    recordAIInterview(`interview-${interviewId}`, {
+      action: 'start',
+      candidate: candidateName
+    });
+    alert(`Starting AI interview with ${candidateName}...`);
+  };
 
   const interviews = [
     {
@@ -64,7 +85,10 @@ export default function AIInterview() {
               Conduct automated AI-powered interviews with candidates
             </p>
           </div>
-          <button className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-md hover:bg-blue-700 transition-colors">
+          <button
+            onClick={handleScheduleInterview}
+            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-md hover:bg-blue-700 transition-colors"
+          >
             <Calendar className="w-5 h-5" />
             Schedule Interview
           </button>

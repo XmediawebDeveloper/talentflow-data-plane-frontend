@@ -7,6 +7,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
+import { recordUsage } from '@/lib/services/usageTrackingService';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -636,6 +637,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
       // Publish the JD
       const publishedJd = await jdService.publish(createdJd.id);
       console.log('[DEBUG] JD published successfully:', publishedJd.id);
+
+      // Track usage - POST /api/v1/external/usage/record
+      // JD Creation uses RU quota (or can be tracked separately)
+      recordUsage({
+        quota_type: 'RU',
+        amount: 0, // JD creation doesn't deduct quota, just logs
+        operation_type: 'jd_creation',
+        resource_id: publishedJd.id,
+        metadata: {
+          title: jobTitle,
+          mode: mode,
+          skills_count: extractedData.mustHaveSkills.length + extractedData.niceToHaveSkills.length
+        }
+      });
 
       setIsPublishing(false);
       setIsPublished(true);

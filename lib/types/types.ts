@@ -39,4 +39,7 @@ export interface Job {
   applicants?: number;
   description?: string;
   skills?: string[];
+    employmentType?: 'Full-time' | 'Part-time' | 'Contract' | 'Internship';
 }
+
+

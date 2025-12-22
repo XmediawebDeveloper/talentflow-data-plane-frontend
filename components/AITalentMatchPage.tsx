@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import AITalentMatchPageJobsList from './AITalentMatchPageJobsList';
 import ResumeVersionsModal from './ResumeVersionsModal';
+import { recordUsage } from '@/lib/services/usageTrackingService';
 
 interface Job {
   id: string;
@@ -121,7 +122,16 @@ export default function AITalentMatchPage({
     setMatchedCandidates(results);
     setShowMatchingPanel(false);
     setViewMode('results');
-    
+
+    // Track usage - POST /api/v1/external/usage/record (RS - talent match uses resume scoring quota)
+    recordUsage({
+      quota_type: 'RS',
+      amount: results.length,
+      operation_type: 'talent_match',
+      resource_id: selectedJob,
+      metadata: { candidates_matched: results.length }
+    });
+
     // Save to history
     if (onSaveMatch && selectedJobData) {
       const newMatchHistory: MatchHistory = {

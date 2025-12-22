@@ -584,7 +584,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 <div className="text-sm text-gray-700 space-y-2">
                   <p>• <strong>Unique Question Sets:</strong> Each candidate receives freshly generated questions for fairness</p>
                   <p>• LLM will analyze the JD and generate questions dynamically per candidate</p>
-                  <p>• Question difficulty adjusted based on experience level: <strong>{selectedJob?.experienceLevel}</strong></p>
+                  <p>• Question difficulty adjusted based on experience level: <strong>{selectedJob?.experience}</strong></p>
                   <p>• Number of questions and time allocation calculated automatically</p>
                   <p>• Topics you provide will guide the question generation process</p>
                 </div>
@@ -703,7 +703,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
               <div className="p-4 bg-yellow-50 rounded-lg">
                 <div className="text-sm text-yellow-600 mb-1">Difficulty</div>
-                <div className="text-2xl text-gray-900">{selectedJob?.experienceLevel}</div>
+                <div className="text-2xl text-gray-900">{selectedJob?.experience}</div>
               </div>
             </div>
           </div>

@@ -8,6 +8,7 @@ import ResumeSelectionModal from './ResumeSelectionModal';
 import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import { scoringService } from '@/lib/services';
+import { recordResumeScoring } from '@/lib/services/usageTrackingService';
 
 interface ScoredResumeData {
   id: string;
@@ -155,6 +156,12 @@ export default function ResumeScoringPage({
       setScoredResumes(scored);
       setShowResults(true);
 
+      // Track usage - POST /api/v1/external/usage/record
+      recordResumeScoring(selectedJob, {
+        resumes_scored: scored.length,
+        source: resumeSource || 'database'
+      });
+
       // Save to history
       if (onSaveScores) {
         const selectedJobData = jobs.find(j => j.id === selectedJob);
@@ -192,6 +199,13 @@ export default function ResumeScoringPage({
 
       setScoredResumes(scored);
       setShowResults(true);
+
+      // Track usage - POST /api/v1/external/usage/record
+      recordResumeScoring(selectedJob, {
+        resumes_scored: scored.length,
+        source: resumeSource || 'database',
+        fallback: true
+      });
 
       // Save to history
       if (onSaveScores) {

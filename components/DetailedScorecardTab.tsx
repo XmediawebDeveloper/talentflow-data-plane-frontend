@@ -136,20 +136,23 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
     return 'bg-red-100 border-red-300 text-red-700';
   };
 
-  const getEligibleStatus = (rating: number): { status: string; icon: JSX.Element; color: string } => {
-    if (rating > 7) {
-      return {
-        status: 'Eligible',
-        icon: <CheckCircle className="w-5 h-5 text-green-600" />,
-        color: 'text-green-700'
-      };
-    }
+ const getEligibleStatus = (
+  rating: number
+): { status: string; icon: React.ReactNode; color: string } => {
+  if (rating > 7) {
     return {
-      status: 'Not Eligible',
-      icon: <XCircle className="w-5 h-5 text-red-600" />,
-      color: 'text-red-700'
+      status: 'Eligible',
+      icon: <CheckCircle className="w-5 h-5 text-green-600" />,
+      color: 'text-green-700'
     };
+  }
+  return {
+    status: 'Not Eligible',
+    icon: <XCircle className="w-5 h-5 text-red-600" />,
+    color: 'text-red-700'
   };
+};
+
 
   const getRatingRangeColor = (rating: number): string => {
     if (rating === 10) return 'text-green-700 font-semibold';

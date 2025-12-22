@@ -11,6 +11,7 @@ import AssessmentEditModal from './AssessmentEditModal';
 import AssessmentDetailsView from './AssessmentDetailsView';
 import { Job } from '@/lib/types/types';
 import { assessmentService } from '@/lib/services';
+import { recordAssessment } from '@/lib/services/usageTrackingService';
 
 interface AssessmentsProps {
   jobs: Job[];
@@ -127,6 +128,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const handleCreateAssessment = (assessment: any) => {
     setAssessmentsList([...assessmentsList, assessment]);
     setShowCreation(false);
+
+    // Track usage - POST /api/v1/external/usage/record
+    recordAssessment(assessment.id, {
+      assessment_title: assessment.title,
+      type: assessment.type
+    });
   };
 
   if (showCreation) {
