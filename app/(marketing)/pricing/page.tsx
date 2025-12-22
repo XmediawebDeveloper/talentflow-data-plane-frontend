@@ -118,8 +118,8 @@ const formatCurrency = (amount: number | undefined | null, currency: string): st
   return `${symbol}${amount.toLocaleString()}`;
 };
 
-// const ADDONS_API_URL = 'https://talentflowapi.mo.vc/api/v1';
-const ADDONS_API_URL = 'http://192.168.1.110:8000/api/v1';
+const ADDONS_API_URL = 'https://talentflowapi.mo.vc/api/v1';
+// const ADDONS_API_URL = 'http://192.168.1.110:8000/api/v1';
 
 export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(false);

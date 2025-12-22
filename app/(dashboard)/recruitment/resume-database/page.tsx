@@ -37,23 +37,22 @@ export default function ResumeDatabaseRoute() {
         education: r.education?.[0]?.degree || 'N/A',
         location: r.location || 'N/A',
         skills: r.skills || [],
-        matchScore: 0,
-        appliedDate: r.created_at,
-        status: 'New',
-        source: r.source || 'manual_upload',
-        folderId: r.folder_id,
-        certifications: r.certifications || [],
+        source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
+        folderId: r.folder_id || '',
+        uploadDate: r.created_at,
+        attachments: r.file_name ? 1 : 0,
+        uploadedBy: 'System',
       }));
 
       // Convert API Folder to component Folder type
-      const convertedFolders: Folder[] = (Array.isArray(folderResponse) ? folderResponse : []).map((f: ApiFolder) => ({
+      const convertApiFolder = (f: ApiFolder): Folder => ({
         id: f.id,
         name: f.name,
+        count: f.resume_count || 0,
         parentId: f.parent_id,
-        resumeCount: f.resume_count || 0,
-        children: f.children || [],
-        color: '#3B82F6',
-      }));
+        children: f.children?.map(convertApiFolder),
+      });
+      const convertedFolders: Folder[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
 
       setResumes(convertedResumes);
       setFolders(convertedFolders);

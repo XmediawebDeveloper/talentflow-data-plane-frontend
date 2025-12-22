@@ -51,7 +51,7 @@ interface DisplayPlan {
   features: string[];
 }
 
-const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://192.168.1.110:8000/api/v1';
+const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://talentflowapi.mo.vc/api/v1';
 
 // Icon mapping based on plan name
 const getIconForPlan = (planName: string): typeof Users | typeof Building2 | typeof Zap => {

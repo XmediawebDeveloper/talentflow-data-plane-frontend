@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import ResumeScoringPage from '@/components/ResumeScoringPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService, folderService } from '@/lib/services/resumeService';
-import { Job, Resume, Folder } from '@/lib/types/types';
+import { Resume, Folder } from '@/lib/types/types';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -18,10 +18,21 @@ interface ScoredResumeData {
   scoredResumes: any[];
 }
 
+interface Job {
+  id: string;
+  title: string;
+  location: string;
+  department: string;
+  status: string;
+  applicants: number;
+  employmentType?: string;
+  experience?: string;
+}
+
 export default function ResumeScoringRoute() {
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [resumes, setResumes] = useState<Resume[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [resumes, setResumes] = useState<any[]>([]);
+  const [folders, setFolders] = useState<any[]>([]);
   const [scoredHistory, setScoredHistory] = useState<ScoredResumeData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -72,27 +83,17 @@ export default function ResumeScoringRoute() {
       ]);
 
       // Convert JDResponse to Job type for component compatibility
-      const convertedJobs: Job[] = jdResponse.items.map((jd: JDResponse) => ({
+      const convertedJobs = jdResponse.items.map((jd: JDResponse) => ({
         id: jd.id,
         title: jd.title,
         department: jd.department || 'General',
         location: jd.location || 'Remote',
         status: jd.status === 'published' ? 'Published' :
                 jd.status === 'draft' ? 'Draft' :
-                jd.status === 'archived' ? 'Archived' : 'Active',
-        postedDate: jd.created_at,
+                jd.status === 'archived' ? 'Archived' : 'Draft',
         applicants: jd.applicants_count || 0,
-        description: jd.description,
-        requirements: jd.must_have_skills || [],
-        experience: jd.experience_min && jd.experience_max
-          ? `${jd.experience_min}-${jd.experience_max} years`
-          : jd.experience_min
-          ? `${jd.experience_min}+ years`
-          : 'Not specified',
-        salary: jd.salary_min && jd.salary_max
-          ? `${jd.salary_currency || 'USD'} ${jd.salary_min?.toLocaleString()}-${jd.salary_max?.toLocaleString()}`
-          : 'Not specified',
         employmentType: jd.employment_type || 'Full-time',
+        experience: jd.experience_min ? `${jd.experience_min}+ years` : undefined,
       }));
 
       // Convert API Resume to component Resume type
@@ -106,23 +107,22 @@ export default function ResumeScoringRoute() {
         education: r.education?.[0]?.degree || 'N/A',
         location: r.location || 'N/A',
         skills: r.skills || [],
-        matchScore: 0,
-        appliedDate: r.created_at,
-        status: 'New',
-        source: r.source || 'manual_upload',
-        folderId: r.folder_id,
-        certifications: r.certifications || [],
+        source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
+        folderId: r.folder_id || '',
+        uploadDate: r.created_at,
+        attachments: r.file_name ? 1 : 0,
+        uploadedBy: 'System',
       }));
 
       // Convert API Folder to component Folder type
-      const convertedFolders: Folder[] = (Array.isArray(folderResponse) ? folderResponse : []).map((f: any) => ({
+      const convertApiFolder = (f: any): Folder => ({
         id: f.id,
         name: f.name,
+        count: f.resume_count || 0,
         parentId: f.parent_id,
-        resumeCount: f.resume_count || 0,
-        children: f.children || [],
-        color: '#3B82F6',
-      }));
+        children: f.children?.map(convertApiFolder),
+      });
+      const convertedFolders: Folder[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
 
       setJobs(convertedJobs);
       setResumes(convertedResumes);

@@ -1,8 +1,9 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, ArrowLeft, GripVertical, Info } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, ArrowLeft, GripVertical, Info, Eye, Pencil } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import ReactMarkdown from 'react-markdown';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
@@ -202,7 +203,8 @@ const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkill
 export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreationProps = {}) {
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>('create');
-  
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+
   // Step 1: Create JD
   const [jobTitle, setJobTitle] = useState('');
   const [aiPrompt, setAiPrompt] = useState('');
@@ -774,7 +776,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
                         placeholder="e.g., Senior Software Engineer"
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-gray-900 bg-white placeholder-gray-400"
                       />
                     </div>
 
@@ -787,7 +789,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         onChange={(e) => setAiPrompt(e.target.value)}
                         placeholder="Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"
                         rows={12}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-gray-900 bg-white placeholder-gray-400"
                       />
                       <p className="text-xs text-gray-500 mt-2">
                         💡 Tip: Include details like experience level, key skills, responsibilities, location, team size, or any specific requirements
@@ -816,7 +818,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
               {mode === 'manual' && (
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                   <h2 className="text-gray-900 mb-6">Job Details</h2>
-                  
+
                   <div className="space-y-5">
                     <div>
                       <label className="block text-sm text-gray-700 mb-2">
@@ -827,7 +829,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
                         placeholder="e.g., Senior Software Engineer"
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-gray-900 bg-white placeholder-gray-400"
                       />
                     </div>
 
@@ -840,7 +842,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         onChange={(e) => setManualJD(e.target.value)}
                         placeholder="Paste or write your job description here..."
                         rows={20}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-gray-900 bg-white placeholder-gray-400"
                       />
                     </div>
                   </div>
@@ -855,6 +857,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   </h2>
                   {((mode === 'ai' && generatedJD) || (mode === 'manual' && manualJD)) && (
                     <div className="flex gap-2">
+                      {/* Preview/Edit Toggle */}
+                      <div className="flex border border-gray-300 rounded-md overflow-hidden">
+                        <button
+                          onClick={() => setIsPreviewMode(false)}
+                          className={`px-3 py-1.5 text-sm flex items-center gap-1 ${!isPreviewMode ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                          title="Edit mode"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => setIsPreviewMode(true)}
+                          className={`px-3 py-1.5 text-sm flex items-center gap-1 ${isPreviewMode ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                          title="Preview mode"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          Preview
+                        </button>
+                      </div>
                       <button
                         onClick={() => {
                           const text = mode === 'ai' ? generatedJD : manualJD;
@@ -889,13 +910,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
 
                 {mode === 'ai' ? (
                   generatedJD ? (
-                    <div className="prose max-w-none">
-                      <textarea
-                        value={generatedJD}
-                        onChange={(e) => setGeneratedJD(e.target.value)}
-                        className="w-full h-[600px] px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent font-mono text-sm"
-                      />
-                    </div>
+                    isPreviewMode ? (
+                      <div className="h-[600px] overflow-y-auto p-6 border border-gray-300 rounded-md bg-white text-gray-900">
+                        <div className="prose prose-sm max-w-none [&_h1]:text-gray-900 [&_h2]:text-gray-900 [&_h3]:text-gray-900 [&_h4]:text-gray-900 [&_p]:text-gray-800 [&_li]:text-gray-800 [&_strong]:text-gray-900 [&_ul]:text-gray-800 [&_ol]:text-gray-800">
+                          <ReactMarkdown>{generatedJD}</ReactMarkdown>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="prose max-w-none">
+                        <textarea
+                          value={generatedJD}
+                          onChange={(e) => setGeneratedJD(e.target.value)}
+                          className="w-full h-[600px] px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent font-mono text-sm text-gray-900 bg-white"
+                        />
+                      </div>
+                    )
                   ) : (
                     <div className="flex items-center justify-center h-[600px] bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                       <div className="text-center">
