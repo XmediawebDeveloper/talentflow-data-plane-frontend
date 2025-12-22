@@ -7,6 +7,31 @@ import { mockTenant } from '@/lib/mockData/tenantData';
 import { useRouter } from 'next/navigation';
 import type { User as ApiUser } from '@/lib/services/authService';
 
+// Helper to store/retrieve user from localStorage
+const USER_STORAGE_KEY = 'talentflow_user';
+
+const saveUserToStorage = (user: User) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  }
+};
+
+const getUserFromStorage = (): User | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(USER_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearUserFromStorage = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(USER_STORAGE_KEY);
+  }
+};
+
 interface AuthContextType {
   user: User | null;
   tenant: Tenant | null;
@@ -57,16 +82,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Restore session on mount
   useEffect(() => {
     const restoreSession = async () => {
-      if (authService.isAuthenticated()) {
+      console.log('[AUTH] Restoring session...');
+      console.log('[AUTH] Has token:', authService.isAuthenticated());
+
+      // First, try to restore from localStorage (fast path)
+      const storedUser = getUserFromStorage();
+      if (storedUser && authService.isAuthenticated()) {
+        console.log('[AUTH] Restored user from localStorage:', storedUser.email);
+        setUser(storedUser);
+        setTenant(mockTenant);
+        setIsLoading(false);
+
+        // Optionally validate with API in background (don't block UI)
         try {
           const apiUserData = await authService.getCurrentUser();
           const userData = mapApiUserToUser(apiUserData);
           setUser(userData);
-          setTenant(mockTenant);
+          saveUserToStorage(userData);
+          console.log('[AUTH] User validated with API');
         } catch (error) {
-          console.error('Session restore failed:', error);
-          clearTokens();
+          console.warn('[AUTH] API validation failed, using cached user:', error);
+          // Keep using cached user - don't clear tokens for temporary API issues
         }
+        return;
+      }
+
+      // Fallback: Try to fetch from API
+      if (authService.isAuthenticated()) {
+        try {
+          console.log('[AUTH] Fetching current user from API...');
+          const apiUserData = await authService.getCurrentUser();
+          console.log('[AUTH] Got user data:', apiUserData);
+          const userData = mapApiUserToUser(apiUserData);
+          setUser(userData);
+          setTenant(mockTenant);
+          saveUserToStorage(userData);
+          console.log('[AUTH] Session restored successfully');
+        } catch (error) {
+          console.error('[AUTH] Session restore failed:', error);
+          clearTokens();
+          clearUserFromStorage();
+        }
+      } else {
+        console.log('[AUTH] No token found, skipping session restore');
       }
       setIsLoading(false);
     };
@@ -75,19 +133,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = (userData: User) => {
+    console.log('[AUTH] Login called for:', userData.email);
     setUser(userData);
     setTenant(mockTenant);
+    saveUserToStorage(userData);
   };
 
   const logout = () => {
+    console.log('[AUTH] Logout called');
     setUser(null);
     setTenant(null);
     clearTokens();
+    clearUserFromStorage();
     router.push('/login');
   };
 
   const updateUser = (userData: User) => {
     setUser(userData);
+    saveUserToStorage(userData);
   };
 
   return (

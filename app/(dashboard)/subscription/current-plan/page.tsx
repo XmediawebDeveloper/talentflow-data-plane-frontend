@@ -6,9 +6,7 @@ import api from '@/lib/services/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://talentflowdata.api.mo.vc/api/v1';
 const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://talentflowapi.mo.vc/api/v1';
-const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'https://talentflowapi.mo.vc';
 
 interface PlanFeature {
   id: string;
@@ -248,6 +246,26 @@ export default function CurrentPlanPage() {
   });
   const [formErrors, setFormErrors] = useState<Partial<PaymentFormData>>({});
 
+  // Step-based modal state
+  const [modalStep, setModalStep] = useState<1 | 2>(1);
+  const [isolationType, setIsolationType] = useState<'database' | 'schema'>('schema');
+  const [databaseMode, setDatabaseMode] = useState<'old' | 'new'>('new');
+  const [isSubmittingStep1, setIsSubmittingStep1] = useState(false);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+
+  // Get tenant ID from token on mount
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setTenantId(payload.tenant_id || null);
+      } catch (e) {
+        console.error('Failed to parse token:', e);
+      }
+    }
+  }, []);
+
   const fetchData = async () => {
     try {
       setIsLoading(true);
@@ -402,15 +420,10 @@ export default function CurrentPlanPage() {
     setExternalTransactionId('');
     setTransactionResult(null);
     setShowPaymentModal(true);
+    setModalStep(1);
+    setIsolationType('schema');
+    setDatabaseMode('new');
     setFormErrors({});
-  };
-
-  // Generate transaction ID from card details
-  const generateTransactionId = (): string => {
-    const timestamp = Date.now();
-    const last4 = paymentForm.cardNumber.replace(/\s/g, '').slice(-4);
-    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-    return `TXN-${timestamp}-${last4}-${random}`;
   };
 
   const handlePaymentSubmit = async () => {
@@ -965,330 +978,44 @@ export default function CurrentPlanPage() {
       {showPaymentModal && selectedPlanForPayment && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-
-            {/* Step 1: Isolation Type Selection */}
-            {modalStep === 'isolation' && (
-              <>
-                <div className="p-6 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <Database className="w-5 h-5 text-purple-600" />
-                      </div>
-                      <div>
-                        <h2 className="text-xl font-semibold text-gray-900">Select Isolation Type</h2>
-                        <p className="text-sm text-gray-600">Step 1 of 3 - {selectedPlanForPayment.name}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setShowPaymentModal(false)}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      <X className="w-5 h-5 text-gray-500" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="p-6">
-                  <p className="text-sm text-gray-600 mb-6">
-                    Choose how you want your tenant data to be isolated:
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Complete Payment</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {selectedPlanForPayment.name} - {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}/month
                   </p>
-
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <button
-                      type="button"
-                      onClick={() => setIsolationType('schema')}
-                      className={`p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3 relative ${
-                        isolationType === 'schema'
-                          ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-200'
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
-                    >
-                      {isolationType === 'schema' && (
-                        <CheckCircle className="w-5 h-5 text-purple-600 absolute top-3 right-3" />
-                      )}
-                      <Layers className={`w-10 h-10 ${isolationType === 'schema' ? 'text-purple-600' : 'text-gray-400'}`} />
-                      <span className={`font-semibold text-lg ${isolationType === 'schema' ? 'text-purple-700' : 'text-gray-700'}`}>
-                        Schema
-                      </span>
-                      <span className="text-xs text-gray-500 text-center">
-                        Shared database with separate schema per tenant
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsolationType('database')}
-                      className={`p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3 relative ${
-                        isolationType === 'database'
-                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
-                    >
-                      {isolationType === 'database' && (
-                        <CheckCircle className="w-5 h-5 text-blue-600 absolute top-3 right-3" />
-                      )}
-                      <Database className={`w-10 h-10 ${isolationType === 'database' ? 'text-blue-600' : 'text-gray-400'}`} />
-                      <span className={`font-semibold text-lg ${isolationType === 'database' ? 'text-blue-700' : 'text-gray-700'}`}>
-                        Database
-                      </span>
-                      <span className="text-xs text-gray-500 text-center">
-                        Dedicated database per tenant (full isolation)
-                      </span>
-                    </button>
-                  </div>
                 </div>
+                <button
+                  onClick={() => setShowPaymentModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
 
-                <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setShowPaymentModal(false)}
-                      className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => setModalStep('tenant')}
-                      className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      Next
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Step 2: Tenant Type Selection */}
-            {modalStep === 'tenant' && (
-              <>
-                <div className="p-6 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                        <Package className="w-5 h-5 text-green-600" />
-                      </div>
-                      <div>
-                        <h2 className="text-xl font-semibold text-gray-900">Select Tenant Type</h2>
-                        <p className="text-sm text-gray-600">Step 2 of 3 - {selectedPlanForPayment.name}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setShowPaymentModal(false)}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      <X className="w-5 h-5 text-gray-500" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="p-6">
-                  <p className="text-sm text-gray-600 mb-6">
-                    Is this for an existing tenant or a new tenant?
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <button
-                      type="button"
-                      onClick={() => setIsNewTenant(false)}
-                      className={`p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3 relative ${
-                        !isNewTenant
-                          ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
-                    >
-                      {!isNewTenant && (
-                        <CheckCircle className="w-5 h-5 text-green-600 absolute top-3 right-3" />
-                      )}
-                      <Package className={`w-10 h-10 ${!isNewTenant ? 'text-green-600' : 'text-gray-400'}`} />
-                      <span className={`font-semibold text-lg ${!isNewTenant ? 'text-green-700' : 'text-gray-700'}`}>
-                        Existing Tenant
-                      </span>
-                      <span className="text-xs text-gray-500 text-center">
-                        Upgrade your current tenant plan
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsNewTenant(true)}
-                      className={`p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3 relative ${
-                        isNewTenant
-                          ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-200'
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
-                    >
-                      {isNewTenant && (
-                        <CheckCircle className="w-5 h-5 text-orange-600 absolute top-3 right-3" />
-                      )}
-                      <Sparkles className={`w-10 h-10 ${isNewTenant ? 'text-orange-600' : 'text-gray-400'}`} />
-                      <span className={`font-semibold text-lg ${isNewTenant ? 'text-orange-700' : 'text-gray-700'}`}>
-                        New Tenant
-                      </span>
-                      <span className="text-xs text-gray-500 text-center">
-                        Create a fresh new tenant
-                      </span>
-                    </button>
-                  </div>
-
-                  {/* Summary */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                    <h4 className="font-medium text-blue-900 mb-2">Selection Summary</h4>
-                    <div className="text-sm text-blue-800 space-y-1">
-                      <div className="flex justify-between">
-                        <span>Plan:</span>
-                        <span className="font-medium">{selectedPlanForPayment.name}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Isolation Type:</span>
-                        <span className="font-medium uppercase">{isolationType}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Tenant Type:</span>
-                        <span className="font-medium">{isNewTenant ? 'New' : 'Existing'}</span>
-                      </div>
-                      <div className="flex justify-between pt-2 border-t border-blue-200">
-                        <span>Price:</span>
-                        <span className="font-bold">{formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}/month</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setModalStep('isolation')}
-                      className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                      Back
-                    </button>
-                    <button
-                      onClick={() => setModalStep('payment')}
-                      className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      Next
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Step 3: Payment Details */}
-            {modalStep === 'payment' && (
-              <>
-                <div className="p-6 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <CreditCard className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <h2 className="text-xl font-semibold text-gray-900">Payment Details</h2>
-                        <p className="text-sm text-gray-600">Step 3 of 3 - {selectedPlanForPayment?.name}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setShowPaymentModal(false)}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      <X className="w-5 h-5 text-gray-500" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="p-6 max-h-[60vh] overflow-y-auto">
-                  {/* Error Display */}
-                  {error && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                      <p className="text-sm text-red-700">{error}</p>
-                    </div>
-                  )}
-
-                  {/* Payment Mode Selection */}
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-3">Payment Mode</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMode('card')}
-                        className={`p-3 rounded-xl border-2 transition-all flex items-center gap-2 ${
-                          paymentMode === 'card'
-                            ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                            : 'border-gray-200 hover:border-gray-300 bg-white'
-                        }`}
-                      >
-                        <CreditCard className={`w-5 h-5 ${paymentMode === 'card' ? 'text-blue-600' : 'text-gray-400'}`} />
-                        <span className={`text-sm font-medium ${paymentMode === 'card' ? 'text-blue-700' : 'text-gray-700'}`}>
-                          Card
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMode('upi')}
-                        className={`p-3 rounded-xl border-2 transition-all flex items-center gap-2 ${
-                          paymentMode === 'upi'
-                            ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
-                            : 'border-gray-200 hover:border-gray-300 bg-white'
-                        }`}
-                      >
-                        <Zap className={`w-5 h-5 ${paymentMode === 'upi' ? 'text-green-600' : 'text-gray-400'}`} />
-                        <span className={`text-sm font-medium ${paymentMode === 'upi' ? 'text-green-700' : 'text-gray-700'}`}>
-                          UPI
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMode('netbanking')}
-                        className={`p-3 rounded-xl border-2 transition-all flex items-center gap-2 ${
-                          paymentMode === 'netbanking'
-                            ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-200'
-                            : 'border-gray-200 hover:border-gray-300 bg-white'
-                        }`}
-                      >
-                        <Building2 className={`w-5 h-5 ${paymentMode === 'netbanking' ? 'text-purple-600' : 'text-gray-400'}`} />
-                        <span className={`text-sm font-medium ${paymentMode === 'netbanking' ? 'text-purple-700' : 'text-gray-700'}`}>
-                          Net Banking
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMode('wallet')}
-                        className={`p-3 rounded-xl border-2 transition-all flex items-center gap-2 ${
-                          paymentMode === 'wallet'
-                            ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-200'
-                            : 'border-gray-200 hover:border-gray-300 bg-white'
-                        }`}
-                      >
-                        <Users className={`w-5 h-5 ${paymentMode === 'wallet' ? 'text-orange-600' : 'text-gray-400'}`} />
-                        <span className={`text-sm font-medium ${paymentMode === 'wallet' ? 'text-orange-700' : 'text-gray-700'}`}>
-                          Wallet
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Card Details - Show when Card is selected */}
-                  {paymentMode === 'card' && (
-                    <div className="mb-6 space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Cardholder Name *
-                        </label>
-                        <input
-                          type="text"
-                          value={paymentForm.cardholderName}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, cardholderName: e.target.value })}
-                          placeholder="John Doe"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                        />
-                      </div>
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              {/* Card Information */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Cardholder Name *
+                </label>
+                <input
+                  type="text"
+                  value={paymentForm.cardholderName}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, cardholderName: e.target.value })}
+                  placeholder="John Doe"
+                  className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    formErrors.cardholderName ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {formErrors.cardholderName && (
+                  <p className="text-red-500 text-xs mt-1">{formErrors.cardholderName}</p>
+                )}
+              </div>
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1444,148 +1171,37 @@ export default function CurrentPlanPage() {
                   </div>
                 </div>
 
-                <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setModalStep('tenant')}
-                      className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                      Back
-                    </button>
-                    <button
-                      onClick={handlePaymentSubmit}
-                      disabled={isSelectingPlan || (paymentMode === 'card' && (!paymentForm.cardNumber || !paymentForm.cvv || !paymentForm.expiryMonth || !paymentForm.expiryYear || !paymentForm.cardholderName)) || (paymentMode !== 'card' && !externalTransactionId)}
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isSelectingPlan ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <Check className="w-4 h-4" />
-                          Confirm & Subscribe
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Step 4: Transaction Result */}
-            {modalStep === 'result' && transactionResult && (
-              <>
-                <div className="p-6 border-b border-gray-200">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                      <CheckCircle className="w-6 h-6 text-green-600" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-semibold text-gray-900">Upgrade Successful!</h2>
-                      <p className="text-sm text-gray-600">Your plan has been upgraded successfully</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-6 space-y-4">
-                  {/* Plan Info */}
-                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-4 border border-purple-200">
-                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <Crown className="w-5 h-5 text-purple-600" />
-                      Plan Details
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <span className="text-gray-600">Plan Name:</span>
-                        <span className="ml-2 font-medium text-gray-900 capitalize">{transactionResult.plan_name}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Tier:</span>
-                        <span className="ml-2 font-medium text-gray-900">{transactionResult.plan_tier}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Provisioning Info */}
-                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <Database className="w-5 h-5 text-blue-600" />
-                      Provisioning Details
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <span className="text-gray-600">Isolation:</span>
-                        <span className="ml-2 font-medium text-gray-900 uppercase">{transactionResult.isolation_type}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Status:</span>
-                        <span className="ml-2 font-medium text-green-600 capitalize">{transactionResult.provisioning?.status}</span>
-                      </div>
-                      {transactionResult.provisioning?.schema_name && (
-                        <div className="col-span-2">
-                          <span className="text-gray-600">Schema:</span>
-                          <span className="ml-2 font-mono text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
-                            {transactionResult.provisioning.schema_name}
-                          </span>
-                        </div>
-                      )}
-                      {transactionResult.provisioning?.database_name && (
-                        <div className="col-span-2">
-                          <span className="text-gray-600">Database:</span>
-                          <span className="ml-2 font-mono text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
-                            {transactionResult.provisioning.database_name}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Billing Info */}
-                  <div className="bg-green-50 rounded-xl p-4 border border-green-200">
-                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-green-600" />
-                      Billing Details
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <span className="text-gray-600">Invoice:</span>
-                        <span className="ml-2 font-medium text-gray-900">{transactionResult.invoice_number}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Amount:</span>
-                        <span className="ml-2 font-bold text-green-700">${transactionResult.total_amount?.toLocaleString()}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Transaction:</span>
-                        <span className="ml-2 font-medium text-gray-900">#{transactionResult.transaction_id}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Subscription:</span>
-                        <span className="ml-2 font-medium text-gray-900">#{transactionResult.subscription_id}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
-                  <button
-                    onClick={() => {
-                      setShowPaymentModal(false);
-                      setTransactionResult(null);
-                      setSelectedPlanForPayment(null);
-                      setSuccessMessage('Plan upgraded successfully!');
-                    }}
-                    className="w-full py-3 px-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-medium hover:from-green-700 hover:to-emerald-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Check className="w-4 h-4" />
-                    Done
-                  </button>
-                </div>
-              </>
-            )}
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowPaymentModal(false)}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePaymentSubmit}
+                  disabled={isSelectingPlan}
+                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isSelectingPlan ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-4 h-4" />
+                      Pay {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 text-center mt-3">
+                Your payment information is secure and encrypted
+              </p>
+            </div>
           </div>
         </div>
       )}

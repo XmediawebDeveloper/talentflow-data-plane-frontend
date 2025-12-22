@@ -56,15 +56,18 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const [isLoading, setIsLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  // Verification state
-  const [step, setStep] = useState<SignUpStep>('form');
-  const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
+  // OTP state (inline, not popup)
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState(['', '', '', '', '', '']);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [isResending, setIsResending] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  const [registrationData, setRegistrationData] = useState<any>(null);
 
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  // Success state
+  const [step, setStep] = useState<SignUpStep>('form');
+
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -108,6 +111,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     if (!form.adminEmail.trim()) return 'Email is required';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.adminEmail)) return 'Invalid email format';
     if (!validateBusinessEmail(form.adminEmail)) return 'Please use a business email address';
+    if (!otpVerified) return 'Please verify your email with OTP first';
     if (!form.adminName.trim()) return 'Your name is required';
     if (!form.phoneNumber.trim()) return 'Phone number is required';
     if (form.password.length < 8) return 'Password must be at least 8 characters';
@@ -128,39 +132,60 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     setIsLoading(true);
 
     try {
-      // Generate subdomain from company email domain
-      const emailDomain = form.adminEmail.split('@')[1].split('.')[0].toLowerCase();
-      const subdomain = emailDomain.replace(/[^a-z0-9]/g, '').slice(0, 20);
-
-      const response = await fetch(`${API_URL}/signup/register`, {
+      // Call complete-registration endpoint to create tenant
+      const response = await fetch(`${API_URL}/signup/complete-registration`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          company_name: form.companyName,
-          subdomain: subdomain,
           email: form.adminEmail,
-          full_name: form.adminName,
-          phone_number: form.phoneNumber,
-          password: form.password,
-          terms_accepted: true,
-          privacy_accepted: true,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || data.message || 'Registration failed');
+        throw new Error(data.detail || 'Registration failed');
       }
 
-      // Store registration data for verification
-      setRegistrationData(data);
+      // Create user object from response
+      const user: UserType = {
+        id: data.tenant_id || crypto.randomUUID(),
+        tenantId: data.tenant_id || crypto.randomUUID(),
+        email: data.email || form.adminEmail,
+        name: data.full_name || form.adminName,
+        role: 'tenant_admin',
+        isActive: true,
+        permissions: {
+          canCreateJD: true,
+          canManageJD: true,
+          canUploadResumes: true,
+          canViewResumes: true,
+          canAccessInternalDB: true,
+          canCreateAssessments: true,
+          canViewAnalytics: true,
+          canManageSettings: true,
+          canManageUsers: true,
+        },
+        createdAt: new Date().toISOString(),
+      };
 
-      // Move to verification step
-      setStep('verification');
-      setResendTimer(60);
+      // If we got tokens, store them
+      if (data.access_token) {
+        localStorage.setItem('access_token', data.access_token);
+      }
+      if (data.refresh_token) {
+        localStorage.setItem('refresh_token', data.refresh_token);
+      }
+
+      login(user);
+      setStep('success');
+
+      // Redirect to dashboard after brief success message
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1500);
 
     } catch (err: any) {
       console.error('Signup error:', err);
@@ -171,41 +196,107 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
   };
 
+  // Check if email is valid for OTP
+  const isEmailValidForOtp = () => {
+    if (!form.adminEmail.trim()) return false;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.adminEmail)) return false;
+    if (!validateBusinessEmail(form.adminEmail)) return false;
+    return true;
+  };
+
+  // Send OTP to email
+  const handleGetOtp = async () => {
+    if (!isEmailValidForOtp()) {
+      setEmailError('Please enter a valid business email first');
+      return;
+    }
+
+    setIsSendingOtp(true);
+    setError('');
+
+    try {
+      // First register to trigger OTP send
+      const emailDomain = form.adminEmail.split('@')[1].split('.')[0].toLowerCase();
+      const subdomain = emailDomain.replace(/[^a-z0-9]/g, '').slice(0, 20);
+
+      const response = await fetch(`${API_URL}/signup/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          company_name: form.companyName || 'Pending',
+          subdomain: subdomain,
+          email: form.adminEmail,
+          full_name: form.adminName || 'Pending',
+          phone_number: form.phoneNumber || '',
+          password: form.password || 'TempPass123!',
+          terms_accepted: true,
+          privacy_accepted: true,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.message || 'Failed to send OTP');
+      }
+
+      setOtpSent(true);
+      setResendTimer(60);
+      // Focus first OTP input
+      setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
+
+    } catch (err: any) {
+      console.error('Send OTP error:', err);
+      setError(err.message || 'Failed to send OTP. Please try again.');
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
   // Handle OTP input
   const handleOtpChange = (index: number, value: string) => {
     if (value.length > 1) {
       // Handle paste
       const digits = value.replace(/\D/g, '').slice(0, 6).split('');
-      const newCode = [...verificationCode];
+      const newCode = [...otpCode];
       digits.forEach((digit, i) => {
         if (index + i < 6) newCode[index + i] = digit;
       });
-      setVerificationCode(newCode);
+      setOtpCode(newCode);
       const nextIndex = Math.min(index + digits.length, 5);
-      inputRefs.current[nextIndex]?.focus();
+      otpInputRefs.current[nextIndex]?.focus();
+
+      // Auto verify if complete
+      if (newCode.join('').length === 6) {
+        verifyOtpCode(newCode.join(''));
+      }
     } else {
-      const newCode = [...verificationCode];
+      const newCode = [...otpCode];
       newCode[index] = value.replace(/\D/g, '');
-      setVerificationCode(newCode);
+      setOtpCode(newCode);
 
       if (value && index < 5) {
-        inputRefs.current[index + 1]?.focus();
+        otpInputRefs.current[index + 1]?.focus();
+      }
+
+      // Auto verify if complete
+      if (newCode.join('').length === 6) {
+        verifyOtpCode(newCode.join(''));
       }
     }
   };
 
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !verificationCode[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+    if (e.key === 'Backspace' && !otpCode[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
     }
   };
 
-  const handleVerify = async () => {
-    const code = verificationCode.join('');
-    if (code.length !== 6) {
-      setError('Please enter the complete 6-digit code');
-      return;
-    }
+  // Verify OTP code
+  const verifyOtpCode = async (code: string) => {
+    if (code.length !== 6) return;
 
     setIsVerifying(true);
     setError('');
@@ -225,60 +316,26 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Verification failed');
+        throw new Error(data.detail || 'Invalid OTP code');
       }
 
-      // Store tokens
-      if (data.access_token && data.refresh_token) {
-        localStorage.setItem('accessToken', data.access_token);
-        localStorage.setItem('refreshToken', data.refresh_token);
-      } else if (registrationData?.access_token) {
-        localStorage.setItem('accessToken', registrationData.access_token);
-        localStorage.setItem('refreshToken', registrationData.refresh_token);
-      }
-
-      // Create user and login
-      const user: UserType = {
-        id: data.tenant_id || registrationData?.tenant_id || crypto.randomUUID(),
-        tenantId: data.tenant_id || registrationData?.tenant_id,
-        email: data.email || form.adminEmail,
-        name: data.full_name || form.adminName,
-        role: 'tenant_admin',
-        isActive: true,
-        permissions: {
-          canCreateJD: true,
-          canManageJD: true,
-          canUploadResumes: true,
-          canViewResumes: true,
-          canAccessInternalDB: true,
-          canCreateAssessments: true,
-          canViewAnalytics: true,
-          canManageSettings: true,
-          canManageUsers: true,
-        },
-        createdAt: new Date().toISOString(),
-      };
-
-      login(user);
-      setStep('success');
-
-      // Redirect to dashboard after brief success message
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 1500);
+      setOtpVerified(true);
 
     } catch (err: any) {
       console.error('Verification error:', err);
-      setError(err.message || 'Verification failed. Please try again.');
+      setError(err.message || 'Invalid OTP. Please try again.');
+      setOtpCode(['', '', '', '', '', '']);
+      otpInputRefs.current[0]?.focus();
     } finally {
       setIsVerifying(false);
     }
   };
 
-  const handleResendCode = async () => {
+  // Resend OTP
+  const handleResendOtp = async () => {
     if (resendTimer > 0) return;
 
-    setIsResending(true);
+    setIsSendingOtp(true);
     setError('');
 
     try {
@@ -295,16 +352,16 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Failed to resend code');
+        throw new Error(data.detail || 'Failed to resend OTP');
       }
 
       setResendTimer(60);
-      setVerificationCode(['', '', '', '', '', '']);
+      setOtpCode(['', '', '', '', '', '']);
 
     } catch (err: any) {
-      setError(err.message || 'Failed to resend verification code');
+      setError(err.message || 'Failed to resend OTP');
     } finally {
-      setIsResending(false);
+      setIsSendingOtp(false);
     }
   };
 
@@ -402,116 +459,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     transition: 'all 0.2s',
   };
 
-  // Verification Step UI
-  if (step === 'verification') {
-    return (
-      <div style={containerStyle}>
-        <div style={{ position: 'absolute', top: 80, left: 40, width: 288, height: 288, backgroundColor: '#93C5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
-        <div style={{ position: 'absolute', top: 160, right: 40, width: 288, height: 288, backgroundColor: '#C4B5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
-
-        <div style={{ ...formCardStyle, maxWidth: 440, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 32 }}>
-            <div style={{ ...logoBoxStyle, margin: '0 auto 24px', width: 64, height: 64 }}>
-              <ShieldCheck style={{ width: 32, height: 32, color: '#fff' }} />
-            </div>
-            <h2 style={{ fontSize: 28, fontWeight: 700, color: '#111827', marginBottom: 8 }}>Verify Your Email</h2>
-            <p style={{ color: '#6B7280', fontSize: 15 }}>
-              We sent a 6-digit code to<br />
-              <strong style={{ color: '#111827' }}>{form.adminEmail}</strong>
-            </p>
-          </div>
-
-          {error && (
-            <div style={{ marginBottom: 24, padding: 16, backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-              <AlertCircle style={{ width: 20, height: 20, color: '#DC2626' }} />
-              <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
-            </div>
-          )}
-
-          {/* OTP Input */}
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginBottom: 32 }}>
-            {verificationCode.map((digit, index) => (
-              <input
-                key={index}
-                ref={el => { inputRefs.current[index] = el; }}
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={digit}
-                onChange={(e) => handleOtpChange(index, e.target.value)}
-                onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                style={{
-                  width: 52,
-                  height: 60,
-                  textAlign: 'center',
-                  fontSize: 24,
-                  fontWeight: 600,
-                  border: '2px solid #D1D5DB',
-                  borderRadius: 12,
-                  outline: 'none',
-                  transition: 'all 0.2s',
-                }}
-                onFocus={(e) => { e.target.style.borderColor = '#2563EB'; }}
-                onBlur={(e) => { e.target.style.borderColor = '#D1D5DB'; }}
-              />
-            ))}
-          </div>
-
-          <button
-            onClick={handleVerify}
-            disabled={isVerifying || verificationCode.join('').length !== 6}
-            style={{
-              ...submitButtonStyle,
-              opacity: isVerifying || verificationCode.join('').length !== 6 ? 0.5 : 1,
-              cursor: isVerifying || verificationCode.join('').length !== 6 ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {isVerifying ? (
-              <>
-                <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
-                Verifying...
-              </>
-            ) : (
-              <>
-                Verify Email
-                <ArrowRight style={{ width: 20, height: 20 }} />
-              </>
-            )}
-          </button>
-
-          <div style={{ marginTop: 24, textAlign: 'center' }}>
-            <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 8 }}>
-              Didn't receive the code?
-            </p>
-            <button
-              onClick={handleResendCode}
-              disabled={isResending || resendTimer > 0}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: resendTimer > 0 ? '#9CA3AF' : '#2563EB',
-                fontWeight: 500,
-                cursor: resendTimer > 0 ? 'default' : 'pointer',
-                fontSize: 14,
-              }}
-            >
-              {isResending ? 'Sending...' : resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend Code'}
-            </button>
-          </div>
-
-          <button
-            onClick={() => setStep('form')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '24px auto 0', background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', fontSize: 14 }}
-          >
-            <ArrowLeft style={{ width: 16, height: 16 }} />
-            Back to signup
-          </button>
-        </div>
-
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
+  // Verification step removed - now handled inline in the form
 
   // Success Step UI
   if (step === 'success') {
@@ -661,29 +609,141 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                 </div>
               </div>
 
-              {/* Work Email */}
+              {/* Work Email with OTP */}
               <div style={{ marginBottom: 16 }}>
                 <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
                   Work Email <span style={{ color: '#6B7280', fontWeight: 400 }}>(Business email only)</span>
                 </label>
-                <div style={{ position: 'relative' }}>
-                  <Mail style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
-                  <input
-                    type="email"
-                    value={form.adminEmail}
-                    onChange={handleChange('adminEmail')}
-                    placeholder="john@acme.com"
-                    required
-                    style={{
-                      ...inputStyle,
-                      borderColor: emailError ? '#EF4444' : '#D1D5DB',
-                    }}
-                  />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <Mail style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
+                    <input
+                      type="email"
+                      value={form.adminEmail}
+                      onChange={handleChange('adminEmail')}
+                      placeholder="john@acme.com"
+                      required
+                      disabled={otpVerified}
+                      style={{
+                        ...inputStyle,
+                        borderColor: otpVerified ? '#10B981' : emailError ? '#EF4444' : '#D1D5DB',
+                        backgroundColor: otpVerified ? '#F0FDF4' : '#F9FAFB',
+                      }}
+                    />
+                    {otpVerified && (
+                      <CheckCircle style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#10B981' }} />
+                    )}
+                  </div>
+                  {!otpVerified && (
+                    <button
+                      type="button"
+                      onClick={handleGetOtp}
+                      disabled={!isEmailValidForOtp() || isSendingOtp || otpSent}
+                      style={{
+                        padding: '12px 20px',
+                        background: otpSent ? '#10B981' : isEmailValidForOtp() ? 'linear-gradient(to right, #2563EB, #4338CA)' : '#E5E7EB',
+                        color: otpSent || isEmailValidForOtp() ? '#fff' : '#9CA3AF',
+                        fontSize: 14,
+                        fontWeight: 500,
+                        borderRadius: 12,
+                        border: 'none',
+                        cursor: !isEmailValidForOtp() || isSendingOtp ? 'not-allowed' : 'pointer',
+                        opacity: isSendingOtp ? 0.7 : 1,
+                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      {isSendingOtp ? (
+                        <>
+                          <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />
+                          Sending...
+                        </>
+                      ) : otpSent ? (
+                        <>
+                          <CheckCircle style={{ width: 16, height: 16 }} />
+                          OTP Sent
+                        </>
+                      ) : (
+                        'Get OTP'
+                      )}
+                    </button>
+                  )}
                 </div>
                 {emailError && (
                   <p style={{ marginTop: 6, fontSize: 13, color: '#DC2626', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <AlertCircle style={{ width: 14, height: 14 }} />
                     {emailError}
+                  </p>
+                )}
+
+                {/* Inline OTP Input */}
+                {otpSent && !otpVerified && (
+                  <div style={{ marginTop: 16, padding: 16, backgroundColor: '#F0F9FF', borderRadius: 12, border: '1px solid #BAE6FD' }}>
+                    <p style={{ fontSize: 13, color: '#0369A1', marginBottom: 12 }}>
+                      Enter the 6-digit code sent to <strong>{form.adminEmail}</strong>
+                    </p>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
+                      {otpCode.map((digit, index) => (
+                        <input
+                          key={index}
+                          ref={el => { otpInputRefs.current[index] = el; }}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          value={digit}
+                          onChange={(e) => handleOtpChange(index, e.target.value)}
+                          onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                          disabled={isVerifying}
+                          style={{
+                            width: 44,
+                            height: 48,
+                            textAlign: 'center',
+                            fontSize: 20,
+                            fontWeight: 600,
+                            border: '2px solid #D1D5DB',
+                            borderRadius: 8,
+                            outline: 'none',
+                            transition: 'all 0.2s',
+                            backgroundColor: isVerifying ? '#F3F4F6' : '#fff',
+                          }}
+                          onFocus={(e) => { e.target.style.borderColor = '#2563EB'; }}
+                          onBlur={(e) => { e.target.style.borderColor = '#D1D5DB'; }}
+                        />
+                      ))}
+                    </div>
+                    {isVerifying && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#2563EB', fontSize: 13 }}>
+                        <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />
+                        Verifying...
+                      </div>
+                    )}
+                    <div style={{ textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={handleResendOtp}
+                        disabled={isSendingOtp || resendTimer > 0}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: resendTimer > 0 ? '#9CA3AF' : '#2563EB',
+                          fontWeight: 500,
+                          cursor: resendTimer > 0 ? 'default' : 'pointer',
+                          fontSize: 13,
+                        }}
+                      >
+                        {isSendingOtp ? 'Sending...' : resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend Code'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* OTP Verified Success */}
+                {otpVerified && (
+                  <p style={{ marginTop: 8, fontSize: 13, color: '#059669', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CheckCircle style={{ width: 14, height: 14 }} />
+                    Email verified successfully
                   </p>
                 )}
               </div>
@@ -756,11 +816,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               {/* Submit */}
               <button
                 type="submit"
-                disabled={isLoading || !!emailError}
+                disabled={isLoading || !!emailError || !otpVerified}
                 style={{
                   ...submitButtonStyle,
-                  opacity: isLoading || emailError ? 0.5 : 1,
-                  cursor: isLoading || emailError ? 'not-allowed' : 'pointer',
+                  opacity: isLoading || emailError || !otpVerified ? 0.5 : 1,
+                  cursor: isLoading || emailError || !otpVerified ? 'not-allowed' : 'pointer',
                 }}
               >
                 {isLoading ? (
@@ -768,9 +828,14 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
                     Creating your workspace...
                   </>
+                ) : !otpVerified ? (
+                  <>
+                    Verify Email First
+                    <Mail style={{ width: 20, height: 20 }} />
+                  </>
                 ) : (
                   <>
-                    Continue
+                    Create Account
                     <ArrowRight style={{ width: 20, height: 20 }} />
                   </>
                 )}
