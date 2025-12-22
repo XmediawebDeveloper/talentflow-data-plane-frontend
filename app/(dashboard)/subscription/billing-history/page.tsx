@@ -4,11 +4,11 @@ import { Receipt, Download, Search, Filter, Calendar } from 'lucide-react';
 import { useState } from 'react';
 
 const mockInvoices = [
-  { id: 'INV-2024-001', date: 'Dec 15, 2024', amount: '$79.00', status: 'paid', plan: 'Professional' },
-  { id: 'INV-2024-002', date: 'Nov 15, 2024', amount: '$79.00', status: 'paid', plan: 'Professional' },
-  { id: 'INV-2024-003', date: 'Oct 15, 2024', amount: '$79.00', status: 'paid', plan: 'Professional' },
-  { id: 'INV-2024-004', date: 'Sep 15, 2024', amount: '$29.00', status: 'paid', plan: 'Basic' },
-  { id: 'INV-2024-005', date: 'Aug 15, 2024', amount: '$29.00', status: 'paid', plan: 'Basic' },
+  { id: 'INV-2024-001', date: 'Dec 15, 2024', amount: '₹6,499.00', status: 'paid', plan: 'Professional' },
+  { id: 'INV-2024-002', date: 'Nov 15, 2024', amount: '₹6,499.00', status: 'paid', plan: 'Professional' },
+  { id: 'INV-2024-003', date: 'Oct 15, 2024', amount: '₹6,499.00', status: 'paid', plan: 'Professional' },
+  { id: 'INV-2024-004', date: 'Sep 15, 2024', amount: '₹2,499.00', status: 'paid', plan: 'Basic' },
+  { id: 'INV-2024-005', date: 'Aug 15, 2024', amount: '₹2,499.00', status: 'paid', plan: 'Basic' },
 ];
 
 export default function BillingHistoryPage() {

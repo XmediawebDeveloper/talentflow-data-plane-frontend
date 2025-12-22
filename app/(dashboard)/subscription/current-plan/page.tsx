@@ -1,12 +1,14 @@
 'use client';
 
-import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, ArrowRight, ArrowLeft } from 'lucide-react';
+import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, Crown, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import api from '@/lib/services/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
-const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://192.168.1.110:8000/api/v1';
+const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://talentflowapi.mo.vc/api/v1';
+const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'https://talentflowapi.mo.vc';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://talentflowdata.api.mo.vc/api/v1';
 
 interface PlanFeature {
   id: string;
@@ -107,6 +109,47 @@ interface PaymentFormData {
   country: string;
 }
 
+interface TransactionResult {
+  status: string;
+  tenant_id: string;
+  old_plan_id: number;
+  new_plan_id: number;
+  plan_name: string;
+  plan_tier: string;
+  isolation_type: string;
+  schema_per_tenant: boolean;
+  database_per_tenant: boolean;
+  provisioning: {
+    isolation_type: string;
+    resource_name: string;
+    schema_name?: string;
+    database_name?: string;
+    status: string;
+  };
+  subscription_id: number;
+  subscription_status: string;
+  invoice_id: number;
+  invoice_number: string;
+  total_amount: number;
+  transaction_id: number;
+  external_transaction_id: string;
+  billing_interval: string;
+}
+
+interface FreeTrialSettings {
+  trial_days: number;
+  features: {
+    MAX_JOBS: number;
+    MAX_SEATS: number;
+    ASSESSMENTS: number;
+    AI_INTERVIEW: number;
+    RESUME_UPLOAD: number;
+    RESUME_SCORING: number;
+    TOTAL_RESUME_STORAGE: number;
+  };
+  trial_includes: string[];
+}
+
 const getIconForPlan = (planName: string, tier: string): typeof Users | typeof Building2 | typeof Zap => {
   const name = planName.toLowerCase();
   const tierLower = tier.toLowerCase();
@@ -192,6 +235,17 @@ export default function CurrentPlanPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Plan selection flow state
+  const [modalStep, setModalStep] = useState<'isolation' | 'tenant' | 'payment' | 'result'>('isolation');
+  const [isolationType, setIsolationType] = useState<'schema' | 'database'>('schema');
+  const [isNewTenant, setIsNewTenant] = useState(false);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [transactionResult, setTransactionResult] = useState<TransactionResult | null>(null);
+
+  // Payment mode state
+  const [paymentMode, setPaymentMode] = useState<'card' | 'upi' | 'netbanking' | 'wallet'>('card');
+  const [externalTransactionId, setExternalTransactionId] = useState('');
+
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<DisplayPlan | null>(null);
@@ -208,12 +262,8 @@ export default function CurrentPlanPage() {
   });
   const [formErrors, setFormErrors] = useState<Partial<PaymentFormData>>({});
 
-  // Step-based modal state
-  const [modalStep, setModalStep] = useState<1 | 2>(1);
-  const [isolationType, setIsolationType] = useState<'database' | 'schema'>('schema');
-  const [databaseMode, setDatabaseMode] = useState<'old' | 'new'>('new');
-  const [isSubmittingStep1, setIsSubmittingStep1] = useState(false);
-  const [tenantId, setTenantId] = useState<string | null>(null);
+  // Free trial settings from admin API
+  const [freeTrialSettings, setFreeTrialSettings] = useState<FreeTrialSettings | null>(null);
 
   // Get tenant ID from token on mount
   useEffect(() => {
@@ -233,27 +283,67 @@ export default function CurrentPlanPage() {
       setIsLoading(true);
       setError(null);
 
+      // Fetch free trial settings from admin API first
+      let trialSettings: FreeTrialSettings | null = null;
+      try {
+        const trialResponse = await fetch(`${ADMIN_API_URL}/public/settings/free-trial`);
+        if (trialResponse.ok) {
+          const trialResult = await trialResponse.json();
+          trialSettings = trialResult.data;
+          setFreeTrialSettings(trialSettings);
+          console.log('[CurrentPlan] Free trial settings:', trialSettings);
+        }
+      } catch (trialError) {
+        console.log('Could not fetch free trial settings');
+      }
+
       let settings: CompanySettings | null = null;
       try {
         const settingsResponse = await api.get<CompanySettings>('/settings/company-settings');
         settings = settingsResponse.data;
         setCompanySettings(settings);
       } catch (settingsError) {
-        console.log('Could not fetch company settings, using defaults');
+        console.log('Could not fetch company settings, using free trial defaults');
+        // Use free trial settings from API, or fallback to defaults
         settings = {
           subscription_status: 'trial',
           status: 'trial',
           current_plan_name: 'Free Trial',
-          max_seats: 5,
-          max_jobs: 5,
-          max_resume_uploads: 100,
-          max_resume_searches: 100,
-          max_assessments: 10,
-          max_ai_interviews: 10,
-          storage_limit_gb: 5,
+          max_seats: trialSettings?.features.MAX_SEATS || 5,
+          max_jobs: trialSettings?.features.MAX_JOBS || 5,
+          max_resume_uploads: trialSettings?.features.RESUME_UPLOAD || 100,
+          max_resume_searches: trialSettings?.features.RESUME_SCORING || 100,
+          max_assessments: trialSettings?.features.ASSESSMENTS || 10,
+          max_ai_interviews: trialSettings?.features.AI_INTERVIEW || 10,
+          storage_limit_gb: Math.ceil((trialSettings?.features.TOTAL_RESUME_STORAGE || 500) / 100) || 5,
           payment_status: 'none',
         };
         setCompanySettings(settings);
+      }
+
+      // Fetch tenant_id from /auth/me (using data-plane API)
+      try {
+        const token = localStorage.getItem('accessToken');
+        console.log('[CurrentPlan] Fetching tenant_id, token exists:', !!token);
+        const meResponse = await fetch(`${API_URL}/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        console.log('[CurrentPlan] /auth/me response status:', meResponse.status);
+        if (meResponse.ok) {
+          const meData = await meResponse.json();
+          console.log('[CurrentPlan] /auth/me data:', meData);
+          if (meData.tenant_id) {
+            setTenantId(meData.tenant_id);
+            console.log('[CurrentPlan] tenant_id set:', meData.tenant_id);
+          }
+        } else {
+          console.log('[CurrentPlan] /auth/me failed:', meResponse.status, await meResponse.text());
+        }
+      } catch (err) {
+        console.error('[CurrentPlan] Error fetching tenant_id:', err);
       }
 
       const plansResponse = await fetch(`${ADMIN_API_URL}/public/plans`);
@@ -344,70 +434,69 @@ export default function CurrentPlanPage() {
     return Object.keys(errors).length === 0;
   };
 
+  // Generate a unique transaction ID for card payments
+  const generateTransactionId = (): string => {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 10);
+    return `TXN-${timestamp}-${random}`.toUpperCase();
+  };
+
   const handleChoosePlan = (plan: DisplayPlan) => {
     if (!plan.price) {
       setError('Cannot select a plan without a price');
       return;
     }
     setSelectedPlanForPayment(plan);
-    setShowPaymentModal(true);
-    setModalStep(1);
+    setModalStep('isolation');
     setIsolationType('schema');
-    setDatabaseMode('new');
+    setIsNewTenant(false);
+    setPaymentMode('card');
+    setExternalTransactionId('');
+    setTransactionResult(null);
     setFormErrors({});
-  };
-
-  const handleStep1Submit = async () => {
-    if (!selectedPlanForPayment || !tenantId) {
-      setError('Missing plan or tenant information');
-      return;
-    }
-
-    // If "Old" is selected, skip API call and go to step 2
-    if (databaseMode === 'old') {
-      setModalStep(2);
-      return;
-    }
-
-    // If "New" is selected, call the select-plan API
-    setIsSubmittingStep1(true);
     setError(null);
-
-    try {
-      const response = await fetch('/api/subscriptions/select-plan', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-        body: JSON.stringify({
-          tenant_id: tenantId,
-          plan_id: selectedPlanForPayment.numericId,
-          schema_per_tenant: isolationType === 'schema',
-          database_per_tenant: isolationType === 'database',
-          external_transaction_id: `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-          billing_interval: 'MONTHLY',
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Request failed with status ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Plan selection response:', data);
-      setModalStep(2);
-    } catch (err) {
-      console.error('Error selecting plan:', err);
-      setError(err instanceof Error ? err.message : 'Failed to select plan configuration');
-    } finally {
-      setIsSubmittingStep1(false);
-    }
+    setShowPaymentModal(true);
   };
 
   const handlePaymentSubmit = async () => {
-    if (!validatePaymentForm() || !selectedPlanForPayment) {
+    console.log('handlePaymentSubmit called', { selectedPlanForPayment, tenantId, paymentMode });
+
+    if (!selectedPlanForPayment) {
+      setError('Please select a plan');
+      return;
+    }
+
+    if (!tenantId) {
+      setError('Tenant ID not found. Please refresh the page and try again.');
+      return;
+    }
+
+    // Validate based on payment mode
+    let transactionId = externalTransactionId;
+
+    if (paymentMode === 'card') {
+      // Validate card details
+      if (!paymentForm.cardholderName.trim()) {
+        setError('Please enter cardholder name');
+        return;
+      }
+      const cardNum = paymentForm.cardNumber.replace(/\s/g, '');
+      if (!cardNum || cardNum.length < 13) {
+        setError('Please enter a valid card number');
+        return;
+      }
+      if (!paymentForm.expiryMonth || !paymentForm.expiryYear) {
+        setError('Please select card expiry date');
+        return;
+      }
+      if (!paymentForm.cvv || paymentForm.cvv.length < 3) {
+        setError('Please enter a valid CVV');
+        return;
+      }
+      // Generate transaction ID from card details
+      transactionId = generateTransactionId();
+    } else if (!externalTransactionId) {
+      setError('Please complete the payment details');
       return;
     }
 
@@ -416,43 +505,108 @@ export default function CurrentPlanPage() {
       setError(null);
       setSuccessMessage(null);
 
-      // Call the select-plan endpoint with payment info
-      const response = await api.post<CompanySettings>('/settings/select-plan', {
+      const token = localStorage.getItem('accessToken');
+      const apiUrl = `${BILLING_API_URL}/api/v1/subscriptions/${tenantId}/select-plan`;
+
+      // Request body per API spec
+      const requestBody = {
         plan_id: selectedPlanForPayment.numericId,
-        plan_name: selectedPlanForPayment.name,
-        plan_price: (selectedPlanForPayment.price || 0) * 100,
-        max_seats: selectedPlanForPayment.quotas?.max_seats || 5,
-        max_jobs: selectedPlanForPayment.quotas?.max_jobs || 5,
-        max_resume_uploads: selectedPlanForPayment.quotas?.RU || 100,
-        max_resume_searches: selectedPlanForPayment.quotas?.RS || 100,
-        max_assessments: selectedPlanForPayment.quotas?.AS || 10,
-        max_ai_interviews: selectedPlanForPayment.quotas?.AIU || 10,
-        storage_limit_gb: selectedPlanForPayment.quotas?.storage_gb || 5,
-        // Payment form data
-        cardholder_name: paymentForm.cardholderName,
-        card_last_four: paymentForm.cardNumber.replace(/\s/g, '').slice(-4),
-        card_expiry: `${paymentForm.expiryMonth}/${paymentForm.expiryYear}`,
-        billing_address: paymentForm.billingAddress,
-        billing_city: paymentForm.city,
-        billing_zip: paymentForm.zipCode,
-        billing_country: paymentForm.country,
+        schema_per_tenant: isolationType === 'schema',
+        database_per_tenant: isolationType === 'database',
+        external_transaction_id: transactionId || null,
+        billing_interval: 'MONTHLY',
+      };
+
+      console.log('Calling API:', apiUrl);
+      console.log('Auth - Token exists:', !!token);
+      console.log('Request body:', requestBody);
+
+      if (!token) {
+        setError('Authentication token not found. Please login again.');
+        setIsSelectingPlan(false);
+        return;
+      }
+
+      // Call billing API with Bearer token
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
       });
 
-      setCompanySettings(response.data);
-      setShowPaymentModal(false);
-      setSelectedPlanForPayment(null);
-      setPaymentForm({
-        cardholderName: '',
-        cardNumber: '',
-        expiryMonth: '',
-        expiryYear: '',
-        cvv: '',
-        billingAddress: '',
-        city: '',
-        zipCode: '',
-        country: 'India',
-      });
-      setSuccessMessage(`Plan "${selectedPlanForPayment.name}" selected! Payment is being processed.`);
+      const data = await response.json();
+
+      if (response.ok && (data.status === 'success' || response.status === 200)) {
+        console.log('[CurrentPlan] Plan selection successful:', data);
+
+        // Store transaction result and show success modal
+        setTransactionResult(data.data || data);
+        setModalStep('result');
+
+        // Also update company_settings in tenant database via data-plane API
+        try {
+          // First, set the selected plan in tenant database with quotas
+          await api.post('/settings/select-plan', {
+            plan_id: selectedPlanForPayment.numericId,
+            plan_name: selectedPlanForPayment.name,
+            plan_price: (selectedPlanForPayment.price || 0) * 100, // Convert to cents
+            // Pass quotas from the plan
+            max_seats: selectedPlanForPayment.quotas?.max_seats || 5,
+            max_jobs: selectedPlanForPayment.quotas?.max_jobs || 5,
+            max_resume_uploads: selectedPlanForPayment.quotas?.RU || 100,
+            max_resume_searches: selectedPlanForPayment.quotas?.RS || 100,
+            max_assessments: selectedPlanForPayment.quotas?.AS || 10,
+            max_ai_interviews: selectedPlanForPayment.quotas?.AIU || 10,
+            storage_limit_gb: selectedPlanForPayment.quotas?.storage_gb || 5,
+          });
+          console.log('[CurrentPlan] Plan selected in tenant DB');
+
+          // Then mark payment as success to activate the plan
+          const updateResponse = await api.post('/settings/payment-status', {
+            payment_status: 'success',
+            payment_reference: transactionId,
+            payment_method: 'card',
+          });
+          console.log('[CurrentPlan] Company settings updated:', updateResponse.data);
+        } catch (updateErr) {
+          console.error('[CurrentPlan] Failed to update company settings:', updateErr);
+        }
+
+        // Update local state with the new plan and quotas
+        if (selectedPlanForPayment) {
+          setCompanySettings(prev => ({
+            ...prev!,
+            selected_plan_id: selectedPlanForPayment.numericId,
+            current_plan_id: selectedPlanForPayment.numericId,
+            current_plan_name: selectedPlanForPayment.name,
+            subscription_status: 'active',
+            status: 'active',
+            payment_status: 'success',
+            // Update quotas from the selected plan
+            max_seats: selectedPlanForPayment.quotas?.max_seats || prev?.max_seats || 5,
+            max_jobs: selectedPlanForPayment.quotas?.max_jobs || prev?.max_jobs || 5,
+            max_resume_uploads: selectedPlanForPayment.quotas?.RU || prev?.max_resume_uploads || 100,
+            max_resume_searches: selectedPlanForPayment.quotas?.RS || prev?.max_resume_searches || 100,
+            max_assessments: selectedPlanForPayment.quotas?.AS || prev?.max_assessments || 10,
+            max_ai_interviews: selectedPlanForPayment.quotas?.AIU || prev?.max_ai_interviews || 10,
+            storage_limit_gb: selectedPlanForPayment.quotas?.storage_gb || prev?.storage_limit_gb || 5,
+          }));
+
+          // Update the plans to mark the new one as current
+          setPlans(prevPlans => prevPlans.map(p => ({
+            ...p,
+            isCurrent: p.numericId === selectedPlanForPayment.numericId,
+          })));
+        }
+
+        // Refresh data after upgrade
+        await fetchData();
+      } else {
+        setError(data.detail || data.message || 'Failed to upgrade plan');
+      }
     } catch (err) {
       console.error('Error selecting plan:', err);
       setError(err instanceof Error ? err.message : 'Failed to select plan');
@@ -507,7 +661,7 @@ export default function CurrentPlanPage() {
 
   const trialDaysRemaining = companySettings?.trial_end_date
     ? getDaysRemaining(companySettings.trial_end_date)
-    : 14;
+    : (freeTrialSettings?.trial_days || 15);
 
   if (isLoading) {
     return (
@@ -678,38 +832,53 @@ export default function CurrentPlanPage() {
             </div>
           </div>
 
-          {/* Quotas */}
-          {companySettings && (
+          {/* Quotas - For trial users, always use freeTrialSettings from API */}
+          {(companySettings || freeTrialSettings) && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <h3 className="text-sm font-medium text-gray-700 mb-4">Your Plan Limits</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">{companySettings.max_seats}</p>
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.MAX_SEATS : companySettings?.max_seats}
+                  </p>
                   <p className="text-xs text-gray-600">Team Seats</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">{companySettings.max_jobs}</p>
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.MAX_JOBS : companySettings?.max_jobs}
+                  </p>
                   <p className="text-xs text-gray-600">Job Postings</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">{companySettings.max_resume_uploads}</p>
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.RESUME_UPLOAD : companySettings?.max_resume_uploads}
+                  </p>
                   <p className="text-xs text-gray-600">Resume Uploads</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">{companySettings.max_resume_searches}</p>
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.RESUME_SCORING : companySettings?.max_resume_searches}
+                  </p>
                   <p className="text-xs text-gray-600">Resume Searches</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">{companySettings.max_assessments}</p>
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.ASSESSMENTS : companySettings?.max_assessments}
+                  </p>
                   <p className="text-xs text-gray-600">Assessments</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">{companySettings.max_ai_interviews}</p>
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.AI_INTERVIEW : companySettings?.max_ai_interviews}
+                  </p>
                   <p className="text-xs text-gray-600">AI Interviews</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">{companySettings.storage_limit_gb}GB</p>
-                  <p className="text-xs text-gray-600">Storage</p>
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.TOTAL_RESUME_STORAGE : companySettings?.storage_limit_gb}
+                    {isOnTrial && freeTrialSettings ? '' : 'GB'}
+                  </p>
+                  <p className="text-xs text-gray-600">{isOnTrial && freeTrialSettings ? 'Total Resume Storage' : 'Storage'}</p>
                 </div>
               </div>
             </div>
@@ -889,7 +1058,7 @@ export default function CurrentPlanPage() {
         )}
       </div>
 
-      {/* Payment Modal */}
+      {/* Plan Selection Modal */}
       {showPaymentModal && selectedPlanForPayment && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
@@ -898,208 +1067,113 @@ export default function CurrentPlanPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900">
-                    {modalStep === 1 ? 'Database Configuration' : 'Complete Payment'}
+                    {modalStep === 'isolation' && 'Step 1: Select Isolation Type'}
+                    {modalStep === 'tenant' && 'Step 2: Database Option'}
+                    {modalStep === 'payment' && 'Step 3: Payment Details'}
+                    {modalStep === 'result' && 'Upgrade Complete!'}
                   </h2>
                   <p className="text-sm text-gray-600 mt-1">
                     {selectedPlanForPayment.name} - {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}/month
                   </p>
-                  {/* Step indicator */}
-                  <div className="flex items-center gap-2 mt-3">
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                      modalStep === 1 ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
-                    }`}>
-                      <span className="w-4 h-4 rounded-full bg-current text-white flex items-center justify-center text-[10px]">
-                        {modalStep === 1 ? '1' : <Check className="w-3 h-3" />}
-                      </span>
-                      Configuration
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-gray-400" />
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                      modalStep === 2 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      <span className="w-4 h-4 rounded-full bg-current text-white flex items-center justify-center text-[10px]">2</span>
-                      Payment
-                    </div>
-                  </div>
                 </div>
                 <button
-                  onClick={() => setShowPaymentModal(false)}
+                  onClick={() => { setShowPaymentModal(false); setModalStep('isolation'); }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
+              {/* Step Indicator */}
+              {modalStep !== 'result' && (
+                <div className="flex items-center gap-2 mt-4">
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${modalStep === 'isolation' ? 'bg-blue-600 text-white' : 'bg-green-500 text-white'}`}>1</div>
+                  <div className={`flex-1 h-1 ${modalStep !== 'isolation' ? 'bg-green-500' : 'bg-gray-200'}`}></div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${modalStep === 'tenant' ? 'bg-blue-600 text-white' : modalStep === 'payment' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>2</div>
+                  <div className={`flex-1 h-1 ${modalStep === 'payment' ? 'bg-green-500' : 'bg-gray-200'}`}></div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${modalStep === 'payment' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>3</div>
+                </div>
+              )}
             </div>
 
-            {/* Step 1: Database Configuration */}
-            {modalStep === 1 && (
-              <>
-                <div className="p-6 space-y-6">
-                  {/* Isolation Type Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Data Isolation Type
-                    </label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <button
-                        type="button"
-                        onClick={() => setIsolationType('database')}
-                        className={`p-4 border-2 rounded-xl text-left transition-all ${
-                          isolationType === 'database'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            isolationType === 'database' ? 'bg-blue-100' : 'bg-gray-100'
-                          }`}>
-                            <Database className={`w-5 h-5 ${isolationType === 'database' ? 'text-blue-600' : 'text-gray-500'}`} />
-                          </div>
-                          <div className="flex-1">
-                            <p className={`font-medium ${isolationType === 'database' ? 'text-blue-900' : 'text-gray-900'}`}>
-                              Database
-                            </p>
-                          </div>
-                          {isolationType === 'database' && (
-                            <CheckCircle className="w-5 h-5 text-blue-600" />
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          Separate database for complete isolation
-                        </p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setIsolationType('schema')}
-                        className={`p-4 border-2 rounded-xl text-left transition-all ${
-                          isolationType === 'schema'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            isolationType === 'schema' ? 'bg-blue-100' : 'bg-gray-100'
-                          }`}>
-                            <Layers className={`w-5 h-5 ${isolationType === 'schema' ? 'text-blue-600' : 'text-gray-500'}`} />
-                          </div>
-                          <div className="flex-1">
-                            <p className={`font-medium ${isolationType === 'schema' ? 'text-blue-900' : 'text-gray-900'}`}>
-                              Schema
-                            </p>
-                          </div>
-                          {isolationType === 'schema' && (
-                            <CheckCircle className="w-5 h-5 text-blue-600" />
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          Shared database with separate schema
-                        </p>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Old or New Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Database Setup
-                    </label>
-                    <div className="space-y-3">
-                      <label
-                        className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                          databaseMode === 'old'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="databaseMode"
-                          value="old"
-                          checked={databaseMode === 'old'}
-                          onChange={() => setDatabaseMode('old')}
-                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                        />
-                        <div className="flex-1">
-                          <p className={`font-medium ${databaseMode === 'old' ? 'text-blue-900' : 'text-gray-900'}`}>
-                            Use Existing
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Continue with your current database setup
-                          </p>
-                        </div>
-                      </label>
-
-                      <label
-                        className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                          databaseMode === 'new'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="databaseMode"
-                          value="new"
-                          checked={databaseMode === 'new'}
-                          onChange={() => setDatabaseMode('new')}
-                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                        />
-                        <div className="flex-1">
-                          <p className={`font-medium ${databaseMode === 'new' ? 'text-blue-900' : 'text-gray-900'}`}>
-                            Create New
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Set up a fresh {isolationType === 'database' ? 'database' : 'schema'} for your data
-                          </p>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
+            {/* Step 1: Isolation Type Selection */}
+            {modalStep === 'isolation' && (
+              <div className="p-6 space-y-4">
+                <p className="text-gray-600 mb-4">Choose how your data will be isolated:</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setIsolationType('schema')}
+                    className={`p-4 border-2 rounded-xl text-left transition-all ${isolationType === 'schema' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                  >
+                    <Layers className={`w-8 h-8 mb-2 ${isolationType === 'schema' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <h4 className="font-semibold text-gray-900">Schema</h4>
+                    <p className="text-sm text-gray-500 mt-1">Shared database, separate schema per tenant</p>
+                  </button>
+                  <button
+                    onClick={() => setIsolationType('database')}
+                    className={`p-4 border-2 rounded-xl text-left transition-all ${isolationType === 'database' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                  >
+                    <Database className={`w-8 h-8 mb-2 ${isolationType === 'database' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <h4 className="font-semibold text-gray-900">Database</h4>
+                    <p className="text-sm text-gray-500 mt-1">Dedicated database per tenant</p>
+                  </button>
                 </div>
-
-                {/* Step 1 Footer */}
-                <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setShowPaymentModal(false)}
-                      className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleStep1Submit}
-                      disabled={isSubmittingStep1}
-                      className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isSubmittingStep1 ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          Continue
-                          <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
-                  </div>
+                <div className="flex justify-end pt-4">
+                  <button
+                    onClick={() => setModalStep('tenant')}
+                    className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    Next <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
-              </>
+              </div>
             )}
 
-            {/* Step 2: Payment Details */}
-            {modalStep === 2 && (
-              <>
-                {/* Modal Body */}
-                <div className="p-6 space-y-4">
-              {/* Card Information */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cardholder Name *
+            {/* Step 2: New/Old Database Selection */}
+            {modalStep === 'tenant' && (
+              <div className="p-6 space-y-4">
+                <p className="text-gray-600 mb-4">Do you want to use an existing database or create a new one?</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setIsNewTenant(false)}
+                    className={`p-4 border-2 rounded-xl text-left transition-all ${!isNewTenant ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                  >
+                    <Package className={`w-8 h-8 mb-2 ${!isNewTenant ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <h4 className="font-semibold text-gray-900">Existing</h4>
+                    <p className="text-sm text-gray-500 mt-1">Use your current database/schema</p>
+                  </button>
+                  <button
+                    onClick={() => setIsNewTenant(true)}
+                    className={`p-4 border-2 rounded-xl text-left transition-all ${isNewTenant ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                  >
+                    <Sparkles className={`w-8 h-8 mb-2 ${isNewTenant ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <h4 className="font-semibold text-gray-900">New</h4>
+                    <p className="text-sm text-gray-500 mt-1">Create a fresh database/schema</p>
+                  </button>
+                </div>
+                <div className="flex justify-between pt-4">
+                  <button
+                    onClick={() => setModalStep('isolation')}
+                    className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" /> Back
+                  </button>
+                  <button
+                    onClick={() => setModalStep('payment')}
+                    className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    Next <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Payment Form */}
+            {modalStep === 'payment' && (
+              <div className="p-6 space-y-4">
+                {/* Card Information */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Cardholder Name *
                 </label>
                 <input
                   type="text"
@@ -1116,202 +1190,165 @@ export default function CurrentPlanPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Card Number *
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={paymentForm.cardNumber}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, cardNumber: formatCardNumber(e.target.value) })}
-                    placeholder="1234 5678 9012 3456"
-                    maxLength={19}
-                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      formErrors.cardNumber ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  />
-                  <CreditCard className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                </div>
-                {formErrors.cardNumber && (
-                  <p className="text-red-500 text-xs mt-1">{formErrors.cardNumber}</p>
-                )}
+                <input
+                  type="text"
+                  value={paymentForm.cardNumber}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, cardNumber: formatCardNumber(e.target.value) })}
+                  placeholder="1234 5678 9012 3456"
+                  maxLength={19}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-mono"
+                />
               </div>
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Month *
                   </label>
                   <select
                     value={paymentForm.expiryMonth}
                     onChange={(e) => setPaymentForm({ ...paymentForm, expiryMonth: e.target.value })}
-                    className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      formErrors.expiryMonth ? 'border-red-500' : 'border-gray-300'
-                    }`}
+                    className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                   >
                     <option value="">MM</option>
-                    {Array.from({ length: 12 }, (_, i) => (
-                      <option key={i + 1} value={String(i + 1).padStart(2, '0')}>
-                        {String(i + 1).padStart(2, '0')}
-                      </option>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                      <option key={m} value={String(m).padStart(2, '0')}>{String(m).padStart(2, '0')}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Year *
                   </label>
                   <select
                     value={paymentForm.expiryYear}
                     onChange={(e) => setPaymentForm({ ...paymentForm, expiryYear: e.target.value })}
-                    className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      formErrors.expiryMonth ? 'border-red-500' : 'border-gray-300'
-                    }`}
+                    className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                   >
                     <option value="">YY</option>
-                    {Array.from({ length: 10 }, (_, i) => {
-                      const year = new Date().getFullYear() + i;
-                      return (
-                        <option key={year} value={String(year).slice(-2)}>
-                          {year}
-                        </option>
-                      );
-                    })}
+                    {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map(y => (
+                      <option key={y} value={String(y).slice(-2)}>{y}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     CVV *
                   </label>
                   <input
                     type="password"
                     value={paymentForm.cvv}
                     onChange={(e) => setPaymentForm({ ...paymentForm, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                    placeholder="123"
+                    placeholder="***"
                     maxLength={4}
-                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      formErrors.cvv ? 'border-red-500' : 'border-gray-300'
-                    }`}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-mono"
                   />
-                  {formErrors.cvv && (
-                    <p className="text-red-500 text-xs mt-1">{formErrors.cvv}</p>
-                  )}
                 </div>
               </div>
 
-              {/* Billing Address */}
-              <div className="pt-4 border-t border-gray-200">
-                <h3 className="text-sm font-medium text-gray-900 mb-3">Billing Address</h3>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Address *
-                    </label>
-                    <input
-                      type="text"
-                      value={paymentForm.billingAddress}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, billingAddress: e.target.value })}
-                      placeholder="123 Main Street"
-                      className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        formErrors.billingAddress ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    />
-                    {formErrors.billingAddress && (
-                      <p className="text-red-500 text-xs mt-1">{formErrors.billingAddress}</p>
-                    )}
+              {/* Payment Summary */}
+              <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-4">
+                <h4 className="font-medium text-gray-900 mb-3">Payment Summary</h4>
+                <div className="text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Plan:</span>
+                    <span className="font-medium text-gray-900">{selectedPlanForPayment?.name}</span>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        City *
-                      </label>
-                      <input
-                        type="text"
-                        value={paymentForm.city}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, city: e.target.value })}
-                        placeholder="Mumbai"
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          formErrors.city ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                      />
-                      {formErrors.city && (
-                        <p className="text-red-500 text-xs mt-1">{formErrors.city}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        ZIP Code *
-                      </label>
-                      <input
-                        type="text"
-                        value={paymentForm.zipCode}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, zipCode: e.target.value })}
-                        placeholder="400001"
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          formErrors.zipCode ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                      />
-                      {formErrors.zipCode && (
-                        <p className="text-red-500 text-xs mt-1">{formErrors.zipCode}</p>
-                      )}
-                    </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Isolation:</span>
+                    <span className="font-medium text-gray-900 uppercase">{isolationType}</span>
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Country
-                    </label>
-                    <select
-                      value={paymentForm.country}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, country: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="India">India</option>
-                      <option value="United States">United States</option>
-                      <option value="United Kingdom">United Kingdom</option>
-                      <option value="Canada">Canada</option>
-                      <option value="Australia">Australia</option>
-                    </select>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Tenant:</span>
+                    <span className="font-medium text-gray-900">{isNewTenant ? 'New' : 'Existing'}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-blue-200">
+                    <span className="text-gray-700 font-medium">Total Amount:</span>
+                    <span className="font-bold text-blue-700 text-lg">
+                      {formatCurrency(selectedPlanForPayment?.price || 0, selectedPlanForPayment?.currency || 'INR')}/month
+                    </span>
                   </div>
                 </div>
+              </div>
+
+              {/* Payment Footer */}
+              <div className="pt-4 border-t border-gray-200">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setModalStep('tenant')}
+                    className="px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors flex items-center gap-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" /> Back
+                  </button>
+                  <button
+                    onClick={handlePaymentSubmit}
+                    disabled={isSelectingPlan}
+                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isSelectingPlan ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="w-4 h-4" />
+                        Pay {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 text-center mt-3">
+                  Your payment information is secure and encrypted
+                </p>
               </div>
             </div>
+            )}
 
-            {/* Step 2 Footer */}
-                <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setModalStep(1)}
-                      className="px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors flex items-center gap-2"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                      Back
-                    </button>
-                    <button
-                      onClick={handlePaymentSubmit}
-                      disabled={isSelectingPlan}
-                      className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isSelectingPlan ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <CreditCard className="w-4 h-4" />
-                          Pay {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}
-                        </>
-                      )}
-                    </button>
+            {/* Step 4: Result */}
+            {modalStep === 'result' && transactionResult && (
+              <div className="p-6 space-y-4">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="w-10 h-10 text-green-600" />
                   </div>
-                  <p className="text-xs text-gray-500 text-center mt-3">
-                    Your payment information is secure and encrypted
-                  </p>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Plan Upgrade Successful!</h3>
+                  <p className="text-gray-600">Your subscription has been updated successfully.</p>
                 </div>
-              </>
+
+                <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Plan:</span>
+                    <span className="font-medium text-gray-900">{transactionResult.plan_name}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Isolation Type:</span>
+                    <span className="font-medium text-gray-900">{transactionResult.isolation_type}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Invoice:</span>
+                    <span className="font-medium text-gray-900">{transactionResult.invoice_number}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Amount:</span>
+                    <span className="font-medium text-green-600">${transactionResult.total_amount}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Status:</span>
+                    <Badge className="bg-green-100 text-green-700">{transactionResult.subscription_status}</Badge>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => { setShowPaymentModal(false); setModalStep('isolation'); }}
+                  className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
             )}
           </div>
         </div>

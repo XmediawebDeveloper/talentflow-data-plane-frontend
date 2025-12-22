@@ -2,6 +2,7 @@ import { X, Upload, File, Trash2, FolderPlus, AlertCircle, CheckCircle, XCircle,
 import { useState, useRef } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
+import { recordResumeUpload } from '@/lib/services/usageTrackingService';
 
 // Default constants for fallback
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -81,7 +82,17 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const handleUpload = () => {
     if (selectedFiles.length > 0) {
       onUpload(selectedFiles, selectedFolder || undefined);
-      
+
+      // Track usage - POST /api/v1/external/usage/record (RU for each resume uploaded)
+      selectedFiles.forEach((file, index) => {
+        recordResumeUpload(`upload-${Date.now()}-${index}`, {
+          file_name: file.name,
+          file_size_kb: Math.round(file.size / 1024),
+          folder_id: selectedFolder || undefined,
+          section: uploadSection
+        });
+      });
+
       // Generate upload status for bulk uploads
       if (activeTab === 'bulk' && selectedFiles.length > 1 && onUploadComplete) {
         // Simulate upload process with status tracking

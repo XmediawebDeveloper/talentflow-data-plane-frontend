@@ -4,8 +4,8 @@ import { RefreshCw, Search, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { useState } from 'react';
 
 const mockRefunds = [
-  { id: 'REF-2024-001', date: 'Dec 10, 2024', amount: '$29.00', status: 'completed', reason: 'Downgrade from Professional to Basic', invoiceId: 'INV-2024-001' },
-  { id: 'REF-2024-002', date: 'Oct 5, 2024', amount: '$50.00', status: 'completed', reason: 'Prorated refund for unused credits', invoiceId: 'INV-2024-003' },
+  { id: 'REF-2024-001', date: 'Dec 10, 2024', amount: '₹2,499.00', status: 'completed', reason: 'Downgrade from Professional to Basic', invoiceId: 'INV-2024-001' },
+  { id: 'REF-2024-002', date: 'Oct 5, 2024', amount: '₹4,000.00', status: 'completed', reason: 'Prorated refund for unused credits', invoiceId: 'INV-2024-003' },
 ];
 
 export default function RefundHistoryPage() {

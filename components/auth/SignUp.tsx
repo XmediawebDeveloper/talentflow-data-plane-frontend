@@ -9,7 +9,7 @@ import {
 import { User as UserType } from '@/lib/types/tenant';
 import { useAuth } from '@/lib/hooks/useAuth';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://talentflowapi.mo.vc/api/v1';
 
 // List of blocked personal email domains
 const BLOCKED_EMAIL_DOMAINS = [
@@ -140,6 +140,10 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         },
         body: JSON.stringify({
           email: form.adminEmail,
+          password: form.password,
+          full_name: form.adminName,
+          company_name: form.companyName,
+          phone_number: form.phoneNumber,
         }),
       });
 
@@ -230,7 +234,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           email: form.adminEmail,
           full_name: form.adminName || 'Pending',
           phone_number: form.phoneNumber || '',
-          password: form.password || 'TempPass123!',
+          password: 'PLACEHOLDER_PENDING',  // Actual password sent in complete-registration
           terms_accepted: true,
           privacy_accepted: true,
         }),
