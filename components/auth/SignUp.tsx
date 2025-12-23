@@ -9,7 +9,7 @@ import {
 import { User as UserType } from '@/lib/types/tenant';
 import { useAuth } from '@/lib/hooks/useAuth';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://talentflowapi.mo.vc/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 // List of blocked personal email domains
 const BLOCKED_EMAIL_DOMAINS = [
@@ -150,7 +150,26 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Registration failed');
+        // Handle different error formats from backend
+        let errorMessage = 'Registration failed. Please try again.';
+
+        if (data.detail) {
+          if (typeof data.detail === 'string') {
+            errorMessage = data.detail;
+          } else if (Array.isArray(data.detail)) {
+            errorMessage = data.detail.map((err: any) => {
+              const field = err.loc ? err.loc[err.loc.length - 1] : '';
+              const msg = err.msg || err.message || 'Invalid value';
+              return field ? `${field}: ${msg}` : msg;
+            }).join(', ');
+          } else if (typeof data.detail === 'object' && data.detail.message) {
+            errorMessage = data.detail.message;
+          }
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
+
+        throw new Error(errorMessage);
       }
 
       // Create user object from response
@@ -219,9 +238,24 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     setError('');
 
     try {
-      // First register to trigger OTP send
-      const emailDomain = form.adminEmail.split('@')[1].split('.')[0].toLowerCase();
-      const subdomain = emailDomain.replace(/[^a-z0-9]/g, '').slice(0, 20);
+      // Validate email format before proceeding
+      const emailParts = form.adminEmail.split('@');
+      if (emailParts.length !== 2 || !emailParts[1]) {
+        throw new Error('Please enter a valid email address');
+      }
+
+      const domainParts = emailParts[1].split('.');
+      if (domainParts.length < 2 || !domainParts[0]) {
+        throw new Error('Please enter a valid email address with a domain');
+      }
+
+      const emailDomain = domainParts[0].toLowerCase();
+      let subdomain = emailDomain.replace(/[^a-z0-9]/g, '').slice(0, 20);
+
+      // Ensure subdomain is at least 3 characters
+      if (subdomain.length < 3) {
+        subdomain = subdomain.padEnd(3, '0');
+      }
 
       const response = await fetch(`${API_URL}/signup/register`, {
         method: 'POST',
@@ -237,13 +271,35 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           password: 'PLACEHOLDER_PENDING',  // Actual password sent in complete-registration
           terms_accepted: true,
           privacy_accepted: true,
+          plan_id: 1,  // Free trial plan
         }),
       });
 
       const data = await response.json();
+      console.log('API Response:', response.status, data);
 
       if (!response.ok) {
-        throw new Error(data.detail || data.message || 'Failed to send OTP');
+        // Handle different error formats from backend
+        let errorMessage = 'Failed to send OTP. Please try again.';
+
+        if (data.detail) {
+          if (typeof data.detail === 'string') {
+            errorMessage = data.detail;
+          } else if (Array.isArray(data.detail)) {
+            // FastAPI validation errors - include field name for better clarity
+            errorMessage = data.detail.map((err: any) => {
+              const field = err.loc ? err.loc[err.loc.length - 1] : '';
+              const msg = err.msg || err.message || 'Invalid value';
+              return field ? `${field}: ${msg}` : msg;
+            }).join(', ');
+          } else if (typeof data.detail === 'object' && data.detail.message) {
+            errorMessage = data.detail.message;
+          }
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
+
+        throw new Error(errorMessage);
       }
 
       setOtpSent(true);
@@ -253,7 +309,8 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
     } catch (err: any) {
       console.error('Send OTP error:', err);
-      setError(err.message || 'Failed to send OTP. Please try again.');
+      const errorMessage = err.message || 'Failed to send OTP. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsSendingOtp(false);
     }
@@ -320,14 +377,34 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Invalid OTP code');
+        // Handle different error formats from backend
+        let errorMessage = 'Invalid OTP code. Please try again.';
+
+        if (data.detail) {
+          if (typeof data.detail === 'string') {
+            errorMessage = data.detail;
+          } else if (Array.isArray(data.detail)) {
+            errorMessage = data.detail.map((err: any) => {
+              const field = err.loc ? err.loc[err.loc.length - 1] : '';
+              const msg = err.msg || err.message || 'Invalid value';
+              return field ? `${field}: ${msg}` : msg;
+            }).join(', ');
+          } else if (typeof data.detail === 'object' && data.detail.message) {
+            errorMessage = data.detail.message;
+          }
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
+
+        throw new Error(errorMessage);
       }
 
       setOtpVerified(true);
 
     } catch (err: any) {
       console.error('Verification error:', err);
-      setError(err.message || 'Invalid OTP. Please try again.');
+      const errorMessage = err.message || 'Invalid OTP. Please try again.';
+      setError(errorMessage);
       setOtpCode(['', '', '', '', '', '']);
       otpInputRefs.current[0]?.focus();
     } finally {
@@ -356,14 +433,34 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Failed to resend OTP');
+        // Handle different error formats from backend
+        let errorMessage = 'Failed to resend OTP. Please try again.';
+
+        if (data.detail) {
+          if (typeof data.detail === 'string') {
+            errorMessage = data.detail;
+          } else if (Array.isArray(data.detail)) {
+            errorMessage = data.detail.map((err: any) => {
+              const field = err.loc ? err.loc[err.loc.length - 1] : '';
+              const msg = err.msg || err.message || 'Invalid value';
+              return field ? `${field}: ${msg}` : msg;
+            }).join(', ');
+          } else if (typeof data.detail === 'object' && data.detail.message) {
+            errorMessage = data.detail.message;
+          }
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
+
+        throw new Error(errorMessage);
       }
 
       setResendTimer(60);
       setOtpCode(['', '', '', '', '', '']);
 
     } catch (err: any) {
-      setError(err.message || 'Failed to resend OTP');
+      const errorMessage = err.message || 'Failed to resend OTP. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsSendingOtp(false);
     }
