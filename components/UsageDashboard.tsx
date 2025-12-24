@@ -333,26 +333,30 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
         // Set subscription summary from new format
         if (data.tenant_id) {
+          // Extract price from plan_info if available
+          const basePrice = data.plan_info?.base_price || 0;
+          const billingInterval = data.plan_info?.billing_period?.toLowerCase() || 'month';
+
           setSubscriptionSummary({
             tenant_id: data.tenant_id,
             tenant_name: data.tenant_id,
             status: 'active',
-            is_trial: false,
+            is_trial: data.is_trial || false,
             plan: {
-              id: 0,
+              id: data.plan_info?.plan_id || 0,
               name: data.plan_name || 'Professional',
-              price: 0,
-              billing_interval: 'month',
+              price: basePrice,
+              billing_interval: billingInterval,
             },
             subscription: data.billing_period ? {
               id: 0,
               status: 'active',
-              billing_interval: 'month',
+              billing_interval: billingInterval,
               start_date: data.billing_period.start,
               current_period_start: data.billing_period.start,
               current_period_end: data.billing_period.end,
               days_until_renewal: data.billing_period.end ? Math.ceil((new Date(data.billing_period.end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 30,
-              price: 0,
+              price: basePrice,
             } : null,
             isolation_type: 'database',
           });

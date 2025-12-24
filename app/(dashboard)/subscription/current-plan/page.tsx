@@ -280,6 +280,11 @@ export default function CurrentPlanPage() {
   // Free trial settings from admin API
   const [freeTrialSettings, setFreeTrialSettings] = useState<FreeTrialSettings | null>(null);
 
+  // Current plan price from quota-status API
+  const [currentPlanPrice, setCurrentPlanPrice] = useState<number | null>(null);
+  const [currentPlanCurrency, setCurrentPlanCurrency] = useState<string>('INR');
+  const [currentPlanBillingPeriod, setCurrentPlanBillingPeriod] = useState<string>('MONTHLY');
+
   // Get tenant ID from token on mount
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -341,6 +346,15 @@ export default function CurrentPlanPage() {
         // Update company settings with plan name from quota data
         if (quotaData.plan_name) {
           setCompanySettings(prev => prev ? { ...prev, current_plan_name: quotaData.plan_name } : prev);
+        }
+
+        // Extract base_price from plan_info if available
+        if (quotaData.plan_info?.base_price !== undefined) {
+          setCurrentPlanPrice(quotaData.plan_info.base_price);
+          console.log('[CurrentPlan] Setting price from plan_info:', quotaData.plan_info.base_price);
+        }
+        if (quotaData.plan_info?.billing_period) {
+          setCurrentPlanBillingPeriod(quotaData.plan_info.billing_period);
         }
       }
 
@@ -846,6 +860,8 @@ export default function CurrentPlanPage() {
               <p className="text-xl font-semibold text-gray-900">
                 {isOnTrial ? (
                   'Free'
+                ) : currentPlanPrice !== null && currentPlanPrice > 0 ? (
+                  <>{formatCurrency(currentPlanPrice, currentPlanCurrency)}<span className="text-sm font-normal text-gray-500">{getBillingPeriodLabel(currentPlanBillingPeriod)}</span></>
                 ) : currentPlan?.price ? (
                   <>{formatCurrency(currentPlan.price, currentPlan.currency)}<span className="text-sm font-normal text-gray-500">{getBillingPeriodLabel(currentPlan.billingPeriod)}</span></>
                 ) : (
@@ -885,7 +901,7 @@ export default function CurrentPlanPage() {
           {(companySettings || freeTrialSettings) && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <h3 className="text-sm font-medium text-gray-700 mb-4">Your Plan Limits</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
                     {isOnTrial && freeTrialSettings ? freeTrialSettings.features.MAX_SEATS : companySettings?.max_seats}
@@ -921,13 +937,6 @@ export default function CurrentPlanPage() {
                     {isOnTrial && freeTrialSettings ? freeTrialSettings.features.AI_INTERVIEW : companySettings?.max_ai_interviews}
                   </p>
                   <p className="text-xs text-gray-600">AI Interviews</p>
-                </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">
-                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.TOTAL_RESUME_STORAGE : companySettings?.storage_limit_gb}
-                    {isOnTrial && freeTrialSettings ? '' : 'GB'}
-                  </p>
-                  <p className="text-xs text-gray-600">{isOnTrial && freeTrialSettings ? 'Total Resume Storage' : 'Storage'}</p>
                 </div>
               </div>
             </div>

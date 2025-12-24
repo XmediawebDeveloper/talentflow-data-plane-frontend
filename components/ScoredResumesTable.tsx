@@ -1,9 +1,7 @@
-import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, MoreVertical, Eye, BarChart3, AlertCircle } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
-import ScoringResultDetailModal from './ScoringResultDetailModal';
 import InviteToAssessmentModal from './InviteToAssessmentModal';
-import ResumeQuickViewModal from './ResumeQuickViewModal';
 
 interface ScoredResume {
   id: string;
@@ -17,6 +15,20 @@ interface ScoredResume {
   experience?: string;
   education?: string;
   certifications?: string[];
+  // Real scoring data from API
+  aiSummary?: string;
+  strengths?: string[];
+  gaps?: string[];
+  matchReason?: string;
+  scoreBreakdown?: {
+    skillsMatch: number;
+    experienceMatch: number;
+    educationMatch: number;
+    overallFit: number;
+  };
+  title?: string;
+  currentCompany?: string;
+  location?: string;
 }
 
 interface ScoredResumesTableProps {
@@ -24,21 +36,16 @@ interface ScoredResumesTableProps {
   jobTitle: string;
   jobId?: string;
   availableUnits?: number;
+  onViewCandidate?: (resume: ScoredResume) => void;
 }
 
-export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', availableUnits = 10 }: ScoredResumesTableProps) {
+export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', availableUnits = 10, onViewCandidate }: ScoredResumesTableProps) {
   const [showColumnModal, setShowColumnModal] = useState(false);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedResumeDetail, setSelectedResumeDetail] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteCandidate, setInviteCandidate] = useState<ScoredResume | null>(null);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [showResumePreview, setShowResumePreview] = useState(false);
-  const [previewResumeId, setPreviewResumeId] = useState<string | null>(null);
-  const [showQuickScoreView, setShowQuickScoreView] = useState(false);
-  const [quickScoreResumeId, setQuickScoreResumeId] = useState<string | null>(null);
   
   // Filter states
   const [filterMatchStatus, setFilterMatchStatus] = useState<string>('all');
@@ -164,91 +171,18 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
     filterRecruiter !== 'all' ||
     searchTerm;
 
-  // Function to handle row click and open detail modal
+  // Function to handle row click and open detail view
   const handleRowClick = (resumeId: string, event: React.MouseEvent) => {
-    // Don't open modal if clicking on checkbox or action button
+    // Don't open view if clicking on checkbox or action button
     const target = event.target as HTMLElement;
     if (target.closest('button') || target.closest('input[type="checkbox"]')) {
       return;
     }
-    setSelectedResumeDetail(resumeId);
-  };
-
-  // Generate enriched resume data for the modal
-  const getEnrichedResumeData = (resumeId: string) => {
     const resume = resumes.find(r => r.id === resumeId);
-    if (!resume) return null;
-
-    // Generate mock detailed scoring data
-    const detailedScores = {
-      titleMatch: Math.min(100, resume.scorePercentage + Math.floor(Math.random() * 10 - 5)),
-      experienceMatch: Math.min(100, resume.scorePercentage + Math.floor(Math.random() * 10 - 5)),
-      skillsMatch: resume.scorePercentage,
-      educationMatch: Math.min(100, resume.scorePercentage + Math.floor(Math.random() * 10 - 5)),
-      locationMatch: Math.min(100, resume.scorePercentage + Math.floor(Math.random() * 15 - 7)),
-    };
-
-    const matchedSkills = ['React', 'TypeScript', 'Node.js', 'AWS', 'Agile', 'REST APIs', 'SQL', 'Git'];
-    const missingSkills = resume.scorePercentage < 85 ? ['Docker', 'Kubernetes', 'GraphQL'] : resume.scorePercentage < 95 ? ['GraphQL'] : [];
-
-    const keyStrengths = [
-      'Strong technical background with relevant experience in modern frameworks',
-      'Excellent communication skills demonstrated through project leadership',
-      'Proven track record of delivering complex projects on time',
-      'Active contributor to open-source community',
-    ];
-
-    const improvementAreas = resume.scorePercentage < 85 ? [
-      'Limited experience with containerization technologies',
-      'Could benefit from additional cloud architecture certifications',
-      'GraphQL experience would strengthen backend capabilities',
-    ] : resume.scorePercentage < 95 ? [
-      'Expanding GraphQL knowledge would be beneficial',
-    ] : [];
-
-    const aiReasoning = resume.matchStatus === 'Exact Match'
-      ? 'Outstanding candidate with exceptional alignment to job requirements. Strong technical skills, relevant experience, and proven track record in similar roles. The candidate demonstrates mastery of core technologies and has consistently delivered high-impact projects. Highly recommended for immediate interview consideration.'
-      : resume.matchStatus === 'Partial Match'
-      ? 'Solid candidate with good alignment to most job requirements. Possesses core technical skills and relevant experience with minor gaps in specialized areas. These gaps can likely be addressed through training or on-the-job learning. Recommended for interview with focus on growth potential and cultural fit.'
-      : 'Limited alignment with current job requirements. While the candidate shows promise in certain areas, there are significant gaps in required technical skills and experience. May be better suited for junior-level positions or roles with different technical focuses. Consider for future opportunities with additional training.';
-
-    const recommendations = resume.matchStatus === 'Exact Match'
-      ? [
-          'Schedule technical interview with senior engineering team within next 48 hours',
-          'Prepare coding challenge focused on React and TypeScript best practices',
-          'Discuss system design capabilities and architectural decision-making',
-          'Evaluate cultural fit and alignment with team values',
-        ]
-      : resume.matchStatus === 'Partial Match'
-      ? [
-          'Conduct initial screening call to assess motivation and learning agility',
-          'Evaluate willingness to upskill in missing technical areas',
-          'Consider for mid-level position with mentorship opportunities',
-          'Assess problem-solving approach through technical assessment',
-        ]
-      : [
-          'Provide constructive feedback on current skill gaps',
-          'Suggest relevant training resources for skill development',
-          'Consider for junior positions or internship programs',
-          'Keep profile for future opportunities after skill development',
-        ];
-
-    return {
-      ...resume,
-      title: resume.experience?.includes('Senior') ? 'Senior Software Engineer' : resume.experience?.includes('Mid') ? 'Software Engineer' : 'Junior Software Engineer',
-      currentCompany: 'Tech Solutions Inc.',
-      location: 'San Francisco, CA',
-      detailedScores,
-      matchedSkills,
-      missingSkills,
-      keyStrengths,
-      improvementAreas,
-      aiReasoning,
-      recommendations,
-    };
+    if (resume && onViewCandidate) {
+      onViewCandidate(resume);
+    }
   };
-
-  const selectedResumeData = selectedResumeDetail ? getEnrichedResumeData(selectedResumeDetail) : null;
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -640,72 +574,18 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
 
                 {/* Actions Column */}
                 <td className="py-3 px-4">
-                  {/* 3-Dot Menu */}
-                  <div className="relative">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenMenuId(openMenuId === resume.id ? null : resume.id);
-                      }}
-                      className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-
-                    {/* Dropdown Menu */}
-                    {openMenuId === resume.id && (
-                      <>
-                        {/* Backdrop to close menu when clicking outside */}
-                        <div 
-                          className="fixed inset-0 z-10" 
-                          onClick={() => setOpenMenuId(null)}
-                        ></div>
-                        
-                        <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
-                          {/* Download Scorecard */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDownloadScorecard(resume.id);
-                              setOpenMenuId(null);
-                            }}
-                            className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700"
-                          >
-                            <Download className="w-4 h-4 text-blue-600" />
-                            <span>Download Scorecard</span>
-                          </button>
-
-                          {/* View Resume */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPreviewResumeId(resume.id);
-                              setShowResumePreview(true);
-                              setOpenMenuId(null);
-                            }}
-                            className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700"
-                          >
-                            <Eye className="w-4 h-4 text-green-600" />
-                            <span>View Resume</span>
-                          </button>
-
-                          {/* Quick View Score Table */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setQuickScoreResumeId(resume.id);
-                              setSelectedResumeDetail(resume.id);
-                              setOpenMenuId(null);
-                            }}
-                            className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700"
-                          >
-                            <BarChart3 className="w-4 h-4 text-purple-600" />
-                            <span>Quick View Score Table</span>
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onViewCandidate) {
+                        onViewCandidate(resume);
+                      }
+                    }}
+                    className="px-3 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors flex items-center gap-1.5"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    View
+                  </button>
                 </td>
               </tr>
             ))}
@@ -893,15 +773,6 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
         />
       )}
 
-      {/* Scoring Result Detail Modal */}
-      {selectedResumeDetail && selectedResumeData && (
-        <ScoringResultDetailModal
-          resume={selectedResumeData}
-          jobTitle={jobTitle}
-          onClose={() => setSelectedResumeDetail(null)}
-        />
-      )}
-
       {/* Invite to Assessment Modal */}
       {showInviteModal && inviteCandidate && (
         <InviteToAssessmentModal
@@ -911,49 +782,6 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
           onClose={() => setShowInviteModal(false)}
         />
       )}
-
-      {/* Resume Preview Modal */}
-      {showResumePreview && previewResumeId && (() => {
-        const resume = resumes.find(r => r.id === previewResumeId);
-        if (!resume) return null;
-        
-        // Convert ScoredResume to Resume format expected by ResumeQuickViewModal
-        const resumeForModal = {
-          id: resume.id,
-          name: resume.candidateName,
-          email: resume.email,
-          phone: resume.phone,
-          title: resume.experience || 'Candidate',
-          uploadDate: resume.scoredDate,
-          fileName: `${resume.candidateName.replace(/\s+/g, '_')}_Resume.pdf`,
-          fileSize: '245 KB',
-          folder: 'Scored Resumes',
-          tags: [resume.matchStatus],
-          status: 'active' as const,
-          score: resume.scorePercentage,
-        };
-        
-        return (
-          <ResumeQuickViewModal
-            resume={resumeForModal}
-            onClose={() => setShowResumePreview(false)}
-          />
-        );
-      })()}
-
-      {/* Quick Score View Modal */}
-      {quickScoreResumeId && (() => {
-        const enrichedData = getEnrichedResumeData(quickScoreResumeId);
-        if (!enrichedData) return null;
-        
-        return (
-          <ScoringResultDetailModal
-            resume={enrichedData}
-            jobTitle={jobTitle}
-            onClose={() => setQuickScoreResumeId(null)}
-          />
-        );
-      })()}
     </div>
   );
 }
