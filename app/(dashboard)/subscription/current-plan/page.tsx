@@ -298,18 +298,50 @@ export default function CurrentPlanPage() {
       setIsLoading(true);
       setError(null);
 
-      // Fetch free trial settings from backend API (which proxies to external API)
-      let trialSettings: FreeTrialSettings | null = null;
+      // Fetch quota status from backend API (calls external admin API)
+      let quotaData: any = null;
       try {
-        const trialResponse = await fetch(`${API_URL}/subscription/public/free-trial`);
-        if (trialResponse.ok) {
-          const trialResult = await trialResponse.json();
-          trialSettings = trialResult.data;
-          setFreeTrialSettings(trialSettings);
-          console.log('[CurrentPlan] Free trial settings:', trialSettings);
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+          const quotaResponse = await fetch(`${API_URL}/usage/quota-status`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          if (quotaResponse.ok) {
+            const quotaResult = await quotaResponse.json();
+            quotaData = quotaResult.data || quotaResult;
+            console.log('[CurrentPlan] Quota status:', quotaData);
+          }
         }
-      } catch (trialError) {
-        console.log('Could not fetch free trial settings');
+      } catch (quotaError) {
+        console.log('Could not fetch quota status');
+      }
+
+      // Build trial settings from quota data
+      let trialSettings: FreeTrialSettings | null = null;
+      if (quotaData?.quotas) {
+        const q = quotaData.quotas;
+        trialSettings = {
+          trial_days: 14,
+          features: {
+            MAX_JOBS: q.max_jobs?.subscription?.limit === 'unlimited' ? 999 : (q.max_jobs?.subscription?.limit || 10),
+            MAX_SEATS: q.max_seats?.subscription?.limit === 'unlimited' ? 999 : (q.max_seats?.subscription?.limit || 5),
+            ASSESSMENTS: q.AS?.subscription?.limit === 'unlimited' ? 999 : (q.AS?.subscription?.limit || 50),
+            AI_INTERVIEW: q.AIU?.subscription?.limit === 'unlimited' ? 999 : (q.AIU?.subscription?.limit || 25),
+            RESUME_UPLOAD: q.RU?.subscription?.limit === 'unlimited' ? 999 : (q.RU?.subscription?.limit || 100),
+            RESUME_SCORING: q.RS?.subscription?.limit === 'unlimited' ? 999 : (q.RS?.subscription?.limit || 100),
+            TOTAL_RESUME_STORAGE: q.storage_gb?.subscription?.limit === 'unlimited' ? 999 : ((q.storage_gb?.subscription?.limit || 10) * 100),
+          },
+          trial_includes: ['Resume Upload', 'Resume Scoring', 'Assessments', 'AI Interviews'],
+        };
+        setFreeTrialSettings(trialSettings);
+
+        // Update company settings with plan name from quota data
+        if (quotaData.plan_name) {
+          setCompanySettings(prev => prev ? { ...prev, current_plan_name: quotaData.plan_name } : prev);
+        }
       }
 
       let settings: CompanySettings | null = null;

@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
 
 type TabType = 'overview' | 'scored-resumes' | 'assessment-results';
 
@@ -282,8 +283,8 @@ ${job.certifications?.join(', ') || 'N/A'}
                 {/* Job Description */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Description</h2>
-                  <div className="prose prose-sm max-w-none text-gray-600 whitespace-pre-wrap">
-                    {job.description}
+                  <div className="markdown-content text-gray-700 leading-relaxed">
+                    <ReactMarkdown>{job.description || ''}</ReactMarkdown>
                   </div>
                 </div>
 

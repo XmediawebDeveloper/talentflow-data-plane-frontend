@@ -228,41 +228,19 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
       let quotaStatusData: any = null;
 
-      // If free trial (plan_id = 1), call free-trial endpoint first
-      if (isTrial || planId === 1) {
-        console.log('[UsageDashboard] User on free trial, fetching trial quotas');
-        try {
-          const freeTrialResponse = await fetch(`${API_BASE}/subscription/public/free-trial`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          });
+      // Always call /usage/quota-status - backend handles both trial and paid users
+      // Backend tries external API (talentflowapi.mo.vc) first, then falls back to local data
+      const quotaStatusResponse = await fetch(`${API_BASE}/usage/quota-status`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-          if (freeTrialResponse.ok) {
-            const trialData = await freeTrialResponse.json();
-            console.log('[UsageDashboard] Free trial data:', trialData);
-            quotaStatusData = { status: 'success', data: trialData.data || trialData };
-          }
-        } catch (trialErr) {
-          console.warn('[UsageDashboard] Free trial API failed, falling back to quota-status:', trialErr);
-        }
-      }
-
-      // If not trial or trial API failed, call regular quota-status
-      if (!quotaStatusData) {
-        const quotaStatusResponse = await fetch(`${API_BASE}/usage/quota-status`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (quotaStatusResponse.ok) {
-          quotaStatusData = await quotaStatusResponse.json();
-        }
+      if (quotaStatusResponse.ok) {
+        quotaStatusData = await quotaStatusResponse.json();
+        console.log('[UsageDashboard] Quota status from backend:', quotaStatusData);
       }
 
       if (quotaStatusData) {
