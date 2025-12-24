@@ -9,6 +9,7 @@ export default function SignUpPage() {
   return (
     <SignUp
       onSwitchToLogin={() => router.push('/login')}
+      onBackToPublic={() => router.push('/')}
     />
   );
 }

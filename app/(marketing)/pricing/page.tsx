@@ -6,7 +6,8 @@ import { Check, Sparkles, Building2, Users, Zap, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://localhost:8001/api/v1';
+const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://talentflowapi.mo.vc/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://talentflowdata.api.mo.vc/api/v1';
 
 interface PlanFeature {
   id: string;
@@ -54,8 +55,11 @@ interface DisplayPlan {
   id: string;
   name: string;
   description: string;
+  basePrice: number | null;
   monthlyPrice: number | null;
   yearlyPrice: number | null;
+  yearlyFullPrice: number | null;
+  billingPeriod: string;
   currency: string;
   icon: typeof Users | typeof Building2 | typeof Zap;
   gradient: string;
@@ -64,6 +68,20 @@ interface DisplayPlan {
   trialDays: number;
   quotas?: PlanQuotas;
 }
+
+const getBillingPeriodLabel = (period: string): string => {
+  switch (period?.toUpperCase()) {
+    case 'ANNUAL':
+    case 'YEARLY':
+      return '/year';
+    case 'MONTHLY':
+      return '/month';
+    case 'QUARTERLY':
+      return '/quarter';
+    default:
+      return '/year';
+  }
+};
 
 interface Addon {
   id: number;
@@ -121,7 +139,7 @@ const formatCurrency = (amount: number | undefined | null, currency: string): st
 const ADDONS_API_URL = 'http://localhost:8001/api/v1';
 
 export default function PricingPage() {
-  const [isYearly, setIsYearly] = useState(false);
+  const [isYearly, setIsYearly] = useState(true); // Default to yearly (base price)
   const [plans, setPlans] = useState<DisplayPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +153,8 @@ export default function PricingPage() {
         setIsLoading(true);
         setError(null);
 
-        const response = await fetch(`${ADMIN_API_URL}/public/plans`);
+        // Fetch plans from backend API (which proxies to external API)
+        const response = await fetch(`${API_URL}/subscription/public/plans`);
 
         if (!response.ok) {
           throw new Error(`Failed to fetch plans: ${response.status}`);
@@ -162,16 +181,24 @@ export default function PricingPage() {
               ?.filter(f => f.is_enabled)
               ?.map(f => f.feature_name) || [];
 
-            const monthlyPrice = plan.monthly_price > 0 ? plan.monthly_price : (plan.base_price > 0 ? plan.base_price : null);
-            // Yearly = monthly * 12 * 0.8 (20% discount)
+            // Base price is the monthly price for display
+            const basePrice = plan.base_price > 0 ? plan.base_price : null;
+            // Monthly price = base_price (treat base_price as monthly rate)
+            const monthlyPrice = basePrice;
+            // Yearly price = monthly * 12 with 20% discount
             const yearlyPrice = monthlyPrice ? Math.round(monthlyPrice * 12 * 0.8) : null;
+            // Full yearly without discount (for strikethrough)
+            const yearlyFullPrice = monthlyPrice ? Math.round(monthlyPrice * 12) : null;
 
             return {
               id: String(plan.id),
               name: plan.plan_name,
               description: plan.description,
+              basePrice,
               monthlyPrice,
               yearlyPrice,
+              yearlyFullPrice,
+              billingPeriod: plan.billing_period || 'ANNUAL',
               currency: plan.currency || 'INR',
               icon: getIconForPlan(plan.plan_name, plan.plan_tier),
               gradient: getGradientForPlan(plan.plan_name, plan.plan_tier),
@@ -316,7 +343,6 @@ export default function PricingPage() {
         }`}>
           {plans.map((plan) => {
             const Icon = plan.icon;
-            const price = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
             return (
               <Card
                 key={plan.id}
@@ -346,23 +372,23 @@ export default function PricingPage() {
                 </p>
 
                 <div className="mb-6">
-                  {price ? (
+                  {(isYearly ? plan.yearlyPrice : plan.monthlyPrice) ? (
                     <>
                       <div className="flex items-baseline gap-1">
                         <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                          {formatCurrency(price, plan.currency)}
+                          {formatCurrency(isYearly ? plan.yearlyPrice : plan.monthlyPrice, plan.currency)}
                         </span>
                         <span className="text-gray-600 dark:text-gray-400">
                           /{isYearly ? 'year' : 'month'}
                         </span>
                       </div>
-                      {isYearly && plan.monthlyPrice && (
+                      {isYearly && plan.yearlyFullPrice && plan.yearlyPrice && (
                         <div className="mt-2">
                           <span className="text-sm text-gray-400 line-through">
-                            {formatCurrency(plan.monthlyPrice * 12, plan.currency)}
+                            {formatCurrency(plan.yearlyFullPrice, plan.currency)}
                           </span>
                           <span className="ml-2 text-sm font-medium text-green-600 dark:text-green-400">
-                            Save {formatCurrency(plan.monthlyPrice * 12 - price, plan.currency)}
+                            Save {formatCurrency(plan.yearlyFullPrice - plan.yearlyPrice, plan.currency)}
                           </span>
                         </div>
                       )}
@@ -450,14 +476,14 @@ export default function PricingPage() {
                 )}
 
                 <Link
-                  href={price ? "/signup" : "/contact"}
+                  href={plan.basePrice ? "/signup" : "/contact"}
                   className={`block w-full h-12 rounded-lg font-medium text-center leading-[48px] transition-all ${
                     plan.popular
                       ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90"
                       : "border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                   }`}
                 >
-                  {price ? (plan.trialDays > 0 ? `Start ${plan.trialDays}-Day Trial` : "Get Started") : "Contact Sales"}
+                  {plan.basePrice ? (plan.trialDays > 0 ? `Start ${plan.trialDays}-Day Trial` : "Get Started") : "Contact Sales"}
                 </Link>
               </Card>
             );

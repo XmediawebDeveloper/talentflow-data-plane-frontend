@@ -1,6 +1,7 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, ArrowLeft, GripVertical, Info } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, ArrowLeft, GripVertical, Info, Eye, Pencil } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { useState, useEffect } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -210,6 +211,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
   const [manualJD, setManualJD] = useState('');
   const [generatedJD, setGeneratedJD] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isEditingJD, setIsEditingJD] = useState(false);
   
   // Step 2: Extracted Data
   const [extractedData, setExtractedData] = useState<ExtractedData>({
@@ -904,12 +906,42 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
 
                 {mode === 'ai' ? (
                   generatedJD ? (
-                    <div className="prose max-w-none">
-                      <textarea
-                        value={generatedJD}
-                        onChange={(e) => setGeneratedJD(e.target.value)}
-                        className="w-full h-[600px] px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent font-mono text-sm"
-                      />
+                    <div className="relative">
+                      {/* Toggle Edit/View Button */}
+                      <div className="absolute top-2 right-2 z-10">
+                        <button
+                          onClick={() => setIsEditingJD(!isEditingJD)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                            isEditingJD
+                              ? 'bg-blue-600 text-white hover:bg-blue-700'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {isEditingJD ? (
+                            <>
+                              <Eye className="w-4 h-4" />
+                              Preview
+                            </>
+                          ) : (
+                            <>
+                              <Pencil className="w-4 h-4" />
+                              Edit
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {isEditingJD ? (
+                        <textarea
+                          value={generatedJD}
+                          onChange={(e) => setGeneratedJD(e.target.value)}
+                          className="w-full h-[600px] px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent font-mono text-sm"
+                        />
+                      ) : (
+                        <div className="h-[600px] overflow-y-auto px-6 py-4 border border-gray-300 rounded-md bg-white markdown-content">
+                          <ReactMarkdown>{generatedJD}</ReactMarkdown>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-[600px] bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
@@ -1714,8 +1746,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   </div>
 
                   {/* JD Content */}
-                  <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                    {mode === 'ai' ? generatedJD : manualJD}
+                  <div className="markdown-content text-gray-700 leading-relaxed">
+                    <ReactMarkdown>
+                      {mode === 'ai' ? generatedJD : manualJD}
+                    </ReactMarkdown>
                   </div>
 
                   {/* Requirements Highlight Section */}
