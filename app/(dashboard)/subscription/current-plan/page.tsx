@@ -290,6 +290,10 @@ export default function CurrentPlanPage() {
 
   // Billing period toggle
   const [isYearly, setIsYearly] = useState(true);
+  // Current plan price from quota-status API
+  const [currentPlanPrice, setCurrentPlanPrice] = useState<number | null>(null);
+  const [currentPlanCurrency, setCurrentPlanCurrency] = useState<string>('INR');
+  const [currentPlanBillingPeriod, setCurrentPlanBillingPeriod] = useState<string>('MONTHLY');
 
   // Get tenant ID from token on mount
   useEffect(() => {
@@ -309,18 +313,59 @@ export default function CurrentPlanPage() {
       setIsLoading(true);
       setError(null);
 
-      // Fetch free trial settings from backend API (which proxies to external API)
-      let trialSettings: FreeTrialSettings | null = null;
+      // Fetch quota status from backend API (calls external admin API)
+      let quotaData: any = null;
       try {
-        const trialResponse = await fetch(`${API_URL}/subscription/public/free-trial`);
-        if (trialResponse.ok) {
-          const trialResult = await trialResponse.json();
-          trialSettings = trialResult.data;
-          setFreeTrialSettings(trialSettings);
-          console.log('[CurrentPlan] Free trial settings:', trialSettings);
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+          const quotaResponse = await fetch(`${API_URL}/usage/quota-status`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          if (quotaResponse.ok) {
+            const quotaResult = await quotaResponse.json();
+            quotaData = quotaResult.data || quotaResult;
+            console.log('[CurrentPlan] Quota status:', quotaData);
+          }
         }
-      } catch (trialError) {
-        console.log('Could not fetch free trial settings');
+      } catch (quotaError) {
+        console.log('Could not fetch quota status');
+      }
+
+      // Build trial settings from quota data
+      let trialSettings: FreeTrialSettings | null = null;
+      if (quotaData?.quotas) {
+        const q = quotaData.quotas;
+        trialSettings = {
+          trial_days: 14,
+          features: {
+            MAX_JOBS: q.max_jobs?.subscription?.limit === 'unlimited' ? 999 : (q.max_jobs?.subscription?.limit || 10),
+            MAX_SEATS: q.max_seats?.subscription?.limit === 'unlimited' ? 999 : (q.max_seats?.subscription?.limit || 5),
+            ASSESSMENTS: q.AS?.subscription?.limit === 'unlimited' ? 999 : (q.AS?.subscription?.limit || 50),
+            AI_INTERVIEW: q.AIU?.subscription?.limit === 'unlimited' ? 999 : (q.AIU?.subscription?.limit || 25),
+            RESUME_UPLOAD: q.RU?.subscription?.limit === 'unlimited' ? 999 : (q.RU?.subscription?.limit || 100),
+            RESUME_SCORING: q.RS?.subscription?.limit === 'unlimited' ? 999 : (q.RS?.subscription?.limit || 100),
+            TOTAL_RESUME_STORAGE: q.storage_gb?.subscription?.limit === 'unlimited' ? 999 : ((q.storage_gb?.subscription?.limit || 10) * 100),
+          },
+          trial_includes: ['Resume Upload', 'Resume Scoring', 'Assessments', 'AI Interviews'],
+        };
+        setFreeTrialSettings(trialSettings);
+
+        // Update company settings with plan name from quota data
+        if (quotaData.plan_name) {
+          setCompanySettings(prev => prev ? { ...prev, current_plan_name: quotaData.plan_name } : prev);
+        }
+
+        // Extract base_price from plan_info if available
+        if (quotaData.plan_info?.base_price !== undefined) {
+          setCurrentPlanPrice(quotaData.plan_info.base_price);
+          console.log('[CurrentPlan] Setting price from plan_info:', quotaData.plan_info.base_price);
+        }
+        if (quotaData.plan_info?.billing_period) {
+          setCurrentPlanBillingPeriod(quotaData.plan_info.billing_period);
+        }
       }
 
       // Fetch plan settings (yearly discount, database extra charge)
@@ -856,6 +901,8 @@ export default function CurrentPlanPage() {
               <p className="text-xl font-semibold text-gray-900">
                 {isOnTrial ? (
                   'Free'
+                ) : currentPlanPrice !== null && currentPlanPrice > 0 ? (
+                  <>{formatCurrency(currentPlanPrice, currentPlanCurrency)}<span className="text-sm font-normal text-gray-500">{getBillingPeriodLabel(currentPlanBillingPeriod)}</span></>
                 ) : currentPlan?.price ? (
                   <>{formatCurrency(currentPlan.price, currentPlan.currency)}</>
                 ) : (
@@ -895,7 +942,7 @@ export default function CurrentPlanPage() {
           {(companySettings || freeTrialSettings) && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <h3 className="text-sm font-medium text-gray-700 mb-4">Your Plan Limits</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
                     {isOnTrial && freeTrialSettings ? freeTrialSettings.features.MAX_SEATS : companySettings?.max_seats}
@@ -931,13 +978,6 @@ export default function CurrentPlanPage() {
                     {isOnTrial && freeTrialSettings ? freeTrialSettings.features.AI_INTERVIEW : companySettings?.max_ai_interviews}
                   </p>
                   <p className="text-xs text-gray-600">AI Interviews</p>
-                </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">
-                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.TOTAL_RESUME_STORAGE : companySettings?.storage_limit_gb}
-                    {isOnTrial && freeTrialSettings ? '' : 'GB'}
-                  </p>
-                  <p className="text-xs text-gray-600">{isOnTrial && freeTrialSettings ? 'Total Resume Storage' : 'Storage'}</p>
                 </div>
               </div>
             </div>

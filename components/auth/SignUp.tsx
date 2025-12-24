@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft,
   Building2, User, CheckCircle, Loader2, Phone, ShieldCheck
@@ -38,7 +38,11 @@ type SignUpStep = 'form' | 'verification' | 'success';
 
 export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuth();
+
+  // Get plan_id from URL query params (e.g., /signup?plan_id=21)
+  const planIdFromUrl = searchParams.get('plan_id');
 
   const [form, setForm] = useState<SignUpForm>({
     companyName: '',
@@ -271,7 +275,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           password: 'PLACEHOLDER_PENDING',  // Actual password sent in complete-registration
           terms_accepted: true,
           privacy_accepted: true,
-          plan_id: 1,  // Free trial plan
+          plan_id: planIdFromUrl ? parseInt(planIdFromUrl) : null,
         }),
       });
 

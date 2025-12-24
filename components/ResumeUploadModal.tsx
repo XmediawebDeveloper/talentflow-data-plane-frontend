@@ -1,5 +1,6 @@
-import { X, Upload, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
-import { useState } from 'react';
+import { X, Upload, FileText, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 
 interface ResumeUploadModalProps {
   jobTitle: string;
@@ -10,6 +11,26 @@ interface ResumeUploadModalProps {
 export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: ResumeUploadModalProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [dragActive, setDragActive] = useState(false);
+
+  // Quota check for RU (Resume Upload)
+  const { checkQuota, status: quotaStatus, canProceed: hasQuota, isChecking: isCheckingQuota } = useQuotaCheck();
+  const [quotaChecked, setQuotaChecked] = useState(false);
+  const [quotaRemaining, setQuotaRemaining] = useState<number>(-1);
+
+  // Check quota on mount and when files change
+  useEffect(() => {
+    const checkResumeQuota = async () => {
+      const canUpload = await checkQuota('RU', selectedFiles.length || 1);
+      setQuotaChecked(true);
+      if (quotaStatus.data?.total_remaining !== undefined) {
+        setQuotaRemaining(quotaStatus.data.total_remaining);
+      }
+    };
+    checkResumeQuota();
+  }, [checkQuota, selectedFiles.length]);
+
+  // Check if selected files exceed quota
+  const filesExceedQuota = quotaRemaining !== -1 && selectedFiles.length > quotaRemaining;
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -149,6 +170,41 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
             </div>
           )}
 
+          {/* Quota Warning */}
+          {quotaChecked && (!hasQuota || filesExceedQuota) && (
+            <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h5 className="text-sm font-medium text-red-900 mb-1">Resume Upload Quota {!hasQuota ? 'Exceeded' : 'Warning'}</h5>
+                  <p className="text-xs text-red-700">
+                    {!hasQuota ? (
+                      <>You have reached your resume upload limit. </>
+                    ) : filesExceedQuota ? (
+                      <>You can only upload {quotaRemaining} more resume{quotaRemaining !== 1 ? 's' : ''}. You've selected {selectedFiles.length}. </>
+                    ) : null}
+                    <a href="/subscription/plans" className="underline font-medium">Upgrade your plan</a> to upload more resumes.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quota Info */}
+          {quotaChecked && quotaRemaining !== -1 && hasQuota && !filesExceedQuota && (
+            <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex gap-3">
+                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h5 className="text-sm font-medium text-green-900 mb-1">Resume Upload Quota</h5>
+                  <p className="text-xs text-green-700">
+                    You have {quotaRemaining} resume upload{quotaRemaining !== 1 ? 's' : ''} remaining in your plan.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Info Box */}
           <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
             <div className="flex gap-3">
@@ -167,11 +223,20 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
         {/* Footer */}
         <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
           <div className="text-sm text-gray-600">
-            {selectedFiles.length > 0 ? (
-              <span className="text-green-600 flex items-center gap-1">
-                <CheckCircle2 className="w-4 h-4" />
-                {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} ready to upload
-              </span>
+            {isCheckingQuota ? (
+              <span className="text-gray-500 animate-pulse">Checking quota...</span>
+            ) : selectedFiles.length > 0 ? (
+              filesExceedQuota || !hasQuota ? (
+                <span className="text-red-600 flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4" />
+                  {!hasQuota ? 'Quota exceeded' : `Exceeds quota (max ${quotaRemaining})`}
+                </span>
+              ) : (
+                <span className="text-green-600 flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" />
+                  {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} ready to upload
+                </span>
+              )
             ) : (
               <span>No files selected</span>
             )}
@@ -185,10 +250,10 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
             </button>
             <button
               onClick={handleSubmit}
-              disabled={selectedFiles.length === 0}
+              disabled={selectedFiles.length === 0 || !hasQuota || filesExceedQuota || isCheckingQuota}
               className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
-              Upload & Score Resumes
+              {isCheckingQuota ? 'Checking...' : !hasQuota || filesExceedQuota ? 'Quota Exceeded' : 'Upload & Score Resumes'}
             </button>
           </div>
         </div>

@@ -568,7 +568,7 @@ export default function PricingPage() {
                 )}
 
                 <Link
-                  href={plan.basePrice ? "/signup" : "/contact"}
+                  href={plan.basePrice ? `/signup?plan_id=${plan.id}` : "/contact"}
                   className={`block w-full h-12 rounded-lg font-medium text-center leading-[48px] transition-all ${
                     plan.popular
                       ? "bg-gray-800 text-white hover:bg-gray-700"

@@ -6,6 +6,7 @@ import ScoredResumesTable from './ScoredResumesTable';
 import ResumeSelectionModal from './ResumeSelectionModal';
 import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
+import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 
 // Types
 interface Job {
@@ -83,8 +84,9 @@ export default function ResumeScoringPage({
   const folders = propFolders;
 
   // View state
-  const [viewMode, setViewMode] = useState<'history' | 'details' | 'new'>('history');
+  const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'candidateView'>('history');
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<ScoredResumeData | null>(null);
+  const [selectedCandidateForView, setSelectedCandidateForView] = useState<any | null>(null);
   const [selectedJob, setSelectedJob] = useState('');
   const [resumeSource, setResumeSource] = useState<'my-resumes' | 'internal-database' | null>(null);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -239,9 +241,32 @@ export default function ResumeScoringPage({
         education: resume.education || 'N/A',
         certifications: resume.certifications || [],
         resumeVersion: getResumeVersion(),
+        // Pass real scoring data from API
+        aiSummary: resume.aiSummary,
+        strengths: resume.strengths,
+        gaps: resume.gaps,
+        matchReason: resume.matchReason,
+        scoreBreakdown: resume.scoreBreakdown,
+        title: resume.title,
+        currentCompany: resume.currentCompany,
+        location: resume.location,
       };
     });
   };
+
+  // View Candidate Scoring Detail Page
+  if (viewMode === 'candidateView' && selectedCandidateForView && selectedHistoryItem) {
+    return (
+      <CandidateScoringDetailPage
+        resume={selectedCandidateForView}
+        jobTitle={selectedHistoryItem.jobTitle}
+        onBack={() => {
+          setSelectedCandidateForView(null);
+          setViewMode('details');
+        }}
+      />
+    );
+  }
 
   // View History Details
   if (viewMode === 'details' && selectedHistoryItem) {
@@ -324,6 +349,10 @@ export default function ResumeScoringPage({
           jobTitle={selectedHistoryItem.jobTitle}
           jobId={selectedHistoryItem.jobId}
           availableUnits={10}
+          onViewCandidate={(resume) => {
+            setSelectedCandidateForView(resume);
+            setViewMode('candidateView');
+          }}
         />
 
         {/* Bulk Scoring Progress Modal */}

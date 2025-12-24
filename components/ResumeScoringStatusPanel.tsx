@@ -154,7 +154,7 @@ export default function ResumeScoringStatusPanel({
           const scoredResults = scoringResumes.map(resume => ({
             ...resume,
             matchScore: resume.score || 0,
-            skillMatches: resume.strengths?.slice(0, 3) || ['React', 'TypeScript', 'Node.js'].slice(0, Math.floor(Math.random() * 3) + 1),
+            skillMatches: resume.strengths?.slice(0, 3) || [],
             matchReason: resume.aiSummary || (
               resume.score && resume.score >= 85
                 ? 'Excellent match with strong alignment on key skills and experience requirements.'
@@ -167,7 +167,10 @@ export default function ResumeScoringStatusPanel({
               experienceMatch: resume.score || 70,
               educationMatch: resume.score || 70,
               overallFit: resume.score || 70,
-            }
+            },
+            // Ensure real scoring data is passed
+            strengths: resume.strengths || [],
+            gaps: resume.gaps || [],
           }));
 
           onComplete(scoredResults);
@@ -266,7 +269,10 @@ export default function ResumeScoringStatusPanel({
         experienceMatch: resume.score || 0,
         educationMatch: resume.score || 0,
         overallFit: resume.score || 0,
-      }
+      },
+      // Ensure real scoring data is passed
+      strengths: resume.strengths || [],
+      gaps: resume.gaps || [],
     }));
 
     onComplete(scoredResults);

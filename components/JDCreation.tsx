@@ -1,6 +1,6 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, ArrowLeft, GripVertical, Info, Eye, Pencil } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useState, useEffect } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -9,6 +9,7 @@ import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
 import { recordUsage } from '@/lib/services/usageTrackingService';
+import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -204,7 +205,11 @@ const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkill
 export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreationProps = {}) {
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>('create');
-  
+
+  // Quota check for max_jobs
+  const { checkQuota, status: quotaStatus, canProceed: hasQuota, isChecking: isCheckingQuota, quotaError } = useQuotaCheck();
+  const [quotaChecked, setQuotaChecked] = useState(false);
+
   // Step 1: Create JD
   const [jobTitle, setJobTitle] = useState('');
   const [aiPrompt, setAiPrompt] = useState('');
@@ -276,7 +281,31 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
     fetchMasterData();
   }, []);
 
+  // Check max_jobs quota on mount
+  useEffect(() => {
+    const checkJobQuota = async () => {
+      const canCreate = await checkQuota('max_jobs', 1);
+      setQuotaChecked(true);
+      if (!canCreate) {
+        toast.warning({
+          title: 'Job Quota Limit Reached',
+          description: 'You have reached your maximum job posting limit. Please upgrade your plan to create more jobs.',
+        });
+      }
+    };
+    checkJobQuota();
+  }, [checkQuota]);
+
   const handleGenerateJD = async () => {
+    // Check quota before generating
+    if (!hasQuota) {
+      toast.error({
+        title: 'Quota Exhausted',
+        description: 'You have reached your job posting limit. Please upgrade your plan.',
+      });
+      return;
+    }
+
     setIsGenerating(true);
 
     try {
@@ -811,16 +840,32 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       </p>
                     </div>
 
+                    {/* Quota Warning */}
+                    {quotaChecked && !hasQuota && (
+                      <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
+                        <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-red-800">Job Quota Exceeded</p>
+                          <p className="text-xs text-red-600">
+                            You have reached your maximum job posting limit.{' '}
+                            <a href="/subscription/plans" className="underline font-medium">Upgrade your plan</a> to create more jobs.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     <button
                       onClick={handleGenerateJD}
-                      disabled={!jobTitle || !aiPrompt || isGenerating}
+                      disabled={!jobTitle || !aiPrompt || isGenerating || !hasQuota || isCheckingQuota}
                       className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white px-6 py-3 rounded-md hover:from-blue-700 hover:to-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Wand2 className="w-5 h-5" />
-                      {isGenerating ? (
-                        <>
-                          <span className="animate-pulse">Generating with AI...</span>
-                        </>
+                      {isCheckingQuota ? (
+                        <span className="animate-pulse">Checking quota...</span>
+                      ) : isGenerating ? (
+                        <span className="animate-pulse">Generating with AI...</span>
+                      ) : !hasQuota ? (
+                        'Quota Exceeded - Upgrade Plan'
                       ) : (
                         'Generate Job Description'
                       )}
