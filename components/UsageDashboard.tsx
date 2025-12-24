@@ -196,23 +196,25 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         return;
       }
 
-      // Get tenant_id from auth/me if not cached
+      // Get tenant_id and plan_id from auth/me
       let tenantId = localStorage.getItem('tenantApiKey');
+      let planId: number | null = null;
+      let isTrial = false;
 
-      if (!tenantId) {
-        const meResponse = await fetch(`${API_BASE}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+      const meResponse = await fetch(`${API_BASE}/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-        if (meResponse.ok) {
-          const meData = await meResponse.json();
-          tenantId = meData.tenant_id;
-          if (tenantId) {
-            localStorage.setItem('tenantApiKey', tenantId);
-          }
+      if (meResponse.ok) {
+        const meData = await meResponse.json();
+        tenantId = meData.tenant_id;
+        planId = meData.plan_id;
+        isTrial = meData.plan_id === 1 || meData.is_trial === true;
+        if (tenantId) {
+          localStorage.setItem('tenantApiKey', tenantId);
         }
       }
 
@@ -222,20 +224,48 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         return;
       }
 
-      console.log('[UsageDashboard] Fetching quota status for tenant:', tenantId);
+      console.log('[UsageDashboard] Fetching quota status for tenant:', tenantId, 'planId:', planId, 'isTrial:', isTrial);
 
-      // Fetch quota status from our backend (which proxies to admin API)
-      // GET /api/v1/usage/quota-status
-      const quotaStatusResponse = await fetch(`${API_BASE}/usage/quota-status`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      let quotaStatusData: any = null;
 
-      if (quotaStatusResponse.ok) {
-        const quotaStatusData = await quotaStatusResponse.json();
+      // If free trial (plan_id = 1), call free-trial endpoint first
+      if (isTrial || planId === 1) {
+        console.log('[UsageDashboard] User on free trial, fetching trial quotas');
+        try {
+          const freeTrialResponse = await fetch(`${API_BASE}/subscription/public/free-trial`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (freeTrialResponse.ok) {
+            const trialData = await freeTrialResponse.json();
+            console.log('[UsageDashboard] Free trial data:', trialData);
+            quotaStatusData = { status: 'success', data: trialData.data || trialData };
+          }
+        } catch (trialErr) {
+          console.warn('[UsageDashboard] Free trial API failed, falling back to quota-status:', trialErr);
+        }
+      }
+
+      // If not trial or trial API failed, call regular quota-status
+      if (!quotaStatusData) {
+        const quotaStatusResponse = await fetch(`${API_BASE}/usage/quota-status`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (quotaStatusResponse.ok) {
+          quotaStatusData = await quotaStatusResponse.json();
+        }
+      }
+
+      if (quotaStatusData) {
         console.log('[UsageDashboard] Quota status data:', quotaStatusData);
 
         // New response format from /usage/quota-status:
@@ -292,10 +322,20 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         const hasLowQuotas = quotasList.some(q => q.is_low || q.is_exhausted);
         const lowQuotaTypes = quotasList.filter(q => q.is_low || q.is_exhausted).map(q => q.name);
 
+        // Handle alerts - can be array of strings or objects
+        let alertMessage = '';
+        if (data.alerts && Array.isArray(data.alerts)) {
+          alertMessage = data.alerts.map((alert: any) => {
+            if (typeof alert === 'string') return alert;
+            if (typeof alert === 'object') return alert.message || alert.text || JSON.stringify(alert);
+            return String(alert);
+          }).join(' ');
+        }
+
         setQuotaSummary({
           has_low_quotas: hasLowQuotas,
           low_quota_types: lowQuotaTypes,
-          upgrade_message: data.alerts?.join(' ') || (hasLowQuotas ? `Some quotas are running low: ${lowQuotaTypes.join(', ')}` : ''),
+          upgrade_message: alertMessage || (hasLowQuotas ? `Some quotas are running low: ${lowQuotaTypes.join(', ')}` : ''),
           quotas: quotasList,
           billing_period: data.billing_period,
         });
@@ -341,7 +381,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         }
 
       } else {
-        console.error('[UsageDashboard] Failed to fetch quota status:', quotaStatusResponse.status);
+        console.error('[UsageDashboard] Failed to fetch quota status');
         // Set default quotas on error
         setQuotaSummary({
           has_low_quotas: false,
