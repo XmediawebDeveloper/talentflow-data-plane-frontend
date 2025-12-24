@@ -2,6 +2,7 @@
 
 import { Menu, X, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
+import Image from "next/image";
 
 const navItems = [
   { label: "Home", page: "home" },
@@ -234,13 +235,11 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
             onClick={() => onNavigate("home")}
             style={logoContainerStyle}
           >
-            <div style={logoBoxStyle}>
-              <span style={logoTextStyle}>BI</span>
-            </div>
-            <div style={brandTextContainerStyle}>
-              <span style={brandSubtextStyle}>BusinessIntegra</span>
-              <span style={brandNameStyle}>TalentFlow</span>
-            </div>
+              <img
+              src="/logos/talent_flow_logo.png"
+              alt="TalentFlow"
+              className="h-10 w-auto"
+            />
           </button>
 
           {/* Desktop Navigation */}

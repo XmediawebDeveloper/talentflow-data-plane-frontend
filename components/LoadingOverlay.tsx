@@ -13,10 +13,10 @@ export default function LoadingOverlay({ message = 'Loading...', progress, subMe
         {/* Spinner */}
         <div className="flex flex-col items-center">
           <div className="relative">
-            <Loader2 className="w-16 h-16 text-blue-600 animate-spin" />
+            <Loader2 className="w-16 h-16 text-gray-800 animate-spin" />
             {progress !== undefined && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-xs text-blue-600">{Math.round(progress)}%</span>
+                <span className="text-xs text-gray-800">{Math.round(progress)}%</span>
               </div>
             )}
           </div>
@@ -29,7 +29,7 @@ export default function LoadingOverlay({ message = 'Loading...', progress, subMe
             <div className="w-full mt-4">
               <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                 <div
-                  className="bg-gradient-to-r from-blue-600 to-blue-500 h-2 rounded-full transition-all duration-300 ease-out"
+                  className="bg-gradient-to-r from-gray-800 to-gray-500 h-2 rounded-full transition-all duration-300 ease-out"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -43,9 +43,9 @@ export default function LoadingOverlay({ message = 'Loading...', progress, subMe
 
           {/* Animated dots */}
           <div className="flex gap-2 mt-4">
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
           </div>
         </div>
       </div>

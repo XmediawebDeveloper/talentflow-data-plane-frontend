@@ -11,6 +11,11 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "TalentFlow - Recruitment Dashboard",
   description: "AI-powered recruitment and talent management platform",
+  icons: {
+    icon: "/logos/favicon.png",
+    shortcut: "/logos/favicon.png",
+    apple: "/logos/favicon.png",
+  },
 };
 
 export default function RootLayout({
@@ -20,6 +25,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/logos/favicon.png" type="image/png" />
+        <link rel="shortcut icon" href="/logos/favicon.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/logos/favicon.png" />
+      </head>
       <body className={inter.className}>
         <ThemeProvider
           attribute="class"

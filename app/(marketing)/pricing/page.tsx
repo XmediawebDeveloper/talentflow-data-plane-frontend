@@ -6,8 +6,7 @@ import { Check, Sparkles, Building2, Users, Zap, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://talentflowapi.mo.vc/api/v1';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://talentflowdata.api.mo.vc/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 interface PlanFeature {
   id: string;
@@ -104,6 +103,27 @@ interface Addon {
   updated_at?: string;
 }
 
+interface FreeTrialData {
+  trial_days: number;
+  features: {
+    MAX_JOBS: number;
+    MAX_SEATS: number;
+    ASSESSMENTS: number;
+    AI_INTERVIEW: number;
+    RESUME_UPLOAD: number;
+    RESUME_SCORING: number;
+    TOTAL_RESUME_STORAGE: number;
+  };
+  trial_includes: string[];
+}
+
+interface PlanSettingsData {
+  yearlyDiscountPercentage: number;
+  databasePerTenantMonthlyPrice: number;
+  updatedAt?: string;
+  updatedBy?: string | null;
+}
+
 const getIconForPlan = (planName: string, tier: string): typeof Users | typeof Building2 | typeof Zap => {
   const name = planName.toLowerCase();
   const tierLower = tier.toLowerCase();
@@ -115,10 +135,10 @@ const getIconForPlan = (planName: string, tier: string): typeof Users | typeof B
 const getGradientForPlan = (planName: string, tier: string): string => {
   const name = planName.toLowerCase();
   const tierLower = tier.toLowerCase();
-  if (name.includes('enterprise') || name.includes('premium') || tierLower === 'enterprise') return "from-orange-500 to-red-500";
-  if (name.includes('business') || name.includes('professional') || name.includes('pro') || tierLower === 'professional') return "from-purple-500 to-pink-500";
-  if (name.includes('freelancer') || name.includes('starter') || name.includes('basic') || tierLower === 'starter') return "from-blue-500 to-cyan-500";
-  return "from-blue-500 to-cyan-500";
+  if (name.includes('enterprise') || name.includes('premium') || tierLower === 'enterprise') return "from-gray-800 to-gray-900";
+  if (name.includes('business') || name.includes('professional') || name.includes('pro') || tierLower === 'professional') return "from-gray-700 to-gray-800";
+  if (name.includes('freelancer') || name.includes('starter') || name.includes('basic') || tierLower === 'starter') return "from-gray-600 to-gray-700";
+  return "from-gray-600 to-gray-700";
 };
 
 // Format currency based on currency code
@@ -136,8 +156,6 @@ const formatCurrency = (amount: number | undefined | null, currency: string): st
   return `${symbol}${amount.toLocaleString()}`;
 };
 
-const ADDONS_API_URL = 'https://talentflowapi.mo.vc/api/v1';
-// const ADDONS_API_URL = 'http://192.168.1.110:8000/api/v1';
 
 export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(true); // Default to yearly (base price)
@@ -147,14 +165,39 @@ export default function PricingPage() {
   const [addons, setAddons] = useState<Addon[]>([]);
   const [addonsLoading, setAddonsLoading] = useState(true);
   const [addonsError, setAddonsError] = useState<string | null>(null);
+  const [freeTrial, setFreeTrial] = useState<FreeTrialData | null>(null);
+  const [planSettings, setPlanSettings] = useState<PlanSettingsData | null>(null);
+
+  // Get discount percentage (default to 20 if not loaded)
+  const yearlyDiscountPercent = planSettings?.yearlyDiscountPercentage ?? 20;
 
   useEffect(() => {
-    const fetchPlans = async () => {
+    let isCancelled = false;
+
+    const fetchPlanSettings = async (): Promise<number> => {
       try {
+        const response = await fetch(`${API_URL}/addons/plan-settings`);
+
+        if (response.ok && !isCancelled) {
+          const result = await response.json();
+          const settingsData = result?.data || result;
+          if (settingsData) {
+            setPlanSettings(settingsData);
+            return settingsData.yearlyDiscountPercentage ?? 20;
+          }
+        }
+      } catch (err) {
+        if (!isCancelled) console.error('Error fetching plan settings:', err);
+      }
+      return 20;
+    };
+
+    const fetchPlans = async (discountPercent: number) => {
+      try {
+        if (isCancelled) return;
         setIsLoading(true);
         setError(null);
 
-        // Fetch plans from backend API (which proxies to external API)
         const response = await fetch(`${API_URL}/subscription/public/plans`);
 
         if (!response.ok) {
@@ -162,33 +205,27 @@ export default function PricingPage() {
         }
 
         const result = await response.json();
-        const data: ApiPlan[] = result.data || result;
+        if (isCancelled) return;
 
-        // Debug: log API response
-        console.log('API Plans Response:', data);
+        const data: ApiPlan[] = result.data || result;
 
         const transformedPlans: DisplayPlan[] = data
           .filter(plan => plan.is_active && plan.is_public)
           .sort((a, b) => {
-            // Sort by display_order first, then by price
             if (a.display_order !== b.display_order) {
               return (a.display_order || 0) - (b.display_order || 0);
             }
             return a.base_price - b.base_price;
           })
           .map((plan) => {
-            // Only use features from API if they exist, otherwise empty array
             const featureNames = plan.features
               ?.filter(f => f.is_enabled)
               ?.map(f => f.feature_name) || [];
 
-            // Base price is the monthly price for display
             const basePrice = plan.base_price > 0 ? plan.base_price : null;
-            // Monthly price = base_price (treat base_price as monthly rate)
             const monthlyPrice = basePrice;
-            // Yearly price = monthly * 12 with 20% discount
-            const yearlyPrice = monthlyPrice ? Math.round(monthlyPrice * 12 * 0.8) : null;
-            // Full yearly without discount (for strikethrough)
+            const discountMultiplier = (100 - discountPercent) / 100;
+            const yearlyPrice = monthlyPrice ? Math.round(monthlyPrice * 12 * discountMultiplier) : null;
             const yearlyFullPrice = monthlyPrice ? Math.round(monthlyPrice * 12) : null;
 
             return {
@@ -212,45 +249,79 @@ export default function PricingPage() {
 
         setPlans(transformedPlans);
       } catch (err) {
-        console.error('Error fetching plans:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load plans');
+        if (!isCancelled) {
+          console.error('Error fetching plans:', err);
+          setError(err instanceof Error ? err.message : 'Failed to load plans');
+        }
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) setIsLoading(false);
       }
     };
 
-    fetchPlans();
-  }, []);
-
-  // Fetch addons from API
-  useEffect(() => {
     const fetchAddons = async () => {
       try {
+        if (isCancelled) return;
         setAddonsLoading(true);
         setAddonsError(null);
 
-        const response = await fetch(`${ADDONS_API_URL}/addons?active_only=false&public_only=false`);
+        const response = await fetch(`${API_URL}/addons?active_only=false&public_only=false`);
 
         if (!response.ok) {
           throw new Error(`Failed to fetch addons: ${response.status}`);
         }
 
         const result = await response.json();
-        const data: Addon[] = result.data || result;
+        if (isCancelled) return;
 
-        // Sort by display_order
-        const sortedAddons = data.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+        const data: Addon[] = result.data || result;
+        const sortedAddons = Array.isArray(data)
+          ? data.sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+          : [];
 
         setAddons(sortedAddons);
       } catch (err) {
-        console.error('Error fetching addons:', err);
-        setAddonsError(err instanceof Error ? err.message : 'Failed to load addons');
+        if (!isCancelled) {
+          console.error('Error fetching addons:', err);
+          setAddonsError(err instanceof Error ? err.message : 'Failed to load addons');
+        }
       } finally {
-        setAddonsLoading(false);
+        if (!isCancelled) setAddonsLoading(false);
       }
     };
 
+    const fetchFreeTrial = async () => {
+      try {
+        const response = await fetch(`${API_URL}/addons/free-trial`);
+
+        if (response.ok && !isCancelled) {
+          const result = await response.json();
+          const trialData = result?.data || result;
+
+          if (trialData && trialData.trial_days) {
+            setFreeTrial(trialData);
+          }
+        }
+      } catch (err) {
+        if (!isCancelled) console.error('Error fetching free trial settings:', err);
+      }
+    };
+
+    // Fetch all data
+    const loadData = async () => {
+      const discountPercent = await fetchPlanSettings();
+      if (!isCancelled) {
+        fetchPlans(discountPercent);
+      }
+    };
+
+    loadData();
     fetchAddons();
+    fetchFreeTrial();
+
+    // Cleanup function - prevents state updates after unmount
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   if (isLoading) {
@@ -258,7 +329,7 @@ export default function PricingPage() {
       <div className="py-20">
         <div className="container mx-auto max-w-[1400px] px-6">
           <div className="text-center mb-16">
-            <Badge className="mb-4 px-4 py-2 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-0">
+            <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0">
               <Sparkles className="w-4 h-4 mr-2" />
               Simple Pricing
             </Badge>
@@ -267,7 +338,7 @@ export default function PricingPage() {
             </h1>
           </div>
           <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-12 h-12 text-purple-500 animate-spin" />
+            <Loader2 className="w-12 h-12 text-gray-500 animate-spin" />
             <p className="mt-4 text-gray-600 dark:text-gray-400">Loading plans...</p>
           </div>
         </div>
@@ -280,7 +351,7 @@ export default function PricingPage() {
       <div className="container mx-auto max-w-[1400px] px-6">
         {/* Header */}
         <div className="text-center mb-16">
-          <Badge className="mb-4 px-4 py-2 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-0">
+          <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-0">
             <Sparkles className="w-4 h-4 mr-2" />
             Simple Pricing
           </Badge>
@@ -288,7 +359,11 @@ export default function PricingPage() {
             Choose the right plan for your team
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            Start with a free trial. No credit card required.
+            {freeTrial ? (
+              <>Start with a {freeTrial.trial_days}-day free trial. No credit card required.</>
+            ) : (
+              <>Start with a free trial. No credit card required.</>
+            )}
           </p>
 
           {/* Billing Toggle */}
@@ -298,9 +373,9 @@ export default function PricingPage() {
             </span>
             <button
               onClick={() => setIsYearly(!isYearly)}
-              className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+              className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ${
                 isYearly
-                  ? "bg-purple-600"
+                  ? "bg-gray-800"
                   : "bg-gray-300 dark:bg-gray-600"
               }`}
               aria-label="Toggle billing period"
@@ -314,12 +389,31 @@ export default function PricingPage() {
             <span className={`text-lg ${isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
               Yearly
             </span>
-            {isYearly && (
-              <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                Save 20%
-              </Badge>
-            )}
+            <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+              Save {yearlyDiscountPercent}%
+            </Badge>
           </div>
+
+          {/* Free Trial Banner */}
+          {freeTrial ? (
+            <div className="mt-8 inline-flex flex-wrap items-center justify-center gap-4 px-6 py-3 bg-gray-50 dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700">
+              {freeTrial.trial_includes && freeTrial.trial_includes.length > 0 ? (
+                freeTrial.trial_includes.map((item, idx) => (
+                  <span key={idx} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <Check className="w-4 h-4 text-green-500" />
+                    {item}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  <Check className="w-4 h-4 text-green-500 inline mr-2" />
+                  {freeTrial.trial_days} days free trial
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="mt-8 text-sm text-gray-500">Loading trial info...</div>
+          )}
         </div>
 
         {error && (
@@ -349,13 +443,13 @@ export default function PricingPage() {
                 key={plan.id}
                 className={`relative p-8 ${
                   plan.popular
-                    ? "border-2 border-purple-500 shadow-xl scale-105"
+                    ? "border-2 border-gray-800 shadow-xl scale-105"
                     : "border border-gray-200 dark:border-gray-700"
                 }`}
               >
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-1">
+                    <Badge className="bg-gray-800 text-white px-4 py-1">
                       Most Popular
                     </Badge>
                   </div>
@@ -378,9 +472,6 @@ export default function PricingPage() {
                       <div className="flex items-baseline gap-1">
                         <span className="text-4xl font-bold text-gray-900 dark:text-white">
                           {formatCurrency(isYearly ? plan.yearlyPrice : plan.monthlyPrice, plan.currency)}
-                        </span>
-                        <span className="text-gray-600 dark:text-gray-400">
-                          /{isYearly ? 'year' : 'month'}
                         </span>
                       </div>
                       {isYearly && plan.yearlyFullPrice && plan.yearlyPrice && (
@@ -480,7 +571,7 @@ export default function PricingPage() {
                   href={plan.basePrice ? `/signup?plan_id=${plan.id}` : "/contact"}
                   className={`block w-full h-12 rounded-lg font-medium text-center leading-[48px] transition-all ${
                     plan.popular
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90"
+                      ? "bg-gray-800 text-white hover:bg-gray-700"
                       : "border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                   }`}
                 >
@@ -494,7 +585,7 @@ export default function PricingPage() {
         {/* Addons Section */}
         <div className="mt-24">
           <div className="text-center mb-12">
-            <Badge className="mb-4 px-4 py-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-0">
+            <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-0">
               <Zap className="w-4 h-4 mr-2" />
               Add-ons
             </Badge>
@@ -508,7 +599,7 @@ export default function PricingPage() {
 
           {addonsLoading && (
             <div className="flex flex-col items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+              <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
               <p className="mt-4 text-gray-600 dark:text-gray-400">Loading add-ons...</p>
             </div>
           )}
@@ -531,11 +622,11 @@ export default function PricingPage() {
               {addons.map((addon) => (
                 <div
                   key={addon.id}
-                  className="flex items-center justify-between p-5 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 transition-colors"
+                  className="flex items-center justify-between p-5 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
                 >
                   {/* Feature Name */}
                   <div className="flex items-center gap-3">
-                    <Sparkles className="w-5 h-5 text-purple-500 flex-shrink-0" />
+                    <Sparkles className="w-5 h-5 text-gray-500 flex-shrink-0" />
                     <span className="font-semibold text-gray-900 dark:text-white">
                       {addon.name || addon.addon_name || 'Unnamed Add-on'}
                     </span>
@@ -550,7 +641,7 @@ export default function PricingPage() {
                       <span className="ml-1 text-sm text-gray-500 dark:text-gray-400">credits</span>
                     </div>
                     <div className="text-right">
-                      <span className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                      <span className="text-2xl font-bold text-gray-800 dark:text-gray-200">
                         ₹{addon.price ?? addon.unit_price ?? 0}
                       </span>
                     </div>
@@ -560,6 +651,117 @@ export default function PricingPage() {
             </div>
           )}
         </div>
+
+        {/* Free Trial Section */}
+        {freeTrial && (
+          <div className="mt-24">
+            <div className="text-center mb-12">
+              <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-0">
+                <Sparkles className="w-4 h-4 mr-2" />
+                Free Trial
+              </Badge>
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+                Start your {freeTrial.trial_days}-day free trial
+              </h2>
+              <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+                Experience the full power of TalentFlow with no commitment.
+              </p>
+            </div>
+
+            <div className="max-w-4xl mx-auto">
+              {/* Trial Includes */}
+              {freeTrial.trial_includes && freeTrial.trial_includes.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                  {freeTrial.trial_includes.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800"
+                    >
+                      <Check className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Trial Features */}
+              {freeTrial.features && (
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 text-center">
+                    What&apos;s included in your trial
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    {freeTrial.features.MAX_SEATS && (
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
+                          {freeTrial.features.MAX_SEATS}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Team Seats</div>
+                      </div>
+                    )}
+                    {freeTrial.features.MAX_JOBS && (
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
+                          {freeTrial.features.MAX_JOBS}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Job Postings</div>
+                      </div>
+                    )}
+                    {freeTrial.features.RESUME_UPLOAD && (
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
+                          {freeTrial.features.RESUME_UPLOAD}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Resume Uploads</div>
+                      </div>
+                    )}
+                    {freeTrial.features.RESUME_SCORING && (
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
+                          {freeTrial.features.RESUME_SCORING}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Resume Scoring</div>
+                      </div>
+                    )}
+                    {freeTrial.features.ASSESSMENTS && (
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
+                          {freeTrial.features.ASSESSMENTS}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Assessments</div>
+                      </div>
+                    )}
+                    {freeTrial.features.AI_INTERVIEW && (
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
+                          {freeTrial.features.AI_INTERVIEW}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">AI Interviews</div>
+                      </div>
+                    )}
+                    {freeTrial.features.TOTAL_RESUME_STORAGE && (
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
+                          {freeTrial.features.TOTAL_RESUME_STORAGE}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Resume Storage</div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-8 text-center">
+                    <Link
+                      href="/signup"
+                      className="inline-block px-8 py-3 bg-gray-800 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors"
+                    >
+                      Start Free Trial
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* FAQ Section */}
         <div className="mt-24 text-center">

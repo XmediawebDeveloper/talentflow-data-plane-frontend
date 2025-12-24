@@ -105,7 +105,7 @@ export default function ResumeSelectionModal({
             onClick={() => setSelectedFolder(folder.id)}
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm group ${
               isSelected
-                ? 'bg-blue-100 text-blue-700 font-medium'
+                ? 'bg-gray-100 text-gray-900 font-medium'
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
             style={{ paddingLeft: `${level * 16 + 12}px` }}
@@ -134,7 +134,7 @@ export default function ResumeSelectionModal({
             <span className="flex-1 text-left">{folder.name}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full ${
               isSelected
-                ? 'bg-blue-200 text-blue-700'
+                ? 'bg-gray-200 text-gray-900'
                 : 'bg-gray-200 text-gray-600'
             }`}>
               {count}
@@ -156,7 +156,7 @@ export default function ResumeSelectionModal({
         {/* Header */}
         <div className="flex items-start justify-between p-6 border-b border-gray-200">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md">
               <Target className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -182,7 +182,7 @@ export default function ResumeSelectionModal({
               onClick={() => handleTabChange('my-resumes')}
               className={`px-5 py-3 text-sm font-medium rounded-t-lg transition-all ${
                 activeTab === 'my-resumes'
-                  ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600'
+                  ? 'bg-gray-50 text-gray-900 border-b-2 border-gray-800'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               }`}
             >
@@ -191,7 +191,7 @@ export default function ResumeSelectionModal({
                 My Resumes
                 <span className={`px-2 py-0.5 rounded-full text-xs ${
                   activeTab === 'my-resumes'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-gray-800 text-white'
                     : 'bg-gray-200 text-gray-600'
                 }`}>
                   {myResumes.length}
@@ -202,7 +202,7 @@ export default function ResumeSelectionModal({
               onClick={() => handleTabChange('database')}
               className={`px-5 py-3 text-sm font-medium rounded-t-lg transition-all ${
                 activeTab === 'database'
-                  ? 'bg-purple-50 text-purple-700 border-b-2 border-purple-600'
+                  ? 'bg-gray-50 text-gray-900 border-b-2 border-gray-800'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               }`}
             >
@@ -211,7 +211,7 @@ export default function ResumeSelectionModal({
                 Internal Database
                 <span className={`px-2 py-0.5 rounded-full text-xs ${
                   activeTab === 'database'
-                    ? 'bg-purple-600 text-white'
+                    ? 'bg-gray-800 text-white'
                     : 'bg-gray-200 text-gray-600'
                 }`}>
                   {databaseResumes.length}
@@ -234,7 +234,7 @@ export default function ResumeSelectionModal({
                   onClick={() => setSelectedFolder('all')}
                   className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm mb-2 ${
                     selectedFolder === 'all'
-                      ? 'bg-blue-100 text-blue-700 font-medium'
+                      ? 'bg-gray-100 text-gray-900 font-medium'
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
@@ -242,7 +242,7 @@ export default function ResumeSelectionModal({
                   <span className="flex-1 text-left">All Resumes</span>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                     selectedFolder === 'all'
-                      ? 'bg-blue-200 text-blue-700'
+                      ? 'bg-gray-200 text-gray-900'
                       : 'bg-gray-200 text-gray-600'
                   }`}>
                     {myResumes.length}
@@ -269,7 +269,7 @@ export default function ResumeSelectionModal({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search by name, email, title, or skills..."
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                   />
                 </div>
                 <button
@@ -278,7 +278,7 @@ export default function ResumeSelectionModal({
                 >
                   {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
                     <>
-                      <CheckSquare className="w-4 h-4 text-blue-600" />
+                      <CheckSquare className="w-4 h-4 text-gray-800" />
                       Deselect All
                     </>
                   ) : (
@@ -289,7 +289,7 @@ export default function ResumeSelectionModal({
                   )}
                 </button>
                 <div className="text-sm text-gray-700 bg-white px-4 py-2.5 rounded-lg border border-gray-200 font-medium">
-                  <span className="text-blue-600">{selectedResumes.length}</span> selected
+                  <span className="text-gray-800">{selectedResumes.length}</span> selected
                 </div>
               </div>
             </div>
@@ -306,7 +306,7 @@ export default function ResumeSelectionModal({
                         className="p-1 hover:bg-gray-200 rounded"
                       >
                         {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
-                          <CheckSquare className="w-4 h-4 text-blue-600" />
+                          <CheckSquare className="w-4 h-4 text-gray-800" />
                         ) : (
                           <Square className="w-4 h-4 text-gray-400" />
                         )}
@@ -328,7 +328,7 @@ export default function ResumeSelectionModal({
                         onClick={() => handleToggleResume(resume.id)}
                         className={`grid grid-cols-12 gap-4 p-4 border-2 rounded-lg transition-all cursor-pointer items-center ${
                           isSelected
-                            ? 'border-blue-400 bg-blue-50 shadow-sm'
+                            ? 'border-gray-400 bg-gray-50 shadow-sm'
                             : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
                         }`}
                       >
@@ -342,7 +342,7 @@ export default function ResumeSelectionModal({
                             className="p-1 hover:bg-gray-100 rounded"
                           >
                             {isSelected ? (
-                              <CheckSquare className="w-5 h-5 text-blue-600" />
+                              <CheckSquare className="w-5 h-5 text-gray-800" />
                             ) : (
                               <Square className="w-5 h-5 text-gray-400" />
                             )}
@@ -462,7 +462,7 @@ export default function ResumeSelectionModal({
               <button
                 onClick={handleScore}
                 disabled={selectedResumes.length === 0}
-                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2"
+                className="px-6 py-2.5 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-blue-700 hover:to-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2"
               >
                 <Target className="w-4 h-4" />
                 Score {selectedResumes.length > 0 && `(${selectedResumes.length})`} Resume{selectedResumes.length === 1 ? '' : 's'}

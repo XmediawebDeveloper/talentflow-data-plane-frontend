@@ -197,8 +197,8 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-purple-600" />
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Sparkles className="w-6 h-6 text-gray-800" />
             </div>
             <div>
               <h2 className="text-xl text-gray-900">AI Talent Match</h2>
@@ -218,7 +218,7 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
               {currentStep === 'embedding' ? (
-                <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+                <Loader2 className="w-6 h-6 text-gray-800 animate-spin" />
               ) : (
                 <CheckCircle2 className="w-6 h-6 text-green-600" />
               )}
@@ -236,18 +236,18 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
 
             {currentStep === 'embedding' && (
               <div className="ml-9">
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="flex items-start gap-3 mb-3">
-                    <Database className="w-5 h-5 text-purple-600 mt-0.5" />
+                    <Database className="w-5 h-5 text-gray-800 mt-0.5" />
                     <p className="text-sm text-purple-900">{processDetails}</p>
                   </div>
-                  <div className="w-full bg-purple-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
-                      className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                      className="bg-gray-800 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
-                  <div className="text-xs text-purple-700 mt-2 text-right">{progress}%</div>
+                  <div className="text-xs text-gray-900 mt-2 text-right">{progress}%</div>
                 </div>
 
                 {!jdEmbeddingExists && progress > 0 && (
@@ -281,7 +281,7 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
               {currentStep === 'matching' ? (
-                <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+                <Loader2 className="w-6 h-6 text-gray-800 animate-spin" />
               ) : currentStep === 'complete' ? (
                 <CheckCircle2 className="w-6 h-6 text-green-600" />
               ) : (
@@ -303,18 +303,18 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
 
             {currentStep === 'matching' && (
               <div className="ml-9">
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="flex items-start gap-3 mb-3">
-                    <Sparkles className="w-5 h-5 text-purple-600 mt-0.5" />
+                    <Sparkles className="w-5 h-5 text-gray-800 mt-0.5" />
                     <p className="text-sm text-purple-900">{processDetails}</p>
                   </div>
-                  <div className="w-full bg-purple-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
-                      className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                      className="bg-gray-800 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
-                  <div className="text-xs text-purple-700 mt-2 text-right">{progress}%</div>
+                  <div className="text-xs text-gray-900 mt-2 text-right">{progress}%</div>
                 </div>
 
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -322,15 +322,15 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
                   <div className="text-xs text-gray-600 space-y-2">
                     <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
                       <span>Algorithm:</span>
-                      <span className="font-mono text-purple-600">Cosine Similarity</span>
+                      <span className="font-mono text-gray-800">Cosine Similarity</span>
                     </div>
                     <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
                       <span>Resume Database:</span>
-                      <span className="font-mono text-purple-600">1,247 vectors</span>
+                      <span className="font-mono text-gray-800">1,247 vectors</span>
                     </div>
                     <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
                       <span>Embedding Model:</span>
-                      <span className="font-mono text-purple-600">text-embedding-3</span>
+                      <span className="font-mono text-gray-800">text-embedding-3</span>
                     </div>
                   </div>
                 </div>

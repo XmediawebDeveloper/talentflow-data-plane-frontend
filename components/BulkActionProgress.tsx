@@ -53,7 +53,7 @@ export default function BulkActionProgress({
                 <XCircle className="w-5 h-5 text-yellow-600" />
               )
             ) : (
-              <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+              <Loader2 className="w-5 h-5 text-gray-800 animate-spin" />
             )}
             <div>
               <p className="text-sm text-gray-900">{title}</p>
@@ -65,7 +65,7 @@ export default function BulkActionProgress({
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsMinimized(false)}
-              className="text-xs text-blue-600 hover:text-blue-700"
+              className="text-xs text-gray-800 hover:text-gray-900"
             >
               Show
             </button>
@@ -114,7 +114,7 @@ export default function BulkActionProgress({
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
               className={`h-2 rounded-full transition-all duration-300 ${
-                isComplete && errorCount > 0 ? 'bg-yellow-600' : 'bg-blue-600'
+                isComplete && errorCount > 0 ? 'bg-yellow-600' : 'bg-gray-800'
               }`}
               style={{ width: `${progress}%` }}
             ></div>
@@ -136,7 +136,7 @@ export default function BulkActionProgress({
             </div>
           )}
           {processingCount > 0 && (
-            <div className="flex items-center gap-1.5 text-blue-600">
+            <div className="flex items-center gap-1.5 text-gray-800">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               <span>{processingCount} processing</span>
             </div>
@@ -159,7 +159,7 @@ export default function BulkActionProgress({
                     <XCircle className="w-4 h-4 text-red-600" />
                   )}
                   {item.status === 'processing' && (
-                    <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+                    <Loader2 className="w-4 h-4 text-gray-800 animate-spin" />
                   )}
                   {item.status === 'pending' && (
                     <div className="w-4 h-4 border-2 border-gray-300 rounded-full"></div>
@@ -173,7 +173,7 @@ export default function BulkActionProgress({
                     <p className="text-xs text-red-600 mt-0.5">{item.error}</p>
                   )}
                   {item.status === 'processing' && (
-                    <p className="text-xs text-blue-600 mt-0.5">Processing...</p>
+                    <p className="text-xs text-gray-800 mt-0.5">Processing...</p>
                   )}
                   {item.status === 'pending' && (
                     <p className="text-xs text-gray-500 mt-0.5">Waiting...</p>
@@ -185,7 +185,7 @@ export default function BulkActionProgress({
               {item.status === 'error' && onRetry && (
                 <button
                   onClick={() => onRetry(item.id)}
-                  className="text-xs text-blue-600 hover:text-blue-700 whitespace-nowrap"
+                  className="text-xs text-gray-800 hover:text-gray-900 whitespace-nowrap"
                 >
                   Retry
                 </button>
@@ -200,7 +200,7 @@ export default function BulkActionProgress({
         <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
           <button
             onClick={onClose}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="w-full px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
           >
             {errorCount > 0 ? 'Close with Errors' : 'Done'}
           </button>

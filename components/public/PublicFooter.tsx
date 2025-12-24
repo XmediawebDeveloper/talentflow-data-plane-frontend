@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 interface PublicFooterProps {
   onNavigate: (page: string) => void;
 }
@@ -10,17 +12,13 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
           <div>
             <button
               onClick={() => onNavigate("home")}
-              className="flex items-center gap-2 mb-4 hover:opacity-80 transition-opacity"
+              className="flex items-center mb-4 hover:opacity-80 transition-opacity"
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-[#2563EB] to-[#1D4ED8] rounded-lg flex items-center justify-center">
-                <span className="text-white text-[14px]">BI</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[#9CA3AF] text-[10px] uppercase tracking-wide">
-                  BusinessIntegra
-                </span>
-                <span className="text-white leading-none">TalentFlow</span>
-              </div>
+                <img
+              src="/logos/talent_flow_logo.png"
+              alt="TalentFlow"
+              className="h-10 w-auto"
+            />
             </button>
             <p className="text-[#9CA3AF] text-[14px] leading-relaxed">
               AI-powered recruitment solutions for agencies, companies, and

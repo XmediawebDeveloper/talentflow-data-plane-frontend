@@ -158,7 +158,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
 
   const priorities = [
     { value: 'low', label: 'Low', color: 'text-gray-600 bg-gray-100' },
-    { value: 'medium', label: 'Medium', color: 'text-blue-600 bg-blue-100' },
+    { value: 'medium', label: 'Medium', color: 'text-gray-800 bg-gray-100' },
     { value: 'high', label: 'High', color: 'text-orange-600 bg-orange-100' },
     { value: 'urgent', label: 'Urgent', color: 'text-red-600 bg-red-100' }
   ];
@@ -196,7 +196,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
 
   const getStatusBadge = (status: SupportTicket['status']) => {
     const styles = {
-      'open': 'bg-blue-100 text-blue-700 border-blue-300',
+      'open': 'bg-gray-100 text-gray-900 border-gray-300',
       'in-progress': 'bg-yellow-100 text-yellow-700 border-yellow-300',
       'resolved': 'bg-green-100 text-green-700 border-green-300',
       'closed': 'bg-gray-100 text-gray-700 border-gray-300'
@@ -263,8 +263,8 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <HelpCircle className="w-5 h-5 text-blue-600" />
+            <div className="p-2 bg-gray-100 rounded-lg">
+              <HelpCircle className="w-5 h-5 text-gray-800" />
             </div>
             <div>
               <h2 className="text-gray-900">Support Center</h2>
@@ -284,16 +284,16 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
           {/* Main Menu */}
           {view === 'main' && (
             <div className="p-6 space-y-4">
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
+              <div className="bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-4">
                 <h3 className="text-sm text-blue-900 mb-1">Need Help?</h3>
-                <p className="text-xs text-blue-700">
+                <p className="text-xs text-gray-900">
                   Submit a ticket or browse your existing support requests.
                 </p>
               </div>
 
               <button
                 onClick={() => setView('submit')}
-                className="w-full flex items-center gap-3 p-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="w-full flex items-center gap-3 p-4 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
               >
                 <Send className="w-5 h-5" />
                 <div className="text-left">
@@ -341,16 +341,16 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
               <div className="mt-6 pt-6 border-t border-gray-200">
                 <h3 className="text-sm text-gray-900 mb-3">Quick Help</h3>
                 <div className="space-y-2">
-                  <a href="#" className="block text-sm text-blue-600 hover:text-blue-700">
+                  <a href="#" className="block text-sm text-gray-800 hover:text-gray-900">
                     📚 Knowledge Base
                   </a>
-                  <a href="#" className="block text-sm text-blue-600 hover:text-blue-700">
+                  <a href="#" className="block text-sm text-gray-800 hover:text-gray-900">
                     🎥 Video Tutorials
                   </a>
-                  <a href="#" className="block text-sm text-blue-600 hover:text-blue-700">
+                  <a href="#" className="block text-sm text-gray-800 hover:text-gray-900">
                     ❓ FAQs
                   </a>
-                  <a href="#" className="block text-sm text-blue-600 hover:text-blue-700">
+                  <a href="#" className="block text-sm text-gray-800 hover:text-gray-900">
                     📧 Email Support: support@talentflow.com
                   </a>
                 </div>
@@ -380,7 +380,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Brief description of your issue"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                   />
                 </div>
 
@@ -391,7 +391,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value as SupportTicket['category'])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                   >
                     {categories.map(cat => (
                       <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -406,7 +406,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                   <select
                     value={priority}
                     onChange={(e) => setPriority(e.target.value as SupportTicket['priority'])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                   >
                     {priorities.map(p => (
                       <option key={p.value} value={p.value}>{p.label}</option>
@@ -423,7 +423,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Please provide detailed information about your issue..."
                     rows={6}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none"
                   />
                 </div>
 
@@ -485,7 +485,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                   </button>
                   <button
                     onClick={handleSubmitTicket}
-                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center justify-center gap-2"
                   >
                     <Send className="w-4 h-4" />
                     Submit Ticket
@@ -518,7 +518,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search tickets..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                 />
               </div>
 
@@ -531,7 +531,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                       setSelectedTicket(ticket);
                       setView('detail');
                     }}
-                    className="w-full text-left p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all"
+                    className="w-full text-left p-4 bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-sm transition-all"
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div>
@@ -602,13 +602,13 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                     key={response.id}
                     className={`${
                       response.from === 'user'
-                        ? 'bg-blue-50 border-blue-200'
+                        ? 'bg-gray-50 border-gray-200'
                         : 'bg-gray-50 border-gray-200'
                     } border rounded-lg p-4`}
                   >
                     <div className="flex items-center gap-2 mb-2">
                       {response.from === 'user' ? (
-                        <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs">
+                        <div className="w-6 h-6 bg-gray-800 rounded-full flex items-center justify-center text-white text-xs">
                           U
                         </div>
                       ) : (
@@ -634,9 +634,9 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                   <textarea
                     placeholder="Add a reply..."
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none"
                   />
-                  <button className="mt-2 w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+                  <button className="mt-2 w-full px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center justify-center gap-2">
                     <MessageSquare className="w-4 h-4" />
                     Send Reply
                   </button>

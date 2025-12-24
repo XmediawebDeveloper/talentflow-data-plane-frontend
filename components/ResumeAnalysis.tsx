@@ -175,8 +175,8 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
     } else if (score >= 70) {
       return { 
         label: 'Partial Match', 
-        color: 'text-blue-700', 
-        bg: 'bg-blue-100 border-blue-300',
+        color: 'text-gray-900', 
+        bg: 'bg-gray-100 border-gray-300',
         icon: AlertTriangle
       };
     } else {
@@ -261,13 +261,13 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                 <MatchIcon className="w-4 h-4" />
                 {matchStatus.label}
               </div>
-              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1">
+              <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-xs flex items-center gap-1">
                 <Sparkles className="w-3 h-3" />
                 AI Analyzed
               </span>
             </div>
             <p className="text-gray-600 mb-4">
-              Applied for: <span className="text-blue-600">{jobTitle}</span> • {applicant.appliedDate}
+              Applied for: <span className="text-gray-800">{jobTitle}</span> • {applicant.appliedDate}
             </p>
             
             {/* Contact Info */}
@@ -301,14 +301,14 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
       </div>
 
       {/* Overall Score Card */}
-      <div className="bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl shadow-lg p-8 mb-8 text-white">
+      <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-8 mb-8 text-white">
         <div className="flex items-center justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-3">
               <Star className="w-8 h-8" />
               <h2 className="text-white text-2xl">Overall Match Score</h2>
             </div>
-            <p className="text-blue-100 mb-6">
+            <p className="text-gray-100 mb-6">
               AI-powered analysis based on job requirements and candidate profile
             </p>
             <div className="grid grid-cols-4 gap-4">
@@ -321,7 +321,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                       <span className="text-sm text-white/90">{cat.category}</span>
                     </div>
                     <div className="text-2xl mb-1">{cat.score}/{cat.maxScore}</div>
-                    <div className="text-xs text-blue-100">{cat.weight}% weight</div>
+                    <div className="text-xs text-gray-100">{cat.weight}% weight</div>
                   </div>
                 );
               })}
@@ -331,7 +331,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
           <div className="text-center px-8 border-l border-white/20">
             <div className="mb-4">
               <div className="text-7xl mb-2">{totalScore}</div>
-              <div className="text-xl text-blue-100">out of {maxTotalScore}</div>
+              <div className="text-xl text-gray-100">out of {maxTotalScore}</div>
             </div>
             <div className="w-32 h-32 mx-auto relative">
               <svg className="transform -rotate-90 w-32 h-32">
@@ -372,7 +372,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
               onClick={() => setActiveTab('overview')}
               className={`py-4 text-sm border-b-2 transition-colors ${
                 activeTab === 'overview'
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-gray-800 text-gray-800'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -382,7 +382,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
               onClick={() => setActiveTab('detailed')}
               className={`py-4 text-sm border-b-2 transition-colors ${
                 activeTab === 'detailed'
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-gray-800 text-gray-800'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -392,7 +392,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
               onClick={() => setActiveTab('resume')}
               className={`py-4 text-sm border-b-2 transition-colors ${
                 activeTab === 'resume'
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-gray-800 text-gray-800'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -414,7 +414,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                     const percentage = (category.score / category.maxScore) * 100;
                     
                     return (
-                      <div key={idx} className="p-5 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors">
+                      <div key={idx} className="p-5 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <div className={`p-2 bg-${category.color}-50 rounded-lg`}>
@@ -448,16 +448,16 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
               </div>
 
               {/* AI Recommendations */}
-              <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-6">
+              <div className="bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <Sparkles className="w-6 h-6 text-purple-600" />
+                  <Sparkles className="w-6 h-6 text-gray-800" />
                   <h3 className="text-gray-900">AI Recommendations</h3>
                 </div>
                 <div className="space-y-3">
                   {recommendations.map((rec, idx) => {
                     const RecIcon = rec.icon;
                     return (
-                      <div key={idx} className="flex items-start gap-3 p-4 bg-white rounded-lg border border-purple-100">
+                      <div key={idx} className="flex items-start gap-3 p-4 bg-white rounded-lg border border-gray-100">
                         <div className={`p-2 bg-${rec.color}-50 rounded-lg flex-shrink-0`}>
                           <RecIcon className={`w-5 h-5 text-${rec.color}-600`} />
                         </div>
@@ -595,7 +595,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                     <h3 className="text-xl text-gray-900 mb-3 pb-2 border-b-2 border-gray-300">Skills</h3>
                     <div className="flex flex-wrap gap-2">
                       {applicant.skills.map((skill, idx) => (
-                        <span key={idx} className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md text-sm">
+                        <span key={idx} className="px-3 py-1.5 bg-gray-100 text-gray-900 rounded-md text-sm">
                           {skill}
                         </span>
                       ))}

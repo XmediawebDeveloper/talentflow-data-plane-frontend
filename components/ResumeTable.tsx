@@ -97,7 +97,7 @@ export default function ResumeTable({
                   if (input) input.indeterminate = someSelected;
                 }}
                 onChange={(e) => onSelectAll(e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                className="rounded border-gray-300 text-gray-800 focus:ring-gray-600"
               />
             </th>
             <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
@@ -137,7 +137,7 @@ export default function ResumeTable({
             <tr
               key={resume.id}
               className={`hover:bg-gray-50 transition-colors ${
-                selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''
+                selectedResumes.includes(resume.id) ? 'bg-gray-50' : ''
               }`}
             >
               <td className="px-4 py-4">
@@ -145,7 +145,7 @@ export default function ResumeTable({
                   type="checkbox"
                   checked={selectedResumes.includes(resume.id)}
                   onChange={() => onSelectResume(resume.id)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                  className="rounded border-gray-300 text-gray-800 focus:ring-gray-600"
                 />
               </td>
               <td className="px-4 py-4">
@@ -157,7 +157,7 @@ export default function ResumeTable({
                     {onViewDetails ? (
                       <button
                         onClick={() => onViewDetails(resume)}
-                        className="text-sm text-gray-900 hover:text-blue-600 hover:underline text-left transition-colors"
+                        className="text-sm text-gray-900 hover:text-gray-800 hover:underline text-left transition-colors"
                       >
                         {resume.name}
                       </button>
@@ -181,7 +181,7 @@ export default function ResumeTable({
                     </span>
                   ))}
                   {resume.skills.length > 4 && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-blue-600">
+                    <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-gray-800">
                       +{resume.skills.length - 4} more
                     </span>
                   )}
@@ -193,7 +193,7 @@ export default function ResumeTable({
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs ${
                     resume.source === 'Manual'
                       ? 'bg-gray-100 text-gray-700'
-                      : 'bg-blue-50 text-blue-600'
+                      : 'bg-gray-50 text-gray-800'
                   }`}
                 >
                   {resume.source === 'Manual' ? (
@@ -209,7 +209,7 @@ export default function ResumeTable({
               </td>
               <td className="px-4 py-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-xs text-white">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-gray-700 flex items-center justify-center text-xs text-white">
                     {resume.uploadedBy.split(' ').map(n => n[0]).join('')}
                   </div>
                   <span className="text-sm text-gray-700">{resume.uploadedBy}</span>
@@ -231,7 +231,7 @@ export default function ResumeTable({
                           onApplySelected();
                         }
                       }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-2"
+                      className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm flex items-center gap-2"
                     >
                       <Briefcase className="w-4 h-4" />
                       Apply to Job
@@ -247,7 +247,7 @@ export default function ResumeTable({
                       </button>
                       <button
                         onClick={() => onApplyToJob(resume)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        className="p-1.5 text-gray-800 hover:bg-gray-50 rounded transition-colors"
                         title="Apply to Job"
                       >
                         <Briefcase className="w-4 h-4" />

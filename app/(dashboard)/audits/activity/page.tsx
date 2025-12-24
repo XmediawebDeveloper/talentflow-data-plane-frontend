@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://talentflowapi.mo.vc/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 interface AuditLog {
   id: string;
@@ -64,13 +64,13 @@ const entityIcons: Record<string, React.ElementType> = {
 };
 
 const actionColors: Record<string, string> = {
-  login: 'bg-purple-500',
+  login: 'bg-gray-700',
   logout: 'bg-gray-400',
   create: 'bg-green-500',
-  update: 'bg-blue-500',
+  update: 'bg-gray-700',
   delete: 'bg-red-500',
   upload: 'bg-teal-500',
-  publish: 'bg-indigo-500',
+  publish: 'bg-gray-500',
   default: 'bg-gray-500',
 };
 
@@ -86,6 +86,11 @@ export default function ActivityLogsPage() {
 
     try {
       const token = localStorage.getItem('accessToken');
+
+      if (!token) {
+        throw new Error('Session expired. Please log in again.');
+      }
+
       const response = await fetch(`${API_URL}/audits/recent?limit=${limit}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -94,7 +99,9 @@ export default function ActivityLogsPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch activity logs');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[DEBUG] Activity logs error:', response.status, errorData);
+        throw new Error(errorData.detail || `Failed to fetch activity logs (${response.status})`);
       }
 
       const data = await response.json();
@@ -172,7 +179,7 @@ export default function ActivityLogsPage() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -190,7 +197,7 @@ export default function ActivityLogsPage() {
               <select
                 value={limit}
                 onChange={(e) => setLimit(parseInt(e.target.value))}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
               >
                 <option value="25">Last 25</option>
                 <option value="50">Last 50</option>
@@ -219,7 +226,7 @@ export default function ActivityLogsPage() {
               <p className="text-red-500">{error}</p>
               <button
                 onClick={fetchRecentActivity}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
               >
                 Retry
               </button>

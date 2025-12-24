@@ -318,7 +318,7 @@ export default function ResumeScoringStatusPanel({
 
   const getScoreColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-blue-600';
+    if (score >= 70) return 'text-gray-800';
     return 'text-yellow-600';
   };
 
@@ -331,18 +331,18 @@ export default function ResumeScoringStatusPanel({
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden pointer-events-auto animate-in zoom-in-95 duration-200 flex flex-col">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-700 px-6 py-5">
+          <div className="bg-gradient-to-r from-gray-800 via-purple-600 to-gray-900 px-6 py-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
                 <Target className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1">
                 <h2 className="text-xl text-white font-semibold">AI Resume Scoring in Progress</h2>
-                <p className="text-sm text-blue-100">Analyzing candidates for: {jobTitle}</p>
+                <p className="text-sm text-gray-100">Analyzing candidates for: {jobTitle}</p>
               </div>
               <div className="text-right">
                 <div className="text-2xl text-white font-bold">{completedCount}/{resumes.length}</div>
-                <div className="text-xs text-blue-100">Successfully Scored</div>
+                <div className="text-xs text-gray-100">Successfully Scored</div>
               </div>
             </div>
 
@@ -368,20 +368,20 @@ export default function ResumeScoringStatusPanel({
           </div>
 
           {/* Stats Bar */}
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 px-6 py-4 border-b border-gray-200">
+          <div className="bg-gradient-to-r from-gray-50 to-gray-50 px-6 py-4 border-b border-gray-200">
             {/* Real-time Update Info Banner */}
             {remainingResumes > 0 && (
-              <div className="mb-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-4 text-white shadow-lg">
+              <div className="mb-4 bg-gradient-to-r from-gray-800 to-gray-800 rounded-xl p-4 text-white shadow-lg">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Loader2 className="w-5 h-5 animate-spin" />
                   </div>
                   <div className="flex-1">
                     <h4 className="font-semibold mb-1.5">Real-Time AI Scoring Active</h4>
-                    <div className="flex items-center gap-2 text-sm text-blue-50">
+                    <div className="flex items-center gap-2 text-sm text-gray-50">
                       <Clock className="w-4 h-4 animate-pulse" />
                       <span className="font-medium">{getEstimatedTimeDisplay()}</span>
-                      <span className="text-blue-100">
+                      <span className="text-gray-100">
                         ({remainingResumes} {remainingResumes === 1 ? 'resume' : 'resumes'} remaining)
                       </span>
                     </div>
@@ -435,7 +435,7 @@ export default function ResumeScoringStatusPanel({
                     </button>
                     <button
                       onClick={handleCompleteWithErrors}
-                      className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                      className="px-3 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium"
                     >
                       Continue
                     </button>
@@ -453,7 +453,7 @@ export default function ResumeScoringStatusPanel({
                       {completedCount > 0 ? `${avgScore}%` : '--'}
                     </div>
                   </div>
-                  <TrendingUp className="w-8 h-8 text-blue-600 opacity-30" />
+                  <TrendingUp className="w-8 h-8 text-gray-800 opacity-30" />
                 </div>
               </div>
 
@@ -463,7 +463,7 @@ export default function ResumeScoringStatusPanel({
                     <div className="text-xs text-gray-600 mb-1">Time Elapsed</div>
                     <div className="text-2xl font-bold text-gray-900">{formatTime(elapsedTime)}</div>
                   </div>
-                  <Clock className="w-8 h-8 text-purple-600 opacity-30" />
+                  <Clock className="w-8 h-8 text-gray-800 opacity-30" />
                 </div>
               </div>
 
@@ -489,7 +489,7 @@ export default function ResumeScoringStatusPanel({
                       resume.status === 'completed'
                         ? 'bg-green-50 border-green-300 shadow-sm'
                         : resume.status === 'scoring'
-                        ? 'bg-blue-50 border-blue-400 shadow-md scale-[1.02]'
+                        ? 'bg-gray-50 border-gray-400 shadow-md scale-[1.02]'
                         : resume.status === 'error'
                         ? `bg-red-50 border-red-300 ${selectedForRetry.includes(resume.id) ? 'ring-2 ring-red-400' : ''}`
                         : 'bg-gray-50 border-gray-200'
@@ -514,7 +514,7 @@ export default function ResumeScoringStatusPanel({
                           <CheckCircle2 className="w-6 h-6 text-white" />
                         </div>
                       ) : resume.status === 'scoring' ? (
-                        <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                        <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center shadow-lg">
                           <Loader2 className="w-6 h-6 text-white animate-spin" />
                         </div>
                       ) : resume.status === 'error' ? (
@@ -533,7 +533,7 @@ export default function ResumeScoringStatusPanel({
                       <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="font-medium text-gray-900 truncate">{resume.name}</h4>
                         {resume.status === 'scoring' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded-full text-xs font-medium animate-pulse">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-800 text-white rounded-full text-xs font-medium animate-pulse">
                             <Loader2 className="w-3 h-3 animate-spin" />
                             Analyzing...
                           </span>
@@ -546,7 +546,7 @@ export default function ResumeScoringStatusPanel({
                         {resume.attemptHistory && resume.attemptHistory.length > 0 && (
                           <button
                             onClick={() => setExpandedHistory(expandedHistory === resume.id ? null : resume.id)}
-                            className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium"
+                            className="text-xs text-gray-800 hover:text-gray-900 flex items-center gap-1 font-medium"
                           >
                             <History className="w-3 h-3" />
                             {resume.attemptHistory.length} {resume.attemptHistory.length === 1 ? 'attempt' : 'attempts'}
@@ -594,16 +594,16 @@ export default function ResumeScoringStatusPanel({
 
                   {/* Attempt History Expanded */}
                   {expandedHistory === resume.id && resume.attemptHistory && resume.attemptHistory.length > 0 && (
-                    <div className="ml-16 mr-4 mb-2 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="ml-16 mr-4 mb-2 bg-gray-50 border border-gray-200 rounded-lg p-4">
                       <div className="flex items-center gap-2 mb-3">
-                        <History className="w-4 h-4 text-blue-600" />
+                        <History className="w-4 h-4 text-gray-800" />
                         <h4 className="font-medium text-blue-900">Attempt History</h4>
                       </div>
                       <div className="space-y-2">
                         {resume.attemptHistory.map((attempt) => (
                           <div
                             key={attempt.attemptNumber}
-                            className="flex items-start gap-3 bg-white rounded-lg p-3 border border-blue-200"
+                            className="flex items-start gap-3 bg-white rounded-lg p-3 border border-gray-200"
                           >
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                               attempt.status === 'Success' ? 'bg-green-100' : 'bg-red-100'
@@ -660,7 +660,7 @@ export default function ResumeScoringStatusPanel({
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 {remainingResumes > 0 ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                    <Loader2 className="w-4 h-4 animate-spin text-gray-800" />
                     <span>Processing resumes via AI...</span>
                   </>
                 ) : (

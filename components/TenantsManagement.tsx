@@ -82,12 +82,12 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
               <Building2 className="w-7 h-7 text-white" />
             </div>
             <div>
@@ -97,7 +97,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
           </div>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-md"
           >
             <Plus className="w-5 h-5" />
             Add Tenant
@@ -114,7 +114,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
             placeholder="Search tenants..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
           />
         </div>
       </div>
@@ -127,8 +127,8 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
               <p className="text-sm text-gray-600">Total Tenants</p>
               <p className="text-3xl font-semibold text-gray-900 mt-1">{tenants.length}</p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-gray-800" />
             </div>
           </div>
         </div>
@@ -153,8 +153,8 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                 {tenants.reduce((acc, t) => acc + t.userCount, 0)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-purple-600" />
+            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Users className="w-6 h-6 text-gray-800" />
             </div>
           </div>
         </div>
@@ -194,7 +194,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
               >
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center">
+                    <div className="w-10 h-10 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg flex items-center justify-center">
                       <span className="text-white text-sm font-medium">
                         {tenant.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
                       </span>
@@ -208,9 +208,9 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                 <td className="px-6 py-4">
                   <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
                     tenant.subscription.planName === 'Enterprise'
-                      ? 'bg-purple-100 text-purple-700'
+                      ? 'bg-gray-100 text-gray-900'
                       : tenant.subscription.planName === 'Professional'
-                      ? 'bg-blue-100 text-blue-700'
+                      ? 'bg-gray-100 text-gray-900'
                       : 'bg-gray-100 text-gray-700'
                   }`}>
                     {tenant.subscription.planName}
@@ -250,7 +250,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                         e.stopPropagation();
                         setEditingTenant(tenant);
                       }}
-                      className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
@@ -302,7 +302,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                   value={newTenant.name}
                   onChange={(e) => setNewTenant({ ...newTenant, name: e.target.value })}
                   placeholder="Enter tenant name"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
               <div>
@@ -314,7 +314,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                   value={newTenant.email}
                   onChange={(e) => setNewTenant({ ...newTenant, email: e.target.value })}
                   placeholder="admin@company.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
             </div>
@@ -328,7 +328,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
               </button>
               <button
                 onClick={handleCreateTenant}
-                className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
               >
                 Create Tenant
               </button>

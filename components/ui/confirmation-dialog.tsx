@@ -44,9 +44,9 @@ export function ConfirmationDialog({
     },
     info: {
       icon: Info,
-      iconBg: 'bg-blue-100',
-      iconColor: 'text-blue-600',
-      buttonBg: 'bg-blue-600 hover:bg-blue-700',
+      iconBg: 'bg-gray-100',
+      iconColor: 'text-gray-800',
+      buttonBg: 'bg-gray-800 hover:bg-gray-900',
     },
     success: {
       icon: CheckCircle,

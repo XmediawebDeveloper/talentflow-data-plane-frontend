@@ -190,7 +190,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-blue-600 px-6 py-5 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-green-600 to-gray-800 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
               <Mail className="w-5 h-5 text-white" />
@@ -266,7 +266,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                   onClick={() => setInputMode('database')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
                     inputMode === 'database'
-                      ? 'bg-purple-600 text-white'
+                      ? 'bg-gray-800 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -294,12 +294,12 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                   {candidates.map((candidate, index) => (
                     <div key={candidate.id} className={`flex items-center gap-3 p-4 border rounded-lg ${
                       candidate.source === 'database'
-                        ? 'bg-purple-50 border-purple-300'
+                        ? 'bg-gray-50 border-gray-300'
                         : 'bg-gray-50 border-gray-200'
                     }`}>
                       {candidate.source === 'database' && (
                         <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
+                          <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
                             <Database className="w-4 h-4 text-white" />
                           </div>
                         </div>
@@ -348,7 +348,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
             {/* Database Selection Mode */}
             {inputMode === 'database' && (
-              <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-4">
+              <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-4">
                 {/* Search */}
                 <div className="mb-4">
                   <input
@@ -356,7 +356,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search by name, email, or position..."
-                    className="w-full px-4 py-2 border border-purple-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
@@ -368,15 +368,15 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                       onClick={() => toggleResumeSelection(resume.id)}
                       className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
                         selectedResumes.includes(resume.id)
-                          ? 'bg-purple-100 border-purple-600'
-                          : 'bg-white border-gray-200 hover:border-purple-300'
+                          ? 'bg-gray-100 border-gray-800'
+                          : 'bg-white border-gray-200 hover:border-gray-300'
                       }`}
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex-shrink-0 mt-1">
                           <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
                             selectedResumes.includes(resume.id)
-                              ? 'bg-purple-600 border-purple-600'
+                              ? 'bg-gray-800 border-gray-800'
                               : 'bg-white border-gray-300'
                           }`}>
                             {selectedResumes.includes(resume.id) && (
@@ -397,7 +397,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                           </div>
                           <div className="flex flex-wrap gap-1">
                             {resume.skills.slice(0, 3).map((skill, idx) => (
-                              <span key={idx} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">
+                              <span key={idx} className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
                                 {skill}
                               </span>
                             ))}
@@ -414,14 +414,14 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex items-center justify-between pt-4 border-t border-purple-300">
+                <div className="flex items-center justify-between pt-4 border-t border-gray-300">
                   <div className="text-sm text-purple-900">
                     {selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected
                   </div>
                   <button
                     onClick={handleAddFromDatabase}
                     disabled={selectedResumes.length === 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
                     <Users className="w-4 h-4" />
                     Add Selected Candidates

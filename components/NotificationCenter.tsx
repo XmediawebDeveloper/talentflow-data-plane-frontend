@@ -40,7 +40,7 @@ export default function NotificationCenter({
       case 'warning':
         return <AlertCircle className="w-5 h-5 text-yellow-600" />;
       case 'info':
-        return <Info className="w-5 h-5 text-blue-600" />;
+        return <Info className="w-5 h-5 text-gray-800" />;
     }
   };
 
@@ -100,7 +100,7 @@ export default function NotificationCenter({
                 <div className="flex items-center gap-2 text-xs">
                   <button
                     onClick={onMarkAllAsRead}
-                    className="text-blue-600 hover:text-blue-700"
+                    className="text-gray-800 hover:text-gray-900"
                   >
                     Mark all as read
                   </button>
@@ -129,7 +129,7 @@ export default function NotificationCenter({
                     <div
                       key={notification.id}
                       className={`px-4 py-3 hover:bg-gray-50 transition-colors ${
-                        !notification.read ? 'bg-blue-50/50' : ''
+                        !notification.read ? 'bg-gray-50/50' : ''
                       }`}
                       onClick={() => !notification.read && onMarkAsRead(notification.id)}
                     >
@@ -155,7 +155,7 @@ export default function NotificationCenter({
                                   {formatTime(notification.timestamp)}
                                 </div>
                                 {!notification.read && (
-                                  <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
+                                  <span className="w-2 h-2 bg-gray-800 rounded-full"></span>
                                 )}
                               </div>
                             </div>
@@ -179,7 +179,7 @@ export default function NotificationCenter({
                                 e.stopPropagation();
                                 notification.onAction?.();
                               }}
-                              className="mt-2 text-xs text-blue-600 hover:text-blue-700"
+                              className="mt-2 text-xs text-gray-800 hover:text-gray-900"
                             >
                               {notification.actionLabel}
                             </button>

@@ -79,10 +79,10 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-5 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 flex items-center justify-between">
           <div>
             <h2 className="text-xl text-white mb-1">Edit Assessment</h2>
-            <p className="text-blue-100 text-sm">
+            <p className="text-gray-100 text-sm">
               Modify assessment details and configuration
             </p>
           </div>
@@ -99,7 +99,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
           {/* Basic Information */}
           <div className="mb-6">
             <h3 className="text-lg text-gray-900 mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <FileText className="w-5 h-5 text-gray-800" />
               Basic Information
             </h3>
             
@@ -116,7 +116,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                     setEditedAssessment({ ...editedAssessment, title: e.target.value });
                     setErrors({ ...errors, title: null });
                   }}
-                  className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 ${
+                  className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 ${
                     errors.title ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder="e.g., Senior Software Engineer Technical Assessment"
@@ -144,7 +144,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                         setEditedAssessment({ ...editedAssessment, duration: e.target.value });
                         setErrors({ ...errors, duration: null });
                       }}
-                      className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 ${
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 ${
                         errors.duration ? 'border-red-500' : 'border-gray-300'
                       }`}
                       placeholder="e.g., 60 min"
@@ -163,7 +163,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                     type="number"
                     value={editedAssessment.questions}
                     onChange={(e) => setEditedAssessment({ ...editedAssessment, questions: parseInt(e.target.value) || 0 })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                     placeholder="e.g., 25"
                   />
                 </div>
@@ -176,7 +176,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                   <select
                     value={editedAssessment.type}
                     onChange={(e) => setEditedAssessment({ ...editedAssessment, type: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                   >
                     <option value="Technical">Technical</option>
                     <option value="Behavioral">Behavioral</option>
@@ -191,7 +191,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                   <select
                     value={editedAssessment.status}
                     onChange={(e) => setEditedAssessment({ ...editedAssessment, status: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                   >
                     <option value="Draft">Draft</option>
                     <option value="Active">Active</option>
@@ -207,12 +207,12 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
           <div className="mb-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg text-gray-900 flex items-center gap-2">
-                <Award className="w-5 h-5 text-purple-600" />
+                <Award className="w-5 h-5 text-gray-800" />
                 Assessment Sections
               </h3>
               <button
                 onClick={addSection}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm"
               >
                 <Plus className="w-4 h-4" />
                 Add Section
@@ -222,9 +222,9 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
             {editedAssessment.sections.length > 0 ? (
               <div className="space-y-4">
                 {editedAssessment.sections.map((section: any, index: number) => (
-                  <div key={index} className="border-2 border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                  <div key={index} className="border-2 border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
                     <div className="flex items-start gap-4">
-                      <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-medium flex-shrink-0">
+                      <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center text-white font-medium flex-shrink-0">
                         {index + 1}
                       </div>
                       
@@ -234,7 +234,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                             type="text"
                             value={section.name}
                             onChange={(e) => updateSection(index, 'name', e.target.value)}
-                            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
                             placeholder="Section name"
                           />
                           <div className="grid grid-cols-2 gap-2">
@@ -243,7 +243,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                                 type="number"
                                 value={section.percentage}
                                 onChange={(e) => updateSection(index, 'percentage', parseInt(e.target.value) || 0)}
-                                className="w-full px-3 py-2 pr-8 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="w-full px-3 py-2 pr-8 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
                                 placeholder="Weight"
                               />
                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">%</span>
@@ -252,7 +252,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                               type="number"
                               value={section.questionCount}
                               onChange={(e) => updateSection(index, 'questionCount', parseInt(e.target.value) || 0)}
-                              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
                               placeholder="Questions"
                             />
                           </div>
@@ -261,7 +261,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                         <textarea
                           value={section.description || ''}
                           onChange={(e) => updateSection(index, 'description', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
                           rows={2}
                           placeholder="Section description (optional)"
                         />
@@ -283,7 +283,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                 <p className="text-gray-600 mb-3">No sections added yet</p>
                 <button
                   onClick={addSection}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm"
                 >
                   <Plus className="w-4 h-4" />
                   Add First Section
@@ -325,7 +325,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
             </button>
             <button
               onClick={handleSave}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
             >
               <Save className="w-4 h-4" />
               Save Changes

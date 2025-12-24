@@ -28,12 +28,12 @@ export default function DisputeHistoryPage() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-orange-600 to-orange-700 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
               <AlertTriangle className="w-7 h-7 text-white" />
             </div>
             <div>
@@ -52,7 +52,7 @@ export default function DisputeHistoryPage() {
               placeholder="Search disputes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
             />
           </div>
         </div>
@@ -62,21 +62,21 @@ export default function DisputeHistoryPage() {
           <AlertTriangle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Disputes</h3>
           <p className="text-sm text-gray-500 mb-6">You haven't filed any billing disputes.</p>
-          <button className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors">
             <MessageSquare className="w-4 h-4" />
             Contact Support
           </button>
         </div>
 
         {/* Info Card */}
-        <div className="mt-8 bg-orange-50 border border-orange-200 rounded-xl p-6">
+        <div className="mt-8 bg-gray-50 border border-gray-200 rounded-xl p-6">
           <div className="flex items-start gap-4">
-            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <AlertTriangle className="w-5 h-5 text-orange-600" />
+            <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+              <AlertTriangle className="w-5 h-5 text-gray-600" />
             </div>
             <div>
-              <h3 className="text-sm font-medium text-orange-900">About Disputes</h3>
-              <p className="text-sm text-orange-700 mt-1">
+              <h3 className="text-sm font-medium text-gray-900">About Disputes</h3>
+              <p className="text-sm text-gray-600 mt-1">
                 If you believe you were incorrectly charged, you can file a dispute. Our team will review your case within 5-7 business days. For immediate assistance, please contact our support team.
               </p>
             </div>

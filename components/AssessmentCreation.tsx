@@ -144,11 +144,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             </p>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-start gap-3">
-            <Sparkles className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 flex items-start gap-3">
+            <Sparkles className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
             <div>
               <div className="text-sm text-blue-900 mb-1">AI-Powered Assessment Generation</div>
-              <div className="text-sm text-blue-700">
+              <div className="text-sm text-gray-900">
                 Our LLM will automatically generate questions based on the JD, adjusting difficulty, topics, and time allocation based on your configuration. <strong>Each candidate receives a unique, freshly generated question set</strong> to ensure fairness and prevent question sharing.
               </div>
             </div>
@@ -181,11 +181,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   <button
                     key={job.id}
                     onClick={() => handleJobSelect(job)}
-                    className="w-full text-left p-6 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all group"
+                    className="w-full text-left p-6 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all group"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <h3 className="text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                        <h3 className="text-gray-900 mb-2 group-hover:text-gray-800 transition-colors">
                           {job.title}
                         </h3>
                         <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
@@ -194,7 +194,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                             {job.department}
                           </span>
                           <span>{job.location}</span>
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
                             {job.experience}
                           </span>
                         </div>
@@ -213,7 +213,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       </div>
                       <div className="ml-4">
                         {requiresCoding(job) && (
-                          <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1">
+                          <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-xs flex items-center gap-1">
                             <Code className="w-3 h-3" />
                             Coding Required
                           </span>
@@ -231,7 +231,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     {onCreateNewJD && (
                       <button
                         onClick={onCreateNewJD}
-                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
                       >
                         Create New Job Description
                       </button>
@@ -281,7 +281,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
               </div>
               {requiresCoding(selectedJob!) && (
-                <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1">
+                <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-xs flex items-center gap-1">
                   <Code className="w-3 h-3" />
                   Coding Enabled
                 </span>
@@ -292,7 +292,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           {/* Duration */}
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
             <div className="flex items-center gap-3 mb-4">
-              <Clock className="w-5 h-5 text-blue-600" />
+              <Clock className="w-5 h-5 text-gray-800" />
               <h3 className="text-gray-900">Assessment Duration</h3>
             </div>
             <div className="flex items-center gap-4">
@@ -331,21 +331,21 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               {/* HR Section */}
-              <div className="bg-white rounded-lg p-4 border-2 border-blue-200">
+              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
                 <div className="flex items-center gap-2 mb-2">
-                  <Users className="w-5 h-5 text-blue-600" />
+                  <Users className="w-5 h-5 text-gray-800" />
                   <h4 className="text-gray-900">HR Section</h4>
                 </div>
                 <div className="space-y-2 text-sm">
                   <div className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 text-gray-800 flex-shrink-0 mt-0.5" />
                     <span className="text-gray-700">Responses recorded</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 text-gray-800 flex-shrink-0 mt-0.5" />
                     <span className="text-gray-700">Displayed in reports</span>
                   </div>
-                  <div className="px-3 py-2 bg-blue-50 rounded-lg mt-2">
+                  <div className="px-3 py-2 bg-gray-50 rounded-lg mt-2">
                     <span className="text-xs text-blue-900">
                       ℹ️ <strong>NOT part of PASS/FAIL</strong>
                     </span>
@@ -354,21 +354,21 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
 
               {/* Technical Section */}
-              <div className="bg-white rounded-lg p-4 border-2 border-purple-300">
+              <div className="bg-white rounded-lg p-4 border-2 border-gray-300">
                 <div className="flex items-center gap-2 mb-2">
-                  <Brain className="w-5 h-5 text-purple-600" />
+                  <Brain className="w-5 h-5 text-gray-800" />
                   <h4 className="text-gray-900">Technical Section</h4>
                 </div>
                 <div className="space-y-2 text-sm">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
+                    <AlertCircle className="w-4 h-4 text-gray-800 flex-shrink-0 mt-0.5" />
                     <span className="text-gray-700">0-10 rating per question</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
+                    <AlertCircle className="w-4 h-4 text-gray-800 flex-shrink-0 mt-0.5" />
                     <span className="text-gray-700">Min passing score: 7/10</span>
                   </div>
-                  <div className="px-3 py-2 bg-purple-100 rounded-lg mt-2">
+                  <div className="px-3 py-2 bg-gray-100 rounded-lg mt-2">
                     <span className="text-xs text-purple-900">
                       ✅ <strong>Counts toward PASS/FAIL</strong>
                     </span>
@@ -430,7 +430,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <Sliders className="w-5 h-5 text-blue-600" />
+                <Sliders className="w-5 h-5 text-gray-800" />
                 <h3 className="text-gray-900">Section Distribution</h3>
               </div>
               <div className="flex items-center gap-2">
@@ -460,14 +460,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      {section.name === 'HR' && <Users className="w-5 h-5 text-blue-600" />}
-                      {section.name === 'Technical' && <Brain className="w-5 h-5 text-purple-600" />}
+                      {section.name === 'HR' && <Users className="w-5 h-5 text-gray-800" />}
+                      {section.name === 'Technical' && <Brain className="w-5 h-5 text-gray-800" />}
                       {section.name === 'Coding' && <Code className="w-5 h-5 text-green-600" />}
                       <div>
                         <div className="flex items-center gap-2">
                           <h4 className="text-gray-900">{section.name} Section</h4>
                           {section.name === 'HR' ? (
-                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
                               Informational Only
                             </span>
                           ) : (
@@ -480,7 +480,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           <p className="text-sm text-gray-500 mt-0.5">
                             ~{Math.ceil((duration * section.percentage) / 100)} minutes • 
                             ~{Math.ceil((duration * section.percentage) / 100 / 2)} questions
-                            {section.name !== 'HR' && <span className="text-purple-600"> • Pass: ≥7/10</span>}
+                            {section.name !== 'HR' && <span className="text-gray-800"> • Pass: ≥7/10</span>}
                           </p>
                         )}
                       </div>
@@ -536,11 +536,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                                 ? 'domain tools, regulations, workflows' 
                                 : 'algorithm type, framework, logic pattern'
                             }`}
-                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                           />
                           <button
                             onClick={() => addTopic(section.name)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
                           >
                             <Plus className="w-4 h-4" />
                             Add Topic
@@ -550,7 +550,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           {section.topics.map((topic, idx) => (
                             <span
                               key={idx}
-                              className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm flex items-center gap-2 border border-blue-200"
+                              className="px-3 py-1.5 bg-gray-50 text-gray-900 rounded-lg text-sm flex items-center gap-2 border border-gray-200"
                             >
                               {topic}
                               <button
@@ -576,9 +576,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           </div>
 
           {/* LLM Configuration Info */}
-          <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-6 mb-6">
+          <div className="bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-6 mb-6">
             <div className="flex items-start gap-3">
-              <Sparkles className="w-6 h-6 text-purple-600 flex-shrink-0" />
+              <Sparkles className="w-6 h-6 text-gray-800 flex-shrink-0" />
               <div>
                 <h4 className="text-gray-900 mb-2">AI Assessment Generation</h4>
                 <div className="text-sm text-gray-700 space-y-2">
@@ -603,7 +603,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             <button
               onClick={handleGenerateAssessment}
               disabled={!isPercentageValid}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <Sparkles className="w-5 h-5" />
               Generate Assessment with AI
@@ -620,7 +620,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       return (
         <div className="flex-1 flex items-center justify-center bg-gray-50">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="w-16 h-16 border-4 border-gray-800 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <h3 className="text-gray-900 mb-2">Saving Assessment Definition...</h3>
             <p className="text-gray-600">Configuring your assessment parameters</p>
           </div>
@@ -687,12 +687,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
             <h2 className="text-gray-900 mb-4">{generatedAssessment?.title}</h2>
             <div className="grid grid-cols-4 gap-4 mb-6">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <div className="text-sm text-blue-600 mb-1">Total Duration</div>
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <div className="text-sm text-gray-800 mb-1">Total Duration</div>
                 <div className="text-2xl text-gray-900">{duration} min</div>
               </div>
-              <div className="p-4 bg-purple-50 rounded-lg">
-                <div className="text-sm text-purple-600 mb-1">Total Questions</div>
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <div className="text-sm text-gray-800 mb-1">Total Questions</div>
                 <div className="text-2xl text-gray-900">
                   {generatedAssessment?.sections.reduce((sum: number, s: any) => sum + s.questions, 0)}
                 </div>
@@ -709,9 +709,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           </div>
 
           {/* Scoring Rules Summary */}
-          <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-6 mb-6">
+          <div className="bg-gradient-to-r from-gray-50 to-pink-50 border-2 border-gray-300 rounded-lg p-6 mb-6">
             <div className="flex items-start gap-3 mb-4">
-              <BarChart className="w-6 h-6 text-purple-600 flex-shrink-0" />
+              <BarChart className="w-6 h-6 text-gray-800 flex-shrink-0" />
               <div>
                 <h3 className="text-purple-900 mb-2">🎯 Evaluation & Scoring Logic</h3>
                 <p className="text-sm text-purple-800">
@@ -722,11 +722,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* HR Section Info */}
-              <div className="bg-white rounded-lg p-4 border border-blue-200">
+              <div className="bg-white rounded-lg p-4 border border-gray-200">
                 <div className="flex items-center gap-2 mb-2">
-                  <Users className="w-4 h-4 text-blue-600" />
+                  <Users className="w-4 h-4 text-gray-800" />
                   <h4 className="text-sm text-gray-900">HR Section</h4>
-                  <span className="ml-auto px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
+                  <span className="ml-auto px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
                     Not Scored
                   </span>
                 </div>
@@ -738,7 +738,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               {/* Technical + Coding Info */}
               <div className="bg-white rounded-lg p-4 border border-green-300">
                 <div className="flex items-center gap-2 mb-2">
-                  <Brain className="w-4 h-4 text-purple-600" />
+                  <Brain className="w-4 h-4 text-gray-800" />
                   <Code className="w-4 h-4 text-green-600" />
                   <h4 className="text-sm text-gray-900">Technical + Coding</h4>
                   <span className="ml-auto px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
@@ -768,14 +768,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               <div key={idx} className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    {section.name === 'HR' && <Users className="w-5 h-5 text-blue-600" />}
-                    {section.name === 'Technical' && <Brain className="w-5 h-5 text-purple-600" />}
+                    {section.name === 'HR' && <Users className="w-5 h-5 text-gray-800" />}
+                    {section.name === 'Technical' && <Brain className="w-5 h-5 text-gray-800" />}
                     {section.name === 'Coding' && <Code className="w-5 h-5 text-green-600" />}
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="text-gray-900">{section.name} Section</h3>
                         {section.name === 'HR' ? (
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
                             Informational Only
                           </span>
                         ) : (
@@ -786,12 +786,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       </div>
                       <p className="text-sm text-gray-600">
                         {section.questions} questions • {section.estimatedTime} min • {section.difficulty} difficulty
-                        {section.name !== 'HR' && <span className="text-purple-600"> • Pass: ≥7/10</span>}
+                        {section.name !== 'HR' && <span className="text-gray-800"> • Pass: ≥7/10</span>}
                       </p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <div className="text-2xl text-blue-600">{section.percentage}%</div>
+                    <div className="text-2xl text-gray-800">{section.percentage}%</div>
                     {section.name !== 'HR' && (
                       <span className="text-xs text-green-600">✅ Counts to PASS/FAIL</span>
                     )}
@@ -810,7 +810,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
 
                 {/* Note: Questions NOT generated yet */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="text-sm text-blue-900">
                     ℹ️ <strong>Questions will be generated dynamically</strong> when candidates are assigned to this assessment based on the configured topics and difficulty level.
                   </div>

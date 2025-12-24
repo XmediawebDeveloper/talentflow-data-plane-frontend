@@ -26,19 +26,19 @@ export default function TeamManagementPage() {
   };
 
   const roleBadgeColors: Record<string, string> = {
-    tenant_admin: 'bg-purple-100 text-purple-700',
-    recruiter: 'bg-blue-100 text-blue-700',
+    tenant_admin: 'bg-gray-100 text-gray-900',
+    recruiter: 'bg-gray-100 text-gray-900',
     viewer: 'bg-gray-100 text-gray-700',
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
                 <Users className="w-7 h-7 text-white" />
               </div>
               <div>
@@ -48,7 +48,7 @@ export default function TeamManagementPage() {
             </div>
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Add Team Member
@@ -65,7 +65,7 @@ export default function TeamManagementPage() {
               placeholder="Search team members..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700"
             />
           </div>
         </div>
@@ -88,7 +88,7 @@ export default function TeamManagementPage() {
                 <tr key={member.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center">
                         {member.name.split(' ').map(n => n[0]).join('')}
                       </div>
                       <div>

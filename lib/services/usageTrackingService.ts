@@ -7,7 +7,7 @@
  * Endpoint: POST /api/v1/external/usage/record
  */
 
-const USAGE_API_BASE = process.env.NEXT_PUBLIC_USAGE_API_URL || 'https://talentflowapi.mo.vc/api/v1';
+const USAGE_API_BASE = process.env.NEXT_PUBLIC_USAGE_API_URL || 'http://localhost:8001/api/v1';
 
 // Quota type codes
 export type QuotaType = 'RU' | 'RS' | 'AS' | 'AIU' | 'storage_gb';
@@ -44,7 +44,7 @@ export interface RecordUsageResponse {
   error?: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://talentflowdata.api.mo.vc/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 /**
  * Get the API key (tenant_id) for the logged-in tenant

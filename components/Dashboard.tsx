@@ -73,8 +73,8 @@ export default function Dashboard({
         <div className="grid grid-cols-4 gap-6 mb-6">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-                <Users className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
+                <Users className="w-6 h-6 text-gray-800" />
               </div>
               <span className="flex items-center gap-1 text-sm text-green-600">
                 <TrendingUp className="w-4 h-4" />
@@ -101,8 +101,8 @@ export default function Dashboard({
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
-                <Video className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
+                <Video className="w-6 h-6 text-gray-800" />
               </div>
               <span className="flex items-center gap-1 text-sm text-red-600">
                 <TrendingDown className="w-4 h-4" />
@@ -133,7 +133,7 @@ export default function Dashboard({
           <div className="flex items-start justify-between mb-6 pb-6 border-b border-gray-200">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <Crown className="w-6 h-6 text-blue-600" />
+                <Crown className="w-6 h-6 text-gray-800" />
                 <h2 className="text-gray-900 text-2xl">{subscription?.planName || 'Agency Pro Plan'}</h2>
               </div>
               <p className="text-sm text-gray-600">
@@ -149,7 +149,7 @@ export default function Dashboard({
                   ? new Date(subscription.renewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                   : 'Jan 15, 2026'}
               </div>
-              <button className="text-sm text-blue-600 hover:text-blue-700 underline transition-colors">
+              <button className="text-sm text-gray-800 hover:text-gray-900 underline transition-colors">
                 Upgrade Plan
               </button>
             </div>
@@ -160,8 +160,8 @@ export default function Dashboard({
             {/* Resume Upload Units */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <Users className="w-5 h-5 text-blue-600" />
+                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-gray-800" />
                 </div>
               </div>
               <div className="text-2xl text-gray-900 mb-1">{limits?.resumeUploads?.toLocaleString() || '2,450'}</div>
@@ -169,7 +169,7 @@ export default function Dashboard({
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div 
-                    className="bg-blue-600 h-2 rounded-full" 
+                    className="bg-gray-800 h-2 rounded-full" 
                     style={{ width: `${limits?.resumeUploads ? Math.round((usage?.resumeUploads || 0) / limits.resumeUploads * 100) : 65}%` }}
                   ></div>
                 </div>
@@ -235,8 +235,8 @@ export default function Dashboard({
             {/* AI Interview Units */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <Video className="w-5 h-5 text-purple-600" />
+                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <Video className="w-5 h-5 text-gray-800" />
                 </div>
               </div>
               <div className="text-2xl text-gray-900 mb-1">
@@ -246,7 +246,7 @@ export default function Dashboard({
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div 
-                    className="bg-purple-600 h-2 rounded-full" 
+                    className="bg-gray-800 h-2 rounded-full" 
                     style={{ 
                       width: limits?.aiInterviews === 'unlimited' 
                         ? '100%' 
@@ -308,7 +308,7 @@ export default function Dashboard({
               </div>
               <button 
                 onClick={() => onNavigateToJDCreation?.()}
-                className="px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
+                className="px-5 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-900 transition-colors flex items-center gap-2 shadow-sm"
               >
                 <Briefcase className="w-4 h-4" />
                 Post New Job
@@ -381,7 +381,7 @@ export default function Dashboard({
               ].map((job) => (
                 <div
                   key={job.id}
-                  className="border border-gray-200 rounded-xl p-6 hover:border-blue-300 hover:shadow-md transition-all bg-white"
+                  className="border border-gray-200 rounded-xl p-6 hover:border-gray-300 hover:shadow-md transition-all bg-white"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
@@ -393,7 +393,7 @@ export default function Dashboard({
                               ? 'bg-red-100 text-red-700'
                               : job.statusColor === 'green'
                               ? 'bg-green-100 text-green-700'
-                              : 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-900'
                           }`}
                         >
                           {job.status}
@@ -421,9 +421,9 @@ export default function Dashboard({
                       </div>
                     </div>
                     <div className="text-center ml-8 bg-gray-50 rounded-xl p-4 min-w-[120px]">
-                      <div className="text-3xl text-blue-600 mb-1">{job.applicants}</div>
+                      <div className="text-3xl text-gray-800 mb-1">{job.applicants}</div>
                       <div className="text-xs text-gray-600 mb-3">Applicants</div>
-                      <button className="px-4 py-2 text-sm text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors w-full">
+                      <button className="px-4 py-2 text-sm text-gray-800 border border-gray-800 rounded-lg hover:bg-gray-50 transition-colors w-full">
                         View Details
                       </button>
                     </div>
@@ -433,7 +433,7 @@ export default function Dashboard({
                       <>
                         <button 
                           onClick={() => onAIMatch(job)}
-                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all text-sm shadow-sm"
+                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-purple-700 hover:to-gray-900 transition-all text-sm shadow-sm"
                         >
                           <Sparkles className="w-4 h-4" />
                           AI Talent Match
@@ -441,19 +441,19 @@ export default function Dashboard({
                         <span className="text-gray-300">•</span>
                       </>
                     )}
-                    <button className="text-sm text-gray-600 hover:text-blue-600 transition-colors">
+                    <button className="text-sm text-gray-600 hover:text-gray-800 transition-colors">
                       View Applicants
                     </button>
                     <span className="text-gray-300">•</span>
-                    <button className="text-sm text-gray-600 hover:text-blue-600 transition-colors">
+                    <button className="text-sm text-gray-600 hover:text-gray-800 transition-colors">
                       Edit JD
                     </button>
                     <span className="text-gray-300">•</span>
-                    <button className="text-sm text-gray-600 hover:text-blue-600 transition-colors">
+                    <button className="text-sm text-gray-600 hover:text-gray-800 transition-colors">
                       Share
                     </button>
                     <span className="text-gray-300">•</span>
-                    <button className="text-sm text-gray-600 hover:text-blue-600 transition-colors">
+                    <button className="text-sm text-gray-600 hover:text-gray-800 transition-colors">
                       Duplicate
                     </button>
                     <div className="ml-auto flex items-center gap-2">
@@ -468,7 +468,7 @@ export default function Dashboard({
           <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600">Showing 5 of 42 active jobs</div>
-              <button className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-2 transition-colors">
+              <button className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-2 transition-colors">
                 View All Jobs
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -483,7 +483,7 @@ export default function Dashboard({
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-gray-900">Recent Activity</h2>
-                <button className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                <button className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1">
                   View all
                   <ArrowRight className="w-4 h-4" />
                 </button>
@@ -530,14 +530,14 @@ export default function Dashboard({
                 ].map((activity, index) => {
                   const Icon = activity.icon;
                   const bgColor = {
-                    blue: 'bg-blue-100',
-                    purple: 'bg-purple-100',
+                    blue: 'bg-gray-100',
+                    purple: 'bg-gray-100',
                     green: 'bg-green-100',
                     yellow: 'bg-yellow-100',
                   }[activity.color];
                   const iconColor = {
-                    blue: 'text-blue-600',
-                    purple: 'text-purple-600',
+                    blue: 'text-gray-800',
+                    purple: 'text-gray-800',
                     green: 'text-green-600',
                     yellow: 'text-yellow-600',
                   }[activity.color];
@@ -566,16 +566,16 @@ export default function Dashboard({
               <div className="space-y-3">
                 <button 
                   onClick={() => onNavigateToMyResumes?.()}
-                  className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all text-left"
+                  className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                    <Users className="w-4 h-4 text-blue-600" />
+                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <Users className="w-4 h-4 text-gray-800" />
                   </div>
                   <span className="text-sm text-gray-900">Upload Resume</span>
                 </button>
                 <button 
                   onClick={() => onNavigateToJDCreation?.()}
-                  className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all text-left"
+                  className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
                   <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
                     <Briefcase className="w-4 h-4 text-green-600" />
@@ -584,16 +584,16 @@ export default function Dashboard({
                 </button>
                 <button 
                   onClick={() => onNavigateToAIInterview?.()}
-                  className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all text-left"
+                  className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                    <Video className="w-4 h-4 text-purple-600" />
+                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <Video className="w-4 h-4 text-gray-800" />
                   </div>
                   <span className="text-sm text-gray-900">Schedule Interview</span>
                 </button>
                 <button 
                   onClick={() => onNavigateToAssessments?.()}
-                  className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all text-left"
+                  className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
                   <div className="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center">
                     <FileText className="w-4 h-4 text-yellow-600" />
@@ -602,9 +602,9 @@ export default function Dashboard({
                 </button>
                 <button 
                   onClick={() => onNavigateToUsage?.()}
-                  className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all text-left"
+                  className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-700 to-gray-700 flex items-center justify-center">
                     <Zap className="w-4 h-4 text-white" />
                   </div>
                   <span className="text-sm text-gray-900">View Units Usage</span>
@@ -633,7 +633,7 @@ export default function Dashboard({
                   <span className={`px-3 py-1 rounded-full text-xs ${
                     job.color === 'red' ? 'bg-red-100 text-red-700' :
                     job.color === 'green' ? 'bg-green-100 text-green-700' :
-                    'bg-blue-100 text-blue-700'
+                    'bg-gray-100 text-gray-900'
                   }`}>
                     {job.status}
                   </span>

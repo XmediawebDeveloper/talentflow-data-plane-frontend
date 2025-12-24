@@ -27,26 +27,18 @@ export function Header() {
   };
 
   return (
-    <header className="bg-white dark:bg-[#0F172A] border-b border-[#E5E7EB] dark:border-[#1E293B] sticky top-0 z-50 transition-colors duration-300">
+    <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50 transition-colors duration-300">
       <div className="container mx-auto max-w-[1440px] px-6">
         <div className="flex items-center justify-between h-16">
           <Link
             href="/"
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-[#2563EB] to-[#1D4ED8] rounded-lg flex items-center justify-center">
-                <span className="text-white text-[14px]">BI</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[#6B7280] dark:text-[#94A3B8] text-[10px] uppercase tracking-wide">
-                  BusinessIntegra
-                </span>
-                <span className="text-[#111827] dark:text-white leading-none">
-                  TalentFlow
-                </span>
-              </div>
-            </div>
+              <img
+              src="/logos/talent_flow_logo.png"
+              alt="TalentFlow"
+              className="h-10 w-auto"
+            />
           </Link>
 
           <nav className="hidden md:flex items-center gap-8">
@@ -54,10 +46,10 @@ export function Header() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`transition-colors ${
+                className={`transition-colors font-medium ${
                   pathname === item.href
-                    ? "text-[#2563EB] dark:text-[#60A5FA]"
-                    : "text-[#374151] dark:text-[#CBD5E1] hover:text-[#2563EB] dark:hover:text-[#60A5FA]"
+                    ? "text-gray-900 dark:text-white"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
                 {item.label}
@@ -68,20 +60,20 @@ export function Header() {
           <div className="hidden md:flex items-center gap-3">
             <button
               onClick={toggleDarkMode}
-              className="p-2 rounded-lg hover:bg-[#F3F4F6] dark:hover:bg-[#1E293B] transition-colors"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               aria-label="Toggle dark mode"
             >
               {theme === "dark" ? (
-                <Sun className="w-5 h-5 text-[#F59E0B]" />
+                <Sun className="w-5 h-5 text-yellow-500" />
               ) : (
-                <Moon className="w-5 h-5 text-[#6B7280]" />
+                <Moon className="w-5 h-5 text-gray-500" />
               )}
             </button>
 
-            <Button variant="outline" asChild>
+            <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800" asChild>
               <Link href="/login">Sign In</Link>
             </Button>
-            <Button asChild>
+            <Button className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200" asChild>
               <Link href="/signup">Start Free Trial</Link>
             </Button>
           </div>
@@ -89,13 +81,13 @@ export function Header() {
           <div className="flex md:hidden items-center gap-2">
             <button
               onClick={toggleDarkMode}
-              className="p-2 rounded-lg hover:bg-[#F3F4F6] dark:hover:bg-[#1E293B] transition-colors"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               aria-label="Toggle dark mode"
             >
               {theme === "dark" ? (
-                <Sun className="w-5 h-5 text-[#F59E0B]" />
+                <Sun className="w-5 h-5 text-yellow-500" />
               ) : (
-                <Moon className="w-5 h-5 text-[#6B7280]" />
+                <Moon className="w-5 h-5 text-gray-500" />
               )}
             </button>
 
@@ -104,40 +96,40 @@ export function Header() {
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? (
-                <X className="w-6 h-6 text-[#374151] dark:text-[#CBD5E1]" />
+                <X className="w-6 h-6 text-gray-600 dark:text-gray-300" />
               ) : (
-                <Menu className="w-6 h-6 text-[#374151] dark:text-[#CBD5E1]" />
+                <Menu className="w-6 h-6 text-gray-600 dark:text-gray-300" />
               )}
             </button>
           </div>
         </div>
 
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-[#E5E7EB] dark:border-[#334155]">
+          <div className="md:hidden py-4 border-t border-gray-200 dark:border-gray-700">
             <nav className="flex flex-col gap-4">
               {navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`text-left py-2 ${
+                  className={`text-left py-2 font-medium ${
                     pathname === item.href
-                      ? "text-[#2563EB] dark:text-[#60A5FA]"
-                      : "text-[#374151] dark:text-[#CBD5E1]"
+                      ? "text-gray-900 dark:text-white"
+                      : "text-gray-500 dark:text-gray-400"
                   }`}
                 >
                   {item.label}
                 </Link>
               ))}
-              <div className="flex flex-col gap-2 pt-4 border-t border-[#E5E7EB] dark:border-[#334155]">
+              <div className="flex flex-col gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <Button
                   variant="outline"
-                  className="w-full dark:border-[#334155] dark:text-white dark:hover:bg-[#1E293B]"
+                  className="w-full border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
                   asChild
                 >
                   <Link href="/login">Sign In</Link>
                 </Button>
-                <Button className="w-full" asChild>
+                <Button className="w-full bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200" asChild>
                   <Link href="/signup">Start Free Trial</Link>
                 </Button>
               </div>

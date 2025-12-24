@@ -165,13 +165,13 @@ export default function ResumeScoringPage({
 
   const getScoreColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-blue-600';
+    if (score >= 70) return 'text-gray-800';
     return 'text-yellow-600';
   };
 
   const getScoreBgColor = (score: number) => {
     if (score >= 85) return 'bg-green-100 border-green-300 text-green-700';
-    if (score >= 70) return 'bg-blue-100 border-blue-300 text-blue-700';
+    if (score >= 70) return 'bg-gray-100 border-gray-300 text-gray-900';
     return 'bg-yellow-100 border-yellow-300 text-yellow-700';
   };
 
@@ -273,7 +273,7 @@ export default function ResumeScoringPage({
     const scoredResumesData = convertToScoredResumesFormat(selectedHistoryItem);
 
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-blue-50 via-purple-50 to-white">
+      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-purple-50 to-white">
         {/* Header with Back Button */}
         <div className="mb-6">
           <button
@@ -282,16 +282,16 @@ export default function ResumeScoringPage({
               setSelectedHistoryItem(null);
               setSelectedStatusFilter('all');
             }}
-            className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-4 font-medium transition-colors hover:gap-3"
+            className="flex items-center gap-2 text-gray-800 hover:text-gray-900 mb-4 font-medium transition-colors hover:gap-3"
           >
             <ArrowLeft className="w-5 h-5" />
             Back to Scored Candidates
           </button>
 
-          <div className="bg-white rounded-xl shadow-lg border-2 border-blue-300 p-6">
+          <div className="bg-white rounded-xl shadow-lg border-2 border-gray-300 p-6">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                <div className="w-14 h-14 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-lg">
                   <Target className="w-7 h-7 text-white" />
                 </div>
                 <div>
@@ -313,8 +313,8 @@ export default function ResumeScoringPage({
                     </span>
                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
                       selectedHistoryItem.source === 'my-resumes'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-purple-100 text-purple-700'
+                        ? 'bg-gray-100 text-gray-900'
+                        : 'bg-gray-100 text-gray-900'
                     }`}>
                       {selectedHistoryItem.source === 'my-resumes' ? (
                         <>
@@ -334,7 +334,7 @@ export default function ResumeScoringPage({
 
               <button
                 onClick={() => setViewMode('new')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
               >
                 <Target className="w-4 h-4" />
                 Score New Resumes
@@ -404,7 +404,7 @@ export default function ResumeScoringPage({
     ].filter(Boolean).length;
 
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-blue-50 via-purple-50 to-white">
+      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-purple-50 to-white">
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-4 mb-4">
@@ -417,7 +417,7 @@ export default function ResumeScoringPage({
                 <ArrowLeft className="w-5 h-5 text-gray-700" />
               </button>
             )}
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-lg">
               <History className="w-7 h-7 text-white" />
             </div>
             <div className="flex-1">
@@ -426,23 +426,23 @@ export default function ResumeScoringPage({
             </div>
 
             {/* Available Units Display */}
-            <div className="bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl shadow-lg p-4 border-2 border-purple-400 mr-4">
+            <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-purple-400 mr-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
                   <DollarSign className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <div className="text-xs text-purple-100 mb-0.5">Available Units</div>
+                  <div className="text-xs text-gray-100 mb-0.5">Available Units</div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-xl font-bold text-white">
                       {tenant ? (tenant.subscription.limits.resumeScoring - tenant.subscription.usage.resumeScoring).toLocaleString() : '250'}
                     </span>
-                    <span className="text-xs text-purple-100">units</span>
+                    <span className="text-xs text-gray-100">units</span>
                   </div>
                 </div>
               </div>
               <div className="mt-2 pt-2 border-t border-white border-opacity-20">
-                <div className="flex items-center justify-between text-xs text-purple-100">
+                <div className="flex items-center justify-between text-xs text-gray-100">
                   <span>Used / Limit:</span>
                   <span className="font-medium text-white">
                     {tenant ? `${tenant.subscription.usage.resumeScoring.toLocaleString()} / ${tenant.subscription.limits.resumeScoring.toLocaleString()}` : '3,247 / 5,000'}
@@ -458,7 +458,7 @@ export default function ResumeScoringPage({
                 setResumeSource(null);
                 setSelectedResumes([]);
               }}
-              className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
+              className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
             >
               <Target className="w-4 h-4" />
               Score Resumes
@@ -475,7 +475,7 @@ export default function ResumeScoringPage({
                   onClick={() => setHistoryViewMode('grid')}
                   className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
                     historyViewMode === 'grid'
-                      ? 'bg-white text-blue-600 shadow-sm'
+                      ? 'bg-white text-gray-800 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
@@ -486,7 +486,7 @@ export default function ResumeScoringPage({
                   onClick={() => setHistoryViewMode('list')}
                   className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
                     historyViewMode === 'list'
-                      ? 'bg-white text-blue-600 shadow-sm'
+                      ? 'bg-white text-gray-800 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
@@ -507,7 +507,7 @@ export default function ResumeScoringPage({
             {selectedHistoryItems.size > 0 && (
               <button
                 onClick={handleDownloadSelectedHistory}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm hover:shadow-md"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium shadow-sm hover:shadow-md"
               >
                 <Download className="w-4 h-4" />
                 Download Selected ({selectedHistoryItems.size})
@@ -536,14 +536,14 @@ export default function ResumeScoringPage({
               onClick={() => setShowHistoryFilters(!showHistoryFilters)}
               className={`px-5 py-2.5 rounded-lg border-2 transition-all flex items-center gap-2 font-medium ${
                 activeFiltersCount > 0
-                  ? 'bg-purple-50 border-purple-600 text-purple-700 shadow-sm'
+                  ? 'bg-gray-50 border-gray-800 text-gray-900 shadow-sm'
                   : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400'
               }`}
             >
               <Filter className="w-5 h-5" />
               Filters
               {activeFiltersCount > 0 && (
-                <span className="px-2 py-0.5 bg-purple-600 text-white rounded-full text-xs font-medium">
+                <span className="px-2 py-0.5 bg-gray-800 text-white rounded-full text-xs font-medium">
                   {activeFiltersCount}
                 </span>
               )}
@@ -551,7 +551,7 @@ export default function ResumeScoringPage({
             </button>
 
             <div className="text-sm text-gray-700 bg-gray-100 px-4 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
-              <span className="text-blue-600">{filteredHistory.length}</span> of {scoredHistory.length} jobs
+              <span className="text-gray-800">{filteredHistory.length}</span> of {scoredHistory.length} jobs
             </div>
           </div>
 
@@ -600,7 +600,7 @@ export default function ResumeScoringPage({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Min Candidates: <span className="text-blue-600">{historyMinCandidates}</span>
+                    Min Candidates: <span className="text-gray-800">{historyMinCandidates}</span>
                   </label>
                   <input
                     type="range"
@@ -620,7 +620,7 @@ export default function ResumeScoringPage({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Min Avg Score: <span className="text-blue-600">{historyAvgScoreMin}%</span>
+                    Min Avg Score: <span className="text-gray-800">{historyAvgScoreMin}%</span>
                   </label>
                   <input
                     type="range"
@@ -679,10 +679,10 @@ export default function ResumeScoringPage({
                 return (
                   <div
                     key={item.id}
-                    className="bg-white rounded-lg border-2 transition-all p-4 border-gray-200 hover:border-blue-300"
+                    className="bg-white rounded-lg border-2 transition-all p-4 border-gray-200 hover:border-gray-300"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+                      <div className="w-10 h-10 bg-gradient-to-br from-gray-800 to-gray-800 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
                         <Target className="w-5 h-5 text-white" />
                       </div>
 
@@ -693,7 +693,7 @@ export default function ResumeScoringPage({
                           setViewMode('details');
                         }}
                       >
-                        <h3 className="text-lg text-gray-900 mb-1 hover:text-blue-600 transition-colors">
+                        <h3 className="text-lg text-gray-900 mb-1 hover:text-gray-800 transition-colors">
                           {item.jobTitle}
                         </h3>
                       </div>
@@ -713,8 +713,8 @@ export default function ResumeScoringPage({
                         </span>
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
                           item.source === 'my-resumes'
-                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                            : 'bg-purple-100 text-purple-700 border border-purple-200'
+                            ? 'bg-gray-100 text-gray-900 border border-gray-200'
+                            : 'bg-gray-100 text-gray-900 border border-gray-200'
                         }`}>
                           {item.source === 'my-resumes' ? (
                             <>
@@ -732,7 +732,7 @@ export default function ResumeScoringPage({
                         <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-200">
                           <span className="text-xs text-gray-600">Avg Score:</span>
                           <span className={`text-base font-semibold ${
-                            avgScore >= 85 ? 'text-green-600' : avgScore >= 70 ? 'text-blue-600' : 'text-yellow-600'
+                            avgScore >= 85 ? 'text-green-600' : avgScore >= 70 ? 'text-gray-800' : 'text-yellow-600'
                           }`}>
                             {avgScore}%
                           </span>
@@ -743,7 +743,7 @@ export default function ResumeScoringPage({
                             setSelectedHistoryItem(item);
                             setViewMode('details');
                           }}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                          className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium"
                         >
                           View Details
                         </button>
@@ -757,7 +757,7 @@ export default function ResumeScoringPage({
               return (
                 <div
                   key={item.id}
-                  className="bg-white rounded-xl border-2 transition-all p-6 group border-gray-200 hover:border-blue-400 hover:shadow-lg"
+                  className="bg-white rounded-xl border-2 transition-all p-6 group border-gray-200 hover:border-gray-400 hover:shadow-lg"
                 >
                   <div className="flex items-start gap-6">
                     <div
@@ -768,11 +768,11 @@ export default function ResumeScoringPage({
                       }}
                     >
                       <div className="flex items-start gap-4 mb-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
+                        <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
                           <Target className="w-6 h-6 text-white" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-xl text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                          <h3 className="text-xl text-gray-900 mb-2 group-hover:text-gray-800 transition-colors">
                             {item.jobTitle}
                           </h3>
                           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 mb-3">
@@ -790,8 +790,8 @@ export default function ResumeScoringPage({
                             </span>
                             <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
                               item.source === 'my-resumes'
-                                ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                                : 'bg-purple-100 text-purple-700 border border-purple-200'
+                                ? 'bg-gray-100 text-gray-900 border border-gray-200'
+                                : 'bg-gray-100 text-gray-900 border border-gray-200'
                             }`}>
                               {item.source === 'my-resumes' ? (
                                 <>
@@ -808,7 +808,7 @@ export default function ResumeScoringPage({
                           </div>
 
                           {jobDetails && (
-                            <div className="bg-gradient-to-r from-gray-50 to-blue-50/30 border border-gray-200 rounded-lg p-4 mb-4">
+                            <div className="bg-gradient-to-r from-gray-50 to-gray-50/30 border border-gray-200 rounded-lg p-4 mb-4">
                               <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                                 <div className="flex items-start gap-2">
                                   <MapPin className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
@@ -854,12 +854,12 @@ export default function ResumeScoringPage({
                           <div className="text-xs text-gray-600 mt-0.5">85%+ match</div>
                         </div>
 
-                        <div className="bg-gradient-to-br from-blue-50 to-sky-50 border border-blue-200 rounded-lg p-3">
+                        <div className="bg-gradient-to-br from-gray-50 to-sky-50 border border-gray-200 rounded-lg p-3">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs text-gray-700 font-medium">Good</span>
-                            <CheckCircle className="w-4 h-4 text-blue-600" />
+                            <CheckCircle className="w-4 h-4 text-gray-800" />
                           </div>
-                          <div className="text-2xl text-blue-700 font-bold">{goodCount}</div>
+                          <div className="text-2xl text-gray-900 font-bold">{goodCount}</div>
                           <div className="text-xs text-gray-600 mt-0.5">70-84% match</div>
                         </div>
 
@@ -884,7 +884,7 @@ export default function ResumeScoringPage({
                       </div>
 
                       <div className="mt-4 flex flex-col gap-2">
-                        <div className="text-blue-600 group-hover:text-blue-700 text-sm font-medium flex items-center gap-1 justify-center">
+                        <div className="text-gray-800 group-hover:text-gray-900 text-sm font-medium flex items-center gap-1 justify-center">
                           View Details
                           <ArrowLeft className="w-4 h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
                         </div>
@@ -898,8 +898,8 @@ export default function ResumeScoringPage({
         ) : scoredHistory.length === 0 ? (
           <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-16 text-center">
             <div className="max-w-md mx-auto">
-              <div className="w-20 h-20 mx-auto mb-5 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
-                <History className="w-10 h-10 text-blue-600" />
+              <div className="w-20 h-20 mx-auto mb-5 bg-gradient-to-br from-gray-100 to-gray-100 rounded-full flex items-center justify-center">
+                <History className="w-10 h-10 text-gray-800" />
               </div>
               <h3 className="text-xl text-gray-900 mb-2">No Scoring History Yet</h3>
               <p className="text-gray-600 mb-6">
@@ -912,7 +912,7 @@ export default function ResumeScoringPage({
                   setResumeSource(null);
                   setSelectedResumes([]);
                 }}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium shadow-sm hover:shadow-md inline-flex items-center gap-2"
+                className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium shadow-sm hover:shadow-md inline-flex items-center gap-2"
               >
                 <Target className="w-5 h-5" />
                 Score Resumes Now
@@ -922,8 +922,8 @@ export default function ResumeScoringPage({
         ) : (
           <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-16 text-center">
             <div className="max-w-md mx-auto">
-              <div className="w-20 h-20 mx-auto mb-5 bg-gradient-to-br from-purple-100 to-blue-100 rounded-full flex items-center justify-center">
-                <Search className="w-10 h-10 text-purple-600" />
+              <div className="w-20 h-20 mx-auto mb-5 bg-gradient-to-br from-gray-100 to-gray-100 rounded-full flex items-center justify-center">
+                <Search className="w-10 h-10 text-gray-800" />
               </div>
               <h3 className="text-xl text-gray-900 mb-2">No Results Found</h3>
               <p className="text-gray-600 mb-6">
@@ -938,7 +938,7 @@ export default function ResumeScoringPage({
                   setHistoryMinCandidates(0);
                   setHistoryAvgScoreMin(0);
                 }}
-                className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-medium shadow-sm hover:shadow-md inline-flex items-center gap-2"
+                className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium shadow-sm hover:shadow-md inline-flex items-center gap-2"
               >
                 <X className="w-5 h-5" />
                 Clear All Filters
@@ -960,7 +960,7 @@ export default function ResumeScoringPage({
 
   // New Scoring Flow
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-blue-50 via-purple-50 to-white">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-purple-50 to-white">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-4 mb-6">
@@ -976,7 +976,7 @@ export default function ResumeScoringPage({
           >
             <ArrowLeft className="w-5 h-5 text-gray-700 group-hover:-translate-x-0.5 transition-transform" />
           </button>
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+          <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-lg">
             <Target className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1">
@@ -985,23 +985,23 @@ export default function ResumeScoringPage({
           </div>
 
           {/* Available Units Display */}
-          <div className="bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl shadow-lg p-4 border-2 border-purple-400">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-purple-400">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
                 <DollarSign className="w-6 h-6 text-white" />
               </div>
               <div>
-                <div className="text-xs text-purple-100 mb-0.5">Available Units</div>
+                <div className="text-xs text-gray-100 mb-0.5">Available Units</div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl font-bold text-white">
                     {tenant ? (tenant.subscription.limits.resumeScoring - tenant.subscription.usage.resumeScoring).toLocaleString() : '250'}
                   </span>
-                  <span className="text-sm text-purple-100">units</span>
+                  <span className="text-sm text-gray-100">units</span>
                 </div>
               </div>
             </div>
             <div className="mt-3 pt-3 border-t border-white border-opacity-20">
-              <div className="flex items-center justify-between text-xs text-purple-100">
+              <div className="flex items-center justify-between text-xs text-gray-100">
                 <span>Used / Limit:</span>
                 <span className="font-medium text-white">
                   {tenant ? `${tenant.subscription.usage.resumeScoring.toLocaleString()} / ${tenant.subscription.limits.resumeScoring.toLocaleString()}` : '3,247 / 5,000'}
@@ -1018,7 +1018,7 @@ export default function ResumeScoringPage({
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
                 selectedJob
                   ? 'bg-green-600 text-white ring-4 ring-green-100'
-                  : 'bg-blue-600 text-white ring-4 ring-blue-100'
+                  : 'bg-gray-800 text-white ring-4 ring-blue-100'
               }`}>
                 {selectedJob ? <CheckCircle2 className="w-5 h-5" /> : '1'}
               </div>
@@ -1030,7 +1030,7 @@ export default function ResumeScoringPage({
             <div className="flex items-center gap-3">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
                 selectedJob
-                  ? 'bg-blue-600 text-white ring-4 ring-blue-100'
+                  ? 'bg-gray-800 text-white ring-4 ring-blue-100'
                   : 'bg-gray-200 text-gray-500'
               }`}>
                 2
@@ -1047,13 +1047,13 @@ export default function ResumeScoringPage({
       <div className={`bg-white rounded-xl shadow-lg p-6 mb-6 transition-all ${
         selectedJob
           ? 'border-2 border-green-300 bg-green-50/30'
-          : 'border-2 border-blue-300'
+          : 'border-2 border-gray-300'
       }`}>
         <div className="flex items-center gap-3 mb-5">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
             selectedJob
               ? 'bg-green-600 text-white'
-              : 'bg-blue-600 text-white'
+              : 'bg-gray-800 text-white'
           }`}>
             {selectedJob ? <CheckCircle2 className="w-6 h-6" /> : '1'}
           </div>
@@ -1073,7 +1073,7 @@ export default function ResumeScoringPage({
                 setSelectedResumes([]);
                 setShowResults(false);
               }}
-              className="w-full px-4 py-3.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-white transition-shadow text-gray-900 font-medium"
+              className="w-full px-4 py-3.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white transition-shadow text-gray-900 font-medium"
             >
               <option value="">-- Choose a published job --</option>
               {publishedJobs.length === 0 ? (
@@ -1100,11 +1100,11 @@ export default function ResumeScoringPage({
             )}
 
             {selectedJobData && (
-              <div className="mt-4 p-5 bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200 rounded-xl">
+              <div className="mt-4 p-5 bg-gradient-to-br from-gray-50 to-gray-50 border-2 border-gray-200 rounded-xl">
                 <div className="flex items-start justify-between gap-6">
                   <div className="flex-1">
                     <div className="flex items-start gap-3 mb-3">
-                      <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
                         <Briefcase className="w-5 h-5 text-white" />
                       </div>
                       <div className="flex-1">
@@ -1118,7 +1118,7 @@ export default function ResumeScoringPage({
                             <Briefcase className="w-4 h-4" />
                             {selectedJobData.department}
                           </span>
-                          <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-blue-300 rounded-full text-blue-700 font-medium">
+                          <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-300 rounded-full text-gray-900 font-medium">
                             <User className="w-4 h-4" />
                             {selectedJobData.applicants} applicants
                           </span>
@@ -1128,7 +1128,7 @@ export default function ResumeScoringPage({
                   </div>
                   <button
                     onClick={() => setShowResumeSelectionModal(true)}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all text-sm font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
+                    className="px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-blue-700 hover:to-gray-900 transition-all text-sm font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
                   >
                     <Target className="w-5 h-5" />
                     Select Resumes
@@ -1142,31 +1142,31 @@ export default function ResumeScoringPage({
 
       {/* Help Text */}
       {!selectedJob && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-start gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 flex items-start gap-3">
+          <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
             <FileText className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
             <h4 className="text-gray-900 font-medium mb-1">How Resume Scoring Works</h4>
             <ul className="text-sm text-gray-700 space-y-1.5">
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">1.</span>
+                <span className="text-gray-800 mt-0.5">1.</span>
                 <span><strong>Step 1:</strong> Select a published job description from the dropdown above</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">2.</span>
+                <span className="text-gray-800 mt-0.5">2.</span>
                 <span><strong>Step 2:</strong> Click &quot;Select Resumes&quot; to open the resume selection modal</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">3.</span>
+                <span className="text-gray-800 mt-0.5">3.</span>
                 <span><strong>Step 3:</strong> Choose resumes from &quot;My Resumes&quot; folders or &quot;Internal Database&quot;</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">4.</span>
+                <span className="text-gray-800 mt-0.5">4.</span>
                 <span><strong>Step 4:</strong> Select candidates and click &quot;Score Resumes&quot; to analyze with AI</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">5.</span>
+                <span className="text-gray-800 mt-0.5">5.</span>
                 <span><strong>Step 5:</strong> Review scored candidates ranked by match percentage and quality</span>
               </li>
             </ul>

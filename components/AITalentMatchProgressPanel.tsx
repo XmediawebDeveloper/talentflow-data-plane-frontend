@@ -292,7 +292,7 @@ export default function AITalentMatchProgressPanel({
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+          <div className="w-20 h-20 bg-gradient-to-br from-gray-800 to-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
             <Sparkles className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-2xl text-gray-900 mb-2">AI Matching in Progress</h2>
@@ -305,11 +305,11 @@ export default function AITalentMatchProgressPanel({
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 font-medium">Overall Progress</span>
-            <span className="text-sm text-purple-600 font-bold">{progress}%</span>
+            <span className="text-sm text-gray-800 font-bold">{progress}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
             <div 
-              className="h-full bg-gradient-to-r from-purple-600 to-blue-600 rounded-full transition-all duration-300 ease-out"
+              className="h-full bg-gradient-to-r from-gray-800 to-gray-800 rounded-full transition-all duration-300 ease-out"
               style={{ width: `${progress}%` }}
             ></div>
           </div>
@@ -326,13 +326,13 @@ export default function AITalentMatchProgressPanel({
               <div 
                 key={index}
                 className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
-                  isCurrent ? 'bg-purple-50 border-2 border-purple-300' :
+                  isCurrent ? 'bg-gray-50 border-2 border-gray-300' :
                   isComplete ? 'bg-green-50 border border-green-200' :
                   'bg-gray-50 border border-gray-200'
                 }`}
               >
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  isCurrent ? 'bg-purple-600 text-white' :
+                  isCurrent ? 'bg-gray-800 text-white' :
                   isComplete ? 'bg-green-600 text-white' :
                   'bg-gray-300 text-gray-600'
                 }`}>
@@ -345,7 +345,7 @@ export default function AITalentMatchProgressPanel({
                   )}
                 </div>
                 <span className={`text-sm font-medium ${
-                  isCurrent ? 'text-purple-700' :
+                  isCurrent ? 'text-gray-900' :
                   isComplete ? 'text-green-700' :
                   'text-gray-600'
                 }`}>
@@ -357,11 +357,11 @@ export default function AITalentMatchProgressPanel({
         </div>
 
         {/* Stats */}
-        <div className="bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-200 rounded-xl p-6">
+        <div className="bg-gradient-to-br from-gray-50 to-gray-50 border border-gray-200 rounded-xl p-6">
           <div className="grid grid-cols-2 gap-6">
             <div className="text-center">
               <div className="text-sm text-gray-600 mb-1">Candidates Analyzed</div>
-              <div className="text-3xl font-bold text-purple-600">{completedCandidates}</div>
+              <div className="text-3xl font-bold text-gray-800">{completedCandidates}</div>
               <div className="text-xs text-gray-500 mt-1">of {totalCandidates} total</div>
             </div>
             <div className="text-center">

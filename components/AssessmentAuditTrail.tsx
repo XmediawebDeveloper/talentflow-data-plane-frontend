@@ -339,7 +339,7 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
   const getStatusBadge = (status: AuditLog['completionStatus']) => {
     const styles = {
       'Completed': 'bg-green-100 text-green-700 border-green-300',
-      'In Progress': 'bg-blue-100 text-blue-700 border-blue-300',
+      'In Progress': 'bg-gray-100 text-gray-900 border-gray-300',
       'Not Started': 'bg-gray-100 text-gray-700 border-gray-300',
       'Failed': 'bg-red-100 text-red-700 border-red-300',
       'Expired': 'bg-orange-100 text-orange-700 border-orange-300'
@@ -424,9 +424,9 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Units Consumed</span>
-            <Hash className="w-4 h-4 text-blue-600" />
+            <Hash className="w-4 h-4 text-gray-800" />
           </div>
-          <div className="text-2xl text-blue-600">{stats.unitsConsumed}</div>
+          <div className="text-2xl text-gray-800">{stats.unitsConsumed}</div>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
@@ -476,7 +476,7 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
                 placeholder="Search by candidate, email, JD, or recruiter..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
               />
             </div>
 
@@ -485,14 +485,14 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
               onClick={() => setShowFilters(!showFilters)}
               className={`px-4 py-2 text-sm border rounded-md transition-colors flex items-center gap-2 ${
                 showFilters || activeFiltersCount > 0
-                  ? 'border-blue-300 text-blue-700 bg-blue-50'
+                  ? 'border-gray-300 text-gray-900 bg-gray-50'
                   : 'border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
               <Filter className="w-4 h-4" />
               Filters
               {activeFiltersCount > 0 && (
-                <span className="px-1.5 py-0.5 bg-blue-600 text-white rounded text-xs">
+                <span className="px-1.5 py-0.5 bg-gray-800 text-white rounded text-xs">
                   {activeFiltersCount}
                 </span>
               )}
@@ -507,7 +507,7 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
                 {activeFiltersCount > 0 && (
                   <button
                     onClick={clearFilters}
-                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                    className="text-xs text-gray-800 hover:text-gray-900 flex items-center gap-1"
                   >
                     <X className="w-3 h-3" />
                     Clear All
@@ -522,7 +522,7 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                   >
                     <option value="all">All</option>
                     <option value="Completed">Completed</option>
@@ -539,7 +539,7 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
                   <select
                     value={filterRefundStatus}
                     onChange={(e) => setFilterRefundStatus(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                   >
                     <option value="all">All</option>
                     <option value="None">No Refund</option>
@@ -555,7 +555,7 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
                   <select
                     value={filterUnitConsumed}
                     onChange={(e) => setFilterUnitConsumed(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                   >
                     <option value="all">All</option>
                     <option value="true">Yes</option>
@@ -571,7 +571,7 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
                     placeholder="jd-001"
                     value={filterJdId}
                     onChange={(e) => setFilterJdId(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
 
@@ -582,7 +582,7 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
                     type="date"
                     value={filterDateFrom}
                     onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
 
@@ -593,7 +593,7 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
                     type="date"
                     value={filterDateTo}
                     onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
               </div>
@@ -722,7 +722,7 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => setSelectedLog(selectedLog === log.id ? null : log.id)}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                            className="p-1.5 text-gray-800 hover:bg-gray-50 rounded-md transition-colors"
                             title="View Details"
                           >
                             <Eye className="w-4 h-4" />
@@ -742,7 +742,7 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
 
                     {/* Expanded Details */}
                     {selectedLog === log.id && (
-                      <tr className="bg-blue-50 border-b border-blue-200">
+                      <tr className="bg-gray-50 border-b border-gray-200">
                         <td colSpan={9} className="p-6">
                           <div className="grid grid-cols-3 gap-6">
                             {/* Column 1 - Tenant & Assessment Info */}
@@ -904,11 +904,11 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
                   onChange={(e) => setRefundReason(e.target.value)}
                   placeholder="Provide a detailed reason for the refund request..."
                   rows={4}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
                 <div className="flex gap-2">
                   <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <p>

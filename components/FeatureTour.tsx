@@ -74,10 +74,10 @@ export default function FeatureTour({ isOpen, onClose }: FeatureTourProps) {
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full pointer-events-auto animate-in zoom-in-95 duration-200">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-5 flex items-center justify-between rounded-t-2xl">
+          <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 flex items-center justify-between rounded-t-2xl">
             <div>
               <h2 className="text-xl text-white font-semibold">{step.title}</h2>
-              <p className="text-sm text-blue-100 mt-1">
+              <p className="text-sm text-gray-100 mt-1">
                 Step {currentStep + 1} of {tourSteps.length}
               </p>
             </div>
@@ -95,7 +95,7 @@ export default function FeatureTour({ isOpen, onClose }: FeatureTourProps) {
             <div className="mb-6">
               <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
+                  className="h-full bg-gradient-to-r from-gray-700 to-gray-700 transition-all duration-300"
                   style={{ width: `${((currentStep + 1) / tourSteps.length) * 100}%` }}
                 />
               </div>
@@ -105,7 +105,7 @@ export default function FeatureTour({ isOpen, onClose }: FeatureTourProps) {
             <p className="text-gray-700 text-lg leading-relaxed mb-8">{step.description}</p>
 
             {/* Visual placeholder */}
-            <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-12 mb-6 text-center">
+            <div className="bg-gradient-to-br from-gray-50 to-gray-50 rounded-xl p-12 mb-6 text-center">
               <div className="text-6xl mb-4">
                 {currentStep === 0 && '👋'}
                 {currentStep === 1 && '📄'}
@@ -138,7 +138,7 @@ export default function FeatureTour({ isOpen, onClose }: FeatureTourProps) {
               )}
               <button
                 onClick={handleNext}
-                className="px-5 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all text-sm font-medium flex items-center gap-2"
+                className="px-5 py-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:shadow-lg transition-all text-sm font-medium flex items-center gap-2"
               >
                 {currentStep < tourSteps.length - 1 ? 'Next' : 'Get Started'}
                 <ChevronRight className="w-4 h-4" />

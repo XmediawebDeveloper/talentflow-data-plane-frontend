@@ -57,9 +57,9 @@ export default function AssignAssessmentModal({
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-scale-in">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-purple-50 to-white">
+        <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
               <ClipboardCheck className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -78,14 +78,14 @@ export default function AssignAssessmentModal({
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
           {/* Selected Resumes Summary */}
-          <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+          <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
             <div className="flex items-start gap-3">
-              <FileText className="w-5 h-5 text-purple-600 mt-0.5" />
+              <FileText className="w-5 h-5 text-gray-800 mt-0.5" />
               <div className="flex-1">
                 <h3 className="text-sm text-purple-900 mb-1">
                   {resumes.length} Candidate{resumes.length > 1 ? 's' : ''} Selected
                 </h3>
-                <div className="text-xs text-purple-700 space-y-1">
+                <div className="text-xs text-gray-900 space-y-1">
                   {resumes.slice(0, 3).map(resume => (
                     <div key={resume.id} className="flex items-center gap-2">
                       <CheckCircle className="w-3 h-3" />
@@ -93,7 +93,7 @@ export default function AssignAssessmentModal({
                     </div>
                   ))}
                   {resumes.length > 3 && (
-                    <div className="text-purple-600 italic">
+                    <div className="text-gray-800 italic">
                       +{resumes.length - 3} more candidate{resumes.length - 3 > 1 ? 's' : ''}
                     </div>
                   )}
@@ -115,13 +115,13 @@ export default function AssignAssessmentModal({
                   onClick={() => setSelectedAssessment(assessment.id)}
                   className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                     selectedAssessment === assessment.id
-                      ? 'border-purple-600 bg-purple-50'
-                      : 'border-gray-200 bg-white hover:border-purple-300 hover:bg-gray-50'
+                      ? 'border-gray-800 bg-gray-50'
+                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      selectedAssessment === assessment.id ? 'bg-purple-600' : 'bg-gray-100'
+                      selectedAssessment === assessment.id ? 'bg-gray-800' : 'bg-gray-100'
                     }`}>
                       <ClipboardCheck className={`w-5 h-5 ${
                         selectedAssessment === assessment.id ? 'text-white' : 'text-gray-600'
@@ -140,7 +140,7 @@ export default function AssignAssessmentModal({
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded">
                           {assessment.sections} Sections
                         </span>
                         <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded">
@@ -156,7 +156,7 @@ export default function AssignAssessmentModal({
                       </div>
                     </div>
                     {selectedAssessment === assessment.id && (
-                      <CheckCircle className="w-5 h-5 text-purple-600 flex-shrink-0" />
+                      <CheckCircle className="w-5 h-5 text-gray-800 flex-shrink-0" />
                     )}
                   </div>
                 </button>
@@ -174,9 +174,9 @@ export default function AssignAssessmentModal({
 
           {/* Assignment Info */}
           {selectedAssessment && (
-            <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
+            <div className="mb-6 p-4 bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg">
               <div className="flex items-start gap-3">
-                <Calendar className="w-5 h-5 text-purple-600 mt-0.5" />
+                <Calendar className="w-5 h-5 text-gray-800 mt-0.5" />
                 <div>
                   <h4 className="text-sm text-gray-900 mb-2">What Happens Next?</h4>
                   <ul className="text-xs text-gray-700 space-y-1">
@@ -214,7 +214,7 @@ export default function AssignAssessmentModal({
           <button
             onClick={handleAssign}
             disabled={!selectedAssessment || isAssigning}
-            className="px-6 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-6 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isAssigning ? (
               <>

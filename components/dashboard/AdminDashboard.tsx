@@ -39,11 +39,11 @@ export default function AdminDashboard({
   const canManageUsers = user?.permissions?.can_manage_users;
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
+          <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
             <BarChart3 className="w-7 h-7 text-white" />
           </div>
           <div>
@@ -69,8 +69,8 @@ export default function AdminDashboard({
               <p className="text-3xl font-semibold text-gray-900 mt-1">{stats.totalTenants}</p>
               <p className="text-xs text-green-600 mt-1">{stats.activeTenants} active</p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-gray-800" />
             </div>
           </div>
         </div>
@@ -85,8 +85,8 @@ export default function AdminDashboard({
               <p className="text-3xl font-semibold text-gray-900 mt-1">{stats.totalUsers}</p>
               <p className="text-xs text-green-600 mt-1">{stats.activeUsers} active</p>
             </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-purple-600" />
+            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Users className="w-6 h-6 text-gray-800" />
             </div>
           </div>
         </div>
@@ -127,10 +127,10 @@ export default function AdminDashboard({
             <div className="space-y-3">
               <button
                 onClick={onNavigateToTenants}
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-200 transition-colors"
               >
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Building2 className="w-5 h-5 text-blue-600" />
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <Building2 className="w-5 h-5 text-gray-800" />
                 </div>
                 <div className="text-left">
                   <p className="text-sm font-medium text-gray-900">Manage Tenants</p>
@@ -140,10 +140,10 @@ export default function AdminDashboard({
 
               <button
                 onClick={onNavigateToUsers}
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-purple-50 hover:border-purple-200 transition-colors"
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-200 transition-colors"
               >
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <Users className="w-5 h-5 text-purple-600" />
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <Users className="w-5 h-5 text-gray-800" />
                 </div>
                 <div className="text-left">
                   <p className="text-sm font-medium text-gray-900">Manage Users</p>
@@ -180,8 +180,8 @@ export default function AdminDashboard({
                 className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <Shield className="w-4 h-4 text-blue-600" />
+                  <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                    <Shield className="w-4 h-4 text-gray-800" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">{activity.action}</p>
@@ -199,14 +199,14 @@ export default function AdminDashboard({
 
       {/* Role-based Message for non-admins */}
       {!canManageUsers && (
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-6">
+        <div className="mt-8 bg-gray-50 border border-gray-200 rounded-xl p-6">
           <div className="flex items-start gap-4">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Shield className="w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Shield className="w-5 h-5 text-gray-800" />
             </div>
             <div>
               <h3 className="text-sm font-medium text-blue-900">Limited Access</h3>
-              <p className="text-sm text-blue-700 mt-1">
+              <p className="text-sm text-gray-900 mt-1">
                 Your current role has limited permissions. Contact your administrator if you need access to additional features.
               </p>
             </div>

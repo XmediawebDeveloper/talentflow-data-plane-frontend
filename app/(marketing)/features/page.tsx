@@ -8,13 +8,13 @@ const features = [
     icon: Sparkles,
     title: "AI Resume Scoring",
     description: "Automatically rank and score candidates based on job requirements with 95% accuracy. Our AI analyzes skills, experience, and cultural fit.",
-    gradient: "from-blue-500 to-purple-500",
+    gradient: "from-gray-700 to-gray-700",
   },
   {
     icon: Video,
     title: "Video Interviews",
     description: "Conduct asynchronous or live video interviews with AI-powered sentiment analysis, transcription, and candidate insights.",
-    gradient: "from-purple-500 to-pink-500",
+    gradient: "from-gray-700 to-pink-500",
   },
   {
     icon: BarChart3,
@@ -32,13 +32,13 @@ const features = [
     icon: Users,
     title: "Team Collaboration",
     description: "Work together seamlessly with hiring managers, interviewers, and recruiters. Share feedback and make decisions faster.",
-    gradient: "from-pink-500 to-purple-500",
+    gradient: "from-pink-500 to-gray-700",
   },
   {
     icon: Shield,
     title: "Enterprise Security",
     description: "SOC 2 Type II certified with bank-level encryption, SSO support, and GDPR compliance built-in.",
-    gradient: "from-teal-500 to-blue-500",
+    gradient: "from-teal-500 to-gray-500",
   },
   {
     icon: Zap,
@@ -50,13 +50,13 @@ const features = [
     icon: Clock,
     title: "Automated Workflows",
     description: "Set up custom workflows to automate candidate communication, interview scheduling, and task assignments.",
-    gradient: "from-indigo-500 to-purple-500",
+    gradient: "from-indigo-500 to-gray-700",
   },
   {
     icon: Globe,
     title: "Global Hiring",
     description: "Hire talent from anywhere in the world with multi-language support, timezone management, and localized compliance.",
-    gradient: "from-cyan-500 to-blue-500",
+    gradient: "from-cyan-500 to-gray-500",
   },
 ];
 
@@ -66,7 +66,7 @@ export default function FeaturesPage() {
       <div className="container mx-auto max-w-[1400px] px-6">
         {/* Hero */}
         <div className="text-center mb-16">
-          <Badge className="mb-4 px-4 py-2 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-0">
+          <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0">
             <Zap className="w-4 h-4 mr-2" />
             Features
           </Badge>
@@ -111,7 +111,7 @@ export default function FeaturesPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/signup"
-              className="h-12 px-8 inline-flex items-center justify-center rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
+              className="h-12 px-8 inline-flex items-center justify-center rounded-lg bg-gray-800 text-white font-medium hover:bg-gray-900 transition-colors"
             >
               Start Free Trial
             </Link>

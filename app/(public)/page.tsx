@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -22,7 +22,7 @@ export default function HomePage() {
               </Link>
               <Link
                 href="/signup"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 transition-colors"
               >
                 Get Started
               </Link>
@@ -37,7 +37,7 @@ export default function HomePage() {
           <h1 className="text-5xl font-bold text-gray-900 mb-6">
             AI-Powered Recruitment
             <br />
-            <span className="text-blue-600">Made Simple</span>
+            <span className="text-gray-800">Made Simple</span>
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
             Transform your hiring process with intelligent resume scoring,
@@ -46,7 +46,7 @@ export default function HomePage() {
           <div className="flex items-center justify-center gap-4">
             <Link
               href="/signup"
-              className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors text-lg font-semibold"
+              className="bg-gray-800 text-white px-8 py-3 rounded-lg hover:bg-gray-900 transition-colors text-lg font-semibold"
             >
               Start Free Trial
             </Link>
@@ -62,7 +62,7 @@ export default function HomePage() {
         {/* Features */}
         <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-3xl">📄</span>
             </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
@@ -74,7 +74,7 @@ export default function HomePage() {
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-3xl">✨</span>
             </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">

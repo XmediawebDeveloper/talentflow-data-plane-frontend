@@ -343,7 +343,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   const getScoreColor = (percentage: number) => {
     if (percentage >= 80) return 'text-green-600';
-    if (percentage >= 60) return 'text-blue-600';
+    if (percentage >= 60) return 'text-gray-800';
     if (percentage >= 40) return 'text-yellow-600';
     return 'text-red-600';
   };
@@ -387,7 +387,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </div>
               <button
                 onClick={() => alert('Export functionality coming soon!')}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
               >
                 <FileText className="w-5 h-5" />
                 Export Results
@@ -400,10 +400,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         <div className="px-8 py-6">
           {/* Round Filter */}
           {availableRounds.length > 1 && (
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-lg p-6 mb-6">
+            <div className="bg-gradient-to-r from-indigo-50 to-gray-50 border-2 border-indigo-300 rounded-lg p-6 mb-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center">
+                  <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
                     <Layers className="w-6 h-6 text-white" />
                   </div>
                   <div>
@@ -421,15 +421,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     onClick={() => setSelectedRound('all')}
                     className={`px-6 py-3 rounded-lg transition-all flex items-center gap-2 ${
                       selectedRound === 'all'
-                        ? 'bg-indigo-600 text-white shadow-lg'
-                        : 'bg-white text-gray-700 border border-gray-300 hover:border-indigo-400 hover:bg-indigo-50'
+                        ? 'bg-gray-800 text-white shadow-lg'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:border-indigo-400 hover:bg-gray-50'
                     }`}
                   >
                     <Layers className="w-4 h-4" />
                     <span>All Rounds</span>
                     <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
                       selectedRound === 'all'
-                        ? 'bg-indigo-500 text-white'
+                        ? 'bg-gray-500 text-white'
                         : 'bg-gray-200 text-gray-600'
                     }`}>
                       {candidateResults.length}
@@ -443,14 +443,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         onClick={() => setSelectedRound(round)}
                         className={`px-6 py-3 rounded-lg transition-all flex items-center gap-2 ${
                           selectedRound === round
-                            ? 'bg-indigo-600 text-white shadow-lg'
-                            : 'bg-white text-gray-700 border border-gray-300 hover:border-indigo-400 hover:bg-indigo-50'
+                            ? 'bg-gray-800 text-white shadow-lg'
+                            : 'bg-white text-gray-700 border border-gray-300 hover:border-indigo-400 hover:bg-gray-50'
                         }`}
                       >
                         <span>Round {round}</span>
                         <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
                           selectedRound === round
-                            ? 'bg-indigo-500 text-white'
+                            ? 'bg-gray-500 text-white'
                             : 'bg-gray-200 text-gray-600'
                         }`}>
                           {roundCount}
@@ -470,8 +470,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <div className="text-gray-600 text-sm mb-1">Total Candidates</div>
                   <div className="text-2xl text-gray-900">{candidateResults.length}</div>
                 </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <User className="w-6 h-6 text-blue-600" />
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <User className="w-6 h-6 text-gray-800" />
                 </div>
               </div>
             </div>
@@ -506,8 +506,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <div className="text-gray-600 text-sm mb-1">Avg. Score</div>
                   <div className="text-2xl text-gray-900">{avgScore}%</div>
                 </div>
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-6 h-6 text-purple-600" />
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-gray-800" />
                 </div>
               </div>
             </div>
@@ -535,7 +535,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <tr key={candidate.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-sm">
                             {candidate.name.split(' ').map(n => n[0]).join('')}
                           </div>
                           <div>
@@ -574,7 +574,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       <td className="px-6 py-4 text-center">
                         <button
                           onClick={() => setSelectedCandidate(candidate.id)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
                         >
                           <Award className="w-3 h-3" />
                           View Details
@@ -595,7 +595,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto">
       {/* Sticky Header - Assessment & JD Title */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 border-b-2 border-blue-700 sticky top-0 z-20 shadow-lg">
+      <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-blue-700 sticky top-0 z-20 shadow-lg">
         <div className="px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -607,8 +607,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <h1 className="text-white text-xl">{assessmentTitle}</h1>
                 {jdTitle && (
                   <div className="flex items-center gap-2 mt-1">
-                    <Briefcase className="w-3.5 h-3.5 text-blue-200" />
-                    <span className="text-blue-100 text-sm">Linked to: {jdTitle}</span>
+                    <Briefcase className="w-3.5 h-3.5 text-gray-200" />
+                    <span className="text-gray-100 text-sm">Linked to: {jdTitle}</span>
                   </div>
                 )}
               </div>
@@ -636,7 +636,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           </button>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xl">
                 {selectedCandidateData?.name.split(' ').map(n => n[0]).join('')}
               </div>
               <div>
@@ -665,8 +665,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <div className="grid grid-cols-3 gap-6">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Briefcase className="w-6 h-6 text-gray-800" />
               </div>
               <div>
                 <div className="text-sm text-gray-600">Assessment</div>
@@ -683,8 +683,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Clock className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Clock className="w-6 h-6 text-gray-800" />
               </div>
               <div>
                 <div className="text-sm text-gray-600">Time Taken</div>
@@ -701,7 +701,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             {selectedCandidateData?.sections.map((section, idx) => (
               <div key={idx} className={`border rounded-lg p-4 ${
                 section.name.toLowerCase().includes('hr') 
-                  ? 'border-blue-200 bg-blue-50/30' 
+                  ? 'border-gray-200 bg-gray-50/30' 
                   : 'border-green-200 bg-green-50/30'
               }`}>
                 <div className="flex items-center justify-between mb-3">
@@ -709,7 +709,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <div className="flex items-center gap-2">
                       <span className="text-gray-900">{section.name}</span>
                       {section.name.toLowerCase().includes('hr') ? (
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
                           Not Scored
                         </span>
                       ) : (
@@ -721,7 +721,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <div className="text-sm text-gray-500">
                       {section.score}/{section.totalScore} points
                       {!section.name.toLowerCase().includes('hr') && (
-                        <span className="text-purple-600 ml-2">• Pass: ≥7/10</span>
+                        <span className="text-gray-800 ml-2">• Pass: ≥7/10</span>
                       )}
                     </div>
                   </div>
@@ -731,7 +731,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3">
                   <div
-                    className={`h-3 rounded-full ${section.percentage >= 80 ? 'bg-green-600' : section.percentage >= 60 ? 'bg-blue-600' : section.percentage >= 40 ? 'bg-yellow-600' : 'bg-red-600'}`}
+                    className={`h-3 rounded-full ${section.percentage >= 80 ? 'bg-green-600' : section.percentage >= 60 ? 'bg-gray-800' : section.percentage >= 40 ? 'bg-yellow-600' : 'bg-red-600'}`}
                     style={{ width: `${section.percentage}%` }}
                   ></div>
                 </div>
@@ -741,9 +741,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         </div>
 
         {/* Scoring Rules & Pass/Fail Criteria */}
-        <div className="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-300 rounded-lg p-6 mb-6">
+        <div className="bg-gradient-to-br from-gray-50 to-gray-50 border-2 border-gray-300 rounded-lg p-6 mb-6">
           <div className="flex items-start gap-3 mb-4">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
               <Info className="w-6 h-6 text-white" />
             </div>
             <div className="flex-1">
@@ -803,16 +803,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           </div>
 
           {/* Pass Logic */}
-          <div className="mt-4 bg-white rounded-lg border-2 border-blue-300 p-4">
+          <div className="mt-4 bg-white rounded-lg border-2 border-gray-300 p-4">
             <div className="flex items-center gap-2 mb-3">
-              <Award className="w-5 h-5 text-blue-600" />
+              <Award className="w-5 h-5 text-gray-800" />
               <h3 className="text-gray-900">Pass Logic (Per Section)</h3>
             </div>
-            <div className="bg-blue-50 rounded-lg p-3 mb-3">
+            <div className="bg-gray-50 rounded-lg p-3 mb-3">
               <div className="text-sm text-gray-900 mb-2">A section PASSES if either condition is met:</div>
               <div className="space-y-2 text-sm">
                 <div className="flex items-start gap-2">
-                  <span className="text-blue-600 font-bold flex-shrink-0">1.</span>
+                  <span className="text-gray-800 font-bold flex-shrink-0">1.</span>
                   <span className="text-gray-700">At least <strong>70% of questions</strong> score ≥7</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-500 text-xs">
@@ -821,11 +821,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </div>
               </div>
             </div>
-            <div className="bg-blue-50 rounded-lg p-3">
+            <div className="bg-gray-50 rounded-lg p-3">
               <div className="text-sm text-gray-900 mb-2">OR:</div>
               <div className="space-y-2 text-sm">
                 <div className="flex items-start gap-2">
-                  <span className="text-blue-600 font-bold flex-shrink-0">2.</span>
+                  <span className="text-gray-800 font-bold flex-shrink-0">2.</span>
                   <span className="text-gray-700">Overall average score ≥7</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-500 text-xs">
@@ -837,7 +837,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           </div>
 
           {/* Final Result Calculation */}
-          <div className="mt-4 bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-300 rounded-lg p-4">
+          <div className="mt-4 bg-gradient-to-r from-green-50 to-gray-50 border-2 border-green-300 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
               <Award className="w-5 h-5 text-green-600" />
               <h3 className="text-gray-900">Final Assessment Result</h3>
@@ -853,10 +853,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         </div>
 
         {/* Detailed Answers */}
-        <div className="bg-white rounded-lg border-2 border-blue-300 overflow-hidden shadow-lg">
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-5">
+        <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-lg">
+          <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5">
             <h2 className="text-white">📝 Detailed Question Analysis</h2>
-            <p className="text-blue-100 text-sm mt-1">Review questions and answers for each section</p>
+            <p className="text-gray-100 text-sm mt-1">Review questions and answers for each section</p>
           </div>
 
           {/* Tab Navigation */}
@@ -872,13 +872,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     onClick={() => setActiveTab(tabKey)}
                     className={`px-6 py-3 rounded-t-lg transition-all flex items-center gap-2 ${
                       isActive
-                        ? 'bg-white text-blue-600 border-t-2 border-x border-blue-600 shadow-sm'
+                        ? 'bg-white text-gray-800 border-t-2 border-x border-gray-800 shadow-sm'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
                     <span className="font-medium">{section.name}</span>
                     <span className={`px-2 py-0.5 rounded-full text-xs ${
-                      isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-600'
+                      isActive ? 'bg-gray-100 text-gray-900' : 'bg-gray-200 text-gray-600'
                     }`}>
                       {section.questions.length}
                     </span>
@@ -919,21 +919,21 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   {section.questions.length > 0 ? (
                     <div className="space-y-6">
                       {section.questions.map((q, qIdx) => (
-                        <div key={qIdx} className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-blue-300 transition-colors">
+                        <div key={qIdx} className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors">
                           {/* Question Header */}
-                          <div className="bg-gradient-to-r from-gray-50 to-blue-50 px-6 py-4 border-b border-gray-200">
+                          <div className="bg-gradient-to-r from-gray-50 to-gray-50 px-6 py-4 border-b border-gray-200">
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-2">
-                                  <span className="px-3 py-1 bg-blue-600 text-white rounded-full text-xs font-medium">
+                                  <span className="px-3 py-1 bg-gray-800 text-white rounded-full text-xs font-medium">
                                     Q{qIdx + 1}
                                   </span>
                                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                                     q.type === 'coding' 
-                                      ? 'bg-purple-100 text-purple-700'
+                                      ? 'bg-gray-100 text-gray-900'
                                       : q.type === 'multiple-choice'
                                       ? 'bg-green-100 text-green-700'
-                                      : 'bg-blue-100 text-blue-700'
+                                      : 'bg-gray-100 text-gray-900'
                                   }`}>
                                     {q.type === 'coding' ? '💻 Coding' : q.type === 'multiple-choice' ? '✓ MCQ' : '✍️ Text'}
                                   </span>
@@ -961,15 +961,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             {/* Candidate's Answer */}
                             <div>
                               <div className="flex items-center gap-2 mb-3">
-                                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                  <User className="w-4 h-4 text-blue-600" />
+                                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                  <User className="w-4 h-4 text-gray-800" />
                                 </div>
                                 <div className="text-sm font-medium text-blue-900">CANDIDATE'S ANSWER</div>
                               </div>
                               <div className={`rounded-lg p-4 ${
                                 q.type === 'coding' 
                                   ? 'bg-gray-900 text-green-400 font-mono text-sm overflow-x-auto'
-                                  : 'bg-blue-50 text-gray-800'
+                                  : 'bg-gray-50 text-gray-800'
                               }`}>
                                 <div className={q.type === 'coding' ? 'whitespace-pre-wrap' : ''}>
                                   {q.candidateAnswer}
@@ -995,12 +995,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             {/* AI Feedback */}
                             <div>
                               <div className="flex items-center gap-2 mb-3">
-                                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                  <FileText className="w-4 h-4 text-purple-600" />
+                                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                  <FileText className="w-4 h-4 text-gray-800" />
                                 </div>
                                 <div className="text-sm font-medium text-purple-900">AI FEEDBACK & EVALUATION</div>
                               </div>
-                              <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                                 <div className="text-gray-800 leading-relaxed">{q.feedback}</div>
                               </div>
                             </div>

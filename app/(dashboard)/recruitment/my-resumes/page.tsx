@@ -234,7 +234,7 @@ export default function MyResumesPage() {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
         <span className="ml-3 text-gray-600">Loading resumes...</span>
       </div>
     );
@@ -251,7 +251,7 @@ export default function MyResumesPage() {
           </div>
           <button
             onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+            className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium shadow-sm"
           >
             <Upload className="w-4 h-4" />
             Upload Resumes
@@ -266,8 +266,8 @@ export default function MyResumesPage() {
                 <p className="text-sm text-gray-500 mb-1">Total Resumes</p>
                 <p className="text-2xl font-semibold text-gray-900">{resumes.length}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-                <FileText className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center">
+                <FileText className="w-6 h-6 text-gray-800" />
               </div>
             </div>
           </div>
@@ -294,10 +294,10 @@ export default function MyResumesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Folders</p>
-                <p className="text-2xl font-semibold text-purple-600">{folders.length}</p>
+                <p className="text-2xl font-semibold text-gray-800">{folders.length}</p>
               </div>
-              <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center">
-                <FolderPlus className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center">
+                <FolderPlus className="w-6 h-6 text-gray-800" />
               </div>
             </div>
           </div>
@@ -325,14 +325,14 @@ export default function MyResumesPage() {
                 placeholder="Search by name, email, or file name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm"
               />
             </div>
 
             <select
               value={selectedFolder}
               onChange={(e) => setSelectedFolder(e.target.value)}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm bg-white"
             >
               <option value="all">All Folders</option>
               {folders.map((folder) => (
@@ -352,7 +352,7 @@ export default function MyResumesPage() {
           onDrop={handleDrop}
           className={`border-2 border-dashed rounded-xl p-8 mb-6 text-center transition-all cursor-pointer ${
             dragActive
-              ? 'border-blue-500 bg-blue-50'
+              ? 'border-gray-700 bg-gray-50'
               : 'border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100'
           }`}
           onClick={() => fileInputRef.current?.click()}
@@ -365,7 +365,7 @@ export default function MyResumesPage() {
             onChange={handleFileSelect}
             className="hidden"
           />
-          <CloudUpload className={`w-12 h-12 mx-auto mb-3 ${dragActive ? 'text-blue-500' : 'text-gray-400'}`} />
+          <CloudUpload className={`w-12 h-12 mx-auto mb-3 ${dragActive ? 'text-gray-700' : 'text-gray-400'}`} />
           <p className="text-gray-700 font-medium mb-1">
             {dragActive ? 'Drop files here' : 'Drag & drop resumes here'}
           </p>
@@ -386,7 +386,7 @@ export default function MyResumesPage() {
             </p>
             <button
               onClick={() => setShowUploadModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
             >
               <Upload className="w-4 h-4" />
               Upload Resumes
@@ -434,8 +434,8 @@ export default function MyResumesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                          <User className="w-5 h-5 text-blue-600" />
+                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                          <User className="w-5 h-5 text-gray-800" />
                         </div>
                         <div>
                           <p className="font-medium text-gray-900">
@@ -529,12 +529,12 @@ export default function MyResumesPage() {
                   onDrop={handleDrop}
                   className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer mb-6 ${
                     dragActive
-                      ? 'border-blue-500 bg-blue-50'
+                      ? 'border-gray-700 bg-gray-50'
                       : 'border-gray-300 bg-gray-50 hover:border-gray-400'
                   }`}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <CloudUpload className={`w-10 h-10 mx-auto mb-3 ${dragActive ? 'text-blue-500' : 'text-gray-400'}`} />
+                  <CloudUpload className={`w-10 h-10 mx-auto mb-3 ${dragActive ? 'text-gray-700' : 'text-gray-400'}`} />
                   <p className="text-gray-700 font-medium mb-1">
                     {dragActive ? 'Drop files here' : 'Drag & drop or click to browse'}
                   </p>
@@ -549,8 +549,8 @@ export default function MyResumesPage() {
                         key={uploadFile.id}
                         className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg bg-gray-50"
                       >
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <FileText className="w-5 h-5 text-blue-600" />
+                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-gray-800" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-gray-900 truncate">{uploadFile.file.name}</p>
@@ -560,7 +560,7 @@ export default function MyResumesPage() {
                           {uploadFile.status === 'uploading' && (
                             <div className="mt-2 w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
                               <div
-                                className="h-full bg-blue-600 transition-all"
+                                className="h-full bg-gray-800 transition-all"
                                 style={{ width: `${uploadFile.progress}%` }}
                               />
                             </div>
@@ -579,7 +579,7 @@ export default function MyResumesPage() {
                             </button>
                           )}
                           {uploadFile.status === 'uploading' && (
-                            <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                            <Loader2 className="w-5 h-5 text-gray-800 animate-spin" />
                           )}
                           {uploadFile.status === 'completed' && (
                             <CheckCircle className="w-5 h-5 text-green-600" />
@@ -611,7 +611,7 @@ export default function MyResumesPage() {
                   <button
                     onClick={uploadFiles}
                     disabled={uploadingFiles.length === 0 || isUploading || uploadingFiles.every(f => f.status !== 'pending')}
-                    className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="flex items-center gap-2 px-5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {isUploading ? (
                       <>
@@ -647,8 +647,8 @@ export default function MyResumesPage() {
 
               <div className="p-6 overflow-y-auto max-h-[60vh]">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                    <User className="w-8 h-8 text-blue-600" />
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                    <User className="w-8 h-8 text-gray-800" />
                   </div>
                   <div>
                     <h3 className="text-xl font-semibold text-gray-900">
@@ -685,7 +685,7 @@ export default function MyResumesPage() {
                       <p className="text-sm font-medium text-gray-700 mb-2">Skills</p>
                       <div className="flex flex-wrap gap-2">
                         {selectedResumeForView.skills.map((skill, idx) => (
-                          <span key={idx} className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm">
+                          <span key={idx} className="px-3 py-1 bg-gray-50 text-gray-900 rounded-full text-sm">
                             {skill}
                           </span>
                         ))}
@@ -705,7 +705,7 @@ export default function MyResumesPage() {
                 </button>
                 <button
                   onClick={() => setSelectedResumeForView(null)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
                 >
                   Close
                 </button>

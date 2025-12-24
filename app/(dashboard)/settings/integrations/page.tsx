@@ -71,7 +71,7 @@ export default function IntegrationsPage() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -94,7 +94,7 @@ export default function IntegrationsPage() {
               onClick={() => setFilter(category)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filter === category
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-gray-800 text-white'
                   : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
               }`}
             >
@@ -146,7 +146,7 @@ export default function IntegrationsPage() {
                   ) : (
                     <button
                       onClick={() => toggleConnection(integration.id)}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
                     >
                       <Plus className="w-4 h-4" />
                       Connect

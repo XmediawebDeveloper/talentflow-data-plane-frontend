@@ -26,13 +26,13 @@ const categoryIcons: Record<string, React.ReactNode> = {
 };
 
 const categoryColors: Record<string, string> = {
-  jobs: 'bg-blue-100 text-blue-600',
-  scoring: 'bg-purple-100 text-purple-600',
+  jobs: 'bg-gray-100 text-gray-800',
+  scoring: 'bg-gray-100 text-gray-800',
   interview: 'bg-green-100 text-green-600',
   assessment: 'bg-orange-100 text-orange-600',
   settings: 'bg-gray-100 text-gray-600',
   view: 'bg-yellow-100 text-yellow-600',
-  upload: 'bg-indigo-100 text-indigo-600',
+  upload: 'bg-gray-100 text-gray-800',
   team: 'bg-pink-100 text-pink-600',
 };
 
@@ -52,13 +52,13 @@ export default function ActivityLogsPage() {
   });
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
                 <BarChart3 className="w-7 h-7 text-white" />
               </div>
               <div>
@@ -82,13 +82,13 @@ export default function ActivityLogsPage() {
               placeholder="Search activities..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
             />
           </div>
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
           >
             {categories.map((cat) => (
               <option key={cat} value={cat}>

@@ -35,7 +35,7 @@ export default function BrandingPage() {
   ];
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -52,7 +52,7 @@ export default function BrandingPage() {
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 transition-colors"
             >
               {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
               {saved ? 'Saved!' : isSaving ? 'Saving...' : 'Save Changes'}
@@ -117,7 +117,7 @@ export default function BrandingPage() {
                   type="text"
                   value={branding.primaryColor}
                   onChange={(e) => setBranding({ ...branding, primaryColor: e.target.value })}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
                 />
               </div>
             </div>
@@ -134,7 +134,7 @@ export default function BrandingPage() {
                   type="text"
                   value={branding.secondaryColor}
                   onChange={(e) => setBranding({ ...branding, secondaryColor: e.target.value })}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
                 />
               </div>
             </div>
@@ -151,7 +151,7 @@ export default function BrandingPage() {
               value={branding.customDomain}
               onChange={(e) => setBranding({ ...branding, customDomain: e.target.value })}
               placeholder="careers.yourcompany.com"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
             />
             <p className="text-sm text-gray-500 mt-2">Point your CNAME record to app.talentflow.com</p>
           </div>
@@ -161,7 +161,7 @@ export default function BrandingPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Preview</h2>
-            <button className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700">
+            <button className="flex items-center gap-2 text-sm text-gray-800 hover:text-gray-900">
               <Eye className="w-4 h-4" />
               Open Full Preview
             </button>

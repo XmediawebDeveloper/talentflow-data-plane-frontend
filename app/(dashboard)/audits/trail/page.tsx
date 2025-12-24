@@ -21,9 +21,9 @@ import {
   FolderOpen,
   CreditCard
 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://talentflowapi.mo.vc/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 interface AuditLog {
   id: string;
@@ -58,12 +58,12 @@ interface AuditStats {
 
 const actionColors: Record<string, string> = {
   create: 'bg-green-100 text-green-700',
-  update: 'bg-blue-100 text-blue-700',
+  update: 'bg-gray-100 text-gray-900',
   delete: 'bg-red-100 text-red-700',
-  login: 'bg-purple-100 text-purple-700',
+  login: 'bg-gray-100 text-gray-900',
   logout: 'bg-gray-100 text-gray-700',
   upload: 'bg-teal-100 text-teal-700',
-  publish: 'bg-indigo-100 text-indigo-700',
+  publish: 'bg-gray-100 text-indigo-700',
   default: 'bg-gray-100 text-gray-700',
 };
 
@@ -103,6 +103,13 @@ export default function AuditTrailPage() {
   const [availableActions, setAvailableActions] = useState<Array<{value: string; label: string}>>([]);
   const [availableEntities, setAvailableEntities] = useState<Array<{value: string; label: string}>>([]);
 
+  // Total users count
+  const [totalUsers, setTotalUsers] = useState(0);
+
+  // Prevent duplicate fetches in development mode
+  const hasFetched = useRef(false);
+  const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange });
+
   const fetchAuditLogs = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -126,6 +133,10 @@ export default function AuditTrailPage() {
         params.append('end_date', endDate.toISOString());
       }
 
+      if (!token) {
+        throw new Error('Session expired. Please log in again.');
+      }
+
       const response = await fetch(`${API_URL}/audits?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -134,7 +145,9 @@ export default function AuditTrailPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch audit logs');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[DEBUG] Audit logs error:', response.status, errorData);
+        throw new Error(errorData.detail || `Failed to fetch audit logs (${response.status})`);
       }
 
       const data = await response.json();
@@ -195,14 +208,51 @@ export default function AuditTrailPage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchFilters();
-  }, [fetchFilters]);
+  const fetchTotalUsers = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`${API_URL}/users`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
+      if (response.ok) {
+        const data = await response.json();
+        const users = data.users || data || [];
+        setTotalUsers(Array.isArray(users) ? users.length : 0);
+      }
+    } catch (err) {
+      console.error('Error fetching users count:', err);
+    }
+  }, []);
+
+  // Initial fetch - only runs once
   useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+    fetchFilters();
+    fetchTotalUsers();
     fetchAuditLogs();
     fetchStats();
-  }, [fetchAuditLogs, fetchStats]);
+  }, []);
+
+  // Re-fetch when filters change (compare with previous values)
+  useEffect(() => {
+    const prev = prevFilters.current;
+    const filtersChanged =
+      prev.page !== page ||
+      prev.actionFilter !== actionFilter ||
+      prev.entityFilter !== entityFilter ||
+      prev.dateRange !== dateRange;
+
+    if (filtersChanged && hasFetched.current) {
+      prevFilters.current = { page, actionFilter, entityFilter, dateRange };
+      fetchAuditLogs();
+      fetchStats();
+    }
+  }, [page, actionFilter, entityFilter, dateRange]);
 
   const getActionColor = (action: string): string => {
     if (action.includes('create') || action.includes('upload')) return actionColors.create;
@@ -293,13 +343,13 @@ export default function AuditTrailPage() {
   });
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
                 <ScrollText className="w-7 h-7 text-white" />
               </div>
               <div>
@@ -335,8 +385,8 @@ export default function AuditTrailPage() {
                   <p className="text-sm text-gray-600">Total Actions</p>
                   <p className="text-3xl font-semibold text-gray-900 mt-1">{stats.total_actions}</p>
                 </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Activity className="w-6 h-6 text-blue-600" />
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <Activity className="w-6 h-6 text-gray-800" />
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-2">Last {stats.period_days} days</p>
@@ -344,14 +394,14 @@ export default function AuditTrailPage() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Active Users</p>
-                  <p className="text-3xl font-semibold text-gray-900 mt-1">{stats.top_active_users.length}</p>
+                  <p className="text-sm text-gray-600">Total Users</p>
+                  <p className="text-3xl font-semibold text-green-600 mt-1">{totalUsers}</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <Users className="w-6 h-6 text-green-600" />
                 </div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">Users with activity</p>
+              <p className="text-xs text-gray-500 mt-2">Registered users</p>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">
@@ -359,8 +409,8 @@ export default function AuditTrailPage() {
                   <p className="text-sm text-gray-600">Action Types</p>
                   <p className="text-3xl font-semibold text-gray-900 mt-1">{Object.keys(stats.actions_by_type).length}</p>
                 </div>
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <Filter className="w-6 h-6 text-purple-600" />
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <Filter className="w-6 h-6 text-gray-800" />
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-2">Unique action types</p>
@@ -391,14 +441,14 @@ export default function AuditTrailPage() {
                   placeholder="Search by user, action, or IP..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700"
                 />
               </div>
             </div>
             <select
               value={actionFilter}
               onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
             >
               <option value="">All Actions</option>
               {availableActions.map(action => (
@@ -408,7 +458,7 @@ export default function AuditTrailPage() {
             <select
               value={entityFilter}
               onChange={(e) => { setEntityFilter(e.target.value); setPage(1); }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
             >
               <option value="">All Entities</option>
               {availableEntities.map(entity => (
@@ -418,7 +468,7 @@ export default function AuditTrailPage() {
             <select
               value={dateRange}
               onChange={(e) => { setDateRange(e.target.value); setPage(1); }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
             >
               <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
@@ -445,7 +495,7 @@ export default function AuditTrailPage() {
               <p className="text-red-500">{error}</p>
               <button
                 onClick={fetchAuditLogs}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
               >
                 Retry
               </button>
@@ -480,7 +530,7 @@ export default function AuditTrailPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center text-xs">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center text-xs">
                             {log.user_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                           </div>
                           <div>
@@ -516,7 +566,7 @@ export default function AuditTrailPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <button
                           onClick={() => setSelectedLog(log)}
-                          className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm"
+                          className="flex items-center gap-1 text-gray-800 hover:text-gray-900 text-sm"
                         >
                           <Eye className="w-4 h-4" />
                           View

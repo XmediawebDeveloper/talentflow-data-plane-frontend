@@ -18,7 +18,7 @@ export function LoadingSpinner({ size = 'md', color = 'blue', className = '' }: 
   };
 
   const colorClasses = {
-    blue: 'border-blue-600 border-t-transparent',
+    blue: 'border-gray-800 border-t-transparent',
     white: 'border-white border-t-transparent',
     gray: 'border-gray-400 border-t-transparent',
   };
@@ -55,8 +55,8 @@ export function FullPageLoader({ message = 'Loading...' }: { message?: string })
     <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
       <div className="text-center">
         <div className="relative">
-          <div className="w-16 h-16 border-4 border-blue-200 rounded-full animate-ping absolute"></div>
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-16 h-16 border-4 border-gray-200 rounded-full animate-ping absolute"></div>
+          <div className="w-16 h-16 border-4 border-gray-800 border-t-transparent rounded-full animate-spin"></div>
         </div>
         <p className="text-gray-700 mt-6 text-lg font-medium">{message}</p>
       </div>
@@ -81,7 +81,7 @@ export function ButtonLoader() {
  */
 export function DotsLoader({ color = 'blue' }: { color?: 'blue' | 'gray' | 'white' }) {
   const dotColor = {
-    blue: 'bg-blue-600',
+    blue: 'bg-gray-800',
     gray: 'bg-gray-400',
     white: 'bg-white',
   };
@@ -109,7 +109,7 @@ export function ProgressLoader({ progress = 0, label }: { progress?: number; lab
       )}
       <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 ease-out rounded-full"
+          className="h-full bg-gradient-to-r from-gray-700 to-gray-800 transition-all duration-300 ease-out rounded-full"
           style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
         />
       </div>

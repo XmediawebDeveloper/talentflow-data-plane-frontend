@@ -257,8 +257,8 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-            <Icon className="w-5 h-5 text-blue-600" />
+          <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+            <Icon className="w-5 h-5 text-gray-800" />
           </div>
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">{config.title}</h1>
@@ -267,7 +267,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
         </div>
         <button
           onClick={openCreateModal}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
         >
           <Plus className="w-4 h-4" />
           Add New
@@ -278,7 +278,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-8 text-center">
-            <div className="animate-spin w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-2"></div>
+            <div className="animate-spin w-8 h-8 border-2 border-gray-800 border-t-transparent rounded-full mx-auto mb-2"></div>
             <p className="text-gray-500">Loading...</p>
           </div>
         ) : items.length === 0 ? (
@@ -287,7 +287,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
             <p className="text-gray-500 mb-4">No items found</p>
             <button
               onClick={openCreateModal}
-              className="text-blue-600 hover:text-blue-700 font-medium"
+              className="text-gray-800 hover:text-gray-900 font-medium"
             >
               Add your first item
             </button>
@@ -334,7 +334,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => openEditModal(item)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        className="p-1.5 text-gray-400 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors"
                         title="Edit"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -400,7 +400,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
                   value={formData.label}
                   onChange={(e) => setFormData({ ...formData, label: e.target.value })}
                   placeholder="e.g., 5-7 years"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
                   autoFocus
                 />
               </div>
@@ -414,7 +414,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                   placeholder="Auto-generated from label"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
                 />
               </div>
 
@@ -429,7 +429,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
                       value={formData.min_years}
                       onChange={(e) => setFormData({ ...formData, min_years: e.target.value })}
                       placeholder="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
                     />
                   </div>
                   <div>
@@ -441,7 +441,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
                       value={formData.max_years}
                       onChange={(e) => setFormData({ ...formData, max_years: e.target.value })}
                       placeholder="5"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
                     />
                   </div>
                 </div>
@@ -457,7 +457,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
                     value={formData.level}
                     onChange={(e) => setFormData({ ...formData, level: e.target.value })}
                     placeholder="1"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
                   />
                 </div>
               )}
@@ -472,7 +472,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder="Brief description of the industry"
                     rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm resize-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none"
                   />
                 </div>
               )}
@@ -486,7 +486,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
                   value={formData.sort_order}
                   onChange={(e) => setFormData({ ...formData, sort_order: e.target.value })}
                   placeholder="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
                 />
                 <p className="text-xs text-gray-500 mt-1">Lower numbers appear first</p>
               </div>
@@ -502,7 +502,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting || !formData.label.trim()}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isSubmitting ? (
                   <>

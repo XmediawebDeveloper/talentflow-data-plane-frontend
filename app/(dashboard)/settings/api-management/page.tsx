@@ -41,7 +41,7 @@ export default function ApiManagementPage() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -57,7 +57,7 @@ export default function ApiManagementPage() {
             </div>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Create API Key
@@ -126,17 +126,17 @@ export default function ApiManagementPage() {
         </div>
 
         {/* API Documentation Link */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-6">
+        <div className="mt-8 bg-gray-50 border border-gray-200 rounded-xl p-6">
           <div className="flex items-start gap-4">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Key className="w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Key className="w-5 h-5 text-gray-800" />
             </div>
             <div>
               <h3 className="text-sm font-medium text-blue-900">API Documentation</h3>
-              <p className="text-sm text-blue-700 mt-1">
+              <p className="text-sm text-gray-900 mt-1">
                 Learn how to integrate TalentFlow into your applications. View our comprehensive API documentation for endpoints, authentication, and examples.
               </p>
-              <button className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-700">
+              <button className="mt-3 text-sm font-medium text-gray-800 hover:text-gray-900">
                 View Documentation →
               </button>
             </div>

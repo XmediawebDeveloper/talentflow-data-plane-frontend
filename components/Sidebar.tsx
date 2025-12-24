@@ -56,8 +56,8 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
   };
 
   const roleBadgeColors = {
-    tenant_admin: 'bg-purple-100 text-purple-700 border-purple-200',
-    recruiter: 'bg-blue-100 text-blue-700 border-blue-200',
+    tenant_admin: 'bg-gray-100 text-gray-900 border-gray-200',
+    recruiter: 'bg-gray-100 text-gray-900 border-gray-200',
     viewer: 'bg-gray-100 text-gray-700 border-gray-200',
   };
 
@@ -209,7 +209,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
       {/* Logo */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-md">
+          <div className="w-8 h-8 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg flex items-center justify-center shadow-md">
             <Sparkles className="w-5 h-5 text-white" />
           </div>
           <span className="text-xl font-bold text-gray-900">TalentFlow</span>
@@ -220,7 +220,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
       {user && (
         <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center shadow-sm">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center shadow-sm">
               <span className="text-sm font-medium">
                 {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
               </span>
@@ -245,7 +245,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
                   onClick={() => toggleSection(item.id)}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
                     isParentActive(item)
-                      ? 'text-blue-600 bg-blue-50'
+                      ? 'text-gray-800 bg-gray-50'
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
@@ -266,7 +266,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
                         onClick={() => onSectionChange(child.id)}
                         className={`w-full flex items-center gap-3 px-4 py-2 pl-6 text-sm transition-colors ${
                           isActive(child.id)
-                            ? 'text-blue-600 bg-blue-50 font-medium border-l-2 border-blue-600 -ml-px'
+                            ? 'text-gray-800 bg-gray-50 font-medium border-l-2 border-gray-800 -ml-px'
                             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                         }`}
                       >
@@ -282,7 +282,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
                 onClick={() => onSectionChange(item.id)}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${
                   isActive(item.id)
-                    ? 'text-blue-600 bg-blue-50 font-medium'
+                    ? 'text-gray-800 bg-gray-50 font-medium'
                     : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >

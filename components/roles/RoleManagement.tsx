@@ -393,9 +393,9 @@ export default function RoleManagement() {
                     }}
                     className={`w-5 h-5 rounded flex items-center justify-center border-2 ${
                       allSelected
-                        ? 'bg-blue-600 border-blue-600'
+                        ? 'bg-gray-800 border-gray-800'
                         : someSelected
-                        ? 'bg-blue-200 border-blue-600'
+                        ? 'bg-gray-200 border-gray-800'
                         : 'border-gray-300'
                     }`}
                   >
@@ -426,7 +426,7 @@ export default function RoleManagement() {
                         type="checkbox"
                         checked={selectedPermissions.includes(perm.id)}
                         onChange={() => handlePermissionToggle(perm.id, isEditing)}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-600"
+                        className="w-4 h-4 text-gray-800 rounded focus:ring-gray-600"
                       />
                       <span className="text-sm text-gray-700">
                         {getActionDisplayName(perm.action)}
@@ -443,12 +443,12 @@ export default function RoleManagement() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
               <Shield className="w-7 h-7 text-white" />
             </div>
             <div>
@@ -458,7 +458,7 @@ export default function RoleManagement() {
           </div>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-md"
           >
             <Plus className="w-5 h-5" />
             Create Role
@@ -472,7 +472,7 @@ export default function RoleManagement() {
           onClick={() => setActiveTab('roles')}
           className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'roles'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-gray-800 text-gray-800'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
@@ -485,7 +485,7 @@ export default function RoleManagement() {
           onClick={() => setActiveTab('audit')}
           className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'audit'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-gray-800 text-gray-800'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
@@ -507,7 +507,7 @@ export default function RoleManagement() {
                 placeholder="Search roles..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
               />
             </div>
           </div>
@@ -520,13 +520,13 @@ export default function RoleManagement() {
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <p className="text-sm text-gray-600">System Roles</p>
-              <p className="text-3xl font-semibold text-purple-600 mt-1">
+              <p className="text-3xl font-semibold text-gray-800 mt-1">
                 {roles.filter(r => r.is_system).length}
               </p>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <p className="text-sm text-gray-600">Custom Roles</p>
-              <p className="text-3xl font-semibold text-blue-600 mt-1">
+              <p className="text-3xl font-semibold text-gray-800 mt-1">
                 {roles.filter(r => !r.is_system).length}
               </p>
             </div>
@@ -540,7 +540,7 @@ export default function RoleManagement() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                <Loader2 className="w-8 h-8 text-gray-800 animate-spin" />
               </div>
             ) : (
               <table className="w-full">
@@ -576,8 +576,8 @@ export default function RoleManagement() {
                         <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                             role.is_system
-                              ? 'bg-gradient-to-br from-purple-600 to-purple-700'
-                              : 'bg-gradient-to-br from-blue-600 to-blue-700'
+                              ? 'bg-gradient-to-br from-gray-800 to-gray-900'
+                              : 'bg-gradient-to-br from-gray-800 to-gray-900'
                           }`}>
                             <Shield className="w-5 h-5 text-white" />
                           </div>
@@ -597,8 +597,8 @@ export default function RoleManagement() {
                       <td className="px-6 py-4">
                         <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
                           role.is_system
-                            ? 'bg-purple-100 text-purple-700'
-                            : 'bg-blue-100 text-blue-700'
+                            ? 'bg-gray-100 text-gray-900'
+                            : 'bg-gray-100 text-gray-900'
                         }`}>
                           {role.is_system ? 'System' : 'Custom'}
                         </span>
@@ -628,7 +628,7 @@ export default function RoleManagement() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleEditRole(role.id)}
-                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -694,7 +694,7 @@ export default function RoleManagement() {
                         ? 'bg-green-100 text-green-700'
                         : log.action.includes('deleted')
                         ? 'bg-red-100 text-red-700'
-                        : 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-900'
                     }`}>
                       {getAuditActionLabel(log.action)}
                     </span>
@@ -757,7 +757,7 @@ export default function RoleManagement() {
                     value={newRole.name}
                     onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
                     placeholder="e.g., Senior Recruiter"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
                 <div>
@@ -769,7 +769,7 @@ export default function RoleManagement() {
                     value={newRole.code}
                     onChange={(e) => setNewRole({ ...newRole, code: e.target.value })}
                     placeholder="e.g., senior_recruiter"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
               </div>
@@ -783,7 +783,7 @@ export default function RoleManagement() {
                   onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}
                   placeholder="Describe what this role can do..."
                   rows={2}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
 
@@ -798,7 +798,7 @@ export default function RoleManagement() {
                     max="100"
                     value={newRole.priority}
                     onChange={(e) => setNewRole({ ...newRole, priority: parseInt(e.target.value) || 0 })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                   <p className="text-xs text-gray-500 mt-1">Higher priority = more importance (0-100)</p>
                 </div>
@@ -809,7 +809,7 @@ export default function RoleManagement() {
                   <select
                     value={newRole.parent_role_id || ''}
                     onChange={(e) => setNewRole({ ...newRole, parent_role_id: e.target.value ? parseInt(e.target.value) : undefined })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                   >
                     <option value="">None</option>
                     {roles.map(role => (
@@ -838,7 +838,7 @@ export default function RoleManagement() {
               <button
                 onClick={handleCreateRole}
                 disabled={isSaving}
-                className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 flex items-center gap-2"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 Create Role
@@ -856,7 +856,7 @@ export default function RoleManagement() {
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-semibold text-gray-900">Edit Role</h2>
                 {editingRole.is_system && (
-                  <span className="px-2.5 py-1 text-xs bg-purple-100 text-purple-700 rounded-full flex items-center gap-1">
+                  <span className="px-2.5 py-1 text-xs bg-gray-100 text-gray-900 rounded-full flex items-center gap-1">
                     <Lock className="w-3 h-3" />
                     System Role
                   </span>
@@ -880,7 +880,7 @@ export default function RoleManagement() {
                     type="text"
                     value={editingRole.name}
                     onChange={(e) => setEditingRole({ ...editingRole, name: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                     disabled={editingRole.is_system}
                   />
                 </div>
@@ -905,7 +905,7 @@ export default function RoleManagement() {
                   value={editingRole.description || ''}
                   onChange={(e) => setEditingRole({ ...editingRole, description: e.target.value })}
                   rows={2}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
 
@@ -920,7 +920,7 @@ export default function RoleManagement() {
                     max="100"
                     value={editingRole.priority}
                     onChange={(e) => setEditingRole({ ...editingRole, priority: parseInt(e.target.value) || 0 })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
                 <div>
@@ -930,7 +930,7 @@ export default function RoleManagement() {
                   <select
                     value={editingRole.parent_role_id || ''}
                     onChange={(e) => setEditingRole({ ...editingRole, parent_role_id: e.target.value ? parseInt(e.target.value) : undefined })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                   >
                     <option value="">None</option>
                     {roles.filter(r => r.id !== editingRole.id).map(role => (
@@ -959,7 +959,7 @@ export default function RoleManagement() {
               <button
                 onClick={handleUpdateRole}
                 disabled={isSaving}
-                className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 flex items-center gap-2"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 Save Changes

@@ -120,8 +120,8 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
           {/* Candidate Info */}
           <div className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <User className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                <User className="w-5 h-5 text-gray-800" />
               </div>
               <div>
                 <h3 className="text-lg text-gray-900">{currentFile.candidateName}</h3>
@@ -167,35 +167,35 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
               </div>
 
               {/* New Resume */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <FileText className="w-4 h-4 text-blue-600" />
+                  <FileText className="w-4 h-4 text-gray-800" />
                   <span className="text-sm text-blue-900">New Resume (Uploading)</span>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
-                    <FileText className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" />
+                    <FileText className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
                     <div>
-                      <div className="text-xs text-blue-600">File Name</div>
+                      <div className="text-xs text-gray-800">File Name</div>
                       <div className="text-sm text-blue-900 truncate">{currentFile.fileName}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <Calendar className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" />
+                    <Calendar className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
                     <div>
-                      <div className="text-xs text-blue-600">Upload Date</div>
+                      <div className="text-xs text-gray-800">Upload Date</div>
                       <div className="text-sm text-blue-900">{currentFile.newResumeDate}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <FileText className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" />
+                    <FileText className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
                     <div>
-                      <div className="text-xs text-blue-600">File Size</div>
+                      <div className="text-xs text-gray-800">File Size</div>
                       <div className="text-sm text-blue-900">{currentFile.newResumeSize}</div>
                     </div>
                   </div>
                 </div>
-                <button className="w-full mt-3 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+                <button className="w-full mt-3 px-3 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors flex items-center justify-center gap-2">
                   <Eye className="w-4 h-4" />
                   Preview New
                 </button>
@@ -340,9 +340,9 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
           </div>
 
           {/* Warning */}
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
             <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+              <AlertCircle className="w-4 h-4 text-gray-800 mt-0.5 flex-shrink-0" />
               <div className="text-xs text-blue-900">
                 <strong>Note:</strong> All actions are fully audit logged. Overwriting or saving as a new version will consume 1 resume upload unit from your quota.
               </div>
@@ -369,7 +369,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
               <button
                 onClick={handleNext}
                 disabled={!hasResolvedCurrent}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isLastFile ? 'Complete & Upload' : 'Next File'}
                 {!isLastFile && <span className="text-xs opacity-75">({duplicateFiles.length - currentIndex - 1} remaining)</span>}

@@ -29,12 +29,12 @@ export default function RefundHistoryPage() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
               <RefreshCw className="w-7 h-7 text-white" />
             </div>
             <div>
@@ -53,7 +53,7 @@ export default function RefundHistoryPage() {
               placeholder="Search refunds..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
             />
           </div>
         </div>
@@ -81,7 +81,7 @@ export default function RefundHistoryPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {refund.date}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-medium">
                       {refund.invoiceId}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">

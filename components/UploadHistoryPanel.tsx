@@ -64,7 +64,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
           <div>
             <h2 className="text-2xl text-gray-900 mb-1">Upload History</h2>
             <p className="text-sm text-gray-600">
@@ -83,8 +83,8 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
         <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
           {filteredRecords.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full py-16">
-              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                <FileText className="w-10 h-10 text-blue-600" />
+              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <FileText className="w-10 h-10 text-gray-800" />
               </div>
               <h3 className="text-xl text-gray-900 mb-2">No Upload History</h3>
               <p className="text-sm text-gray-500 text-center max-w-md">
@@ -101,14 +101,14 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                   <div
                     key={record.id}
                     onClick={() => setSelectedRecord(record)}
-                    className="bg-white border border-gray-200 rounded-xl p-6 hover:border-blue-300 hover:shadow-lg transition-all cursor-pointer"
+                    className="bg-white border border-gray-200 rounded-xl p-6 hover:border-gray-300 hover:shadow-lg transition-all cursor-pointer"
                   >
                     {/* Header Row */}
                     <div className="flex items-start justify-between mb-5">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <FileText className="w-5 h-5 text-blue-600" />
+                          <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <FileText className="w-5 h-5 text-gray-800" />
                           </div>
                           <div>
                             <h3 className="text-gray-900 mb-1">{record.fileName}</h3>
@@ -129,7 +129,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                         <div className="text-right">
                           <div className={`text-3xl mb-1 ${
                             successRate === 100 ? 'text-green-600' :
-                            successRate >= 90 ? 'text-blue-600' :
+                            successRate >= 90 ? 'text-gray-800' :
                             successRate >= 70 ? 'text-yellow-600' :
                             'text-red-600'
                           }`}>
@@ -155,14 +155,14 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                       </div>
 
                       {/* Pending */}
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200 rounded-lg p-4">
+                      <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200 rounded-lg p-4">
                         <div className="flex items-center gap-2 mb-2">
-                          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                          <div className="w-8 h-8 bg-gray-700 rounded-lg flex items-center justify-center">
                             <RefreshCw className="w-4 h-4 text-white" />
                           </div>
                           <span className="text-xs text-gray-700">Pending</span>
                         </div>
-                        <div className="text-2xl text-blue-700">{record.pending}</div>
+                        <div className="text-2xl text-gray-900">{record.pending}</div>
                       </div>
 
                       {/* Error */}
@@ -188,14 +188,14 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                       </div>
 
                       {/* Versioned */}
-                      <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200 rounded-lg p-4">
+                      <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200 rounded-lg p-4">
                         <div className="flex items-center gap-2 mb-2">
-                          <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+                          <div className="w-8 h-8 bg-gray-700 rounded-lg flex items-center justify-center">
                             <GitBranch className="w-4 h-4 text-white" />
                           </div>
                           <span className="text-xs text-gray-700">Versioned</span>
                         </div>
-                        <div className="text-2xl text-purple-700">{record.versioned}</div>
+                        <div className="text-2xl text-gray-900">{record.versioned}</div>
                       </div>
 
                       {/* Total Files */}
@@ -220,7 +220,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                         <div 
                           className={`h-full transition-all ${
                             successRate === 100 ? 'bg-green-500' :
-                            successRate >= 90 ? 'bg-blue-500' :
+                            successRate >= 90 ? 'bg-gray-700' :
                             successRate >= 70 ? 'bg-yellow-500' :
                             'bg-red-500'
                           }`}
@@ -250,7 +250,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
             </p>
             <button
               onClick={onClose}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-sm"
             >
               Close
             </button>

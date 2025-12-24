@@ -201,14 +201,14 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
 
   const getMatchColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-blue-600';
+    if (score >= 70) return 'text-gray-800';
     if (score >= 50) return 'text-yellow-600';
     return 'text-gray-600';
   };
 
   const getMatchBgColor = (score: number) => {
     if (score >= 85) return 'bg-green-100 border-green-300';
-    if (score >= 70) return 'bg-blue-100 border-blue-300';
+    if (score >= 70) return 'bg-gray-100 border-gray-300';
     if (score >= 50) return 'bg-yellow-100 border-yellow-300';
     return 'bg-gray-100 border-gray-300';
   };
@@ -641,7 +641,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
             {/* AI Talent Match Button */}
             <button
               onClick={handleAITalentMatch}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-md hover:from-purple-700 hover:to-blue-700 transition-colors shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-md hover:from-purple-700 hover:to-gray-900 transition-colors shadow-sm"
             >
               <Sparkles className="w-4 h-4" />
               AI Talent Match
@@ -712,14 +712,14 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
 
         <button
           onClick={() => setShowApplicantsView(true)}
-          className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:border-blue-300 hover:shadow-md transition-all text-left group"
+          className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:border-gray-300 hover:shadow-md transition-all text-left group"
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600 group-hover:text-blue-600 transition-colors">Applicants</span>
-            <Users className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
+            <span className="text-sm text-gray-600 group-hover:text-gray-800 transition-colors">Applicants</span>
+            <Users className="w-5 h-5 text-gray-400 group-hover:text-gray-800 transition-colors" />
           </div>
-          <div className="text-3xl text-gray-900 group-hover:text-blue-600 transition-colors">{job.applicants || 0}</div>
-          <div className="text-xs text-gray-500 mt-1 group-hover:text-blue-600 transition-colors">Click to view all →</div>
+          <div className="text-3xl text-gray-900 group-hover:text-gray-800 transition-colors">{job.applicants || 0}</div>
+          <div className="text-xs text-gray-500 mt-1 group-hover:text-gray-800 transition-colors">Click to view all →</div>
         </button>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
@@ -736,20 +736,20 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
           disabled={aiMatchResults.length === 0}
           className={`rounded-lg shadow-sm border p-5 text-left transition-all ${
             aiMatchResults.length > 0
-              ? 'bg-gradient-to-br from-purple-50 to-blue-50 border-purple-200 hover:border-purple-300 hover:shadow-md group'
+              ? 'bg-gradient-to-br from-gray-50 to-gray-50 border-gray-200 hover:border-gray-300 hover:shadow-md group'
               : 'bg-white border-gray-200 cursor-not-allowed opacity-60'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-sm ${aiMatchResults.length > 0 ? 'text-purple-600 group-hover:text-purple-700' : 'text-gray-600'}`}>
+            <span className={`text-sm ${aiMatchResults.length > 0 ? 'text-gray-800 group-hover:text-gray-900' : 'text-gray-600'}`}>
               AI Matches
             </span>
-            <Sparkles className={`w-5 h-5 ${aiMatchResults.length > 0 ? 'text-purple-600 group-hover:text-purple-700' : 'text-gray-400'}`} />
+            <Sparkles className={`w-5 h-5 ${aiMatchResults.length > 0 ? 'text-gray-800 group-hover:text-gray-900' : 'text-gray-400'}`} />
           </div>
-          <div className={`text-3xl ${aiMatchResults.length > 0 ? 'text-purple-600 group-hover:text-purple-700' : 'text-gray-900'}`}>
+          <div className={`text-3xl ${aiMatchResults.length > 0 ? 'text-gray-800 group-hover:text-gray-900' : 'text-gray-900'}`}>
             {aiMatchResults.length > 0 ? aiMatchResults.length : '0'}
           </div>
-          <div className={`text-xs mt-1 ${aiMatchResults.length > 0 ? 'text-purple-600 group-hover:text-purple-700' : 'text-gray-500'}`}>
+          <div className={`text-xs mt-1 ${aiMatchResults.length > 0 ? 'text-gray-800 group-hover:text-gray-900' : 'text-gray-500'}`}>
             {aiMatchResults.length > 0 ? 'Click to view matches →' : 'Run AI Match first'}
           </div>
         </button>
@@ -762,53 +762,53 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
             onClick={() => setActiveTab('overview')}
             className={`px-6 py-4 text-sm transition-colors relative ${ 
               activeTab === 'overview' 
-                ? 'text-blue-600 bg-blue-50' 
+                ? 'text-gray-800 bg-gray-50' 
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             Overview
             {activeTab === 'overview' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800"></div>
             )}
           </button>
           <button
             onClick={() => setActiveTab('scored-resumes')}
             className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${ 
               activeTab === 'scored-resumes' 
-                ? 'text-blue-600 bg-blue-50' 
+                ? 'text-gray-800 bg-gray-50' 
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             Scored Resumes
             <span className={`px-2 py-0.5 rounded-full text-xs ${
               activeTab === 'scored-resumes'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-gray-800 text-white'
                 : 'bg-gray-200 text-gray-600'
             }`}>
               {mockScoredResumes.length}
             </span>
             {activeTab === 'scored-resumes' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800"></div>
             )}
           </button>
           <button
             onClick={() => setActiveTab('assessment-results')}
             className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${ 
               activeTab === 'assessment-results' 
-                ? 'text-blue-600 bg-blue-50' 
+                ? 'text-gray-800 bg-gray-50' 
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             Assessment Results
             <span className={`px-2 py-0.5 rounded-full text-xs ${
               activeTab === 'assessment-results'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-gray-800 text-white'
                 : 'bg-gray-200 text-gray-600'
             }`}>
               {mockAssessmentResults.length}
             </span>
             {activeTab === 'assessment-results' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800"></div>
             )}
           </button>
         </div>
@@ -818,11 +818,11 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
       {activeTab === 'ai-matches' && aiMatchResults.length > 0 && (
         <div className="mb-6">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-blue-50">
+            <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <Sparkles className="w-6 h-6 text-purple-600" />
+                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                    <Sparkles className="w-6 h-6 text-gray-800" />
                   </div>
                   <div>
                     <h2 className="text-gray-900">AI Talent Match Results</h2>
@@ -842,7 +842,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                       <div className="text-xs text-gray-600">Excellent</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-lg text-blue-600">
+                      <div className="text-lg text-gray-800">
                         {aiMatchResults.filter(r => r.matchScore >= 70 && r.matchScore < 85).length}
                       </div>
                       <div className="text-xs text-gray-600">Good</div>
@@ -876,7 +876,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                 {filteredAIResults.map((candidate, index) => (
                   <div
                     key={candidate.id}
-                    className="bg-white rounded-lg border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all p-5"
+                    className="bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all p-5"
                   >
                     <div className="flex items-start gap-4">
                       {/* Rank Badge */}
@@ -938,11 +938,11 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                         </div>
 
                         {/* AI Analysis */}
-                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3">
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
                           <div className="flex items-start gap-2">
-                            <Sparkles className="w-3.5 h-3.5 text-purple-600 mt-0.5 flex-shrink-0" />
+                            <Sparkles className="w-3.5 h-3.5 text-gray-800 mt-0.5 flex-shrink-0" />
                             <div>
-                              <div className="text-xs text-purple-700 mb-0.5">AI Analysis</div>
+                              <div className="text-xs text-gray-900 mb-0.5">AI Analysis</div>
                               <p className="text-xs text-gray-700">{candidate.matchReason}</p>
                             </div>
                           </div>
@@ -974,7 +974,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                             type="checkbox"
                             checked={selectedCandidates.includes(candidate.id)}
                             onChange={() => handleSelectCandidate(candidate.id)}
-                            className="w-4 h-4 text-purple-600 rounded"
+                            className="w-4 h-4 text-gray-800 rounded"
                           />
                           <span className="text-xs text-gray-600">Select candidate</span>
                         </div>
@@ -990,7 +990,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                     <span className="text-sm text-gray-600">
                       {selectedCandidates.length} candidate{selectedCandidates.length !== 1 ? 's' : ''} selected
                     </span>
-                    <button className="px-6 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm">
+                    <button className="px-6 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors shadow-sm">
                       Add as Applicants
                     </button>
                   </div>
@@ -1009,27 +1009,27 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
           {/* Complete Job Description */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             {/* JD Header */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 px-8 py-6">
+            <div className="bg-gradient-to-r from-gray-50 to-indigo-50 border-b border-gray-100 px-8 py-6">
               <h1 className="text-2xl text-gray-900 mb-2">{job.title}</h1>
               <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                 {job.department && (
                   <div className="flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4 text-blue-600" />
+                    <Building2 className="w-4 h-4 text-gray-800" />
                     <span>{job.department}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-blue-600" />
+                  <MapPin className="w-4 h-4 text-gray-800" />
                   <span>{job.location}</span>
                 </div>
                 {job.experience && (
                   <div className="flex items-center gap-1.5">
-                    <Briefcase className="w-4 h-4 text-blue-600" />
+                    <Briefcase className="w-4 h-4 text-gray-800" />
                     <span>{job.experience}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-1.5">
-                  <Calendar className="w-4 h-4 text-blue-600" />
+                  <Calendar className="w-4 h-4 text-gray-800" />
                   <span>Posted {job.daysActive} days ago</span>
                 </div>
               </div>
@@ -1040,7 +1040,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
               <div className="space-y-8">
                 {/* About the Role */}
                 <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
+                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-gray-800 inline-block">
                     About the Role
                   </h2>
                   <div className="mt-4 space-y-3 text-gray-700 leading-relaxed">
@@ -1058,28 +1058,28 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
 
                 {/* Key Responsibilities */}
                 <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
+                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-gray-800 inline-block">
                     Key Responsibilities
                   </h2>
                   <ul className="mt-4 space-y-3">
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Lead technical design and implementation of solutions</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Collaborate with team members on complex projects</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Mentor junior team members and conduct code reviews</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Contribute to architectural decisions and best practices</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Ensure code quality, performance, and scalability</span>
                     </li>
                   </ul>
@@ -1088,14 +1088,14 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                 {/* Required Skills */}
                 {job.skills && job.skills.length > 0 && (
                   <div>
-                    <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
+                    <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-gray-800 inline-block">
                       Required Skills
                     </h2>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {job.skills.map((skill, index) => (
                         <span
                           key={index}
-                          className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md text-sm border border-blue-200"
+                          className="px-3 py-1.5 bg-gray-100 text-gray-900 rounded-md text-sm border border-gray-200"
                         >
                           {skill}
                         </span>
@@ -1106,28 +1106,28 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
 
                 {/* Qualifications */}
                 <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
+                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-gray-800 inline-block">
                     Qualifications
                   </h2>
                   <ul className="mt-4 space-y-3">
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                       <span>{job.experience || 'Relevant years of'} professional experience</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Strong proficiency in required technologies</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Excellent problem-solving and communication skills</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Bachelor's degree in Computer Science or related field (or equivalent experience)</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Ability to work in a {job.location.toLowerCase()} environment</span>
                     </li>
                   </ul>
@@ -1135,7 +1135,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
 
                 {/* What We Offer */}
                 <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
+                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-gray-800 inline-block">
                     What We Offer
                   </h2>
                   <ul className="mt-4 space-y-3">
@@ -1185,7 +1185,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                     onNavigateToAITalentMatch(job.id);
                   }
                 }}
-                className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 rounded-md transition-all shadow-sm text-left flex items-center justify-between"
+                className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-gray-800 to-gray-800 text-white hover:from-purple-700 hover:to-gray-900 rounded-md transition-all shadow-sm text-left flex items-center justify-between"
               >
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4" />
@@ -1216,14 +1216,14 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                 </div>
               </div>
               <div className="flex gap-3">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                <div className="w-2 h-2 bg-gray-700 rounded-full mt-1.5 flex-shrink-0"></div>
                 <div>
                   <div className="text-sm text-gray-900">Job posting shared</div>
                   <div className="text-xs text-gray-500">5 hours ago</div>
                 </div>
               </div>
               <div className="flex gap-3">
-                <div className="w-2 h-2 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                <div className="w-2 h-2 bg-gray-700 rounded-full mt-1.5 flex-shrink-0"></div>
                 <div>
                   <div className="text-sm text-gray-900">Match score updated</div>
                   <div className="text-xs text-gray-500">1 day ago</div>

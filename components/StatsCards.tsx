@@ -11,8 +11,8 @@ export default function StatsCards({ totalResumes, resumesThisMonth, folderCount
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-            <FileText className="w-5 h-5 text-blue-600" />
+          <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+            <FileText className="w-5 h-5 text-gray-800" />
           </div>
           <span className="text-sm text-gray-500">Total Resumes</span>
         </div>
@@ -36,8 +36,8 @@ export default function StatsCards({ totalResumes, resumesThisMonth, folderCount
 
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-            <Folder className="w-5 h-5 text-purple-600" />
+          <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+            <Folder className="w-5 h-5 text-gray-800" />
           </div>
           <span className="text-sm text-gray-500">Folders</span>
         </div>

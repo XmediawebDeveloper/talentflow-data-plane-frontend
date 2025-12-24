@@ -111,7 +111,7 @@ export default function JDListPage() {
           </div>
           <button
             onClick={() => router.push('/recruitment/jd-creation')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium"
           >
             <Plus className="w-4 h-4" />
             Create New JD
@@ -128,7 +128,7 @@ export default function JDListPage() {
                 placeholder="Search job descriptions..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -136,7 +136,7 @@ export default function JDListPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white"
               >
                 <option value="all">All Status</option>
                 <option value="draft">Draft</option>
@@ -150,7 +150,7 @@ export default function JDListPage() {
         {/* JD List */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
             <span className="ml-3 text-gray-600">Loading job descriptions...</span>
           </div>
         ) : jds.length === 0 ? (
@@ -165,7 +165,7 @@ export default function JDListPage() {
             {!searchQuery && statusFilter === 'all' && (
               <button
                 onClick={() => router.push('/recruitment/jd-creation')}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
               >
                 <Plus className="w-4 h-4" />
                 Create New JD

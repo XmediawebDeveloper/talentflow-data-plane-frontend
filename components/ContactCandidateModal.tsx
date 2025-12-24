@@ -86,14 +86,14 @@ export default function ContactCandidateModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 flex items-center justify-between flex-shrink-0">
+        <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
               <Mail className="w-5 h-5 text-white" />
             </div>
             <div>
               <h2 className="text-white">Contact Candidate</h2>
-              <p className="text-blue-100 text-sm">{candidateName}</p>
+              <p className="text-gray-100 text-sm">{candidateName}</p>
             </div>
           </div>
           <button
@@ -111,7 +111,7 @@ export default function ContactCandidateModal({
               onClick={() => setContactMethod('email')}
               className={`px-6 py-3 text-sm font-medium transition-colors flex items-center gap-2 ${
                 contactMethod === 'email'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                  ? 'text-gray-800 border-b-2 border-gray-800 bg-white'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -122,7 +122,7 @@ export default function ContactCandidateModal({
               onClick={() => setContactMethod('phone')}
               className={`px-6 py-3 text-sm font-medium transition-colors flex items-center gap-2 ${
                 contactMethod === 'phone'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                  ? 'text-gray-800 border-b-2 border-gray-800 bg-white'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -133,7 +133,7 @@ export default function ContactCandidateModal({
               onClick={() => setContactMethod('schedule')}
               className={`px-6 py-3 text-sm font-medium transition-colors flex items-center gap-2 ${
                 contactMethod === 'schedule'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                  ? 'text-gray-800 border-b-2 border-gray-800 bg-white'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -156,7 +156,7 @@ export default function ContactCandidateModal({
                 <select
                   value={emailTemplate}
                   onChange={(e) => handleTemplateChange(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
                   <option value="custom">Custom Email</option>
                   <option value="interview">Interview Invitation</option>
@@ -184,7 +184,7 @@ export default function ContactCandidateModal({
                   type="text"
                   value={emailSubject}
                   onChange={(e) => setEmailSubject(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   placeholder="Email subject"
                 />
               </div>
@@ -198,7 +198,7 @@ export default function ContactCandidateModal({
                   value={emailBody}
                   onChange={(e) => setEmailBody(e.target.value)}
                   rows={12}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none"
                   placeholder="Type your message here..."
                 />
               </div>
@@ -209,9 +209,9 @@ export default function ContactCandidateModal({
           {contactMethod === 'phone' && (
             <div className="space-y-4">
               {/* Phone Number */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-2">
-                  <Phone className="w-5 h-5 text-blue-600" />
+                  <Phone className="w-5 h-5 text-gray-800" />
                   <span className="text-sm font-medium text-gray-700">Phone Number</span>
                 </div>
                 <div className="text-xl font-bold text-gray-900">{candidatePhone}</div>
@@ -226,7 +226,7 @@ export default function ContactCandidateModal({
                   value={phoneNotes}
                   onChange={(e) => setPhoneNotes(e.target.value)}
                   rows={8}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none"
                   placeholder="Add any notes or talking points for the call..."
                 />
               </div>
@@ -248,9 +248,9 @@ export default function ContactCandidateModal({
           {contactMethod === 'schedule' && (
             <div className="space-y-4">
               {/* Interview Details */}
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <Calendar className="w-5 h-5 text-purple-600" />
+                  <Calendar className="w-5 h-5 text-gray-800" />
                   <span className="text-sm font-medium text-gray-700">Interview Details</span>
                 </div>
                 <div className="text-sm text-gray-700">
@@ -270,7 +270,7 @@ export default function ContactCandidateModal({
                   type="date"
                   value={scheduleDate}
                   onChange={(e) => setScheduleDate(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   min={new Date().toISOString().split('T')[0]}
                 />
               </div>
@@ -284,7 +284,7 @@ export default function ContactCandidateModal({
                   type="time"
                   value={scheduleTime}
                   onChange={(e) => setScheduleTime(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                 />
               </div>
 
@@ -293,7 +293,7 @@ export default function ContactCandidateModal({
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Interview Type
                 </label>
-                <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500">
                   <option>Video Call (Zoom/Teams)</option>
                   <option>Phone Interview</option>
                   <option>In-Person Interview</option>
@@ -308,7 +308,7 @@ export default function ContactCandidateModal({
                 </label>
                 <textarea
                   rows={4}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none"
                   placeholder="Any additional information for the candidate..."
                 />
               </div>
@@ -318,7 +318,7 @@ export default function ContactCandidateModal({
                 <input
                   type="checkbox"
                   id="sendConfirmation"
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
                   defaultChecked
                 />
                 <label htmlFor="sendConfirmation" className="text-sm text-gray-700">
@@ -342,7 +342,7 @@ export default function ContactCandidateModal({
             <button
               onClick={handleSendEmail}
               disabled={isSending}
-              className="px-6 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSending ? (
                 <>
@@ -370,7 +370,7 @@ export default function ContactCandidateModal({
             <button
               onClick={handleScheduleCall}
               disabled={isSending}
-              className="px-6 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSending ? (
                 <>

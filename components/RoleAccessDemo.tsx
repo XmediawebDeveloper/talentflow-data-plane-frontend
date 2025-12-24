@@ -23,13 +23,13 @@ export default function RoleAccessDemo({ user }: RoleAccessDemoProps) {
   ];
 
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
       <div className="flex items-start gap-3">
-        <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+        <Shield className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
         <div className="flex-1">
           <h4 className="text-blue-900 mb-2 flex items-center gap-2">
             Role-Based Access Control
-            <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded">
+            <span className="px-2 py-0.5 bg-gray-800 text-white text-xs rounded">
               {roleLabels[user.role]}
             </span>
           </h4>
@@ -55,7 +55,7 @@ export default function RoleAccessDemo({ user }: RoleAccessDemoProps) {
             })}
           </div>
           
-          <div className="mt-3 flex items-start gap-2 text-xs text-blue-700">
+          <div className="mt-3 flex items-start gap-2 text-xs text-gray-900">
             <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
             <span>
               Try logging in with different demo accounts to see how permissions change. Contact your Tenant Admin to request additional permissions.

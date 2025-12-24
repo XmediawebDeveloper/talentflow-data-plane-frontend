@@ -51,21 +51,21 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
 
   const getScoreColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-blue-600';
+    if (score >= 70) return 'text-gray-800';
     if (score >= 60) return 'text-yellow-600';
     return 'text-red-600';
   };
 
   const getScoreBgColor = (score: number) => {
     if (score >= 85) return 'bg-green-100 border-green-300 text-green-700';
-    if (score >= 70) return 'bg-blue-100 border-blue-300 text-blue-700';
+    if (score >= 70) return 'bg-gray-100 border-gray-300 text-gray-900';
     if (score >= 60) return 'bg-yellow-100 border-yellow-300 text-yellow-700';
     return 'bg-red-100 border-red-300 text-red-700';
   };
 
   const getProgressBarColor = (score: number) => {
     if (score >= 85) return 'bg-green-600';
-    if (score >= 70) return 'bg-blue-600';
+    if (score >= 70) return 'bg-gray-800';
     if (score >= 60) return 'bg-yellow-600';
     return 'bg-red-600';
   };
@@ -84,10 +84,10 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-b-2 border-blue-200 p-6 flex-shrink-0">
+        <div className="bg-gradient-to-r from-gray-50 to-gray-50 border-b-2 border-gray-200 p-6 flex-shrink-0">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-4 flex-1">
-              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
                 <Target className="w-8 h-8 text-white" />
               </div>
               <div className="flex-1">
@@ -95,7 +95,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
                 <p className="text-gray-700 mb-2 font-medium">{resume.title || 'Candidate'}</p>
                 <div className="flex items-center gap-4 text-sm text-gray-600">
                   <span className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-gray-200">
-                    <Mail className="w-4 h-4 text-blue-600" />
+                    <Mail className="w-4 h-4 text-gray-800" />
                     <span className="text-gray-900">{resume.email}</span>
                   </span>
                   <span className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-gray-200">
@@ -114,12 +114,12 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
           </div>
 
           {/* Score Display */}
-          <div className="bg-white rounded-lg p-5 border-2 border-blue-200 shadow-sm">
+          <div className="bg-white rounded-lg p-5 border-2 border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm text-gray-600 mb-2 font-medium">Overall Match Score</div>
                 <div className="flex items-center gap-3">
-                  <div className="text-5xl font-bold text-blue-600">{resume.scorePercentage}%</div>
+                  <div className="text-5xl font-bold text-gray-800">{resume.scorePercentage}%</div>
                   <span className={`px-4 py-2 rounded-lg text-sm font-medium border-2 ${getMatchStatusColor(resume.matchStatus)}`}>
                     {resume.matchStatus}
                   </span>
@@ -148,7 +148,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
               onClick={() => setActiveTab('overview')}
               className={`px-6 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'overview'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                  ? 'text-gray-800 border-b-2 border-gray-800 bg-white'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -158,7 +158,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
               onClick={() => setActiveTab('comparison')}
               className={`px-6 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'comparison'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                  ? 'text-gray-800 border-b-2 border-gray-800 bg-white'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -168,7 +168,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
               onClick={() => setActiveTab('scoretable')}
               className={`px-6 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'scoretable'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                  ? 'text-gray-800 border-b-2 border-gray-800 bg-white'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -178,7 +178,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
               onClick={() => setActiveTab('personalinfo')}
               className={`px-6 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'personalinfo'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                  ? 'text-gray-800 border-b-2 border-gray-800 bg-white'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -192,9 +192,9 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* AI Analysis */}
-              <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-lg p-6">
+              <div className="bg-gradient-to-r from-gray-50 to-gray-50 border-2 border-gray-200 rounded-lg p-6">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Zap className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex-1">
@@ -291,19 +291,19 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
                       <h4 className="text-sm font-medium text-gray-700 mb-3">What We're Looking For</h4>
                       <ul className="space-y-2 text-sm text-gray-600">
                         <li className="flex items-start gap-2">
-                          <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                          <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                           <span>Senior-level experience (5+ years)</span>
                         </li>
                         <li className="flex items-start gap-2">
-                          <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                          <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                           <span>Strong technical skills in required areas</span>
                         </li>
                         <li className="flex items-start gap-2">
-                          <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                          <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                           <span>Proven track record in similar roles</span>
                         </li>
                         <li className="flex items-start gap-2">
-                          <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                          <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
                           <span>Relevant education and certifications</span>
                         </li>
                       </ul>
@@ -346,7 +346,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
                 resume.scorePercentage >= 85
                   ? 'bg-green-50 border-green-300'
                   : resume.scorePercentage >= 70
-                  ? 'bg-blue-50 border-blue-300'
+                  ? 'bg-gray-50 border-gray-300'
                   : resume.scorePercentage >= 60
                   ? 'bg-yellow-50 border-yellow-300'
                   : 'bg-red-50 border-red-300'
@@ -396,13 +396,13 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
               {/* Work Experience */}
               <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-6">
-                  <Briefcase className="w-5 h-5 text-blue-600" />
+                  <Briefcase className="w-5 h-5 text-gray-800" />
                   <h2 className="text-gray-900">Work Experience</h2>
                 </div>
                 <div className="space-y-6">
                   {/* Current Position */}
-                  <div className="relative pl-6 pb-6 border-l-2 border-blue-200">
-                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-blue-600 border-2 border-white"></div>
+                  <div className="relative pl-6 pb-6 border-l-2 border-gray-200">
+                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gray-800 border-2 border-white"></div>
                     <div className="mb-3">
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -420,7 +420,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
                               <Calendar className="w-3 h-3" />
                               Jan 2020 - Present
                             </span>
-                            <span className="text-blue-600">({resume.experience || 'N/A'})</span>
+                            <span className="text-gray-800">({resume.experience || 'N/A'})</span>
                           </div>
                         </div>
                       </div>
@@ -449,8 +449,8 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
                   </div>
                   
                   {/* Previous Position */}
-                  <div className="relative pl-6 pb-0 border-l-2 border-blue-200">
-                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-blue-400 border-2 border-white"></div>
+                  <div className="relative pl-6 pb-0 border-l-2 border-gray-200">
+                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gray-600 border-2 border-white"></div>
                     <div className="mb-3">
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -468,7 +468,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
                               <Calendar className="w-3 h-3" />
                               Mar 2018 - Dec 2019
                             </span>
-                            <span className="text-blue-600">(1 year 10 months)</span>
+                            <span className="text-gray-800">(1 year 10 months)</span>
                           </div>
                         </div>
                       </div>
@@ -495,11 +495,11 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
               {/* Education */}
               <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-6">
-                  <GraduationCap className="w-5 h-5 text-purple-600" />
+                  <GraduationCap className="w-5 h-5 text-gray-800" />
                   <h2 className="text-gray-900">Education</h2>
                 </div>
                 <div className="space-y-4">
-                  <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                     <h3 className="text-gray-900 mb-2">{resume.education || 'Bachelor of Science in Computer Science'}</h3>
                     <div className="text-gray-700 mb-1">
                       {resume.education?.split(',')[1]?.trim() || 'University'}
@@ -513,8 +513,8 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
                         <Calendar className="w-3 h-3" />
                         2016
                       </span>
-                      <span className="text-purple-700">GPA: 3.8/4.0</span>
-                      <span className="px-2 py-0.5 bg-purple-600 text-white rounded text-xs">
+                      <span className="text-gray-900">GPA: 3.8/4.0</span>
+                      <span className="px-2 py-0.5 bg-gray-800 text-white rounded text-xs">
                         Magna Cum Laude
                       </span>
                     </div>
@@ -545,7 +545,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
                             <div
                               className={`h-2 rounded-full ${
                                 level >= 90 ? 'bg-green-600' :
-                                level >= 75 ? 'bg-blue-600' :
+                                level >= 75 ? 'bg-gray-800' :
                                 level >= 60 ? 'bg-yellow-600' :
                                 'bg-orange-600'
                               }`}
@@ -604,19 +604,19 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
               {/* Languages */}
               <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-6">
-                  <Languages className="w-5 h-5 text-indigo-600" />
+                  <Languages className="w-5 h-5 text-gray-800" />
                   <h2 className="text-gray-900">Languages</h2>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-center">
+                  <div className="p-4 bg-gray-50 border border-indigo-200 rounded-lg text-center">
                     <div className="text-gray-900 mb-1">English</div>
                     <div className="text-sm text-indigo-700">Native</div>
                   </div>
-                  <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-center">
+                  <div className="p-4 bg-gray-50 border border-indigo-200 rounded-lg text-center">
                     <div className="text-gray-900 mb-1">Spanish</div>
                     <div className="text-sm text-indigo-700">Professional Working</div>
                   </div>
-                  <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-center">
+                  <div className="p-4 bg-gray-50 border border-indigo-200 rounded-lg text-center">
                     <div className="text-gray-900 mb-1">French</div>
                     <div className="text-sm text-indigo-700">Elementary</div>
                   </div>
@@ -638,7 +638,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
             </button>
             <button
               onClick={handleDownloadScorecard}
-              className="px-4 py-2 text-sm text-blue-700 border border-blue-300 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors flex items-center gap-2"
+              className="px-4 py-2 text-sm text-gray-900 border border-gray-300 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
               Download Scorecard
@@ -653,7 +653,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
             </button>
             <button
               onClick={() => setShowContactModal(true)}
-              className="px-6 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+              className="px-6 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors flex items-center gap-2"
             >
               <Mail className="w-4 h-4" />
               Contact Candidate

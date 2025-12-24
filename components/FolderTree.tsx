@@ -65,7 +65,7 @@ export default function FolderTree({
         <div
           className={`group w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer ${
             isSelected
-              ? 'bg-blue-50 text-blue-600'
+              ? 'bg-gray-50 text-gray-800'
               : 'text-gray-700 hover:bg-gray-100'
           }`}
           style={{ paddingLeft: `${12 + level * 16}px` }}
@@ -100,8 +100,8 @@ export default function FolderTree({
                 e.stopPropagation();
                 setShowFolderMenu(hasMenu ? null : folder.id);
               }}
-              className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-blue-100 text-blue-600 transition-opacity ${
-                hasMenu ? 'opacity-100 bg-blue-100' : ''
+              className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-gray-100 text-gray-800 transition-opacity ${
+                hasMenu ? 'opacity-100 bg-gray-100' : ''
               }`}
               title="Folder actions"
             >
@@ -123,7 +123,7 @@ export default function FolderTree({
                 }
                 setShowFolderMenu(null);
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-800 transition-colors flex items-center gap-2"
             >
               <Upload className="w-4 h-4" />
               Upload to Folder
@@ -135,7 +135,7 @@ export default function FolderTree({
                 setIsCreatingFolder(false);
                 setShowFolderMenu(null);
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-800 transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Create Subfolder
@@ -158,12 +158,12 @@ export default function FolderTree({
               }}
               placeholder="Sub-folder name..."
               autoFocus
-              className="w-full px-2 py-1 text-xs border border-blue-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-600"
+              className="w-full px-2 py-1 text-xs border border-gray-800 rounded focus:outline-none focus:ring-1 focus:ring-gray-600"
             />
             <div className="flex gap-1.5 mt-1.5">
               <button
                 onClick={() => handleCreateFolder(folder.id)}
-                className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                className="flex-1 px-2 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-900"
               >
                 Create
               </button>
@@ -198,7 +198,7 @@ export default function FolderTree({
         <h3 className="text-gray-900">Folders</h3>
         <button
           onClick={() => setIsCreatingFolder(true)}
-          className="text-blue-600 hover:text-blue-700 text-sm flex items-center gap-1"
+          className="text-gray-800 hover:text-gray-900 text-sm flex items-center gap-1"
         >
           <Plus className="w-4 h-4" />
           New
@@ -220,12 +220,12 @@ export default function FolderTree({
             }}
             placeholder="Folder name..."
             autoFocus
-            className="w-full px-3 py-1.5 text-sm border border-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+            className="w-full px-3 py-1.5 text-sm border border-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
           />
           <div className="flex gap-2 mt-2">
             <button
               onClick={handleCreateFolder}
-              className="flex-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="flex-1 px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-900"
             >
               Create
             </button>

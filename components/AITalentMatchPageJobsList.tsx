@@ -91,7 +91,7 @@ export default function AITalentMatchPageJobsList({
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-purple-50 via-blue-50 to-white">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-blue-50 to-white">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-4 mb-4">
@@ -104,7 +104,7 @@ export default function AITalentMatchPageJobsList({
               <ArrowRight className="w-5 h-5 text-gray-700 rotate-180" />
             </button>
           )}
-          <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+          <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-lg">
             <Sparkles className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1">
@@ -134,14 +134,14 @@ export default function AITalentMatchPageJobsList({
             onClick={() => setShowFilters(!showFilters)}
             className={`px-5 py-2.5 rounded-lg border-2 transition-all flex items-center gap-2 font-medium ${
               activeFiltersCount > 0
-                ? 'bg-purple-50 border-purple-600 text-purple-700 shadow-sm'
+                ? 'bg-gray-50 border-gray-800 text-gray-900 shadow-sm'
                 : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
             }`}
           >
             <Filter className="w-5 h-5" />
             Filters
             {activeFiltersCount > 0 && (
-              <span className="px-2 py-0.5 bg-purple-600 text-white rounded-full text-xs font-medium">
+              <span className="px-2 py-0.5 bg-gray-800 text-white rounded-full text-xs font-medium">
                 {activeFiltersCount}
               </span>
             )}
@@ -149,7 +149,7 @@ export default function AITalentMatchPageJobsList({
           </button>
 
           <div className="text-sm text-gray-700 bg-gray-100 px-4 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
-            <span className="text-purple-600">{filteredJobs.length}</span> of {publishedJobs.length} jobs
+            <span className="text-gray-800">{filteredJobs.length}</span> of {publishedJobs.length} jobs
           </div>
         </div>
 
@@ -245,7 +245,7 @@ export default function AITalentMatchPageJobsList({
                   className={`bg-white rounded-xl border-2 transition-all p-6 ${
                     selectedJobs.includes(job.id)
                       ? 'border-purple-400 shadow-md'
-                      : 'border-gray-200 hover:border-purple-300 hover:shadow-lg'
+                      : 'border-gray-200 hover:border-gray-300 hover:shadow-lg'
                   }`}
                 >
                   <div className="flex items-start gap-6">
@@ -255,14 +255,14 @@ export default function AITalentMatchPageJobsList({
                         type="checkbox"
                         checked={selectedJobs.includes(job.id)}
                         onChange={() => handleSelectJob(job.id)}
-                        className="w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer"
+                        className="w-5 h-5 text-gray-800 rounded border-gray-300 focus:ring-purple-500 cursor-pointer"
                       />
                     </div>
                     
                     {/* Job Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start gap-4 mb-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
+                        <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
                           <Briefcase className="w-6 h-6 text-white" />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -280,7 +280,7 @@ export default function AITalentMatchPageJobsList({
                                 {job.department}
                               </span>
                             )}
-                            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-100 border border-purple-300 rounded-full text-purple-700 font-medium">
+                            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 border border-gray-300 rounded-full text-gray-900 font-medium">
                               <User className="w-4 h-4" />
                               {job.applicants} applicants
                             </span>
@@ -317,7 +317,7 @@ export default function AITalentMatchPageJobsList({
                               </div>
                             </div>
                           </div>
-                          <div className="px-3 py-1.5 bg-blue-100 border border-blue-300 rounded-lg text-xs font-medium text-blue-700">
+                          <div className="px-3 py-1.5 bg-gray-100 border border-gray-300 rounded-lg text-xs font-medium text-gray-900">
                             Matched {jobHistory.length}x
                           </div>
                         </div>
@@ -328,7 +328,7 @@ export default function AITalentMatchPageJobsList({
                     <div className="flex-shrink-0 flex items-center justify-center">
                       <button 
                         onClick={() => onSelectJob(job.id)}
-                        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all font-medium shadow-md group-hover:shadow-lg flex items-center gap-2 whitespace-nowrap"
+                        className="px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-purple-700 hover:to-gray-900 transition-all font-medium shadow-md group-hover:shadow-lg flex items-center gap-2 whitespace-nowrap"
                       >
                         <Sparkles className="w-5 h-5" />
                         Run AI Match
@@ -344,8 +344,8 @@ export default function AITalentMatchPageJobsList({
       ) : publishedJobs.length === 0 ? (
         <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-16 text-center">
           <div className="max-w-md mx-auto">
-            <div className="w-20 h-20 mx-auto mb-5 bg-gradient-to-br from-purple-100 to-blue-100 rounded-full flex items-center justify-center">
-              <Briefcase className="w-10 h-10 text-purple-600" />
+            <div className="w-20 h-20 mx-auto mb-5 bg-gradient-to-br from-gray-100 to-gray-100 rounded-full flex items-center justify-center">
+              <Briefcase className="w-10 h-10 text-gray-800" />
             </div>
             <h3 className="text-xl text-gray-900 mb-2">No Published Jobs Available</h3>
             <p className="text-gray-600 mb-6">
@@ -356,8 +356,8 @@ export default function AITalentMatchPageJobsList({
       ) : (
         <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-16 text-center">
           <div className="max-w-md mx-auto">
-            <div className="w-20 h-20 mx-auto mb-5 bg-gradient-to-br from-purple-100 to-blue-100 rounded-full flex items-center justify-center">
-              <Search className="w-10 h-10 text-purple-600" />
+            <div className="w-20 h-20 mx-auto mb-5 bg-gradient-to-br from-gray-100 to-gray-100 rounded-full flex items-center justify-center">
+              <Search className="w-10 h-10 text-gray-800" />
             </div>
             <h3 className="text-xl text-gray-900 mb-2">No Results Found</h3>
             <p className="text-gray-600 mb-6">
@@ -370,7 +370,7 @@ export default function AITalentMatchPageJobsList({
                 setLocationFilter('');
                 setEmploymentTypeFilter('');
               }}
-              className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-medium shadow-sm hover:shadow-md inline-flex items-center gap-2"
+              className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium shadow-sm hover:shadow-md inline-flex items-center gap-2"
             >
               <X className="w-5 h-5" />
               Clear All Filters
@@ -380,27 +380,27 @@ export default function AITalentMatchPageJobsList({
       )}
 
       {/* How It Works */}
-      <div className="mt-6 bg-purple-50 border border-purple-200 rounded-xl p-5 flex items-start gap-3">
-        <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+      <div className="mt-6 bg-gray-50 border border-gray-200 rounded-xl p-5 flex items-start gap-3">
+        <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
           <Sparkles className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1">
           <h4 className="text-gray-900 font-medium mb-1">How AI Talent Match Works</h4>
           <ul className="text-sm text-gray-700 space-y-1.5">
             <li className="flex items-start gap-2">
-              <span className="text-purple-600 mt-0.5">•</span>
+              <span className="text-gray-800 mt-0.5">•</span>
               <span><strong>Step 1:</strong> Click on any job card above to select it</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-purple-600 mt-0.5">•</span>
+              <span className="text-gray-800 mt-0.5">•</span>
               <span><strong>Step 2:</strong> AI analyzes all candidates in the database against job requirements</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-purple-600 mt-0.5">•</span>
+              <span className="text-gray-800 mt-0.5">•</span>
               <span><strong>Step 3:</strong> Review matched candidates ranked by AI match score (1 unit per match)</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-purple-600 mt-0.5">•</span>
+              <span className="text-gray-800 mt-0.5">•</span>
               <span><strong>Step 4:</strong> Select top candidates and submit them for detailed scoring</span>
             </li>
           </ul>

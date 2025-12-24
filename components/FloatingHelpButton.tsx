@@ -32,7 +32,7 @@ export default function FloatingHelpButton({ onNavigateToSupport }: FloatingHelp
                 }}
                 className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center gap-3"
               >
-                <MessageSquare className="w-5 h-5 text-blue-600" />
+                <MessageSquare className="w-5 h-5 text-gray-800" />
                 <div>
                   <div className="text-sm text-gray-900">Quick Support</div>
                   <div className="text-xs text-gray-500">Open support panel</div>
@@ -46,7 +46,7 @@ export default function FloatingHelpButton({ onNavigateToSupport }: FloatingHelp
                 }}
                 className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center gap-3"
               >
-                <ExternalLink className="w-5 h-5 text-blue-600" />
+                <ExternalLink className="w-5 h-5 text-gray-800" />
                 <div>
                   <div className="text-sm text-gray-900">Support Center</div>
                   <div className="text-xs text-gray-500">Go to full page</div>
@@ -59,7 +59,7 @@ export default function FloatingHelpButton({ onNavigateToSupport }: FloatingHelp
         {/* Main Button */}
         <button
           onClick={() => setShowMenu(!showMenu)}
-          className="w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all flex items-center justify-center group relative"
+          className="w-14 h-14 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-900 hover:shadow-xl transition-all flex items-center justify-center group relative"
           title="Get Help & Support"
         >
           <HelpCircle className="w-6 h-6" />

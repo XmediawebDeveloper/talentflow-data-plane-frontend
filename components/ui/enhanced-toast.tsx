@@ -142,9 +142,9 @@ export const toast = {
     
     sonnerToast.custom(
       (t) => (
-        <div className="bg-white rounded-lg shadow-lg border border-blue-200 p-4 flex items-start gap-3 min-w-[320px] max-w-md animate-scale-in">
-          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-            <Info className="w-4 h-4 text-blue-600" />
+        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-4 flex items-start gap-3 min-w-[320px] max-w-md animate-scale-in">
+          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
+            <Info className="w-4 h-4 text-gray-800" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-medium text-gray-900 text-sm">{config.title}</div>
@@ -157,7 +157,7 @@ export const toast = {
                   config.action?.onClick();
                   sonnerToast.dismiss(t);
                 }}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium mt-2 transition-colors"
+                className="text-sm text-gray-800 hover:text-gray-900 font-medium mt-2 transition-colors"
               >
                 {config.action.label}
               </button>

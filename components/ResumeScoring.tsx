@@ -157,7 +157,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
   const getMatchColor = (type: string) => {
     switch (type) {
       case 'excellent': return 'bg-green-100 text-green-800 border-green-200';
-      case 'good': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'good': return 'bg-gray-100 text-blue-800 border-gray-200';
       case 'fair': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'poor': return 'bg-red-100 text-red-800 border-red-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -167,7 +167,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
   const getScoreIcon = (type: string) => {
     switch (type) {
       case 'excellent': return <Award className="w-5 h-5 text-green-600" />;
-      case 'good': return <CheckCircle className="w-5 h-5 text-blue-600" />;
+      case 'good': return <CheckCircle className="w-5 h-5 text-gray-800" />;
       case 'fair': return <TrendingUp className="w-5 h-5 text-yellow-600" />;
       case 'poor': return <AlertCircle className="w-5 h-5 text-red-600" />;
       default: return <Star className="w-5 h-5 text-gray-600" />;
@@ -195,7 +195,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
             </div>
             <button
               onClick={onComplete}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
             >
               Complete & Apply
             </button>
@@ -212,8 +212,8 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                 <div className="text-gray-600 text-sm mb-1">Total Matches</div>
                 <div className="text-2xl text-gray-900">{scoringResults.length}</div>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Briefcase className="w-6 h-6 text-gray-800" />
               </div>
             </div>
           </div>
@@ -240,8 +240,8 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                   {scoringResults.filter(r => r.matchType === 'good').length}
                 </div>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                <CheckCircle className="w-6 h-6 text-gray-800" />
               </div>
             </div>
           </div>
@@ -254,8 +254,8 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                   {Math.round(scoringResults.reduce((acc, r) => acc + r.score, 0) / scoringResults.length)}%
                 </div>
               </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-gray-800" />
               </div>
             </div>
           </div>
@@ -288,7 +288,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                     <tr key={resultKey} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-sm">
                             {resume.name.split(' ').map(n => n[0]).join('')}
                           </div>
                           <div>
@@ -343,7 +343,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                       <td className="px-6 py-4 text-center">
                         <button
                           onClick={() => setSelectedResultForDetail(resultKey)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
                         >
                           <Eye className="w-3 h-3" />
                           View Details
@@ -367,21 +367,21 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
           if (!result || !resume || !job) return null;
 
           return (
-            <div className="bg-white rounded-lg border-2 border-blue-300 overflow-hidden shadow-lg mb-6">
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-5 border-b-4 border-blue-700">
+            <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-lg mb-6">
+              <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 border-b-4 border-blue-700">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-white mb-2">📊 Detailed Score Breakdown</h3>
-                    <p className="text-blue-100 text-sm">
+                    <p className="text-gray-100 text-sm">
                       <span className="bg-white bg-opacity-20 px-2 py-1 rounded">{resume.name}</span> → <span className="bg-white bg-opacity-20 px-2 py-1 rounded">{job.title}</span>
                     </p>
-                    <p className="text-blue-200 text-xs mt-2">
+                    <p className="text-gray-200 text-xs mt-2">
                       💡 Click any row to expand and view detailed AI reasoning
                     </p>
                   </div>
                   <button
                     onClick={() => alert('PDF export functionality coming soon!')}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition-all shadow-md hover:shadow-lg"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-white text-gray-800 rounded-lg hover:bg-gray-50 transition-all shadow-md hover:shadow-lg"
                   >
                     <FileText className="w-4 h-4" />
                     Export as PDF
@@ -407,7 +407,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                       const getStatusColor = (status: string) => {
                         switch (status) {
                           case 'Excellent': return 'bg-green-100 text-green-800 border-green-200';
-                          case 'Good': return 'bg-blue-100 text-blue-800 border-blue-200';
+                          case 'Good': return 'bg-gray-100 text-blue-800 border-gray-200';
                           case 'Partial': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
                           case 'Poor': return 'bg-red-100 text-red-800 border-red-200';
                           default: return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -417,7 +417,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                       const getRequirementColor = (req: string) => {
                         return req === 'Required' 
                           ? 'bg-red-50 text-red-700 border-red-200' 
-                          : 'bg-blue-50 text-blue-700 border-blue-200';
+                          : 'bg-gray-50 text-gray-900 border-gray-200';
                       };
 
                       return (
@@ -425,11 +425,11 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                           <tr 
                             key={index}
                             onClick={() => setExpandedRow(isExpanded ? null : `${selectedResultForDetail}-${index}`)}
-                            className={`border-b border-gray-200 hover:bg-blue-50 cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50' : 'bg-white'}`}
+                            className={`border-b border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors ${isExpanded ? 'bg-gray-50' : 'bg-white'}`}
                           >
                             <td className="px-6 py-5 border-r border-gray-200">
                               {isExpanded ? (
-                                <ChevronUp className="w-4 h-4 text-blue-600" />
+                                <ChevronUp className="w-4 h-4 text-gray-800" />
                               ) : (
                                 <ChevronDown className="w-4 h-4 text-gray-400" />
                               )}
@@ -458,7 +458,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                               <div className="inline-flex items-center gap-2">
                                 <div className="w-16 bg-gray-200 rounded-full h-2">
                                   <div 
-                                    className={`h-2 rounded-full ${category.score >= 90 ? 'bg-green-600' : category.score >= 70 ? 'bg-blue-600' : category.score >= 50 ? 'bg-yellow-600' : 'bg-red-600'}`}
+                                    className={`h-2 rounded-full ${category.score >= 90 ? 'bg-green-600' : category.score >= 70 ? 'bg-gray-800' : category.score >= 50 ? 'bg-yellow-600' : 'bg-red-600'}`}
                                     style={{ width: `${category.score}%` }}
                                   ></div>
                                 </div>
@@ -467,18 +467,18 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                             </td>
                           </tr>
                           {isExpanded && (
-                            <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                            <tr className="bg-gradient-to-r from-gray-50 to-indigo-50 border-b-2 border-gray-200">
                               <td className="border-r border-gray-200"></td>
                               <td colSpan={5} className="px-6 py-5">
                                 <div className="flex items-start gap-4">
-                                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg">
+                                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-800 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg">
                                     <Star className="w-5 h-5 text-white" />
                                   </div>
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-2">
-                                      <div className="text-xs text-blue-900 px-2 py-1 bg-blue-200 rounded-md">AI REASONING</div>
+                                      <div className="text-xs text-blue-900 px-2 py-1 bg-gray-200 rounded-md">AI REASONING</div>
                                     </div>
-                                    <p className="text-sm text-gray-800 leading-relaxed bg-white px-4 py-3 rounded-lg border border-blue-200 shadow-sm">
+                                    <p className="text-sm text-gray-800 leading-relaxed bg-white px-4 py-3 rounded-lg border border-gray-200 shadow-sm">
                                       {category.reasoning}
                                     </p>
                                   </div>
@@ -499,7 +499,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                     <div className="text-sm text-gray-600">
                       Overall Match Score:
                     </div>
-                    <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border-2 border-blue-600 shadow-sm">
+                    <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border-2 border-gray-800 shadow-sm">
                       {getScoreIcon(result.matchType)}
                       <span className="text-xl text-gray-900">{result.score}%</span>
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border ${getMatchColor(result.matchType)}`}>
@@ -509,7 +509,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                   </div>
                   <button
                     onClick={() => setSelectedResultForDetail(null)}
-                    className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+                    className="px-4 py-2 text-sm text-white bg-gray-800 rounded-lg hover:bg-gray-900 transition-colors shadow-md"
                   >
                     Close Detailed View
                   </button>
@@ -520,7 +520,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
         })()}
 
         {/* Action Footer */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-gray-900 mb-1">Ready to Proceed?</h3>
@@ -550,7 +550,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                   });
                   onComplete();
                 }}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
               >
                 Complete & Apply
               </button>

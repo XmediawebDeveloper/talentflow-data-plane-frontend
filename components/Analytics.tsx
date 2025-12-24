@@ -34,12 +34,12 @@ export default function Analytics() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-purple-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-lg">
               <BarChart3 className="w-7 h-7 text-white" />
             </div>
             <div>
@@ -60,7 +60,7 @@ export default function Analytics() {
               <option value="90days">Last 90 days</option>
               <option value="1year">Last year</option>
             </select>
-            <button className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-2 shadow-lg">
+            <button className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm flex items-center gap-2 shadow-lg">
               <Download className="w-4 h-4" />
               Export Report
             </button>
@@ -69,7 +69,7 @@ export default function Analytics() {
       </div>
 
       {/* Performance Summary Alert */}
-      <div className="mb-6 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-xl p-4">
+      <div className="mb-6 bg-gradient-to-r from-green-50 to-gray-50 border border-green-200 rounded-xl p-4">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
             <ThumbsUp className="w-5 h-5 text-green-600" />
@@ -86,10 +86,10 @@ export default function Analytics() {
       {/* Key Metrics Grid - Recruiter Focused */}
       <div className="grid grid-cols-3 gap-6 mb-8">
         {/* My Active Jobs */}
-        <div className="bg-white rounded-xl shadow-lg border border-purple-200 p-6 hover:shadow-xl transition-all">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-all">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Briefcase className="w-6 h-6 text-purple-600" />
+            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Briefcase className="w-6 h-6 text-gray-800" />
             </div>
             <div className={`flex items-center gap-1 text-sm ${trends.activeJobs > 0 ? 'text-green-600' : 'text-red-600'}`}>
               {trends.activeJobs > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
@@ -102,10 +102,10 @@ export default function Analytics() {
         </div>
 
         {/* Applicants Received */}
-        <div className="bg-white rounded-xl shadow-lg border border-blue-200 p-6 hover:shadow-xl transition-all">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-all">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Users className="w-6 h-6 text-gray-800" />
             </div>
             <div className={`flex items-center gap-1 text-sm ${trends.applicants > 0 ? 'text-green-600' : 'text-red-600'}`}>
               {trends.applicants > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
@@ -141,8 +141,8 @@ export default function Analytics() {
       <div className="grid grid-cols-3 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Calendar className="w-5 h-5 text-gray-800" />
             </div>
             <div>
               <div className="text-2xl font-bold text-gray-900">{stats.interviewsScheduled}</div>
@@ -197,7 +197,7 @@ export default function Analytics() {
               <h3 className="text-lg text-gray-900 font-medium">My Applications Over Time</h3>
               <p className="text-xs text-gray-500 mt-1">Applications received for your jobs</p>
             </div>
-            <button className="text-sm text-purple-600 hover:text-purple-700 flex items-center gap-1">
+            <button className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1">
               <Filter className="w-4 h-4" />
               Filter
             </button>
@@ -209,7 +209,7 @@ export default function Analytics() {
               <div key={idx} className="flex-1 flex flex-col items-center gap-2">
                 <div className="relative w-full flex items-end justify-center" style={{ height: '100%' }}>
                   <div 
-                    className="w-full bg-gradient-to-t from-purple-600 to-blue-600 rounded-t-lg hover:from-purple-700 hover:to-blue-700 transition-all cursor-pointer group relative"
+                    className="w-full bg-gradient-to-t from-gray-800 to-gray-800 rounded-t-lg hover:from-purple-700 hover:to-gray-900 transition-all cursor-pointer group relative"
                     style={{ height: `${(value / 48) * 100}%` }}
                   >
                     <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-700 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
@@ -239,7 +239,7 @@ export default function Analytics() {
               <h3 className="text-lg text-gray-900 font-medium">My Hiring Funnel</h3>
               <p className="text-xs text-gray-500 mt-1">Conversion rates at each stage</p>
             </div>
-            <button className="text-sm text-purple-600 hover:text-purple-700 flex items-center gap-1">
+            <button className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1">
               <Eye className="w-4 h-4" />
               Details
             </button>
@@ -248,9 +248,9 @@ export default function Analytics() {
           {/* Funnel Visualization with Conversion Rates */}
           <div className="space-y-4">
             {[
-              { stage: 'Applications', count: 342, percentage: 100, color: 'bg-blue-600', conversion: null },
-              { stage: 'Screened', count: 247, percentage: 72, color: 'bg-purple-600', conversion: 72 },
-              { stage: 'Assessment Sent', count: 186, percentage: 54, color: 'bg-indigo-600', conversion: 75 },
+              { stage: 'Applications', count: 342, percentage: 100, color: 'bg-gray-800', conversion: null },
+              { stage: 'Screened', count: 247, percentage: 72, color: 'bg-gray-800', conversion: 72 },
+              { stage: 'Assessment Sent', count: 186, percentage: 54, color: 'bg-gray-800', conversion: 75 },
               { stage: 'Assessment Passed', count: 142, percentage: 42, color: 'bg-violet-600', conversion: 76 },
               { stage: 'Interviews', count: 89, percentage: 26, color: 'bg-fuchsia-600', conversion: 63 },
               { stage: 'Offers', count: 32, percentage: 9, color: 'bg-orange-600', conversion: 36 },
@@ -295,7 +295,7 @@ export default function Analytics() {
             <h3 className="text-lg text-gray-900 font-medium">My Top Performing Jobs</h3>
             <p className="text-xs text-gray-500 mt-1">Jobs posted by you, ranked by success metrics</p>
           </div>
-          <button className="text-sm text-purple-600 hover:text-purple-700">View All My Jobs</button>
+          <button className="text-sm text-gray-800 hover:text-gray-900">View All My Jobs</button>
         </div>
 
         <div className="overflow-x-auto">
@@ -321,7 +321,7 @@ export default function Analytics() {
                 { title: 'UI/UX Designer', apps: 48, interviews: 12, offers: 2, hired: 1, conversion: 2.1, status: 'Active', quality: 'medium' },
                 { title: 'Data Analyst', apps: 24, interviews: 8, offers: 1, hired: 1, conversion: 4.2, status: 'Filled', quality: 'high' },
               ].map((job, idx) => (
-                <tr key={idx} className="border-b border-gray-100 hover:bg-purple-50 transition-colors cursor-pointer">
+                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer">
                   <td className="py-4 text-sm text-gray-900">{job.title}</td>
                   <td className="py-4 text-sm text-gray-700">{job.apps}</td>
                   <td className="py-4 text-sm text-gray-700">{job.interviews}</td>
@@ -331,7 +331,7 @@ export default function Analytics() {
                     <div className="flex items-center gap-2">
                       <span className={`text-sm font-medium ${
                         job.conversion >= 4 ? 'text-green-600' :
-                        job.conversion >= 3 ? 'text-blue-600' :
+                        job.conversion >= 3 ? 'text-gray-800' :
                         'text-orange-600'
                       }`}>
                         {job.conversion}%
@@ -370,7 +370,7 @@ export default function Analytics() {
           <div className="space-y-4">
             {[
               { timeframe: '< 2 hours', count: 142, percentage: 42, color: 'bg-green-600', label: 'Excellent' },
-              { timeframe: '2-6 hours', count: 124, percentage: 36, color: 'bg-blue-600', label: 'Good' },
+              { timeframe: '2-6 hours', count: 124, percentage: 36, color: 'bg-gray-800', label: 'Good' },
               { timeframe: '6-24 hours', count: 58, percentage: 17, color: 'bg-yellow-600', label: 'Fair' },
               { timeframe: '> 24 hours', count: 18, percentage: 5, color: 'bg-red-600', label: 'Needs Improvement' },
             ].map((metric, idx) => (
@@ -427,7 +427,7 @@ export default function Analytics() {
                 </div>
                 <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-gradient-to-r from-purple-600 to-blue-600 rounded-full"
+                    className="h-full bg-gradient-to-r from-gray-800 to-gray-800 rounded-full"
                     style={{ width: `${assessment.rate}%` }}
                   ></div>
                 </div>
@@ -437,7 +437,7 @@ export default function Analytics() {
           <div className="mt-4 pt-4 border-t border-gray-200">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-600">Overall Assessment Completion:</span>
-              <span className="text-lg font-bold text-blue-600">86%</span>
+              <span className="text-lg font-bold text-gray-800">86%</span>
             </div>
           </div>
         </div>
@@ -452,9 +452,9 @@ export default function Analytics() {
           </div>
           <div className="space-y-4">
             {[
-              { source: 'LinkedIn', count: 142, percentage: 42, color: 'bg-blue-600', conversion: 9.2 },
+              { source: 'LinkedIn', count: 142, percentage: 42, color: 'bg-gray-800', conversion: 9.2 },
               { source: 'Indeed', count: 89, percentage: 26, color: 'bg-orange-600', conversion: 7.8 },
-              { source: 'Company Website', count: 68, percentage: 20, color: 'bg-purple-600', conversion: 11.8 },
+              { source: 'Company Website', count: 68, percentage: 20, color: 'bg-gray-800', conversion: 11.8 },
               { source: 'Referrals', count: 28, percentage: 8, color: 'bg-green-600', conversion: 21.4 },
               { source: 'Other', count: 15, percentage: 4, color: 'bg-gray-600', conversion: 6.7 },
             ].map((source, idx) => (
@@ -493,9 +493,9 @@ export default function Analytics() {
           </div>
           <div className="space-y-4">
             {[
-              { stage: 'Application to Screening', days: 1.2, color: 'bg-blue-600', percentage: 7 },
-              { stage: 'Screening to Assessment', days: 2.8, color: 'bg-purple-600', percentage: 16 },
-              { stage: 'Assessment to Interview', days: 3.5, color: 'bg-indigo-600', percentage: 20 },
+              { stage: 'Application to Screening', days: 1.2, color: 'bg-gray-800', percentage: 7 },
+              { stage: 'Screening to Assessment', days: 2.8, color: 'bg-gray-800', percentage: 16 },
+              { stage: 'Assessment to Interview', days: 3.5, color: 'bg-gray-800', percentage: 20 },
               { stage: 'Interview to Offer', days: 6.2, color: 'bg-violet-600', percentage: 35 },
               { stage: 'Offer to Acceptance', days: 3.9, color: 'bg-fuchsia-600', percentage: 22 },
             ].map((stage, idx) => (
@@ -518,7 +518,7 @@ export default function Analytics() {
           <div className="mt-4 pt-4 border-t border-gray-200">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-600">Total Average Time to Hire:</span>
-              <span className="text-lg font-bold text-purple-600">17.6 days</span>
+              <span className="text-lg font-bold text-gray-800">17.6 days</span>
             </div>
           </div>
         </div>
@@ -531,21 +531,21 @@ export default function Analytics() {
             <h3 className="text-lg text-gray-900 font-medium">My Recent Activity</h3>
             <p className="text-xs text-gray-500 mt-1">Latest updates from your jobs and candidates</p>
           </div>
-          <button className="text-sm text-purple-600 hover:text-purple-700">View All Activity</button>
+          <button className="text-sm text-gray-800 hover:text-gray-900">View All Activity</button>
         </div>
 
         <div className="space-y-4">
           {[
             { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100', text: 'Sarah Johnson accepted your offer for Senior Full Stack Developer', time: '12 min ago', action: 'Offer Accepted' },
-            { icon: Users, color: 'text-blue-600', bg: 'bg-blue-100', text: '8 new applications received for Backend Engineer position', time: '45 min ago', action: 'New Applications' },
-            { icon: Award, color: 'text-purple-600', bg: 'bg-purple-100', text: 'Michael Chen scored 94% in your coding assessment', time: '2 hours ago', action: 'Assessment Completed' },
+            { icon: Users, color: 'text-gray-800', bg: 'bg-gray-100', text: '8 new applications received for Backend Engineer position', time: '45 min ago', action: 'New Applications' },
+            { icon: Award, color: 'text-gray-800', bg: 'bg-gray-100', text: 'Michael Chen scored 94% in your coding assessment', time: '2 hours ago', action: 'Assessment Completed' },
             { icon: Calendar, color: 'text-orange-600', bg: 'bg-orange-100', text: 'Interview scheduled with Emily Rodriguez for tomorrow at 2:00 PM', time: '3 hours ago', action: 'Interview Scheduled' },
-            { icon: MessageSquare, color: 'text-blue-600', bg: 'bg-blue-100', text: 'David Kim sent you a message regarding the DevOps position', time: '5 hours ago', action: 'Candidate Message' },
+            { icon: MessageSquare, color: 'text-gray-800', bg: 'bg-gray-100', text: 'David Kim sent you a message regarding the DevOps position', time: '5 hours ago', action: 'Candidate Message' },
             { icon: XCircle, color: 'text-red-600', bg: 'bg-red-100', text: 'Alex Thompson withdrew application for Product Manager', time: '6 hours ago', action: 'Application Withdrawn' },
           ].map((activity, idx) => {
             const Icon = activity.icon;
             return (
-              <div key={idx} className="flex items-start gap-4 p-3 rounded-lg hover:bg-purple-50 transition-colors cursor-pointer">
+              <div key={idx} className="flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
                 <div className={`w-10 h-10 rounded-lg ${activity.bg} flex items-center justify-center flex-shrink-0`}>
                   <Icon className={`w-5 h-5 ${activity.color}`} />
                 </div>
