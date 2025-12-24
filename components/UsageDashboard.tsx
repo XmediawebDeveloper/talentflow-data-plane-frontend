@@ -123,19 +123,20 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     return headers;
   };
 
-  // Record usage via POST /api/v1/external/usage/record
+  // Record usage via backend API (which proxies to admin API)
   const recordUsage = async (request: RecordUsageRequest): Promise<boolean> => {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      setRecordError('API Key not found. Please configure your API key in settings.');
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      setRecordError('Not authenticated. Please log in again.');
       return false;
     }
 
     try {
-      const response = await fetch(`${USAGE_API_BASE}/external/usage/record`, {
+      // Call backend endpoint which proxies to admin API
+      const response = await fetch(`${API_BASE}/usage/record`, {
         method: 'POST',
         headers: {
-          'X-API-Key': apiKey,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(request),
@@ -188,7 +189,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   const fetchUsageData = async () => {
     setLoading(true);
     try {
-      // Get tenant_id from /auth/me
       const token = localStorage.getItem('accessToken');
       if (!token) {
         console.warn('[UsageDashboard] No access token found');
@@ -196,7 +196,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         return;
       }
 
-      // First get tenant_id from auth/me
+      // Get tenant_id from auth/me if not cached
       let tenantId = localStorage.getItem('tenantApiKey');
 
       if (!tenantId) {
@@ -222,10 +222,11 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         return;
       }
 
-      console.log('[UsageDashboard] Fetching usage summary for tenant:', tenantId);
+      console.log('[UsageDashboard] Fetching quota status for tenant:', tenantId);
 
-      // Call subscriptions summary API: GET /api/v1/subscriptions/{tenant_id}/summary
-      const summaryResponse = await fetch(`${USAGE_API_BASE}/subscriptions/${tenantId}/summary`, {
+      // Fetch quota status from our backend (which proxies to admin API)
+      // GET /api/v1/usage/quota-status
+      const quotaStatusResponse = await fetch(`${API_BASE}/usage/quota-status`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -233,74 +234,146 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         },
       });
 
-      if (summaryResponse.ok) {
-        const summaryData = await summaryResponse.json();
-        console.log('[UsageDashboard] Subscription summary data:', summaryData);
+      if (quotaStatusResponse.ok) {
+        const quotaStatusData = await quotaStatusResponse.json();
+        console.log('[UsageDashboard] Quota status data:', quotaStatusData);
 
-        // Handle the subscription summary API response
-        // Response format: { tenant_id, tenant_name, status, is_trial, plan, subscription, isolation_type }
-        const data = summaryData.data || summaryData;
-        setSubscriptionSummary(data);
+        // New response format from /usage/quota-status:
+        // { status, data: { tenant_id, plan_name, billing_period, quotas: { RU: { subscription: {...}, addon: {...}, total_remaining, status }, ... }, alerts }, meta }
+        const data = quotaStatusData.data || quotaStatusData;
+        const quotasMap = data.quotas || {};
 
-        // Convert plan quotas to quota display format if available
-        if (data.plan?.quotas) {
-          const quotaMap: Record<string, { name: string; limit: number }> = {
-            'resume_uploads': { name: 'Resume Upload', limit: data.plan.quotas.resume_uploads || 0 },
-            'resume_scoring': { name: 'Resume Scoring', limit: data.plan.quotas.resume_scoring || 0 },
-            'ai_interviews': { name: 'AI Interview', limit: data.plan.quotas.ai_interviews || 0 },
-            'assessments': { name: 'Assessment', limit: data.plan.quotas.assessments || 0 },
-            'RU': { name: 'Resume Upload', limit: data.plan.quotas.RU || data.plan.quotas.resume_uploads || 0 },
-            'RS': { name: 'Resume Scoring', limit: data.plan.quotas.RS || data.plan.quotas.resume_scoring || 0 },
-            'AIU': { name: 'AI Interview', limit: data.plan.quotas.AIU || data.plan.quotas.ai_interviews || 0 },
-            'AS': { name: 'Assessment', limit: data.plan.quotas.AS || data.plan.quotas.assessments || 0 },
-          };
+        // Convert external API quota format to our QuotaInfo format - DYNAMIC
+        const quotasList: QuotaInfo[] = [];
 
-          const quotas: QuotaInfo[] = [
-            { quota_type: 'RU', name: 'Resume Upload', limit: quotaMap.RU?.limit || quotaMap.resume_uploads?.limit || 1000, used: 0, remaining: quotaMap.RU?.limit || quotaMap.resume_uploads?.limit || 1000, percentage_used: 0, is_low: false, is_exhausted: false },
-            { quota_type: 'RS', name: 'Resume Scoring', limit: quotaMap.RS?.limit || quotaMap.resume_scoring?.limit || 500, used: 0, remaining: quotaMap.RS?.limit || quotaMap.resume_scoring?.limit || 500, percentage_used: 0, is_low: false, is_exhausted: false },
-            { quota_type: 'AS', name: 'Assessment', limit: quotaMap.AS?.limit || quotaMap.assessments?.limit || 200, used: 0, remaining: quotaMap.AS?.limit || quotaMap.assessments?.limit || 200, percentage_used: 0, is_low: false, is_exhausted: false },
-            { quota_type: 'AIU', name: 'AI Interview', limit: quotaMap.AIU?.limit || quotaMap.ai_interviews?.limit || 100, used: 0, remaining: quotaMap.AIU?.limit || quotaMap.ai_interviews?.limit || 100, percentage_used: 0, is_low: false, is_exhausted: false },
-          ];
+        // Preferred order for display (any extras will be added at the end)
+        const preferredOrder = ['RU', 'RS', 'AS', 'AIU', 'storage_gb', 'max_jobs', 'max_seats'];
 
-          setQuotaSummary({ has_low_quotas: false, quotas });
-          setQuotaData({ quotas });
-        } else {
-          // Set default quotas if plan doesn't have quota info
-          setQuotaSummary({
-            has_low_quotas: false,
-            quotas: [
-              { quota_type: 'RU', name: 'Resume Upload', limit: 1000, used: 0, remaining: 1000, percentage_used: 0, is_low: false, is_exhausted: false },
-              { quota_type: 'RS', name: 'Resume Scoring', limit: 500, used: 0, remaining: 500, percentage_used: 0, is_low: false, is_exhausted: false },
-              { quota_type: 'AS', name: 'Assessment', limit: 200, used: 0, remaining: 200, percentage_used: 0, is_low: false, is_exhausted: false },
-              { quota_type: 'AIU', name: 'AI Interview', limit: 100, used: 0, remaining: 100, percentage_used: 0, is_low: false, is_exhausted: false },
-            ],
-          });
+        // Get all quota types from API response
+        const allQuotaTypes = Object.keys(quotasMap);
+
+        // Sort: preferred order first, then any remaining
+        const sortedQuotaTypes = [
+          ...preferredOrder.filter(qt => allQuotaTypes.includes(qt)),
+          ...allQuotaTypes.filter(qt => !preferredOrder.includes(qt))
+        ];
+
+        for (const quotaType of sortedQuotaTypes) {
+          const q = quotasMap[quotaType];
+          if (q) {
+            // New format: q.subscription contains { limit, used, remaining, percentage }
+            const sub = q.subscription || {};
+            // Handle "unlimited" values
+            const isUnlimited = sub.limit === 'unlimited' || sub.limit === -1;
+            const limit = isUnlimited ? -1 : (sub.limit || 0);
+            const used = sub.used || 0;
+            const remaining = isUnlimited ? -1 : (q.total_remaining !== undefined ? q.total_remaining : (sub.remaining || 0));
+            const usagePercentage = isUnlimited ? 0 : (sub.percentage || (limit > 0 ? (used / limit) * 100 : 0));
+
+            // Status: OK, WARNING, CRITICAL, EXCEEDED
+            const status = q.status || 'OK';
+            const isLow = status === 'WARNING' || status === 'CRITICAL' || usagePercentage >= 80;
+            const isExhausted = status === 'EXCEEDED' || (remaining <= 0 && !isUnlimited);
+
+            quotasList.push({
+              quota_type: quotaType,
+              name: quotaTypeToModule[quotaType] || quotaType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+              limit: limit,
+              used: used,
+              remaining: remaining,
+              percentage_used: usagePercentage,
+              is_low: isLow,
+              is_exhausted: isExhausted,
+            });
+          }
         }
 
-        // Set usage data for stats display
+        // Check if any quotas are low or critical
+        const hasLowQuotas = quotasList.some(q => q.is_low || q.is_exhausted);
+        const lowQuotaTypes = quotasList.filter(q => q.is_low || q.is_exhausted).map(q => q.name);
+
+        setQuotaSummary({
+          has_low_quotas: hasLowQuotas,
+          low_quota_types: lowQuotaTypes,
+          upgrade_message: data.alerts?.join(' ') || (hasLowQuotas ? `Some quotas are running low: ${lowQuotaTypes.join(', ')}` : ''),
+          quotas: quotasList,
+          billing_period: data.billing_period,
+        });
+        setQuotaData({ quotas: quotasList });
+
+        // Calculate total usage stats from new format
+        const totalUsed = quotasList.reduce((sum, q) => sum + (q.used || 0), 0);
         setUsageData({
-          total_units: 0,
+          total_units: totalUsed,
           breakdown: {
-            resume_upload: { units: 0 },
-            resume_scoring: { units: 0 },
-            ai_interview: { units: 0 },
-            assessment: { units: 0 },
+            resume_upload: { units: quotasMap.RU?.subscription?.used || 0 },
+            resume_scoring: { units: quotasMap.RS?.subscription?.used || 0 },
+            ai_interview: { units: quotasMap.AIU?.subscription?.used || 0 },
+            assessment: { units: quotasMap.AS?.subscription?.used || 0 },
           }
         });
 
+        // Set subscription summary from new format
+        if (data.tenant_id) {
+          setSubscriptionSummary({
+            tenant_id: data.tenant_id,
+            tenant_name: data.tenant_id,
+            status: 'active',
+            is_trial: false,
+            plan: {
+              id: 0,
+              name: data.plan_name || 'Professional',
+              price: 0,
+              billing_interval: 'month',
+            },
+            subscription: data.billing_period ? {
+              id: 0,
+              status: 'active',
+              billing_interval: 'month',
+              start_date: data.billing_period.start,
+              current_period_start: data.billing_period.start,
+              current_period_end: data.billing_period.end,
+              days_until_renewal: data.billing_period.end ? Math.ceil((new Date(data.billing_period.end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 30,
+              price: 0,
+            } : null,
+            isolation_type: 'database',
+          });
+        }
+
       } else {
-        console.error('[UsageDashboard] Failed to fetch subscription summary:', summaryResponse.status);
-        // Set placeholder data on error
+        console.error('[UsageDashboard] Failed to fetch quota status:', quotaStatusResponse.status);
+        // Set default quotas on error
         setQuotaSummary({
           has_low_quotas: false,
           quotas: [
-            { quota_type: 'RU', name: 'Resume Upload', limit: 1000, used: 0, remaining: 1000, percentage_used: 0, is_low: false, is_exhausted: false },
-            { quota_type: 'RS', name: 'Resume Scoring', limit: 500, used: 0, remaining: 500, percentage_used: 0, is_low: false, is_exhausted: false },
-            { quota_type: 'AS', name: 'Assessment', limit: 200, used: 0, remaining: 200, percentage_used: 0, is_low: false, is_exhausted: false },
-            { quota_type: 'AIU', name: 'AI Interview', limit: 100, used: 0, remaining: 100, percentage_used: 0, is_low: false, is_exhausted: false },
+            { quota_type: 'RU', name: 'Resume Upload', limit: 0, used: 0, remaining: 0, percentage_used: 0, is_low: false, is_exhausted: false },
+            { quota_type: 'RS', name: 'Resume Scoring', limit: 0, used: 0, remaining: 0, percentage_used: 0, is_low: false, is_exhausted: false },
+            { quota_type: 'AS', name: 'Assessment', limit: 0, used: 0, remaining: 0, percentage_used: 0, is_low: false, is_exhausted: false },
+            { quota_type: 'AIU', name: 'AI Interview', limit: 0, used: 0, remaining: 0, percentage_used: 0, is_low: false, is_exhausted: false },
           ],
         });
       }
+
+      // Subscription summary endpoint commented out - using quota-status data only
+      // try {
+      //   const summaryResponse = await fetch(`${USAGE_API_BASE}/subscriptions/${tenantId}/summary`, {
+      //     method: 'GET',
+      //     headers: {
+      //       'Authorization': `Bearer ${token}`,
+      //       'Content-Type': 'application/json',
+      //     },
+      //   });
+      //
+      //   if (summaryResponse.ok) {
+      //     const summaryData = await summaryResponse.json();
+      //     console.log('[UsageDashboard] Subscription summary data:', summaryData);
+      //     const subData = summaryData.data || summaryData;
+      //     setSubscriptionSummary(subData);
+      //   }
+      // } catch (subError) {
+      //   console.warn('[UsageDashboard] Could not fetch subscription summary:', subError);
+      // }
+
     } catch (error) {
       console.error('[UsageDashboard] Error fetching usage data:', error);
     } finally {
@@ -315,6 +388,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     'AS': 'Assessment',
     'AIU': 'AI Interview',
     'storage_gb': 'Storage',
+    'max_jobs': 'Max Jobs',
+    'max_seats': 'Max Users',
   };
 
   // Calculate statistics - use API data
@@ -571,16 +646,21 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               </div>
             )}
 
-            {/* Quota Cards Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {/* Quota Cards Grid - Dynamic */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-6">
               {quotaSummary.quotas?.map((quota: QuotaInfo) => {
                 const colors: Record<string, { bg: string; text: string; border: string }> = {
                   'RU': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
                   'RS': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
                   'AS': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
                   'AIU': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+                  'storage_gb': { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
+                  'max_jobs': { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
+                  'max_seats': { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200' },
                 };
-                const c = colors[quota.quota_type] || colors['RU'];
+                const defaultColor = { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' };
+                const c = colors[quota.quota_type] || defaultColor;
+                const isUnlimited = quota.limit === -1 || quota.remaining === -1;
 
                 return (
                   <div
@@ -591,31 +671,38 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-gray-600">{quota.name}</span>
-                      {quota.is_exhausted && (
+                      {isUnlimited && (
+                        <span className="text-xs font-bold text-cyan-600 bg-cyan-100 px-2 py-0.5 rounded-full">
+                          UNLIMITED
+                        </span>
+                      )}
+                      {!isUnlimited && quota.is_exhausted && (
                         <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
                           EXHAUSTED
                         </span>
                       )}
-                      {quota.is_low && !quota.is_exhausted && (
+                      {!isUnlimited && quota.is_low && !quota.is_exhausted && (
                         <span className="text-xs font-bold text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full">
                           LOW
                         </span>
                       )}
                     </div>
                     <div className={`text-3xl font-bold ${c.text}`}>
-                      {quota.remaining}
-                      <span className="text-sm font-normal text-gray-500">/{quota.limit}</span>
+                      {isUnlimited ? '∞' : quota.remaining}
+                      <span className="text-sm font-normal text-gray-500">
+                        /{isUnlimited ? '∞' : quota.limit}
+                      </span>
                     </div>
                     <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-2">
                       <div
                         className={`h-full rounded-full transition-all ${
-                          quota.is_exhausted ? 'bg-red-500' : quota.is_low ? 'bg-yellow-500' : 'bg-green-500'
+                          isUnlimited ? 'bg-cyan-500' : quota.is_exhausted ? 'bg-red-500' : quota.is_low ? 'bg-yellow-500' : 'bg-green-500'
                         }`}
-                        style={{ width: `${Math.min(quota.percentage_used, 100)}%` }}
+                        style={{ width: isUnlimited ? '100%' : `${Math.min(quota.percentage_used, 100)}%` }}
                       />
                     </div>
                     <div className="mt-1 text-xs text-gray-500">
-                      {quota.used} used ({quota.percentage_used?.toFixed(1)}%)
+                      {quota.used} used {isUnlimited ? '' : `(${quota.percentage_used?.toFixed(1)}%)`}
                     </div>
                   </div>
                 );
@@ -889,8 +976,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               {/* API Info */}
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <p className="text-xs text-blue-700">
-                  <strong>API:</strong> POST /api/v1/external/usage/record<br />
-                  <strong>Auth:</strong> X-API-Key header required
+                  <strong>API:</strong> POST /api/v1/usage/record<br />
+                  <strong>Auth:</strong> Bearer token (JWT)
                 </p>
               </div>
             </div>

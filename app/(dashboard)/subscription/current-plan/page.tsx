@@ -52,6 +52,20 @@ interface ApiPlan {
   quotas?: PlanQuotas;
 }
 
+const getBillingPeriodLabel = (period: string): string => {
+  switch (period?.toUpperCase()) {
+    case 'ANNUAL':
+    case 'YEARLY':
+      return '/year';
+    case 'MONTHLY':
+      return '/month';
+    case 'QUARTERLY':
+      return '/quarter';
+    default:
+      return '/year';
+  }
+};
+
 interface DisplayPlan {
   id: string;
   numericId: number;
@@ -59,6 +73,7 @@ interface DisplayPlan {
   description: string;
   price: number | null;
   currency: string;
+  billingPeriod: string;
   icon: typeof Users | typeof Building2 | typeof Zap;
   gradient: string;
   popular: boolean;
@@ -283,10 +298,10 @@ export default function CurrentPlanPage() {
       setIsLoading(true);
       setError(null);
 
-      // Fetch free trial settings from admin API first
+      // Fetch free trial settings from backend API (which proxies to external API)
       let trialSettings: FreeTrialSettings | null = null;
       try {
-        const trialResponse = await fetch(`${ADMIN_API_URL}/public/settings/free-trial`);
+        const trialResponse = await fetch(`${API_URL}/subscription/public/free-trial`);
         if (trialResponse.ok) {
           const trialResult = await trialResponse.json();
           trialSettings = trialResult.data;
@@ -346,7 +361,8 @@ export default function CurrentPlanPage() {
         console.error('[CurrentPlan] Error fetching tenant_id:', err);
       }
 
-      const plansResponse = await fetch(`${ADMIN_API_URL}/public/plans`);
+      // Fetch plans from backend API (which proxies to external API)
+      const plansResponse = await fetch(`${API_URL}/subscription/public/plans`);
       if (!plansResponse.ok) {
         throw new Error('Failed to fetch plans');
       }
@@ -374,8 +390,9 @@ export default function CurrentPlanPage() {
             numericId: plan.id,
             name: plan.plan_name,
             description: plan.description,
-            price: plan.monthly_price > 0 ? plan.monthly_price : (plan.base_price > 0 ? plan.base_price : null),
+            price: plan.base_price > 0 ? plan.base_price : null,
             currency: plan.currency || 'INR',
+            billingPeriod: plan.billing_period || 'ANNUAL',
             icon: getIconForPlan(plan.plan_name, plan.plan_tier),
             gradient: getGradientForPlan(plan.plan_name, plan.plan_tier),
             popular: plan.is_featured || false,
@@ -728,7 +745,7 @@ export default function CurrentPlanPage() {
                 <div>
                   <h3 className="text-lg font-semibold text-orange-700">Payment Pending</h3>
                   <p className="text-orange-600">
-                    Complete payment for <strong>{selectedPlan.name}</strong> - {formatCurrency(selectedPlan.price || 0, selectedPlan.currency)}/month
+                    Complete payment for <strong>{selectedPlan.name}</strong> - {formatCurrency(selectedPlan.price || 0, selectedPlan.currency)}{getBillingPeriodLabel(selectedPlan.billingPeriod)}
                   </p>
                 </div>
               </div>
@@ -798,7 +815,7 @@ export default function CurrentPlanPage() {
                 {isOnTrial ? (
                   'Free'
                 ) : currentPlan?.price ? (
-                  <>{formatCurrency(currentPlan.price, currentPlan.currency)}<span className="text-sm font-normal text-gray-500">/month</span></>
+                  <>{formatCurrency(currentPlan.price, currentPlan.currency)}<span className="text-sm font-normal text-gray-500">{getBillingPeriodLabel(currentPlan.billingPeriod)}</span></>
                 ) : (
                   'Custom'
                 )}
@@ -948,7 +965,7 @@ export default function CurrentPlanPage() {
                           <span className="text-4xl font-bold text-gray-900">
                             {formatCurrency(plan.price, plan.currency)}
                           </span>
-                          <span className="text-gray-600">/month</span>
+                          <span className="text-gray-600">{getBillingPeriodLabel(plan.billingPeriod)}</span>
                         </div>
                       ) : (
                         <div className="text-4xl font-bold text-gray-900">Custom</div>
@@ -1073,7 +1090,7 @@ export default function CurrentPlanPage() {
                     {modalStep === 'result' && 'Upgrade Complete!'}
                   </h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    {selectedPlanForPayment.name} - {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}/month
+                    {selectedPlanForPayment.name} - {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}{getBillingPeriodLabel(selectedPlanForPayment.billingPeriod)}
                   </p>
                 </div>
                 <button
@@ -1268,7 +1285,7 @@ export default function CurrentPlanPage() {
                   <div className="flex justify-between pt-2 border-t border-blue-200">
                     <span className="text-gray-700 font-medium">Total Amount:</span>
                     <span className="font-bold text-blue-700 text-lg">
-                      {formatCurrency(selectedPlanForPayment?.price || 0, selectedPlanForPayment?.currency || 'INR')}/month
+                      {formatCurrency(selectedPlanForPayment?.price || 0, selectedPlanForPayment?.currency || 'INR')}{getBillingPeriodLabel(selectedPlanForPayment?.billingPeriod || 'ANNUAL')}
                     </span>
                   </div>
                 </div>
@@ -1296,7 +1313,7 @@ export default function CurrentPlanPage() {
                     ) : (
                       <>
                         <CreditCard className="w-4 h-4" />
-                        Pay {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}
+                        Pay {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}{getBillingPeriodLabel(selectedPlanForPayment.billingPeriod)}
                       </>
                     )}
                   </button>

@@ -20,12 +20,15 @@ import {
   ChevronDown,
   Loader2,
   Building2,
-  TrendingUp
+  TrendingUp,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
+type ViewMode = 'grid' | 'list';
 
 export default function JobOpeningsPage() {
   const router = useRouter();
@@ -37,6 +40,7 @@ export default function JobOpeningsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
   // Stats
   const [stats, setStats] = useState({
@@ -246,10 +250,36 @@ export default function JobOpeningsPage() {
                 </button>
               ))}
             </div>
+
+            {/* View Toggle */}
+            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded-md transition-colors ${
+                  viewMode === 'grid'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+                title="Grid View"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-md transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+                title="List View"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Jobs Grid */}
+        {/* Jobs Display */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -274,7 +304,8 @@ export default function JobOpeningsPage() {
               </button>
             )}
           </div>
-        ) : (
+        ) : viewMode === 'grid' ? (
+          /* Grid View */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {jobs.map((job) => (
               <div
@@ -380,6 +411,113 @@ export default function JobOpeningsPage() {
                 </div>
               </div>
             ))}
+          </div>
+        ) : (
+          /* List View */
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Job Title</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Experience</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Applicants</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Created</th>
+                  <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {jobs.map((job) => (
+                  <tr key={job.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => router.push(`/recruitment/job-details?id=${job.id}`)}
+                        className="font-medium text-gray-900 hover:text-blue-600 transition-colors text-left"
+                      >
+                        {job.title}
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {job.department || '-'}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      <div className="flex items-center gap-1.5">
+                        {job.location && <MapPin className="w-3.5 h-3.5 text-gray-400" />}
+                        <span>{job.location || '-'}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {getExperienceText(job.experience_min, job.experience_max)}
+                    </td>
+                    <td className="px-6 py-4">
+                      {getStatusBadge(job.status)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                        <Users className="w-4 h-4 text-gray-400" />
+                        <span>{job.applicants_count || 0}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {formatDate(job.created_at)}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="relative inline-block">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveDropdown(activeDropdown === job.id ? null : job.id);
+                          }}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                          <MoreVertical className="w-4 h-4 text-gray-400" />
+                        </button>
+                        {activeDropdown === job.id && (
+                          <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                            <button
+                              onClick={() => { router.push(`/recruitment/job-details?id=${job.id}`); setActiveDropdown(null); }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Eye className="w-4 h-4" />
+                              View Details
+                            </button>
+                            {job.status === 'draft' && (
+                              <button
+                                onClick={() => handleStatusChange(job.id, 'published')}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                                Publish
+                              </button>
+                            )}
+                            {job.status === 'published' && (
+                              <button
+                                onClick={() => handleStatusChange(job.id, 'disabled')}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                              >
+                                <Ban className="w-4 h-4" />
+                                Disable
+                              </button>
+                            )}
+                            {job.status === 'disabled' && (
+                              <button
+                                onClick={() => handleStatusChange(job.id, 'published')}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                              >
+                                <RefreshCw className="w-4 h-4" />
+                                Republish
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 
