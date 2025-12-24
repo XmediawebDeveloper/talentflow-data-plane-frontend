@@ -95,8 +95,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     resource_id: '',
   });
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://talentflowdata.api.mo.vc/api/v1';
-  const USAGE_API_BASE = process.env.NEXT_PUBLIC_USAGE_API_URL || 'https://talentflowapi.mo.vc/api/v1';
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+  const USAGE_API_BASE = process.env.NEXT_PUBLIC_USAGE_API_URL || 'http://localhost:8001/api/v1';
 
   useEffect(() => {
     fetchUsageData();

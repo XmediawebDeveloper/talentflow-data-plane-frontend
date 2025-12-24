@@ -21,9 +21,9 @@ import {
   FolderOpen,
   CreditCard
 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://talentflowapi.mo.vc/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 interface AuditLog {
   id: string;
@@ -103,6 +103,13 @@ export default function AuditTrailPage() {
   const [availableActions, setAvailableActions] = useState<Array<{value: string; label: string}>>([]);
   const [availableEntities, setAvailableEntities] = useState<Array<{value: string; label: string}>>([]);
 
+  // Total users count
+  const [totalUsers, setTotalUsers] = useState(0);
+
+  // Prevent duplicate fetches in development mode
+  const hasFetched = useRef(false);
+  const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange });
+
   const fetchAuditLogs = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -126,6 +133,10 @@ export default function AuditTrailPage() {
         params.append('end_date', endDate.toISOString());
       }
 
+      if (!token) {
+        throw new Error('Session expired. Please log in again.');
+      }
+
       const response = await fetch(`${API_URL}/audits?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -134,7 +145,9 @@ export default function AuditTrailPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch audit logs');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[DEBUG] Audit logs error:', response.status, errorData);
+        throw new Error(errorData.detail || `Failed to fetch audit logs (${response.status})`);
       }
 
       const data = await response.json();
@@ -195,14 +208,51 @@ export default function AuditTrailPage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchFilters();
-  }, [fetchFilters]);
+  const fetchTotalUsers = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`${API_URL}/users`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
+      if (response.ok) {
+        const data = await response.json();
+        const users = data.users || data || [];
+        setTotalUsers(Array.isArray(users) ? users.length : 0);
+      }
+    } catch (err) {
+      console.error('Error fetching users count:', err);
+    }
+  }, []);
+
+  // Initial fetch - only runs once
   useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+    fetchFilters();
+    fetchTotalUsers();
     fetchAuditLogs();
     fetchStats();
-  }, [fetchAuditLogs, fetchStats]);
+  }, []);
+
+  // Re-fetch when filters change (compare with previous values)
+  useEffect(() => {
+    const prev = prevFilters.current;
+    const filtersChanged =
+      prev.page !== page ||
+      prev.actionFilter !== actionFilter ||
+      prev.entityFilter !== entityFilter ||
+      prev.dateRange !== dateRange;
+
+    if (filtersChanged && hasFetched.current) {
+      prevFilters.current = { page, actionFilter, entityFilter, dateRange };
+      fetchAuditLogs();
+      fetchStats();
+    }
+  }, [page, actionFilter, entityFilter, dateRange]);
 
   const getActionColor = (action: string): string => {
     if (action.includes('create') || action.includes('upload')) return actionColors.create;
@@ -344,14 +394,14 @@ export default function AuditTrailPage() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Active Users</p>
-                  <p className="text-3xl font-semibold text-gray-900 mt-1">{stats.top_active_users.length}</p>
+                  <p className="text-sm text-gray-600">Total Users</p>
+                  <p className="text-3xl font-semibold text-green-600 mt-1">{totalUsers}</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <Users className="w-6 h-6 text-green-600" />
                 </div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">Users with activity</p>
+              <p className="text-xs text-gray-500 mt-2">Registered users</p>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">

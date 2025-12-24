@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Plus,
@@ -160,7 +160,7 @@ const mockUsers: ApiUser[] = [
   },
 ];
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://talendflowapi.mo.vc/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 export default function UserManagement() {
   const [users, setUsers] = useState<ApiUser[]>([]);
@@ -182,8 +182,13 @@ export default function UserManagement() {
     permissions: { ...defaultPermissions },
   });
 
+  // Prevent duplicate fetches in development mode
+  const hasFetched = useRef(false);
+
   // Load users and roles
   useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
     loadUsers();
     loadRoles();
   }, []);

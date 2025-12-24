@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://talentflowapi.mo.vc/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 interface AuditLog {
   id: string;
@@ -86,6 +86,11 @@ export default function ActivityLogsPage() {
 
     try {
       const token = localStorage.getItem('accessToken');
+
+      if (!token) {
+        throw new Error('Session expired. Please log in again.');
+      }
+
       const response = await fetch(`${API_URL}/audits/recent?limit=${limit}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -94,7 +99,9 @@ export default function ActivityLogsPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch activity logs');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[DEBUG] Activity logs error:', response.status, errorData);
+        throw new Error(errorData.detail || `Failed to fetch activity logs (${response.status})`);
       }
 
       const data = await response.json();

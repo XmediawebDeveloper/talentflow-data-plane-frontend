@@ -6,7 +6,7 @@ import { Check, Sparkles, Building2, Users, Zap, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://talentflowapi.mo.vc/api/v1';
+const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://localhost:8001/api/v1';
 
 interface PlanFeature {
   id: string;
@@ -118,8 +118,7 @@ const formatCurrency = (amount: number | undefined | null, currency: string): st
   return `${symbol}${amount.toLocaleString()}`;
 };
 
-const ADDONS_API_URL = 'https://talentflowapi.mo.vc/api/v1';
-// const ADDONS_API_URL = 'http://192.168.1.110:8000/api/v1';
+const ADDONS_API_URL = 'http://localhost:8001/api/v1';
 
 export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(false);

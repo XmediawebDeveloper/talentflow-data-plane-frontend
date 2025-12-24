@@ -1,7 +1,7 @@
 'use client';
 
 import { Building2, Save, Globe, Mail, Phone, MapPin, Users, Calendar, Edit2, Loader2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -48,8 +48,13 @@ export default function CompanyProfilePage() {
     zipCode: '',
   });
 
+  // Prevent duplicate fetches in development mode
+  const hasFetched = useRef(false);
+
   // Fetch organization profile on mount
   useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
     fetchOrganizationProfile();
   }, []);
 
@@ -58,12 +63,23 @@ export default function CompanyProfilePage() {
     setError('');
     try {
       const token = localStorage.getItem('accessToken');
+      console.log('[DEBUG] Fetching organization profile, token exists:', !!token);
+
+      if (!token) {
+        console.error('[DEBUG] No token found in localStorage');
+        setError('Session expired. Please log in again.');
+        setIsLoading(false);
+        return;
+      }
+
       const response = await fetch(`${API_URL}/settings/organization-profile`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
+
+      console.log('[DEBUG] GET response status:', response.status);
 
       if (response.ok) {
         const data: OrganizationProfile = await response.json();
@@ -98,6 +114,14 @@ export default function CompanyProfilePage() {
 
     try {
       const token = localStorage.getItem('accessToken');
+
+      // Check if token exists
+      if (!token) {
+        throw new Error('Session expired. Please log in again.');
+      }
+
+      console.log('[DEBUG] Saving organization profile with token:', token.substring(0, 20) + '...');
+
       const response = await fetch(`${API_URL}/settings/organization-profile`, {
         method: 'PUT',
         headers: {
@@ -121,12 +145,21 @@ export default function CompanyProfilePage() {
         }),
       });
 
+      console.log('[DEBUG] Response status:', response.status);
+
       if (response.ok) {
         setSuccessMessage('Organization profile saved successfully');
         setIsEditing(false);
         setTimeout(() => setSuccessMessage(''), 3000);
       } else {
         const data = await response.json();
+        console.error('[DEBUG] Error response:', data);
+
+        // Handle 401 specifically
+        if (response.status === 401) {
+          throw new Error('Session expired. Please log in again.');
+        }
+
         throw new Error(data.detail || 'Failed to save');
       }
     } catch (err: any) {
