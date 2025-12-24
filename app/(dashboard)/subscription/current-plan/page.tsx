@@ -165,6 +165,11 @@ interface FreeTrialSettings {
   trial_includes: string[];
 }
 
+interface PlanSettings {
+  yearlyDiscountPercentage: number;
+  databasePerTenantMonthlyPrice: number;
+}
+
 const getIconForPlan = (planName: string, tier: string): typeof Users | typeof Building2 | typeof Zap => {
   const name = planName.toLowerCase();
   const tierLower = tier.toLowerCase();
@@ -176,9 +181,9 @@ const getIconForPlan = (planName: string, tier: string): typeof Users | typeof B
 const getGradientForPlan = (planName: string, tier: string): string => {
   const name = planName.toLowerCase();
   const tierLower = tier.toLowerCase();
-  if (name.includes('enterprise') || name.includes('premium') || tierLower === 'enterprise') return "from-orange-500 to-red-500";
-  if (name.includes('business') || name.includes('professional') || name.includes('pro') || tierLower === 'professional') return "from-purple-500 to-pink-500";
-  return "from-blue-500 to-cyan-500";
+  if (name.includes('enterprise') || name.includes('premium') || tierLower === 'enterprise') return "from-gray-800 to-gray-900";
+  if (name.includes('business') || name.includes('professional') || name.includes('pro') || tierLower === 'professional') return "from-gray-700 to-gray-800";
+  return "from-gray-600 to-gray-700";
 };
 
 const formatCurrency = (amount: number, currency: string): string => {
@@ -280,6 +285,12 @@ export default function CurrentPlanPage() {
   // Free trial settings from admin API
   const [freeTrialSettings, setFreeTrialSettings] = useState<FreeTrialSettings | null>(null);
 
+  // Plan settings from admin API (yearly discount, database extra charge)
+  const [planSettings, setPlanSettings] = useState<PlanSettings | null>(null);
+
+  // Billing period toggle
+  const [isYearly, setIsYearly] = useState(true);
+
   // Get tenant ID from token on mount
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -310,6 +321,22 @@ export default function CurrentPlanPage() {
         }
       } catch (trialError) {
         console.log('Could not fetch free trial settings');
+      }
+
+      // Fetch plan settings (yearly discount, database extra charge)
+      try {
+        const planSettingsResponse = await fetch(`${API_URL}/addons/plan-settings`);
+        if (planSettingsResponse.ok) {
+          const planSettingsResult = await planSettingsResponse.json();
+          const settings = planSettingsResult.data || planSettingsResult;
+          setPlanSettings({
+            yearlyDiscountPercentage: settings.yearlyDiscountPercentage || 0,
+            databasePerTenantMonthlyPrice: settings.databasePerTenantMonthlyPrice || 0,
+          });
+          console.log('[CurrentPlan] Plan settings:', settings);
+        }
+      } catch (planSettingsError) {
+        console.log('Could not fetch plan settings');
       }
 
       let settings: CompanySettings | null = null;
@@ -467,6 +494,7 @@ export default function CurrentPlanPage() {
     setModalStep('isolation');
     setIsolationType('schema');
     setIsNewTenant(false);
+    setIsYearly(true);
     setPaymentMode('card');
     setExternalTransactionId('');
     setTransactionResult(null);
@@ -680,12 +708,26 @@ export default function CurrentPlanPage() {
     ? getDaysRemaining(companySettings.trial_end_date)
     : (freeTrialSettings?.trial_days || 15);
 
+  // Calculate prices for payment
+  const calculatePrices = () => {
+    const basePrice = selectedPlanForPayment?.price || 0;
+    const discountPercent = planSettings?.yearlyDiscountPercentage || 20;
+    const monthlyPrice = basePrice;
+    const yearlyPrice = Math.round(basePrice * 12 * (1 - discountPercent / 100));
+    const yearlyFullPrice = basePrice * 12;
+    const planPrice = isYearly ? yearlyPrice : monthlyPrice;
+    const dbExtraCharge = isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) : 0;
+    const dbChargeTotal = isYearly ? dbExtraCharge * 12 : dbExtraCharge;
+    const totalAmount = planPrice + dbChargeTotal;
+    return { basePrice, monthlyPrice, yearlyPrice, yearlyFullPrice, planPrice, dbExtraCharge, dbChargeTotal, totalAmount };
+  };
+
   if (isLoading) {
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+      <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+            <Loader2 className="w-12 h-12 text-gray-500 animate-spin" />
             <p className="mt-4 text-gray-600">Loading subscription details...</p>
           </div>
         </div>
@@ -694,12 +736,12 @@ export default function CurrentPlanPage() {
   }
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
               <CreditCard className="w-7 h-7 text-white" />
             </div>
             <div>
@@ -745,7 +787,7 @@ export default function CurrentPlanPage() {
                 <div>
                   <h3 className="text-lg font-semibold text-orange-700">Payment Pending</h3>
                   <p className="text-orange-600">
-                    Complete payment for <strong>{selectedPlan.name}</strong> - {formatCurrency(selectedPlan.price || 0, selectedPlan.currency)}{getBillingPeriodLabel(selectedPlan.billingPeriod)}
+                    Complete payment for <strong>{selectedPlan.name}</strong> - {formatCurrency(selectedPlan.price || 0, selectedPlan.currency)}
                   </p>
                 </div>
               </div>
@@ -815,7 +857,7 @@ export default function CurrentPlanPage() {
                 {isOnTrial ? (
                   'Free'
                 ) : currentPlan?.price ? (
-                  <>{formatCurrency(currentPlan.price, currentPlan.currency)}<span className="text-sm font-normal text-gray-500">{getBillingPeriodLabel(currentPlan.billingPeriod)}</span></>
+                  <>{formatCurrency(currentPlan.price, currentPlan.currency)}</>
                 ) : (
                   'Custom'
                 )}
@@ -905,10 +947,37 @@ export default function CurrentPlanPage() {
         {/* Available Plans */}
         {plans.length > 0 && (
           <>
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">
-              {isOnTrial || isLocked ? 'Choose a Plan' : 'Available Plans'}
-            </h2>
-            <div className={`grid gap-8 ${
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 text-center mb-4">
+                {isOnTrial || isLocked ? 'Choose a Plan' : 'Available Plans'}
+              </h2>
+              {/* Billing Toggle - Centered */}
+              <div className="flex items-center justify-center gap-3">
+                <span className={`text-sm font-medium ${!isYearly ? "text-gray-900" : "text-gray-400"}`}>
+                  Monthly
+                </span>
+                <button
+                  onClick={() => setIsYearly(!isYearly)}
+                  className={`relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ${
+                    isYearly ? "bg-gray-800" : "bg-gray-300"
+                  }`}
+                  aria-label="Toggle billing period"
+                >
+                  <span
+                    className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                      isYearly ? "translate-x-6" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+                <span className={`text-sm font-medium ${isYearly ? "text-gray-900" : "text-gray-400"}`}>
+                  Yearly
+                </span>
+                <Badge className="bg-green-100 text-green-700 text-xs">
+                  Save {planSettings?.yearlyDiscountPercentage || 20}%
+                </Badge>
+              </div>
+            </div>
+            <div className={`grid gap-8 pt-8 ${
               plans.length === 1 ? 'md:grid-cols-1 max-w-md' :
               plans.length === 2 ? 'md:grid-cols-2 max-w-3xl' :
               'md:grid-cols-3'
@@ -924,9 +993,9 @@ export default function CurrentPlanPage() {
                       isSelectedPending
                         ? "border-2 border-orange-500 shadow-xl"
                         : plan.isCurrent
-                          ? "border-2 border-blue-500 shadow-xl"
+                          ? "border-2 border-gray-600 shadow-xl"
                           : plan.popular
-                            ? "border-2 border-purple-500 shadow-xl scale-105"
+                            ? "border-2 border-gray-800 shadow-xl scale-105"
                             : "border border-gray-200"
                     }`}
                   >
@@ -939,14 +1008,14 @@ export default function CurrentPlanPage() {
                     )}
                     {plan.isCurrent && !isSelectedPending && (
                       <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                        <Badge className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-1">
+                        <Badge className="bg-gray-700 text-white px-4 py-1">
                           Current Plan
                         </Badge>
                       </div>
                     )}
                     {plan.popular && !plan.isCurrent && !isSelectedPending && (
                       <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                        <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-1">
+                        <Badge className="bg-gray-800 text-white px-4 py-1">
                           Most Popular
                         </Badge>
                       </div>
@@ -961,12 +1030,28 @@ export default function CurrentPlanPage() {
 
                     <div className="mb-6">
                       {plan.price ? (
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-4xl font-bold text-gray-900">
-                            {formatCurrency(plan.price, plan.currency)}
-                          </span>
-                          <span className="text-gray-600">{getBillingPeriodLabel(plan.billingPeriod)}</span>
-                        </div>
+                        <>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-4xl font-bold text-gray-900">
+                              {formatCurrency(
+                                isYearly
+                                  ? Math.round(plan.price * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100))
+                                  : plan.price,
+                                plan.currency
+                              )}
+                            </span>
+                          </div>
+                          {isYearly && (
+                            <div className="mt-2">
+                              <span className="text-sm text-gray-400 line-through">
+                                {formatCurrency(plan.price * 12, plan.currency)}
+                              </span>
+                              <span className="ml-2 text-sm font-medium text-green-600">
+                                Save {formatCurrency(plan.price * 12 - Math.round(plan.price * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)), plan.currency)}
+                              </span>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <div className="text-4xl font-bold text-gray-900">Custom</div>
                       )}
@@ -1045,7 +1130,7 @@ export default function CurrentPlanPage() {
                           : !plan.price
                             ? "bg-gray-100 text-gray-500 cursor-not-allowed"
                             : plan.popular
-                              ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90"
+                              ? "bg-gray-800 text-white hover:bg-gray-700"
                               : "border border-gray-300 text-gray-700 hover:bg-gray-50"
                       }`}
                     >
@@ -1090,7 +1175,7 @@ export default function CurrentPlanPage() {
                     {modalStep === 'result' && 'Upgrade Complete!'}
                   </h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    {selectedPlanForPayment.name} - {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}{getBillingPeriodLabel(selectedPlanForPayment.billingPeriod)}
+                    {selectedPlanForPayment.name} - {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}
                   </p>
                 </div>
                 <button
@@ -1103,11 +1188,11 @@ export default function CurrentPlanPage() {
               {/* Step Indicator */}
               {modalStep !== 'result' && (
                 <div className="flex items-center gap-2 mt-4">
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${modalStep === 'isolation' ? 'bg-blue-600 text-white' : 'bg-green-500 text-white'}`}>1</div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${modalStep === 'isolation' ? 'bg-gray-800 text-white' : 'bg-green-500 text-white'}`}>1</div>
                   <div className={`flex-1 h-1 ${modalStep !== 'isolation' ? 'bg-green-500' : 'bg-gray-200'}`}></div>
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${modalStep === 'tenant' ? 'bg-blue-600 text-white' : modalStep === 'payment' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>2</div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${modalStep === 'tenant' ? 'bg-gray-800 text-white' : modalStep === 'payment' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>2</div>
                   <div className={`flex-1 h-1 ${modalStep === 'payment' ? 'bg-green-500' : 'bg-gray-200'}`}></div>
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${modalStep === 'payment' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>3</div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${modalStep === 'payment' ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-500'}`}>3</div>
                 </div>
               )}
             </div>
@@ -1115,29 +1200,48 @@ export default function CurrentPlanPage() {
             {/* Step 1: Isolation Type Selection */}
             {modalStep === 'isolation' && (
               <div className="p-6 space-y-4">
-                <p className="text-gray-600 mb-4">Choose how your data will be isolated:</p>
+                <p className="text-gray-600">Choose how your data will be isolated:</p>
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     onClick={() => setIsolationType('schema')}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${isolationType === 'schema' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                    className={`p-4 border-2 rounded-xl text-left transition-all ${isolationType === 'schema' ? 'border-gray-700 bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
                   >
-                    <Layers className={`w-8 h-8 mb-2 ${isolationType === 'schema' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <Layers className={`w-8 h-8 mb-2 ${isolationType === 'schema' ? 'text-gray-700' : 'text-gray-400'}`} />
                     <h4 className="font-semibold text-gray-900">Schema</h4>
                     <p className="text-sm text-gray-500 mt-1">Shared database, separate schema per tenant</p>
                   </button>
                   <button
                     onClick={() => setIsolationType('database')}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${isolationType === 'database' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                    className={`p-4 border-2 rounded-xl text-left transition-all ${isolationType === 'database' ? 'border-gray-700 bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
                   >
-                    <Database className={`w-8 h-8 mb-2 ${isolationType === 'database' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <Database className={`w-8 h-8 mb-2 ${isolationType === 'database' ? 'text-gray-700' : 'text-gray-400'}`} />
                     <h4 className="font-semibold text-gray-900">Database</h4>
                     <p className="text-sm text-gray-500 mt-1">Dedicated database per tenant</p>
                   </button>
                 </div>
+                {/* Extra charge info message - always visible */}
+                {planSettings?.databasePerTenantMonthlyPrice && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center shadow-md">
+                        <Database className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Dedicated Database Option</p>
+                        <p className="text-xs text-gray-500">
+                          Additional charge of{' '}
+                          <span className="font-semibold text-gray-700">
+                            {formatCurrency(planSettings.databasePerTenantMonthlyPrice, selectedPlanForPayment?.currency || 'INR')}/month
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-end pt-4">
                   <button
                     onClick={() => setModalStep('tenant')}
-                    className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    className="px-6 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors flex items-center gap-2"
                   >
                     Next <ArrowRight className="w-4 h-4" />
                   </button>
@@ -1152,17 +1256,17 @@ export default function CurrentPlanPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     onClick={() => setIsNewTenant(false)}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${!isNewTenant ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                    className={`p-4 border-2 rounded-xl text-left transition-all ${!isNewTenant ? 'border-gray-700 bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
                   >
-                    <Package className={`w-8 h-8 mb-2 ${!isNewTenant ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <Package className={`w-8 h-8 mb-2 ${!isNewTenant ? 'text-gray-700' : 'text-gray-400'}`} />
                     <h4 className="font-semibold text-gray-900">Existing</h4>
                     <p className="text-sm text-gray-500 mt-1">Use your current database/schema</p>
                   </button>
                   <button
                     onClick={() => setIsNewTenant(true)}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${isNewTenant ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                    className={`p-4 border-2 rounded-xl text-left transition-all ${isNewTenant ? 'border-gray-700 bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
                   >
-                    <Sparkles className={`w-8 h-8 mb-2 ${isNewTenant ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <Sparkles className={`w-8 h-8 mb-2 ${isNewTenant ? 'text-gray-700' : 'text-gray-400'}`} />
                     <h4 className="font-semibold text-gray-900">New</h4>
                     <p className="text-sm text-gray-500 mt-1">Create a fresh database/schema</p>
                   </button>
@@ -1176,7 +1280,7 @@ export default function CurrentPlanPage() {
                   </button>
                   <button
                     onClick={() => setModalStep('payment')}
-                    className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    className="px-6 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors flex items-center gap-2"
                   >
                     Next <ArrowRight className="w-4 h-4" />
                   </button>
@@ -1197,7 +1301,7 @@ export default function CurrentPlanPage() {
                   value={paymentForm.cardholderName}
                   onChange={(e) => setPaymentForm({ ...paymentForm, cardholderName: e.target.value })}
                   placeholder="John Doe"
-                  className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500 ${
                     formErrors.cardholderName ? 'border-red-500' : 'border-gray-300'
                   }`}
                 />
@@ -1216,7 +1320,7 @@ export default function CurrentPlanPage() {
                   onChange={(e) => setPaymentForm({ ...paymentForm, cardNumber: formatCardNumber(e.target.value) })}
                   placeholder="1234 5678 9012 3456"
                   maxLength={19}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-mono"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-colors font-mono"
                 />
               </div>
 
@@ -1228,7 +1332,7 @@ export default function CurrentPlanPage() {
                   <select
                     value={paymentForm.expiryMonth}
                     onChange={(e) => setPaymentForm({ ...paymentForm, expiryMonth: e.target.value })}
-                    className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-colors"
                   >
                     <option value="">MM</option>
                     {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
@@ -1243,7 +1347,7 @@ export default function CurrentPlanPage() {
                   <select
                     value={paymentForm.expiryYear}
                     onChange={(e) => setPaymentForm({ ...paymentForm, expiryYear: e.target.value })}
-                    className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-colors"
                   >
                     <option value="">YY</option>
                     {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map(y => (
@@ -1261,13 +1365,13 @@ export default function CurrentPlanPage() {
                     onChange={(e) => setPaymentForm({ ...paymentForm, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                     placeholder="***"
                     maxLength={4}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-mono"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-colors font-mono"
                   />
                 </div>
               </div>
 
               {/* Payment Summary */}
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-4">
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                 <h4 className="font-medium text-gray-900 mb-3">Payment Summary</h4>
                 <div className="text-sm space-y-2">
                   <div className="flex justify-between">
@@ -1275,17 +1379,48 @@ export default function CurrentPlanPage() {
                     <span className="font-medium text-gray-900">{selectedPlanForPayment?.name}</span>
                   </div>
                   <div className="flex justify-between">
+                    <span className="text-gray-600">Billing:</span>
+                    <span className="font-medium text-gray-900">{isYearly ? 'Yearly' : 'Monthly'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Plan Price:</span>
+                    <div className="text-right">
+                      <span className="font-medium text-gray-900">
+                        {formatCurrency(calculatePrices().planPrice, selectedPlanForPayment?.currency || 'INR')}
+                      </span>
+                      {isYearly && (
+                        <div className="text-xs">
+                          <span className="text-gray-400 line-through mr-2">
+                            {formatCurrency(calculatePrices().yearlyFullPrice, selectedPlanForPayment?.currency || 'INR')}
+                          </span>
+                          <span className="text-green-600 font-medium">
+                            Save {formatCurrency(calculatePrices().yearlyFullPrice - calculatePrices().yearlyPrice, selectedPlanForPayment?.currency || 'INR')}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-gray-600">Isolation:</span>
                     <span className="font-medium text-gray-900 uppercase">{isolationType}</span>
                   </div>
+                  {isolationType === 'database' && planSettings?.databasePerTenantMonthlyPrice ? (
+                    <div className="flex justify-between text-amber-700">
+                      <span>Database Extra Charge:</span>
+                      <span className="font-medium">
+                        +{formatCurrency(calculatePrices().dbChargeTotal, selectedPlanForPayment?.currency || 'INR')}
+                        {isYearly && <span className="text-xs ml-1">({formatCurrency(calculatePrices().dbExtraCharge, selectedPlanForPayment?.currency || 'INR')}/mo × 12)</span>}
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="flex justify-between">
                     <span className="text-gray-600">Tenant:</span>
                     <span className="font-medium text-gray-900">{isNewTenant ? 'New' : 'Existing'}</span>
                   </div>
-                  <div className="flex justify-between pt-2 border-t border-blue-200">
+                  <div className="flex justify-between pt-2 border-t border-gray-200">
                     <span className="text-gray-700 font-medium">Total Amount:</span>
-                    <span className="font-bold text-blue-700 text-lg">
-                      {formatCurrency(selectedPlanForPayment?.price || 0, selectedPlanForPayment?.currency || 'INR')}{getBillingPeriodLabel(selectedPlanForPayment?.billingPeriod || 'ANNUAL')}
+                    <span className="font-bold text-gray-900 text-lg">
+                      {formatCurrency(calculatePrices().totalAmount, selectedPlanForPayment?.currency || 'INR')}
                     </span>
                   </div>
                 </div>
@@ -1303,7 +1438,7 @@ export default function CurrentPlanPage() {
                   <button
                     onClick={handlePaymentSubmit}
                     disabled={isSelectingPlan}
-                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isSelectingPlan ? (
                       <>
@@ -1313,7 +1448,7 @@ export default function CurrentPlanPage() {
                     ) : (
                       <>
                         <CreditCard className="w-4 h-4" />
-                        Pay {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}{getBillingPeriodLabel(selectedPlanForPayment.billingPeriod)}
+                        Pay {formatCurrency(calculatePrices().totalAmount, selectedPlanForPayment.currency)}
                       </>
                     )}
                   </button>
@@ -1361,7 +1496,7 @@ export default function CurrentPlanPage() {
 
                 <button
                   onClick={() => { setShowPaymentModal(false); setModalStep('isolation'); }}
-                  className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                  className="w-full px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
                 >
                   Done
                 </button>

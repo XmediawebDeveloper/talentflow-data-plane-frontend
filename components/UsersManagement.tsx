@@ -16,8 +16,8 @@ const roleLabels: Record<UserRole, string> = {
 };
 
 const roleBadgeColors: Record<UserRole, string> = {
-  tenant_admin: 'bg-purple-100 text-purple-700',
-  recruiter: 'bg-blue-100 text-blue-700',
+  tenant_admin: 'bg-gray-100 text-gray-900',
+  recruiter: 'bg-gray-100 text-gray-900',
   viewer: 'bg-gray-100 text-gray-700',
 };
 
@@ -230,12 +230,12 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
               <UserCog className="w-7 h-7 text-white" />
             </div>
             <div>
@@ -245,7 +245,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
           </div>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-md"
           >
             <Plus className="w-5 h-5" />
             Add User
@@ -262,7 +262,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
             placeholder="Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
           />
         </div>
       </div>
@@ -275,13 +275,13 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm text-gray-600">Admins</p>
-          <p className="text-3xl font-semibold text-purple-600 mt-1">
+          <p className="text-3xl font-semibold text-gray-800 mt-1">
             {users.filter(u => u.role === 'tenant_admin').length}
           </p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm text-gray-600">Recruiters</p>
-          <p className="text-3xl font-semibold text-blue-600 mt-1">
+          <p className="text-3xl font-semibold text-gray-800 mt-1">
             {users.filter(u => u.role === 'recruiter').length}
           </p>
         </div>
@@ -297,7 +297,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            <Loader2 className="w-8 h-8 text-gray-800 animate-spin" />
           </div>
         ) : (
           <table className="w-full">
@@ -330,9 +330,9 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                         user.role === 'tenant_admin'
-                          ? 'bg-gradient-to-br from-purple-600 to-purple-700'
+                          ? 'bg-gradient-to-br from-gray-800 to-gray-900'
                           : user.role === 'recruiter'
-                          ? 'bg-gradient-to-br from-blue-600 to-blue-700'
+                          ? 'bg-gradient-to-br from-gray-800 to-gray-900'
                           : 'bg-gradient-to-br from-gray-500 to-gray-600'
                       }`}>
                         <span className="text-white text-sm font-medium">
@@ -395,7 +395,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => setEditingUser(user)}
-                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -446,7 +446,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   value={newUser.name}
                   onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
                   placeholder="Enter full name"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
               <div>
@@ -458,7 +458,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   value={newUser.email}
                   onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
                   placeholder="user@company.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
               <div>
@@ -470,7 +470,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                   placeholder="Min. 6 characters"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
               <div>
@@ -480,7 +480,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                 <select
                   value={newUser.role}
                   onChange={(e) => handleRoleChange(e.target.value as UserRole)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 >
                   <option value="viewer">Viewer</option>
                   <option value="recruiter">Recruiter</option>
@@ -509,7 +509,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                             [key]: e.target.checked
                           }
                         })}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-600"
+                        className="w-4 h-4 text-gray-800 rounded focus:ring-gray-600"
                       />
                       <span className="text-sm text-gray-700">{label}</span>
                     </label>
@@ -529,7 +529,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
               <button
                 onClick={handleCreateUser}
                 disabled={isSaving}
-                className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 flex items-center gap-2"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 Create User
@@ -562,7 +562,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   type="text"
                   value={editingUser.name}
                   onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
               <div>
@@ -583,7 +583,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                 <select
                   value={editingUser.role}
                   onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as UserRole })}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 >
                   <option value="viewer">Viewer</option>
                   <option value="recruiter">Recruiter</option>
@@ -612,7 +612,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                             [key]: e.target.checked
                           }
                         })}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-600"
+                        className="w-4 h-4 text-gray-800 rounded focus:ring-gray-600"
                       />
                       <span className="text-sm text-gray-700">{label}</span>
                     </label>
@@ -632,7 +632,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
               <button
                 onClick={handleUpdateUser}
                 disabled={isSaving}
-                className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 flex items-center gap-2"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 Save Changes

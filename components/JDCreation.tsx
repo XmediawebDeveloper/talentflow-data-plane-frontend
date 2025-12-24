@@ -75,8 +75,8 @@ const DraggableSkill = ({
   }));
 
   const isMustHave = category === 'mustHaveSkills';
-  const bgColor = isMustHave ? 'bg-red-50' : 'bg-blue-50';
-  const borderColor = isMustHave ? 'border-red-200' : 'border-blue-200';
+  const bgColor = isMustHave ? 'bg-red-50' : 'bg-gray-50';
+  const borderColor = isMustHave ? 'border-red-200' : 'border-gray-200';
 
   return (
     <div 
@@ -95,7 +95,7 @@ const DraggableSkill = ({
               if (e.key === 'Enter') onSaveEdit();
               if (e.key === 'Escape') onCancelEdit();
             }}
-            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
             autoFocus
           />
           <div className="flex gap-1 ml-2">
@@ -126,7 +126,7 @@ const DraggableSkill = ({
               <GripVertical className="w-4 h-4" />
             </div>
             <span 
-              className="text-sm text-gray-900 flex-1 cursor-pointer hover:text-blue-600" 
+              className="text-sm text-gray-900 flex-1 cursor-pointer hover:text-gray-800" 
               onClick={() => onStartEdit(category, index, skill)}
               title="Click to edit"
             >
@@ -136,14 +136,14 @@ const DraggableSkill = ({
           <div className="flex gap-1">
             <button
               onClick={() => onStartEdit(category, index, skill)}
-              className="text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
               title="Edit"
             >
               <Edit2 className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => onMove(skill, category, isMustHave ? 'niceToHaveSkills' : 'mustHaveSkills')}
-              className="text-xs text-blue-600 hover:text-blue-700 px-2"
+              className="text-xs text-gray-800 hover:text-gray-900 px-2"
               title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
             >
               {isMustHave ? '→' : '←'}
@@ -192,7 +192,7 @@ const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkill
         isActive 
           ? isMustHave 
             ? 'border-red-400 bg-red-50' 
-            : 'border-blue-400 bg-blue-50'
+            : 'border-gray-400 bg-gray-50'
           : 'border-transparent'
       }`}
     >
@@ -658,7 +658,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
         {/* Step 1 */}
         <div className="flex flex-col items-center">
           <div className={`flex items-center justify-center w-10 h-10 rounded-full mb-2 ${
-            step === 'create' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'
+            step === 'create' ? 'bg-gray-800 text-white' : 'bg-green-600 text-white'
           }`}>
             {step !== 'create' ? <CheckCircle className="w-6 h-6" /> : '1'}
           </div>
@@ -671,7 +671,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
         {/* Step 2 */}
         <div className="flex flex-col items-center">
           <div className={`flex items-center justify-center w-10 h-10 rounded-full mb-2 ${
-            step === 'extract' ? 'bg-blue-600 text-white' : 
+            step === 'extract' ? 'bg-gray-800 text-white' : 
             step === 'review' ? 'bg-green-600 text-white' : 
             'bg-gray-300 text-gray-600'
           }`}>
@@ -686,7 +686,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
         {/* Step 3 */}
         <div className="flex flex-col items-center">
           <div className={`flex items-center justify-center w-10 h-10 rounded-full mb-2 ${
-            step === 'review' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'
+            step === 'review' ? 'bg-gray-800 text-white' : 'bg-gray-300 text-gray-600'
           }`}>
             3
           </div>
@@ -740,13 +740,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                 onClick={() => setMode('ai')}
                 className={`flex-1 p-6 rounded-lg border-2 transition-all ${
                   mode === 'ai'
-                    ? 'border-blue-600 bg-blue-50'
+                    ? 'border-gray-800 bg-gray-50'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <Wand2 className={`w-6 h-6 ${mode === 'ai' ? 'text-blue-600' : 'text-gray-400'}`} />
-                  <h3 className={mode === 'ai' ? 'text-blue-600' : 'text-gray-900'}>
+                  <Wand2 className={`w-6 h-6 ${mode === 'ai' ? 'text-gray-800' : 'text-gray-400'}`} />
+                  <h3 className={mode === 'ai' ? 'text-gray-800' : 'text-gray-900'}>
                     AI-Generated JD
                   </h3>
                 </div>
@@ -759,13 +759,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                 onClick={() => setMode('manual')}
                 className={`flex-1 p-6 rounded-lg border-2 transition-all ${
                   mode === 'manual'
-                    ? 'border-blue-600 bg-blue-50'
+                    ? 'border-gray-800 bg-gray-50'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <Edit2 className={`w-6 h-6 ${mode === 'manual' ? 'text-blue-600' : 'text-gray-400'}`} />
-                  <h3 className={mode === 'manual' ? 'text-blue-600' : 'text-gray-900'}>
+                  <Edit2 className={`w-6 h-6 ${mode === 'manual' ? 'text-gray-800' : 'text-gray-400'}`} />
+                  <h3 className={mode === 'manual' ? 'text-gray-800' : 'text-gray-900'}>
                     Manual Input
                   </h3>
                 </div>
@@ -791,7 +791,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
                         placeholder="e.g., Senior Software Engineer"
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                       />
                     </div>
 
@@ -804,7 +804,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         onChange={(e) => setAiPrompt(e.target.value)}
                         placeholder="Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"
                         rows={12}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                       />
                       <p className="text-xs text-gray-500 mt-2">
                         💡 Tip: Include details like experience level, key skills, responsibilities, location, team size, or any specific requirements
@@ -814,7 +814,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                     <button
                       onClick={handleGenerateJD}
                       disabled={!jobTitle || !aiPrompt || isGenerating}
-                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-md hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white px-6 py-3 rounded-md hover:from-blue-700 hover:to-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Wand2 className="w-5 h-5" />
                       {isGenerating ? (
@@ -844,7 +844,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
                         placeholder="e.g., Senior Software Engineer"
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                       />
                     </div>
 
@@ -857,7 +857,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         onChange={(e) => setManualJD(e.target.value)}
                         placeholder="Paste or write your job description here..."
                         rows={20}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                       />
                     </div>
                   </div>
@@ -913,7 +913,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                           onClick={() => setIsEditingJD(!isEditingJD)}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                             isEditingJD
-                              ? 'bg-blue-600 text-white hover:bg-blue-700'
+                              ? 'bg-gray-800 text-white hover:bg-gray-900'
                               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
                         >
@@ -935,7 +935,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         <textarea
                           value={generatedJD}
                           onChange={(e) => setGeneratedJD(e.target.value)}
-                          className="w-full h-[600px] px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent font-mono text-sm"
+                          className="w-full h-[600px] px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent font-mono text-sm"
                         />
                       ) : (
                         <div className="h-[600px] overflow-y-auto px-6 py-4 border border-gray-300 rounded-md bg-white markdown-content">
@@ -979,7 +979,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
               <button
                 onClick={handleNext}
                 disabled={isExtracting || !jobTitle || (mode === 'ai' ? !generatedJD : !manualJD)}
-                className="flex items-center gap-2 bg-blue-600 text-white px-8 py-3 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isExtracting ? 'Extracting...' : 'Next: Extract Skills'}
                 <ChevronRight className="w-5 h-5" />
@@ -993,10 +993,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
           <div className="space-y-6">
             {/* Drag & Drop Tips */}
             {showDragTips && (
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
+              <div className="bg-gradient-to-r from-gray-50 to-indigo-50 border border-gray-200 rounded-xl p-5">
                 <div className="flex items-start gap-4">
                   <div className="flex-shrink-0">
-                    <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
                       <Info className="w-5 h-5 text-white" />
                     </div>
                   </div>
@@ -1005,7 +1005,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       <h3 className="text-blue-900">💡 Pro Tips: Managing Skills</h3>
                       <button
                         onClick={() => setShowDragTips(false)}
-                        className="text-blue-600 hover:text-blue-700 text-sm flex items-center gap-1"
+                        className="text-gray-800 hover:text-gray-900 text-sm flex items-center gap-1"
                       >
                         <X className="w-4 h-4" />
                         Dismiss
@@ -1013,19 +1013,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                     </div>
                     <div className="grid grid-cols-3 gap-4 text-sm text-blue-800">
                       <div className="flex items-start gap-2">
-                        <GripVertical className="w-4 h-4 mt-0.5 text-blue-600 flex-shrink-0" />
+                        <GripVertical className="w-4 h-4 mt-0.5 text-gray-800 flex-shrink-0" />
                         <div>
                           <strong>Drag & Drop:</strong> Hover over a skill and grab the grip icon to drag it between Must-Have and Nice-to-Have
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
-                        <Edit2 className="w-4 h-4 mt-0.5 text-blue-600 flex-shrink-0" />
+                        <Edit2 className="w-4 h-4 mt-0.5 text-gray-800 flex-shrink-0" />
                         <div>
                           <strong>Click to Edit:</strong> Click on any skill or comment text to edit it inline. Press Enter to save, Escape to cancel
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
-                        <span className="text-blue-600 mt-0.5 flex-shrink-0">← →</span>
+                        <span className="text-gray-800 mt-0.5 flex-shrink-0">← →</span>
                         <div>
                           <strong>Arrow Buttons:</strong> Use arrow buttons to quickly move skills between categories
                         </div>
@@ -1050,7 +1050,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                     <h3 className="text-gray-900">Must-Have Skills</h3>
                     <button
                       onClick={() => setEditingCategory('mustHave')}
-                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                      className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
                     >
                       <Plus className="w-4 h-4" />
                       Add
@@ -1064,12 +1064,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         onChange={(e) => setNewSkill(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddSkill('mustHaveSkills')}
                         placeholder="Enter skill..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
                         autoFocus
                       />
                       <button
                         onClick={() => handleAddSkill('mustHaveSkills')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
                       >
                         Add
                       </button>
@@ -1104,7 +1104,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                     <h3 className="text-gray-900">Nice-to-Have Skills</h3>
                     <button
                       onClick={() => setEditingCategory('niceToHave')}
-                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                      className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
                     >
                       <Plus className="w-4 h-4" />
                       Add
@@ -1118,12 +1118,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         onChange={(e) => setNewSkill(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddSkill('niceToHaveSkills')}
                         placeholder="Enter skill..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
                         autoFocus
                       />
                       <button
                         onClick={() => handleAddSkill('niceToHaveSkills')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
                       >
                         Add
                       </button>
@@ -1158,7 +1158,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                     <h3 className="text-gray-900">Must-Have Comments</h3>
                     <button
                       onClick={() => setEditingCategory('comments')}
-                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                      className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
                     >
                       <Plus className="w-4 h-4" />
                       Add
@@ -1172,12 +1172,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         onChange={(e) => setNewComment(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
                         placeholder="Enter comment..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
                         autoFocus
                       />
                       <button
                         onClick={handleAddComment}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
                       >
                         Add
                       </button>
@@ -1196,7 +1196,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                                 if (e.key === 'Enter') handleSaveEditComment();
                                 if (e.key === 'Escape') handleCancelEditComment();
                               }}
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
                               autoFocus
                             />
                             <div className="flex gap-1 ml-2">
@@ -1219,7 +1219,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         ) : (
                           <>
                             <span 
-                              className="text-sm text-gray-900 flex-1 cursor-pointer hover:text-blue-600" 
+                              className="text-sm text-gray-900 flex-1 cursor-pointer hover:text-gray-800" 
                               onClick={() => handleStartEditComment(index, comment)}
                               title="Click to edit"
                             >
@@ -1228,7 +1228,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                             <div className="flex gap-1">
                               <button
                                 onClick={() => handleStartEditComment(index, comment)}
-                                className="text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
                                 title="Edit"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
@@ -1256,7 +1256,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   <div className="flex items-center gap-2 mb-4">
                     <h3 className="text-gray-900">Assessment Guidance</h3>
                     <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Optional</span>
-                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded" title="This guidance will be shared with assessment creators">
+                    <span className="text-xs text-gray-800 bg-gray-50 px-2 py-1 rounded" title="This guidance will be shared with assessment creators">
                       ℹ️ Visible to assessment team
                     </span>
                   </div>
@@ -1268,7 +1268,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                     onChange={(e) => setExtractedData(prev => ({ ...prev, assessmentGuidance: e.target.value }))}
                     placeholder="e.g., Focus on system design, coding best practices, problem-solving approach..."
                     rows={8}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm resize-none"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none"
                   />
                 </div>
 
@@ -1287,7 +1287,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   <div className="flex items-center justify-end mb-3">
                     <button
                       onClick={() => setEditingCategory('recruiterComments')}
-                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                      className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
                     >
                       <Plus className="w-4 h-4" />
                       Add Note
@@ -1302,12 +1302,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         onChange={(e) => setNewRecruiterComment(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddRecruiterComment()}
                         placeholder="Enter internal note..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
                         autoFocus
                       />
                       <button
                         onClick={handleAddRecruiterComment}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
                       >
                         Add
                       </button>
@@ -1327,7 +1327,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                                 if (e.key === 'Enter') handleSaveEditRecruiterComment();
                                 if (e.key === 'Escape') handleCancelEditRecruiterComment();
                               }}
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
                               autoFocus
                             />
                             <div className="flex gap-1 ml-2">
@@ -1350,7 +1350,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         ) : (
                           <>
                             <span 
-                              className="text-sm text-gray-900 flex-1 cursor-pointer hover:text-blue-600" 
+                              className="text-sm text-gray-900 flex-1 cursor-pointer hover:text-gray-800" 
                               onClick={() => handleStartEditRecruiterComment(index, comment)}
                               title="Click to edit"
                             >
@@ -1359,7 +1359,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                             <div className="flex gap-1">
                               <button
                                 onClick={() => handleStartEditRecruiterComment(index, comment)}
-                                className="text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
                                 title="Edit"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
@@ -1388,7 +1388,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   <select
                     value={extractedData.experience}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, experience: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm mb-3"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3"
                     disabled={masterDataLoading}
                   >
                     <option value="">{masterDataLoading ? 'Loading...' : 'Select experience level'}</option>
@@ -1401,7 +1401,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       type="checkbox"
                       checked={Boolean(extractedData.experienceRequired)}
                       onChange={(e) => setExtractedData(prev => ({ ...prev, experienceRequired: e.target.checked }))}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-600"
+                      className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
                     />
                     <span className="text-sm text-gray-700">Required</span>
                   </label>
@@ -1413,7 +1413,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   <select
                     value={extractedData.education}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, education: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm mb-3"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3"
                     disabled={masterDataLoading}
                   >
                     <option value="">{masterDataLoading ? 'Loading...' : 'Select education level'}</option>
@@ -1426,7 +1426,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       type="checkbox"
                       checked={Boolean(extractedData.educationRequired)}
                       onChange={(e) => setExtractedData(prev => ({ ...prev, educationRequired: e.target.checked }))}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-600"
+                      className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
                     />
                     <span className="text-sm text-gray-700">Required</span>
                   </label>
@@ -1438,7 +1438,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   <select
                     value={extractedData.industryType}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, industryType: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm mb-3"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3"
                     disabled={masterDataLoading}
                   >
                     <option value="">{masterDataLoading ? 'Loading...' : 'Select industry type'}</option>
@@ -1451,7 +1451,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       type="checkbox"
                       checked={Boolean(extractedData.industryTypeRequired)}
                       onChange={(e) => setExtractedData(prev => ({ ...prev, industryTypeRequired: e.target.checked }))}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-600"
+                      className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
                     />
                     <span className="text-sm text-gray-700">Required</span>
                   </label>
@@ -1467,20 +1467,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         value={extractedData.salaryFrom || ''}
                         onChange={(e) => setExtractedData(prev => ({ ...prev, salaryFrom: e.target.value }))}
                         placeholder="From"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
                       />
                       <input
                         type="text"
                         value={extractedData.salaryTo || ''}
                         onChange={(e) => setExtractedData(prev => ({ ...prev, salaryTo: e.target.value }))}
                         placeholder="To"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
                       />
                     </div>
                     <select
                       value={extractedData.compensationType}
                       onChange={(e) => setExtractedData(prev => ({ ...prev, compensationType: e.target.value as 'hourly' | 'daily' | 'monthly' | 'yearly' }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
                     >
                       <option value="hourly">Hourly</option>
                       <option value="daily">Daily</option>
@@ -1505,7 +1505,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       onChange={(e) => setExtractedData(prev => ({ ...prev, allowOverqualified: e.target.checked }))}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
                   </label>
                 </div>
               </div>
@@ -1520,7 +1520,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         type="checkbox"
                         checked={Boolean(extractedData.locationsRequired)}
                         onChange={(e) => setExtractedData(prev => ({ ...prev, locationsRequired: e.target.checked }))}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-600"
+                        className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
                       />
                       <span className="text-sm text-gray-700">Required</span>
                     </label>
@@ -1528,7 +1528,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   <div className="relative">
                     <button
                       onClick={() => setShowLocationMenu(!showLocationMenu)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center gap-2"
+                      className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm flex items-center gap-2"
                     >
                       <Plus className="w-4 h-4" />
                       Add Location
@@ -1559,7 +1559,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                               <select
                                 value={newLocation.city}
                                 onChange={(e) => setNewLocation(prev => ({ ...prev, city: e.target.value }))}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
                                 autoFocus
                               >
                                 <option value="">Select a location</option>
@@ -1607,7 +1607,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                               <select
                                 value={newLocation.radius}
                                 onChange={(e) => setNewLocation(prev => ({ ...prev, radius: e.target.value }))}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-sm"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
                               >
                                 <option value="10">10 miles</option>
                                 <option value="25">25 miles</option>
@@ -1622,7 +1622,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                             {/* Add Button */}
                             <button
                               onClick={handleAddLocation}
-                              className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm mt-2"
+                              className="w-full px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm mt-2"
                             >
                               Add Location
                             </button>
@@ -1675,20 +1675,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
         {step === 'review' && !isPublished && (
           <div className="space-y-6">
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-6 text-white">
+            <div className="bg-gradient-to-r from-gray-800 to-gray-800 rounded-lg p-6 text-white">
               <h2 className="text-2xl mb-2">Review & Publish</h2>
-              <p className="text-blue-100">
+              <p className="text-gray-100">
                 Review all details before publishing. Once published, this JD will be locked and available to all authorized users.
               </p>
             </div>
 
             {/* Final JD Document View */}
-            <div className="bg-white rounded-lg border-2 border-blue-200 shadow-lg">
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 px-6 py-4 border-b border-blue-200">
+            <div className="bg-white rounded-lg border-2 border-gray-200 shadow-lg">
+              <div className="bg-gradient-to-r from-gray-50 to-gray-50 px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg text-gray-900 flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-blue-600" />
+                      <FileText className="w-5 h-5 text-gray-800" />
                       Final Job Description
                     </h3>
                     <p className="text-sm text-gray-600 mt-1">This is the job description that will be published</p>
@@ -1773,11 +1773,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
 
                       {extractedData.niceToHaveSkills.length > 0 && (
                         <div>
-                          <h4 className="text-sm uppercase tracking-wide text-blue-600 mb-3">Nice-to-Have Skills</h4>
+                          <h4 className="text-sm uppercase tracking-wide text-gray-800 mb-3">Nice-to-Have Skills</h4>
                           <div className="grid grid-cols-2 gap-2">
                             {extractedData.niceToHaveSkills.map((skill, index) => (
                               <div key={index} className="flex items-center gap-2 text-sm text-gray-600">
-                                <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                <CheckCircle className="w-4 h-4 text-gray-800 flex-shrink-0" />
                                 {skill}
                               </div>
                             ))}
@@ -1807,8 +1807,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       <h3 className="text-xl text-gray-900 mb-3">Location{extractedData.locations.length > 1 ? 's' : ''}</h3>
                       <div className="flex flex-wrap gap-2">
                         {extractedData.locations.map((loc, index) => (
-                          <div key={index} className="bg-blue-50 border border-blue-200 text-blue-900 px-4 py-2 rounded-lg">
-                            📍 {loc.city} <span className="text-blue-600 text-sm">(within {loc.radius} miles)</span>
+                          <div key={index} className="bg-gray-50 border border-gray-200 text-blue-900 px-4 py-2 rounded-lg">
+                            📍 {loc.city} <span className="text-gray-800 text-sm">(within {loc.radius} miles)</span>
                           </div>
                         ))}
                       </div>
@@ -1855,7 +1855,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                     <div className="space-y-2">
                       {extractedData.niceToHaveSkills.map((skill, index) => (
                         <div key={index} className="flex items-center gap-2 text-sm text-gray-600">
-                          <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                          <CheckCircle className="w-4 h-4 text-gray-800 flex-shrink-0" />
                           {skill}
                         </div>
                       ))}
@@ -1932,8 +1932,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {extractedData.locations.map((loc, index) => (
-                      <div key={index} className="bg-blue-50 text-blue-900 px-3 py-2 rounded-lg text-sm">
-                        {loc.city} <span className="text-blue-600">(+{loc.radius}mi)</span>
+                      <div key={index} className="bg-gray-50 text-blue-900 px-3 py-2 rounded-lg text-sm">
+                        {loc.city} <span className="text-gray-800">(+{loc.radius}mi)</span>
                       </div>
                     ))}
                   </div>
@@ -1945,7 +1945,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                 <div className="p-6 border-b border-gray-200">
                   <h3 className="text-gray-900 mb-3 flex items-center gap-2">
                     Assessment Guidance
-                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                    <span className="text-xs text-gray-800 bg-gray-50 px-2 py-1 rounded">
                       ℹ️ Visible to assessment team
                     </span>
                   </h3>
@@ -2075,7 +2075,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
               </button>
               <button 
                 onClick={onBack}
-                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="px-6 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
               >
                 View All Jobs
               </button>

@@ -54,7 +54,7 @@ export default function SelectSourceModal({
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md animate-scale-in">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-blue-50 to-white">
+        <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
           <div>
             <h2 className="text-xl text-gray-900">Select Resume Source</h2>
             <p className="text-sm text-gray-600 mt-1">Choose where to select resumes from</p>
@@ -70,9 +70,9 @@ export default function SelectSourceModal({
         {/* Content */}
         <div className="p-6">
           {/* Job Context */}
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
             <div className="text-sm text-blue-900 mb-1">Scoring resumes for:</div>
-            <div className="text-blue-700">{jobTitle}</div>
+            <div className="text-gray-900">{jobTitle}</div>
           </div>
 
           {/* Source Options */}
@@ -80,11 +80,11 @@ export default function SelectSourceModal({
             {/* My Resumes */}
             <button
               onClick={() => handleSelectSource('my-resumes')}
-              className="w-full p-5 border-2 border-gray-200 rounded-lg hover:border-blue-600 hover:bg-blue-50 transition-all text-left group"
+              className="w-full p-5 border-2 border-gray-200 rounded-lg hover:border-gray-800 hover:bg-gray-50 transition-all text-left group"
             >
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-600 transition-colors">
-                  <Users className="w-6 h-6 text-blue-600 group-hover:text-white transition-colors" />
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-gray-800 transition-colors">
+                  <Users className="w-6 h-6 text-gray-800 group-hover:text-white transition-colors" />
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">

@@ -189,22 +189,22 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
   // Consent Screen
   if (step === 'consent') {
     return (
-      <div className="min-h-screen max-h-screen overflow-y-auto bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-6">
+      <div className="min-h-screen max-h-screen overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center p-6">
         <div className="max-w-3xl w-full bg-white rounded-2xl shadow-xl border border-gray-200 my-6">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-8 rounded-t-2xl">
+          <div className="bg-gradient-to-r from-gray-800 to-gray-800 text-white p-8 rounded-t-2xl">
             <div className="flex items-center gap-3 mb-4">
               <Shield className="w-10 h-10" />
               <div>
                 <h1 className="text-2xl">Assessment Consent & Terms</h1>
-                <p className="text-blue-100 text-sm">Please review and accept before proceeding</p>
+                <p className="text-gray-100 text-sm">Please review and accept before proceeding</p>
               </div>
             </div>
           </div>
 
           <div className="p-6">
             {/* Candidate Info */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
               <div className="text-sm text-blue-900 mb-2">Assessment Details</div>
               <div className="text-gray-900 mb-1">{assessment.title}</div>
               <div className="text-sm text-gray-600">
@@ -214,17 +214,17 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
 
             {/* Consent Items */}
             <div className="space-y-3 mb-6">
-              <div className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 transition-colors">
+              <div className="border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors">
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={consentChecks.terms}
                     onChange={(e) => setConsentChecks({ ...consentChecks, terms: e.target.checked })}
-                    className="w-5 h-5 text-blue-600 rounded mt-1 cursor-pointer flex-shrink-0"
+                    className="w-5 h-5 text-gray-800 rounded mt-1 cursor-pointer flex-shrink-0"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <FileText className="w-4 h-4 text-blue-600" />
+                      <FileText className="w-4 h-4 text-gray-800" />
                       <span className="text-sm text-gray-900">Terms & Conditions</span>
                     </div>
                     <p className="text-xs text-gray-600">
@@ -234,17 +234,17 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                 </label>
               </div>
 
-              <div className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 transition-colors">
+              <div className="border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors">
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={consentChecks.dataUse}
                     onChange={(e) => setConsentChecks({ ...consentChecks, dataUse: e.target.checked })}
-                    className="w-5 h-5 text-blue-600 rounded mt-1 cursor-pointer flex-shrink-0"
+                    className="w-5 h-5 text-gray-800 rounded mt-1 cursor-pointer flex-shrink-0"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <Lock className="w-4 h-4 text-purple-600" />
+                      <Lock className="w-4 h-4 text-gray-800" />
                       <span className="text-sm text-gray-900">Data Use & Privacy</span>
                     </div>
                     <p className="text-xs text-gray-600">
@@ -254,13 +254,13 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                 </label>
               </div>
 
-              <div className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 transition-colors">
+              <div className="border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors">
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={consentChecks.recording}
                     onChange={(e) => setConsentChecks({ ...consentChecks, recording: e.target.checked })}
-                    className="w-5 h-5 text-blue-600 rounded mt-1 cursor-pointer flex-shrink-0"
+                    className="w-5 h-5 text-gray-800 rounded mt-1 cursor-pointer flex-shrink-0"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
@@ -274,17 +274,17 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                 </label>
               </div>
 
-              <div className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 transition-colors">
+              <div className="border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors">
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={consentChecks.честность}
                     onChange={(e) => setConsentChecks({ ...consentChecks, честность: e.target.checked })}
-                    className="w-5 h-5 text-blue-600 rounded mt-1 cursor-pointer flex-shrink-0"
+                    className="w-5 h-5 text-gray-800 rounded mt-1 cursor-pointer flex-shrink-0"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                      <CheckCircle2 className="w-4 h-4 text-gray-800" />
                       <span className="text-sm text-gray-900">Honesty & Integrity</span>
                     </div>
                     <p className="text-xs text-gray-600">
@@ -316,7 +316,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
               <button
                 onClick={handleStartAssessment}
                 disabled={!allConsentsGiven}
-                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2"
+                className="flex-1 bg-gray-800 text-white px-6 py-3 rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2"
               >
                 <CheckCircle2 className="w-5 h-5" />
                 I Accept - Continue to Assessment
@@ -331,10 +331,10 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
   // Ready Screen
   if (step === 'ready') {
     return (
-      <div className="min-h-screen max-h-screen overflow-y-auto bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-6">
+      <div className="min-h-screen max-h-screen overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center p-6">
         <div className="max-w-4xl w-full bg-white rounded-2xl shadow-xl border border-gray-200 my-6">
           {/* Header */}
-          <div className="bg-gradient-to-r from-green-600 to-blue-600 text-white p-6 rounded-t-2xl">
+          <div className="bg-gradient-to-r from-green-600 to-gray-800 text-white p-6 rounded-t-2xl">
             <div className="flex items-center gap-3">
               <Sparkles className="w-8 h-8" />
               <div>
@@ -346,7 +346,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
 
           <div className="p-6">
             {/* Welcome Message */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
               <h3 className="text-base text-gray-900 mb-1">Welcome, {candidateName}!</h3>
               <p className="text-sm text-gray-700">
                 You're about to begin your assessment for <strong>{assessment.jobTitle}</strong> at {assessment.companyName}. 
@@ -358,13 +358,13 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             <div className="mb-4">
               <h3 className="text-base text-gray-900 mb-3">Assessment Overview</h3>
               <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-                  <Clock className="w-5 h-5 text-purple-600 mb-1" />
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <Clock className="w-5 h-5 text-gray-800 mb-1" />
                   <div className="text-xl text-gray-900">{assessment.duration} min</div>
                   <div className="text-xs text-gray-600">Total Duration</div>
                 </div>
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <MessageSquare className="w-5 h-5 text-blue-600 mb-1" />
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <MessageSquare className="w-5 h-5 text-gray-800 mb-1" />
                   <div className="text-xl text-gray-900">{assessment.sections.length}</div>
                   <div className="text-xs text-gray-600">Sections</div>
                 </div>
@@ -384,7 +384,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                         <div className="text-sm text-gray-900">{section.name} Section</div>
                         <div className="text-xs text-gray-600">~{section.estimatedTime} minutes</div>
                       </div>
-                      <div className="text-lg text-blue-600">{section.percentage}%</div>
+                      <div className="text-lg text-gray-800">{section.percentage}%</div>
                     </div>
                   </div>
                 ))}
@@ -392,7 +392,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             </div>
 
             {/* Instructions */}
-            <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4 mb-4">
+            <div className="bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
               <h4 className="text-sm text-gray-900 mb-2">How It Works</h4>
               <div className="space-y-1 text-xs text-gray-700">
                 <p>✓ The AI will ask you questions one at a time</p>
@@ -428,10 +428,10 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
           <div className="max-w-5xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-purple-600" />
+                <Sparkles className="w-5 h-5 text-gray-800" />
                 <span className="text-gray-900">Assessment</span>
               </div>
-              <div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+              <div className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-sm">
                 Question {currentQuestion + 1} of {aiQuestions.length}
               </div>
             </div>
@@ -454,7 +454,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
           <div className="max-w-5xl mx-auto mt-3">
             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
               <div 
-                className="h-full bg-gradient-to-r from-blue-600 to-purple-600 transition-all duration-500"
+                className="h-full bg-gradient-to-r from-gray-800 to-gray-800 transition-all duration-500"
                 style={{ width: `${progress}%` }}
               ></div>
             </div>
@@ -468,7 +468,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             {currentQ.type !== 'coding' && (
               <div className="px-6 pt-6 pb-4">
                 <div className="max-w-5xl mx-auto">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-full">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-900 rounded-full">
                     <span className="text-sm">{currentQ.section} Section</span>
                   </div>
                 </div>
@@ -481,18 +481,18 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                 <div className="max-w-5xl mx-auto">
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                     <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center flex-shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-500 flex items-center justify-center flex-shrink-0">
                         <Sparkles className="w-5 h-5 text-white" />
                       </div>
                       <div className="flex-1">
-                        <div className="text-sm text-purple-600 mb-2">AI Interviewer</div>
+                        <div className="text-sm text-gray-800 mb-2">AI Interviewer</div>
                         <p className="text-base text-gray-900 leading-relaxed mb-3">{currentQ.question}</p>
                         
                         {/* Scenario for Technical Questions */}
                         {currentQ.type === 'technical' && currentQ.scenario && (
-                          <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+                          <div className="mt-4 p-4 bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg">
                             <div className="flex items-start gap-2 mb-2">
-                              <FileText className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                              <FileText className="w-4 h-4 text-gray-800 mt-0.5 flex-shrink-0" />
                               <span className="text-sm text-blue-900">Scenario:</span>
                             </div>
                             <p className="text-sm text-gray-700 whitespace-pre-line ml-6">{currentQ.scenario}</p>
@@ -514,14 +514,14 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             {aiTyping && (
               <div className="px-6 pb-6">
                 <div className="max-w-5xl mx-auto">
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-6">
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-6">
                     <div className="flex items-center gap-3">
                       <div className="flex gap-1">
-                        <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                        <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                        <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
                       </div>
-                      <span className="text-sm text-blue-700">AI is processing your response...</span>
+                      <span className="text-sm text-gray-900">AI is processing your response...</span>
                     </div>
                   </div>
                 </div>
@@ -542,7 +542,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                           <div className="flex-1 flex gap-6 min-h-0 mb-4">
                             {/* LEFT SIDE: Question & Scenario */}
                             <div className="w-1/2 flex flex-col rounded-xl shadow-lg overflow-hidden border border-gray-200 bg-white">
-                              <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-5 py-3.5 flex items-center gap-3">
+                              <div className="bg-gradient-to-r from-gray-800 to-gray-800 text-white px-5 py-3.5 flex items-center gap-3">
                                 <FileText className="w-5 h-5" />
                                 <span className="font-medium">Problem Statement</span>
                               </div>
@@ -550,10 +550,10 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                                 <h3 className="text-xl text-gray-900 mb-4 leading-relaxed">{currentQ.question}</h3>
                                 
                                 {currentQ.scenario && (
-                                  <div className="mt-4 p-5 bg-white border border-blue-200 rounded-xl shadow-sm">
+                                  <div className="mt-4 p-5 bg-white border border-gray-200 rounded-xl shadow-sm">
                                     <div className="flex items-center gap-2 mb-3">
-                                      <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                                        <FileText className="w-4 h-4 text-blue-600" />
+                                      <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                                        <FileText className="w-4 h-4 text-gray-800" />
                                       </div>
                                       <span className="text-sm font-semibold text-blue-900">Problem Description</span>
                                     </div>
@@ -562,13 +562,13 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                                 )}
                                 
                                 {/* AI-Detected Language Info */}
-                                <div className="mt-6 flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-100 to-blue-100 border border-purple-300 rounded-lg shadow-sm">
-                                  <Sparkles className="w-4 h-4 text-purple-600" />
+                                <div className="mt-6 flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-100 to-gray-100 border border-gray-300 rounded-lg shadow-sm">
+                                  <Sparkles className="w-4 h-4 text-gray-800" />
                                   <span className="text-sm text-gray-700">Detected Language:</span>
                                   <span className="text-sm font-bold text-gray-900 uppercase">
                                     {currentQ.programmingLanguage || 'python'}
                                   </span>
-                                  <Terminal className="w-4 h-4 text-purple-600 ml-auto" />
+                                  <Terminal className="w-4 h-4 text-gray-800 ml-auto" />
                                 </div>
                               </div>
                             </div>
@@ -629,9 +629,9 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                               ) : isRunning ? (
                                 <div className="flex items-center gap-2 text-gray-600">
                                   <div className="flex gap-1">
-                                    <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
-                                    <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                                    <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                                    <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce"></div>
+                                    <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                                    <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
                                   </div>
                                   <span className="text-sm">Executing...</span>
                                 </div>
@@ -659,7 +659,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                               <button
                                 onClick={handleSubmitAnswer}
                                 disabled={!codeAnswer.trim()}
-                                className="flex items-center gap-2.5 bg-blue-600 text-white px-10 py-3.5 rounded-xl hover:bg-blue-700 transition-all disabled:bg-gray-300 disabled:cursor-not-allowed shadow-lg hover:shadow-xl font-medium text-base"
+                                className="flex items-center gap-2.5 bg-gray-800 text-white px-10 py-3.5 rounded-xl hover:bg-gray-900 transition-all disabled:bg-gray-300 disabled:cursor-not-allowed shadow-lg hover:shadow-xl font-medium text-base"
                               >
                                 <Send className="w-5 h-5" />
                                 Submit
@@ -677,7 +677,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                         value={answer}
                         onChange={(e) => setAnswer(e.target.value)}
                         placeholder="Type your answer here... Be specific and provide examples where possible."
-                        className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900"
+                        className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent resize-none text-gray-900"
                       />
                       <div className="flex items-center justify-between mt-4">
                         <div className="text-sm text-gray-500">
@@ -686,7 +686,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                         <button
                           onClick={handleSubmitAnswer}
                           disabled={!answer.trim()}
-                          className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25"
+                          className="flex items-center gap-2 bg-gray-800 text-white px-6 py-3 rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25"
                         >
                           <Send className="w-5 h-5" />
                           Submit Answer
@@ -706,7 +706,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
   // Completed Screen
   if (step === 'completed') {
     return (
-      <div className="min-h-screen max-h-screen overflow-y-auto bg-gradient-to-br from-green-50 via-white to-blue-50 flex items-center justify-center p-6">
+      <div className="min-h-screen max-h-screen overflow-y-auto bg-gradient-to-br from-green-50 via-white to-gray-50 flex items-center justify-center p-6">
         <div className="max-w-3xl w-full bg-white rounded-2xl shadow-xl border border-gray-200 my-6">
           <div className="p-8 text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -718,19 +718,19 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             </p>
 
             {/* Results Info */}
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
               <h3 className="text-base text-gray-900 mb-3">What Happens Next?</h3>
               <div className="text-left space-y-2 text-gray-700">
                 <div className="flex items-start gap-2">
-                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 text-xs">1</div>
+                  <div className="w-5 h-5 rounded-full bg-gray-800 text-white flex items-center justify-center flex-shrink-0 text-xs">1</div>
                   <p className="text-xs">Your assessment results are being analyzed by our AI system</p>
                 </div>
                 <div className="flex items-start gap-2">
-                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 text-xs">2</div>
+                  <div className="w-5 h-5 rounded-full bg-gray-800 text-white flex items-center justify-center flex-shrink-0 text-xs">2</div>
                   <p className="text-xs">Our recruitment team will review your performance and responses</p>
                 </div>
                 <div className="flex items-start gap-2">
-                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 text-xs">3</div>
+                  <div className="w-5 h-5 rounded-full bg-gray-800 text-white flex items-center justify-center flex-shrink-0 text-xs">3</div>
                   <p className="text-xs">You'll receive an email update within 3-5 business days</p>
                 </div>
               </div>

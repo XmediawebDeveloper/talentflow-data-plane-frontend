@@ -200,7 +200,7 @@ export default function PreConditionGuard({
           {errors.some(e => e.type === 'subscription' || e.type === 'units') && onUpgradePlan && (
             <button
               onClick={onUpgradePlan}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
             >
               Upgrade Plan
             </button>
@@ -219,9 +219,9 @@ export default function PreConditionGuard({
         </div>
 
         {/* Info Box */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
               <p className="mb-1">
                 <strong>Need help?</strong>

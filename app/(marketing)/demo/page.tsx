@@ -29,7 +29,7 @@ export default function DemoPage() {
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           {/* Left Side */}
           <div>
-            <Badge className="mb-4 px-4 py-2 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-0">
+            <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0">
               <Play className="w-4 h-4 mr-2" />
               Request Demo
             </Badge>
@@ -58,7 +58,7 @@ export default function DemoPage() {
           {/* Right Side - Form */}
           <Card className="p-8">
             <div className="flex items-center gap-3 mb-6">
-              <Calendar className="w-6 h-6 text-purple-500" />
+              <Calendar className="w-6 h-6 text-gray-700" />
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Book your demo
               </h2>
@@ -107,13 +107,13 @@ export default function DemoPage() {
                 />
               </div>
 
-              <Button type="submit" className="w-full h-12 bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90">
+              <Button type="submit" className="w-full h-12 bg-gradient-to-r from-gray-700 to-pink-500 hover:opacity-90">
                 Request Demo
               </Button>
 
               <p className="text-sm text-gray-500 text-center">
                 Or start your{" "}
-                <a href="/signup" className="text-purple-600 hover:underline">
+                <a href="/signup" className="text-gray-800 hover:underline">
                   14-day free trial
                 </a>{" "}
                 now

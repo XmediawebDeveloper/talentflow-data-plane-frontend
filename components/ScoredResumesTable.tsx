@@ -273,7 +273,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
             <>
               <button
                 onClick={handleDownloadBulkScorecards}
-                className="px-4 py-2 text-sm border border-blue-300 text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors flex items-center gap-2"
+                className="px-4 py-2 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2"
               >
                 <Download className="w-4 h-4" />
                 Download Scorecards ({selectedResumes.length})
@@ -310,7 +310,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by name, email, or phone..."
-              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
             />
           </div>
 
@@ -319,14 +319,14 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
             onClick={() => setShowFilters(!showFilters)}
             className={`px-4 py-2 text-sm border rounded-md transition-colors flex items-center gap-2 ${
               showFilters || hasActiveFilters
-                ? 'bg-blue-50 border-blue-300 text-blue-700'
+                ? 'bg-gray-50 border-gray-300 text-gray-900'
                 : 'border-gray-300 text-gray-700 hover:bg-gray-50'
             }`}
           >
             <Filter className="w-4 h-4" />
             Filters
             {hasActiveFilters && !showFilters && (
-              <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
+              <span className="w-2 h-2 bg-gray-800 rounded-full"></span>
             )}
           </button>
 
@@ -350,7 +350,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                 <select
                   value={filterMatchStatus}
                   onChange={(e) => setFilterMatchStatus(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                 >
                   <option value="all">All Statuses</option>
                   <option value="Exact Match">Exact Match</option>
@@ -370,7 +370,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                     min="0"
                     max="100"
                     placeholder="Min"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                   <input
                     type="number"
@@ -379,7 +379,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                     min="0"
                     max="100"
                     placeholder="Max"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
               </div>
@@ -390,7 +390,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                 <select
                   value={filterRecruiter}
                   onChange={(e) => setFilterRecruiter(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                 >
                   <option value="all">All Recruiters</option>
                   {uniqueRecruiters.map(recruiter => (
@@ -406,7 +406,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                   type="date"
                   value={filterDateFrom}
                   onChange={(e) => setFilterDateFrom(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
 
@@ -416,7 +416,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                   type="date"
                   value={filterDateTo}
                   onChange={(e) => setFilterDateTo(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
             </div>
@@ -432,7 +432,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
               <th className="text-left py-3 px-4 w-12">
                 <button onClick={handleSelectAll} className="p-1 hover:bg-gray-100 rounded">
                   {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
-                    <CheckSquare className="w-4 h-4 text-blue-600" />
+                    <CheckSquare className="w-4 h-4 text-gray-800" />
                   ) : (
                     <Square className="w-4 h-4 text-gray-400" />
                   )}
@@ -462,7 +462,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                     className="p-1 hover:bg-gray-200 rounded"
                   >
                     {selectedResumes.includes(resume.id) ? (
-                      <CheckSquare className="w-4 h-4 text-blue-600" />
+                      <CheckSquare className="w-4 h-4 text-gray-800" />
                     ) : (
                       <Square className="w-4 h-4 text-gray-400" />
                     )}
@@ -520,7 +520,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                             resume.scorePercentage >= 85
                               ? 'text-green-600'
                               : resume.scorePercentage >= 70
-                              ? 'text-blue-600'
+                              ? 'text-gray-800'
                               : 'text-yellow-600'
                           }`}>
                             {resume.scorePercentage}%
@@ -531,7 +531,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                                 resume.scorePercentage >= 85
                                   ? 'bg-green-600'
                                   : resume.scorePercentage >= 70
-                                  ? 'bg-blue-600'
+                                  ? 'bg-gray-800'
                                   : 'bg-yellow-600'
                               }`}
                               style={{ width: `${resume.scorePercentage}%` }}
@@ -671,7 +671,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                             }}
                             className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700"
                           >
-                            <Download className="w-4 h-4 text-blue-600" />
+                            <Download className="w-4 h-4 text-gray-800" />
                             <span>Download Scorecard</span>
                           </button>
 
@@ -699,7 +699,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                             }}
                             className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700"
                           >
-                            <BarChart3 className="w-4 h-4 text-purple-600" />
+                            <BarChart3 className="w-4 h-4 text-gray-800" />
                             <span>Quick View Score Table</span>
                           </button>
                         </div>
@@ -741,7 +741,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                   className="p-1 hover:bg-gray-200 rounded mt-1"
                 >
                   {selectedResumes.includes(resume.id) ? (
-                    <CheckSquare className="w-5 h-5 text-blue-600" />
+                    <CheckSquare className="w-5 h-5 text-gray-800" />
                   ) : (
                     <Square className="w-5 h-5 text-gray-400" />
                   )}
@@ -762,7 +762,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                       resume.scorePercentage >= 85
                         ? 'text-green-600'
                         : resume.scorePercentage >= 70
-                        ? 'text-blue-600'
+                        ? 'text-gray-800'
                         : 'text-yellow-600'
                     }`}>
                       {resume.scorePercentage}%
@@ -863,7 +863,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                   e.stopPropagation();
                   handleDownloadScorecard(resume.id);
                 }}
-                className="w-full px-4 py-2 text-sm text-blue-600 border border-blue-300 rounded-md hover:bg-blue-50 transition-colors"
+                className="w-full px-4 py-2 text-sm text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >
                 Download Scorecard
               </button>

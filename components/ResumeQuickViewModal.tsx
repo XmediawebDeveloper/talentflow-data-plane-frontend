@@ -39,7 +39,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                 onClick={() => setActiveTab('preview')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors ${
                   activeTab === 'preview'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-gray-800 text-white'
                     : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
@@ -50,7 +50,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                 onClick={() => setActiveTab('details')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors ${
                   activeTab === 'details'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-gray-800 text-white'
                     : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
@@ -61,7 +61,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                 onClick={() => setActiveTab('history')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors ${
                   activeTab === 'history'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-gray-800 text-white'
                     : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
@@ -109,7 +109,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                 <section>
                   <h3 className="text-gray-900 mb-3 pb-2 border-b border-gray-200">Education</h3>
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
                       <span className="text-lg">🎓</span>
                     </div>
                     <div>
@@ -121,7 +121,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                 <section>
                   <h3 className="text-gray-900 mb-3 pb-2 border-b border-gray-200">Experience</h3>
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
                       <span className="text-lg">💼</span>
                     </div>
                     <div>
@@ -155,7 +155,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                           className={`inline-flex items-center px-2.5 py-1 rounded text-xs ${
                             resume.source === 'Manual'
                               ? 'bg-gray-100 text-gray-700'
-                              : 'bg-blue-50 text-blue-600'
+                              : 'bg-gray-50 text-gray-800'
                           }`}
                         >
                           {resume.source}
@@ -188,7 +188,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                   <h3 className="text-gray-900 mb-4 pb-2 border-b border-gray-200">Activity History</h3>
                   <div className="space-y-4">
                     <div className="flex items-start gap-4">
-                      <div className="w-2 h-2 rounded-full bg-blue-600 mt-2" />
+                      <div className="w-2 h-2 rounded-full bg-gray-800 mt-2" />
                       <div className="flex-1">
                         <div className="text-sm text-gray-900">Resume uploaded</div>
                         <div className="text-xs text-gray-500 mt-1">
@@ -221,16 +221,16 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                   
                   <div className="space-y-3">
                     {/* Current Version */}
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200 p-4">
+                    <div className="bg-gradient-to-r from-gray-50 to-indigo-50 rounded-lg border-2 border-gray-200 p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-3 flex-1">
-                          <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+                          <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0">
                             <FileText className="w-5 h-5 text-white" />
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-sm text-gray-900">Current Version</span>
-                              <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full">Latest</span>
+                              <span className="px-2 py-0.5 bg-gray-800 text-white text-xs rounded-full">Latest</span>
                             </div>
                             <div className="text-xs text-gray-600 mb-2">
                               {resume.name}_v3.pdf
@@ -249,10 +249,10 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <button className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors" title="View">
+                          <button className="p-2 text-gray-800 hover:bg-gray-100 rounded-lg transition-colors" title="View">
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors" title="Download">
+                          <button className="p-2 text-gray-800 hover:bg-gray-100 rounded-lg transition-colors" title="Download">
                             <Download className="w-4 h-4" />
                           </button>
                         </div>
@@ -338,13 +338,13 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                   </div>
 
                   {/* Info Banner */}
-                  <div className="mt-4 bg-blue-50 rounded-lg border border-blue-200 p-3 flex items-start gap-3">
-                    <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="mt-4 bg-gray-50 rounded-lg border border-gray-200 p-3 flex items-start gap-3">
+                    <div className="w-5 h-5 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-white text-xs">ℹ</span>
                     </div>
                     <div>
                       <h4 className="text-sm text-blue-900 mb-1">Older versions available under version history</h4>
-                      <p className="text-xs text-blue-700">
+                      <p className="text-xs text-gray-900">
                         All previous versions are stored securely and can be accessed anytime. Click on any version to view or download.
                       </p>
                     </div>

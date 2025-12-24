@@ -124,14 +124,14 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
               <Briefcase className="w-5 h-5 text-white" />
             </div>
             <div>
               <h2 className="text-white">Resume Details</h2>
-              <p className="text-blue-100 text-sm">{resume.name}</p>
+              <p className="text-gray-100 text-sm">{resume.name}</p>
             </div>
           </div>
           <button
@@ -181,7 +181,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
           {onApplyToJob && (
             <button
               onClick={() => onApplyToJob(resume)}
-              className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm shadow-md"
+              className="flex items-center gap-2 px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm shadow-md"
             >
               <Send className="w-4 h-4" />
               Apply to Job
@@ -194,9 +194,9 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
           <div className="max-w-5xl mx-auto space-y-6">
             
             {/* Personal Info Card */}
-            <div className="bg-white border-2 border-blue-200 rounded-xl p-6 shadow-lg">
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-6 shadow-lg">
               <div className="flex items-start gap-6">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-3xl flex-shrink-0">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-3xl flex-shrink-0">
                   {resume.name.split(' ').map(n => n[0]).join('')}
                 </div>
                 <div className="flex-1">
@@ -230,25 +230,25 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                   {/* Contact Info */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <Mail className="w-4 h-4 text-blue-600" />
-                      <a href={`mailto:${resume.email}`} className="hover:text-blue-600">{resume.email}</a>
+                      <Mail className="w-4 h-4 text-gray-800" />
+                      <a href={`mailto:${resume.email}`} className="hover:text-gray-800">{resume.email}</a>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <Phone className="w-4 h-4 text-blue-600" />
-                      <a href={`tel:${resume.phone}`} className="hover:text-blue-600">{resume.phone}</a>
+                      <Phone className="w-4 h-4 text-gray-800" />
+                      <a href={`tel:${resume.phone}`} className="hover:text-gray-800">{resume.phone}</a>
                     </div>
                     {detailedResume.links.linkedin && (
                       <div className="flex items-center gap-2 text-sm text-gray-700">
-                        <Linkedin className="w-4 h-4 text-blue-600" />
-                        <a href={`https://${detailedResume.links.linkedin}`} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 flex items-center gap-1">
+                        <Linkedin className="w-4 h-4 text-gray-800" />
+                        <a href={`https://${detailedResume.links.linkedin}`} target="_blank" rel="noopener noreferrer" className="hover:text-gray-800 flex items-center gap-1">
                           LinkedIn <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>
                     )}
                     {detailedResume.links.portfolio && (
                       <div className="flex items-center gap-2 text-sm text-gray-700">
-                        <Globe className="w-4 h-4 text-blue-600" />
-                        <a href={`https://${detailedResume.links.portfolio}`} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 flex items-center gap-1">
+                        <Globe className="w-4 h-4 text-gray-800" />
+                        <a href={`https://${detailedResume.links.portfolio}`} target="_blank" rel="noopener noreferrer" className="hover:text-gray-800 flex items-center gap-1">
                           Portfolio <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>
@@ -258,7 +258,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                   {/* Tags */}
                   <div className="flex flex-wrap gap-2">
                     {resume.skills?.slice(0, 8).map((skill, index) => (
-                      <span key={index} className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs border border-blue-200">
+                      <span key={index} className="px-3 py-1 bg-gray-50 text-gray-900 rounded-full text-xs border border-gray-200">
                         {skill}
                       </span>
                     ))}
@@ -279,13 +279,13 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             {/* Work Experience */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Briefcase className="w-5 h-5 text-blue-600" />
+                <Briefcase className="w-5 h-5 text-gray-800" />
                 <h2 className="text-gray-900">Work Experience</h2>
               </div>
               <div className="space-y-6">
                 {detailedResume.experience.map((exp, index) => (
-                  <div key={index} className="relative pl-6 pb-6 border-l-2 border-blue-200 last:pb-0">
-                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-blue-600 border-2 border-white"></div>
+                  <div key={index} className="relative pl-6 pb-6 border-l-2 border-gray-200 last:pb-0">
+                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gray-800 border-2 border-white"></div>
                     <div className="mb-3">
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -303,7 +303,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                               <Calendar className="w-3 h-3" />
                               {exp.startDate} - {exp.endDate}
                             </span>
-                            <span className="text-blue-600">({exp.duration})</span>
+                            <span className="text-gray-800">({exp.duration})</span>
                           </div>
                         </div>
                       </div>
@@ -325,12 +325,12 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             {/* Education */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-6">
-                <GraduationCap className="w-5 h-5 text-purple-600" />
+                <GraduationCap className="w-5 h-5 text-gray-800" />
                 <h2 className="text-gray-900">Education</h2>
               </div>
               <div className="space-y-4">
                 {detailedResume.education.map((edu, index) => (
-                  <div key={index} className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                  <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                     <h3 className="text-gray-900 mb-2">{edu.degree}</h3>
                     <div className="text-gray-700 mb-1">{edu.school}</div>
                     <div className="flex items-center gap-4 text-sm text-gray-600">
@@ -343,10 +343,10 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                         {edu.year}
                       </span>
                       {edu.gpa && (
-                        <span className="text-purple-700">GPA: {edu.gpa}</span>
+                        <span className="text-gray-900">GPA: {edu.gpa}</span>
                       )}
                       {edu.honors && (
-                        <span className="px-2 py-0.5 bg-purple-600 text-white rounded text-xs">
+                        <span className="px-2 py-0.5 bg-gray-800 text-white rounded text-xs">
                           {edu.honors}
                         </span>
                       )}
@@ -377,7 +377,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                         <div
                           className={`h-2 rounded-full ${
                             skill.level >= 90 ? 'bg-green-600' :
-                            skill.level >= 75 ? 'bg-blue-600' :
+                            skill.level >= 75 ? 'bg-gray-800' :
                             skill.level >= 60 ? 'bg-yellow-600' :
                             'bg-orange-600'
                           }`}
@@ -436,12 +436,12 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             {detailedResume.languages.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-6">
-                  <Languages className="w-5 h-5 text-indigo-600" />
+                  <Languages className="w-5 h-5 text-gray-800" />
                   <h2 className="text-gray-900">Languages</h2>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   {detailedResume.languages.map((lang, index) => (
-                    <div key={index} className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-center">
+                    <div key={index} className="p-4 bg-gray-50 border border-indigo-200 rounded-lg text-center">
                       <div className="text-gray-900 mb-1">{lang.name}</div>
                       <div className="text-sm text-indigo-700">{lang.proficiency}</div>
                     </div>

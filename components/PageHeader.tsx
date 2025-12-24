@@ -26,7 +26,7 @@ export default function PageHeader({ onUploadClick, onVersionClick }: PageHeader
           {/* Version Button */}
           <button
             onClick={onVersionClick}
-            className="flex items-center gap-2 bg-purple-600 text-white px-6 py-2.5 rounded-md hover:bg-purple-700 transition-colors"
+            className="flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-md hover:bg-gray-900 transition-colors"
           >
             <GitBranch className="w-5 h-5" />
             Version
@@ -36,7 +36,7 @@ export default function PageHeader({ onUploadClick, onVersionClick }: PageHeader
           <div className="relative">
             <button
               onClick={() => setShowDropdown(!showDropdown)}
-              className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-md hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-md hover:bg-gray-900 transition-colors"
             >
               <Plus className="w-5 h-5" />
               Upload Resume

@@ -163,7 +163,7 @@ ${job.certifications?.join(', ') || 'N/A'}
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
         <span className="ml-3 text-gray-600">Loading job details...</span>
       </div>
     );
@@ -177,7 +177,7 @@ ${job.certifications?.join(', ') || 'N/A'}
           <h3 className="text-lg font-medium text-gray-900 mb-2">Job not found</h3>
           <button
             onClick={() => router.push('/recruitment/job-openings')}
-            className="text-blue-600 hover:underline"
+            className="text-gray-800 hover:underline"
           >
             Back to Job Openings
           </button>
@@ -260,7 +260,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 onClick={() => setActiveTab(tab.id as TabType)}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
-                    ? 'text-blue-600 border-blue-600'
+                    ? 'text-gray-800 border-gray-800'
                     : 'text-gray-600 border-transparent hover:text-gray-900'
                 }`}
               >
@@ -327,12 +327,12 @@ ${job.certifications?.join(', ') || 'N/A'}
                   {job.nice_to_have_skills && job.nice_to_have_skills.length > 0 && (
                     <div className="mb-6">
                       <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                        <Target className="w-4 h-4 text-blue-500" />
+                        <Target className="w-4 h-4 text-gray-700" />
                         Nice to Have Skills
                       </h3>
                       <div className="flex flex-wrap gap-2">
                         {job.nice_to_have_skills.map((skill, index) => (
-                          <span key={index} className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm">
+                          <span key={index} className="px-3 py-1 bg-gray-50 text-gray-900 rounded-full text-sm">
                             {skill}
                           </span>
                         ))}
@@ -344,12 +344,12 @@ ${job.certifications?.join(', ') || 'N/A'}
                   {job.certifications && job.certifications.length > 0 && (
                     <div>
                       <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                        <Award className="w-4 h-4 text-purple-500" />
+                        <Award className="w-4 h-4 text-gray-700" />
                         Certifications
                       </h3>
                       <div className="flex flex-wrap gap-2">
                         {job.certifications.map((cert, index) => (
-                          <span key={index} className="px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-sm">
+                          <span key={index} className="px-3 py-1 bg-gray-50 text-gray-900 rounded-full text-sm">
                             {cert}
                           </span>
                         ))}
@@ -413,7 +413,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                   <h2 className="text-lg font-semibold text-gray-900">Scored Resumes</h2>
                   <button
                     onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm"
                   >
                     <Target className="w-4 h-4" />
                     Score New Resumes
@@ -426,7 +426,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                     <p className="text-gray-500 mb-4">Start scoring resumes against this job description</p>
                     <button
                       onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
                     >
                       <Target className="w-4 h-4" />
                       Score Resumes
@@ -444,7 +444,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                   <h2 className="text-lg font-semibold text-gray-900">Assessment Results</h2>
                   <button
                     onClick={() => router.push(`/recruitment/assessments?jd_id=${job.id}`)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm"
                   >
                     <ClipboardList className="w-4 h-4" />
                     Create Assessment
@@ -457,7 +457,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                     <p className="text-gray-500 mb-4">Create assessments for candidates applying to this job</p>
                     <button
                       onClick={() => router.push(`/recruitment/assessments?jd_id=${job.id}`)}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
                     >
                       <ClipboardList className="w-4 h-4" />
                       Create Assessment
@@ -497,7 +497,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 {job.status === 'disabled' && (
                   <button
                     onClick={() => handleStatusChange('published')}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-white bg-gray-800 rounded-lg hover:bg-gray-900 transition-colors"
                   >
                     <RefreshCw className="w-4 h-4" />
                     Republish Job
@@ -526,8 +526,8 @@ ${job.certifications?.join(', ') || 'N/A'}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                      <Users className="w-4 h-4 text-blue-600" />
+                    <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center">
+                      <Users className="w-4 h-4 text-gray-800" />
                     </div>
                     <span className="text-sm text-gray-600">Total Applicants</span>
                   </div>
@@ -544,8 +544,8 @@ ${job.certifications?.join(', ') || 'N/A'}
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center">
-                      <Target className="w-4 h-4 text-purple-600" />
+                    <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center">
+                      <Target className="w-4 h-4 text-gray-800" />
                     </div>
                     <span className="text-sm text-gray-600">Scored</span>
                   </div>
@@ -570,12 +570,12 @@ ${job.certifications?.join(', ') || 'N/A'}
                 {recentActivity.map((activity) => (
                   <div key={activity.id} className="flex items-start gap-3">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      activity.type === 'application' ? 'bg-blue-50' :
-                      activity.type === 'score' ? 'bg-green-50' : 'bg-purple-50'
+                      activity.type === 'application' ? 'bg-gray-50' :
+                      activity.type === 'score' ? 'bg-green-50' : 'bg-gray-50'
                     }`}>
-                      {activity.type === 'application' && <Users className="w-4 h-4 text-blue-600" />}
+                      {activity.type === 'application' && <Users className="w-4 h-4 text-gray-800" />}
                       {activity.type === 'score' && <Target className="w-4 h-4 text-green-600" />}
-                      {activity.type === 'assessment' && <ClipboardList className="w-4 h-4 text-purple-600" />}
+                      {activity.type === 'assessment' && <ClipboardList className="w-4 h-4 text-gray-800" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-900">{activity.action}</p>

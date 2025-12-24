@@ -8,14 +8,14 @@ const steps = [
     title: "Upload Resumes",
     description: "Bulk upload resumes in any format. Our AI automatically parses and extracts key information.",
     icon: Upload,
-    gradient: "from-blue-500 to-purple-500",
+    gradient: "from-gray-700 to-gray-700",
   },
   {
     number: "02",
     title: "AI Screening",
     description: "Our AI analyzes each resume against your job requirements and ranks candidates automatically.",
     icon: Search,
-    gradient: "from-purple-500 to-pink-500",
+    gradient: "from-gray-700 to-pink-500",
   },
   {
     number: "03",
@@ -46,7 +46,7 @@ export default function HowItWorksPage() {
       <div className="container mx-auto max-w-[1400px] px-6">
         {/* Hero */}
         <div className="text-center mb-16">
-          <Badge className="mb-4 px-4 py-2 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-0">
+          <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0">
             How It Works
           </Badge>
           <h1 className="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-4">
@@ -65,7 +65,7 @@ export default function HowItWorksPage() {
               <div key={index} className="relative flex gap-8 pb-16 last:pb-0">
                 {/* Connector Line */}
                 {index < steps.length - 1 && (
-                  <div className="absolute left-[39px] top-24 w-0.5 h-[calc(100%-6rem)] bg-gradient-to-b from-purple-500 to-transparent" />
+                  <div className="absolute left-[39px] top-24 w-0.5 h-[calc(100%-6rem)] bg-gradient-to-b from-gray-700 to-transparent" />
                 )}
 
                 {/* Step Number */}
@@ -103,7 +103,7 @@ export default function HowItWorksPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/signup"
-              className="h-12 px-8 inline-flex items-center justify-center rounded-lg bg-white text-purple-600 font-medium hover:bg-gray-100 transition-colors"
+              className="h-12 px-8 inline-flex items-center justify-center rounded-lg bg-white text-gray-800 font-medium hover:bg-gray-100 transition-colors"
             >
               Start Free Trial
             </Link>

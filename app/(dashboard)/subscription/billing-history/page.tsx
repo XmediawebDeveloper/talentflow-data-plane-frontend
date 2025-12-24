@@ -19,12 +19,12 @@ export default function BillingHistoryPage() {
   );
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
               <Receipt className="w-7 h-7 text-white" />
             </div>
             <div>
@@ -43,7 +43,7 @@ export default function BillingHistoryPage() {
               placeholder="Search invoices..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
             />
           </div>
         </div>
@@ -82,7 +82,7 @@ export default function BillingHistoryPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <button className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 ml-auto">
+                    <button className="flex items-center gap-1 text-sm text-gray-700 hover:text-gray-900 ml-auto">
                       <Download className="w-4 h-4" />
                       Download
                     </button>

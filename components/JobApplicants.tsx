@@ -51,9 +51,9 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
   const getStatusConfig = (status: string) => {
     switch (status) {
       case 'New':
-        return { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', icon: Clock };
+        return { bg: 'bg-gray-100', text: 'text-gray-900', border: 'border-gray-300', icon: Clock };
       case 'Reviewing':
-        return { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-300', icon: Eye };
+        return { bg: 'bg-gray-100', text: 'text-gray-900', border: 'border-gray-300', icon: Eye };
       case 'Shortlisted':
         return { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300', icon: CheckCircle2 };
       case 'Interview':
@@ -67,7 +67,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
 
   const getScoreColor = (score: number) => {
     if (score >= 85) return 'text-green-600 bg-green-100';
-    if (score >= 70) return 'text-blue-600 bg-blue-100';
+    if (score >= 70) return 'text-gray-800 bg-gray-100';
     return 'text-yellow-600 bg-yellow-100';
   };
 
@@ -84,9 +84,9 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
       case 'partial':
         return { 
           label: 'Partial Match', 
-          bg: 'bg-blue-100', 
-          text: 'text-blue-700', 
-          border: 'border-blue-300',
+          bg: 'bg-gray-100', 
+          text: 'text-gray-900', 
+          border: 'border-gray-300',
           icon: AlertTriangle 
         };
       case 'low':
@@ -136,7 +136,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
           <div>
             <h1 className="text-gray-900 mb-2">Job Applicants</h1>
             <p className="text-sm text-gray-600">
-              Managing applicants for: <span className="text-blue-600">{jobTitle}</span>
+              Managing applicants for: <span className="text-gray-800">{jobTitle}</span>
             </p>
           </div>
           <div className="flex gap-3">
@@ -144,7 +144,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <Download className="w-4 h-4" />
               Export
             </button>
-            <button className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/25">
+            <button className="flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-lg hover:bg-gray-900 transition-colors shadow-lg shadow-blue-500/25">
               <Mail className="w-5 h-5" />
               Email Selected
             </button>
@@ -155,8 +155,8 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
         <div className="grid grid-cols-5 gap-4">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-3">
-              <div className="p-2.5 bg-blue-50 rounded-lg">
-                <Users className="w-5 h-5 text-blue-600" />
+              <div className="p-2.5 bg-gray-50 rounded-lg">
+                <Users className="w-5 h-5 text-gray-800" />
               </div>
               <TrendingUp className="w-4 h-4 text-green-500" />
             </div>
@@ -177,10 +177,10 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-3">
-              <div className="p-2.5 bg-blue-50 rounded-lg">
-                <AlertTriangle className="w-5 h-5 text-blue-600" />
+              <div className="p-2.5 bg-gray-50 rounded-lg">
+                <AlertTriangle className="w-5 h-5 text-gray-800" />
               </div>
-              <div className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">70-84</div>
+              <div className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">70-84</div>
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.partialMatch}</div>
             <div className="text-sm text-gray-600">Partial Match</div>
@@ -222,7 +222,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
                 placeholder="Search by name or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm"
               />
             </div>
 
@@ -231,7 +231,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white cursor-pointer min-w-[160px]"
+                className="appearance-none pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm bg-white cursor-pointer min-w-[160px]"
               >
                 <option value="all">All Status</option>
                 <option value="New">New</option>
@@ -248,7 +248,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <select
                 value={scoreFilter}
                 onChange={(e) => setScoreFilter(e.target.value)}
-                className="appearance-none pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white cursor-pointer min-w-[160px]"
+                className="appearance-none pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm bg-white cursor-pointer min-w-[160px]"
               >
                 <option value="all">All Scores</option>
                 <option value="high">High (85+)</option>
@@ -263,7 +263,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <select
                 value={matchFilter}
                 onChange={(e) => setMatchFilter(e.target.value)}
-                className="appearance-none pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white cursor-pointer min-w-[160px]"
+                className="appearance-none pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm bg-white cursor-pointer min-w-[160px]"
               >
                 <option value="all">All Matches</option>
                 <option value="exact">Exact Match</option>
@@ -294,11 +294,11 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
             <div
               key={applicant.id}
               onClick={() => setSelectedApplicant(applicant)}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg hover:border-blue-300 transition-all overflow-hidden cursor-pointer group"
+              className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg hover:border-gray-300 transition-all overflow-hidden cursor-pointer group"
             >
               <div className="flex">
                 {/* Left Color Bar */}
-                <div className={`w-2 ${applicant.score >= 85 ? 'bg-green-500' : applicant.score >= 70 ? 'bg-blue-500' : 'bg-yellow-500'}`}></div>
+                <div className={`w-2 ${applicant.score >= 85 ? 'bg-green-500' : applicant.score >= 70 ? 'bg-gray-700' : 'bg-yellow-500'}`}></div>
 
                 <div className="flex-1 p-5">
                   <div className="flex items-center justify-between gap-6">
@@ -306,7 +306,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-4 mb-3">
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">{applicant.name}</h3>
+                          <h3 className="text-gray-900 mb-1 group-hover:text-gray-800 transition-colors">{applicant.name}</h3>
                           <div className="flex items-center gap-3 flex-wrap">
                             <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border ${matchConfig.bg} ${matchConfig.text} ${matchConfig.border}`}>
                               <MatchIcon className="w-3 h-3" />
@@ -395,7 +395,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
                       </button>
                       <button 
                         onClick={(e) => e.stopPropagation()}
-                        className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                        className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm"
                       >
                         Schedule Interview
                       </button>

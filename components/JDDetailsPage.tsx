@@ -85,7 +85,7 @@ export default function JDDetailsPage() {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
         <span className="ml-3 text-gray-600">Loading job description...</span>
       </div>
     );
@@ -99,7 +99,7 @@ export default function JDDetailsPage() {
         <p className="text-gray-500 mb-6">The job description you're looking for doesn't exist.</p>
         <button
           onClick={() => router.push('/recruitment/jd-list')}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
         >
           Back to Job Descriptions
         </button>
@@ -209,7 +209,7 @@ export default function JDDetailsPage() {
                   <h3 className="text-sm font-medium text-gray-700 mb-2">Nice to Have</h3>
                   <div className="flex flex-wrap gap-2">
                     {jd.nice_to_have_skills.map((skill, i) => (
-                      <span key={i} className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm">
+                      <span key={i} className="px-3 py-1 bg-gray-50 text-gray-900 rounded-full text-sm">
                         {skill}
                       </span>
                     ))}

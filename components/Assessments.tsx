@@ -215,7 +215,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {onOpenCandidateView && (
               <button 
                 onClick={onOpenCandidateView}
-                className="flex items-center gap-2 border border-purple-600 text-purple-600 px-6 py-2.5 rounded-lg hover:bg-purple-50 transition-colors shadow-sm"
+                className="flex items-center gap-2 border border-gray-800 text-gray-800 px-6 py-2.5 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
               >
                 <Eye className="w-5 h-5" />
                 Preview Candidate View
@@ -223,7 +223,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             )}
             <button 
               onClick={() => setShowCreation(true)}
-              className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              className="flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-lg hover:bg-gray-900 transition-colors shadow-sm"
             >
               <Sparkles className="w-5 h-5" />
               Create AI Assessment
@@ -235,8 +235,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         <div className="grid grid-cols-4 gap-6 mb-6">
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                <FileText className="w-5 h-5 text-blue-600" />
+              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-gray-800" />
               </div>
               <span className="text-sm text-gray-500">Total Assessments</span>
             </div>
@@ -255,8 +255,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                <Users className="w-5 h-5 text-purple-600" />
+              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                <Users className="w-5 h-5 text-gray-800" />
               </div>
               <span className="text-sm text-gray-500">Candidates Tested</span>
             </div>
@@ -282,7 +282,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 onClick={() => setActiveTab('all')}
                 className={`py-4 text-sm border-b-2 transition-colors ${
                   activeTab === 'all'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-gray-800 text-gray-800'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -292,7 +292,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 onClick={() => setActiveTab('active')}
                 className={`py-4 text-sm border-b-2 transition-colors ${
                   activeTab === 'active'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-gray-800 text-gray-800'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -302,7 +302,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 onClick={() => setActiveTab('completed')}
                 className={`py-4 text-sm border-b-2 transition-colors ${
                   activeTab === 'completed'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-gray-800 text-gray-800'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -312,7 +312,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 onClick={() => setActiveTab('audit-trail')}
                 className={`py-4 text-sm border-b-2 transition-colors ${
                   activeTab === 'audit-trail'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-gray-800 text-gray-800'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -334,18 +334,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       setSelectedAssessmentForDetails(assessment);
                       setShowDetailsView(true);
                     }}
-                    className="p-6 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all bg-white cursor-pointer"
+                    className="p-6 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-start gap-4 flex-1">
-                        <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                          <FileText className="w-6 h-6 text-blue-600" />
+                        <div className="w-12 h-12 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-6 h-6 text-gray-800" />
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 className="text-gray-900">{assessment.title}</h3>
                             {assessment.sections && (
-                              <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs flex items-center gap-1">
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs flex items-center gap-1">
                                 <Sparkles className="w-3 h-3" />
                                 AI-Generated
                               </span>
@@ -429,7 +429,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   }}
                                   className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
                                 >
-                                  <Edit2 className="w-4 h-4 text-blue-600" />
+                                  <Edit2 className="w-4 h-4 text-gray-800" />
                                   Edit Assessment
                                 </button>
                                 <button
@@ -440,7 +440,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   }}
                                   className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
                                 >
-                                  <Eye className="w-4 h-4 text-purple-600" />
+                                  <Eye className="w-4 h-4 text-gray-800" />
                                   Preview Assessment
                                 </button>
                                 <button
@@ -463,7 +463,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   }}
                                   className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
                                 >
-                                  <Copy className="w-4 h-4 text-indigo-600" />
+                                  <Copy className="w-4 h-4 text-gray-800" />
                                   Duplicate
                                 </button>
                                 <button
@@ -554,7 +554,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             setSelectedAssessmentForShare(assessment);
                             setShowShareModal(true);
                           }}
-                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all text-sm shadow-md"
+                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-blue-700 hover:to-gray-900 transition-all text-sm shadow-md"
                         >
                           <Mail className="w-4 h-4" />
                           Share via Email
@@ -565,7 +565,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               setSelectedAssessmentForResults(assessment);
                               setShowResults(true);
                             }}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm"
                           >
                             <BarChart className="w-4 h-4" />
                             View Results ({assessment.candidates})
@@ -594,7 +594,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             ].map((template, index) => (
               <div
                 key={index}
-                className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
+                className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all cursor-pointer"
               >
                 <div className="text-3xl mb-2">{template.icon}</div>
                 <div className="text-sm text-gray-900 mb-1">{template.name}</div>

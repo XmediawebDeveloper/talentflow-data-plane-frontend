@@ -21,13 +21,13 @@ export default function TeamUsagePage() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
                 <Activity className="w-7 h-7 text-white" />
               </div>
               <div>
@@ -39,7 +39,7 @@ export default function TeamUsagePage() {
               <select
                 value={timeRange}
                 onChange={(e) => setTimeRange(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
               >
                 <option value="7days">Last 7 days</option>
                 <option value="30days">Last 30 days</option>
@@ -61,8 +61,8 @@ export default function TeamUsagePage() {
                 <p className="text-sm text-gray-600">Resumes Scored</p>
                 <p className="text-3xl font-semibold text-gray-900 mt-1">{totalStats.totalResumes}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <BarChart3 className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                <BarChart3 className="w-6 h-6 text-gray-800" />
               </div>
             </div>
           </div>
@@ -72,8 +72,8 @@ export default function TeamUsagePage() {
                 <p className="text-sm text-gray-600">Assessments Created</p>
                 <p className="text-3xl font-semibold text-gray-900 mt-1">{totalStats.totalAssessments}</p>
               </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-gray-800" />
               </div>
             </div>
           </div>
@@ -122,7 +122,7 @@ export default function TeamUsagePage() {
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center text-sm">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center text-sm">
                         {user.name.split(' ').map(n => n[0]).join('')}
                       </div>
                       <span className="font-medium text-gray-900">{user.name}</span>

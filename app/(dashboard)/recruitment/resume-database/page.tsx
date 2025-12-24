@@ -100,7 +100,7 @@ export default function ResumeDatabaseRoute() {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
         <span className="ml-3 text-gray-600">Loading resume database...</span>
       </div>
     );
@@ -110,7 +110,7 @@ export default function ResumeDatabaseRoute() {
     <div className="flex-1 p-6 bg-gray-50">
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg flex items-center justify-center shadow-md">
+          <div className="w-10 h-10 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg flex items-center justify-center shadow-md">
             <Database className="w-5 h-5 text-white" />
           </div>
           <div>

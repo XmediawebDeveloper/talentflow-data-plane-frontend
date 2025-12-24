@@ -50,7 +50,7 @@ export default function BulkScoringProgress({
           <p className="text-yellow-800">No job data available. Please try again.</p>
           <button
             onClick={onBack}
-            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="mt-4 px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
           >
             Go Back
           </button>
@@ -171,7 +171,7 @@ export default function BulkScoringProgress({
       case 'queued':
         return <Clock className="w-5 h-5 text-gray-400" />;
       case 'in-progress':
-        return <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />;
+        return <Loader2 className="w-5 h-5 text-gray-800 animate-spin" />;
       case 'completed':
         return <CheckCircle className="w-5 h-5 text-green-600" />;
       case 'failed':
@@ -197,7 +197,7 @@ export default function BulkScoringProgress({
 
     const colors = {
       excellent: 'bg-green-100 text-green-700 border-green-300',
-      good: 'bg-blue-100 text-blue-700 border-blue-300',
+      good: 'bg-gray-100 text-gray-900 border-gray-300',
       fair: 'bg-yellow-100 text-yellow-700 border-yellow-300',
       poor: 'bg-red-100 text-red-700 border-red-300'
     };
@@ -243,11 +243,11 @@ export default function BulkScoringProgress({
           </div>
           
           {isProcessing && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
-              <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+            <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+              <Loader2 className="w-5 h-5 text-gray-800 animate-spin" />
               <div className="text-sm">
                 <div className="text-blue-900">Processing...</div>
-                <div className="text-blue-700">Est. {formatTime(estimatedTimeRemaining)} remaining</div>
+                <div className="text-gray-900">Est. {formatTime(estimatedTimeRemaining)} remaining</div>
               </div>
             </div>
           )}
@@ -284,13 +284,13 @@ export default function BulkScoringProgress({
           <div className="text-xs text-gray-500 mt-1">Waiting to process</div>
         </div>
 
-        <div className="bg-blue-50 rounded-lg shadow-sm border border-blue-200 p-5">
+        <div className="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-blue-900">In Progress</span>
-            <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+            <Loader2 className="w-5 h-5 text-gray-800 animate-spin" />
           </div>
           <div className="text-3xl text-blue-900">{inProgress}</div>
-          <div className="text-xs text-blue-700 mt-1">Currently scoring</div>
+          <div className="text-xs text-gray-900 mt-1">Currently scoring</div>
         </div>
 
         <div className="bg-green-50 rounded-lg shadow-sm border border-green-200 p-5">
@@ -316,14 +316,14 @@ export default function BulkScoringProgress({
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-blue-600" />
+            <TrendingUp className="w-5 h-5 text-gray-800" />
             <span className="text-sm text-gray-900">Overall Progress</span>
           </div>
           <span className="text-sm text-gray-600">{Math.round(progressPercentage)}% Complete</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
           <div 
-            className="bg-gradient-to-r from-blue-600 to-green-600 h-3 rounded-full transition-all duration-500 ease-out"
+            className="bg-gradient-to-r from-gray-800 to-green-600 h-3 rounded-full transition-all duration-500 ease-out"
             style={{ width: `${progressPercentage}%` }}
           ></div>
         </div>
@@ -339,14 +339,14 @@ export default function BulkScoringProgress({
       </div>
 
       {/* AI Scoring Info Banner */}
-      <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4 mb-6">
+      <div className="bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
         <div className="flex items-start gap-3">
-          <div className="p-2 bg-purple-100 rounded-lg">
-            <Sparkles className="w-5 h-5 text-purple-600" />
+          <div className="p-2 bg-gray-100 rounded-lg">
+            <Sparkles className="w-5 h-5 text-gray-800" />
           </div>
           <div>
             <h3 className="text-sm text-purple-900 mb-1">AI-Powered Resume Scoring</h3>
-            <p className="text-xs text-purple-700">
+            <p className="text-xs text-gray-900">
               Each resume is analyzed by our AI engine against the job description. This process may take 3-6 seconds per resume. 
               You can navigate away and return anytime - progress will continue in the background.
             </p>
@@ -382,7 +382,7 @@ export default function BulkScoringProgress({
                 <tr 
                   key={item.id}
                   className={`transition-colors ${
-                    item.status === 'in-progress' ? 'bg-blue-50' : 
+                    item.status === 'in-progress' ? 'bg-gray-50' : 
                     item.status === 'completed' ? 'bg-green-50' : 
                     item.status === 'failed' ? 'bg-red-50' : 
                     'bg-white hover:bg-gray-50'
@@ -394,7 +394,7 @@ export default function BulkScoringProgress({
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 rounded-full text-xs ${
                       item.source === 'my-resumes' 
-                        ? 'bg-blue-100 text-blue-700' 
+                        ? 'bg-gray-100 text-gray-900' 
                         : 'bg-green-100 text-green-700'
                     }`}>
                       {item.source === 'my-resumes' ? 'My Resumes' : 'Internal DB'}
@@ -467,7 +467,7 @@ export default function BulkScoringProgress({
                   onComplete();
                   onBack();
                 }}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
               >
                 <Target className="w-4 h-4" />
                 View Scored Resumes

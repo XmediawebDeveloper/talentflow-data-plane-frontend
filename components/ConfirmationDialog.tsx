@@ -40,9 +40,9 @@ export default function ConfirmationDialog({
     },
     info: {
       icon: Info,
-      iconColor: 'text-blue-600',
-      iconBg: 'bg-blue-100',
-      confirmButton: 'bg-blue-600 hover:bg-blue-700',
+      iconColor: 'text-gray-800',
+      iconBg: 'bg-gray-100',
+      confirmButton: 'bg-gray-800 hover:bg-gray-900',
     },
     success: {
       icon: CheckCircle,

@@ -53,13 +53,13 @@ export default function ResumeScoringDetailsView({
 
   const getScoreColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-blue-600';
+    if (score >= 70) return 'text-gray-800';
     return 'text-yellow-600';
   };
 
   const getScoreBgColor = (score: number) => {
     if (score >= 85) return 'bg-green-100 border-green-300 text-green-700';
-    if (score >= 70) return 'bg-blue-100 border-blue-300 text-blue-700';
+    if (score >= 70) return 'bg-gray-100 border-gray-300 text-gray-900';
     return 'bg-yellow-100 border-yellow-300 text-yellow-700';
   };
 
@@ -73,14 +73,14 @@ export default function ResumeScoringDetailsView({
     switch (status) {
       case 'invitation_sent':
         return (
-          <div className=\"flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium\">
+          <div className=\"flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-900 rounded-lg text-xs font-medium\">
             <Send className=\"w-3.5 h-3.5\" />
             Invitation Sent
           </div>
         );
       case 'link_opened':
         return (
-          <div className=\"flex items-center gap-2 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-xs font-medium\">
+          <div className=\"flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-900 rounded-lg text-xs font-medium\">
             <MousePointer className=\"w-3.5 h-3.5\" />
             Link Opened
           </div>
@@ -110,21 +110,21 @@ export default function ResumeScoringDetailsView({
   };
 
   return (
-    <main className=\"flex-1 p-8 overflow-y-auto bg-gradient-to-br from-blue-50 via-purple-50 to-white\">
+    <main className=\"flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-purple-50 to-white\">
       {/* Header with Back Button */}
       <div className=\"mb-6\">
         <button
           onClick={onBack}
-          className=\"flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-4 font-medium\"
+          className=\"flex items-center gap-2 text-gray-800 hover:text-gray-900 mb-4 font-medium\"
         >
           <ArrowLeft className=\"w-5 h-5\" />
           Back to Scored Candidates
         </button>
 
-        <div className=\"bg-white rounded-xl shadow-lg border-2 border-blue-300 p-6\">
+        <div className=\"bg-white rounded-xl shadow-lg border-2 border-gray-300 p-6\">
           <div className=\"flex items-start justify-between\">
             <div className=\"flex items-center gap-4\">
-              <div className=\"w-14 h-14 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg\">
+              <div className=\"w-14 h-14 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-lg\">
                 <Target className=\"w-7 h-7 text-white\" />
               </div>
               <div>
@@ -146,8 +146,8 @@ export default function ResumeScoringDetailsView({
                   </span>
                   <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
                     selectedHistoryItem.source === 'my-resumes' 
-                      ? 'bg-blue-100 text-blue-700' 
-                      : 'bg-purple-100 text-purple-700'
+                      ? 'bg-gray-100 text-gray-900' 
+                      : 'bg-gray-100 text-gray-900'
                   }`}>
                     {selectedHistoryItem.source === 'my-resumes' ? (
                       <>
@@ -167,7 +167,7 @@ export default function ResumeScoringDetailsView({
 
             <button
               onClick={onScoreNew}
-              className=\"px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2\"
+              className=\"px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2\"
             >
               <Target className=\"w-4 h-4\" />
               Score New Resumes
@@ -182,12 +182,12 @@ export default function ResumeScoringDetailsView({
         <button
           onClick={() => setSelectedStatusFilter(selectedStatusFilter === 'invitation_sent' ? 'all' : 'invitation_sent')}
           className={`bg-white rounded-xl shadow-sm border-2 transition-all p-4 text-left hover:shadow-lg ${
-            selectedStatusFilter === 'invitation_sent' ? 'border-blue-500 bg-blue-50' : 'border-blue-200 hover:border-blue-300'
+            selectedStatusFilter === 'invitation_sent' ? 'border-gray-700 bg-gray-50' : 'border-gray-200 hover:border-gray-300'
           }`}
         >
           <div className=\"flex items-center justify-between mb-3\">
-            <div className=\"w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center\">
-              <Send className=\"w-5 h-5 text-blue-600\" />
+            <div className=\"w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center\">
+              <Send className=\"w-5 h-5 text-gray-800\" />
             </div>
             <div className=\"text-2xl text-gray-900\">{statusCounts.invitation_sent}</div>
           </div>
@@ -199,12 +199,12 @@ export default function ResumeScoringDetailsView({
         <button
           onClick={() => setSelectedStatusFilter(selectedStatusFilter === 'link_opened' ? 'all' : 'link_opened')}
           className={`bg-white rounded-xl shadow-sm border-2 transition-all p-4 text-left hover:shadow-lg ${
-            selectedStatusFilter === 'link_opened' ? 'border-purple-500 bg-purple-50' : 'border-purple-200 hover:border-purple-300'
+            selectedStatusFilter === 'link_opened' ? 'border-purple-500 bg-gray-50' : 'border-gray-200 hover:border-gray-300'
           }`}
         >
           <div className=\"flex items-center justify-between mb-3\">
-            <div className=\"w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center\">
-              <MousePointer className=\"w-5 h-5 text-purple-600\" />
+            <div className=\"w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center\">
+              <MousePointer className=\"w-5 h-5 text-gray-800\" />
             </div>
             <div className=\"text-2xl text-gray-900\">{statusCounts.link_opened}</div>
           </div>
@@ -266,16 +266,16 @@ export default function ResumeScoringDetailsView({
 
       {/* Filter Info Banner */}
       {selectedStatusFilter !== 'all' && (
-        <div className=\"bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-center justify-between\">
+        <div className=\"bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-4 mb-6 flex items-center justify-between\">
           <div className=\"flex items-center gap-3\">
-            <Filter className=\"w-5 h-5 text-blue-600\" />
+            <Filter className=\"w-5 h-5 text-gray-800\" />
             <span className=\"text-sm text-gray-700\">
               Showing <span className=\"font-medium\">{filteredStatusResumes.length}</span> candidate{filteredStatusResumes.length !== 1 ? 's' : ''} with status: <span className=\"font-medium capitalize\">{selectedStatusFilter.replace('_', ' ')}</span>
             </span>
           </div>
           <button
             onClick={() => setSelectedStatusFilter('all')}
-            className=\"text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1\"
+            className=\"text-sm text-gray-800 hover:text-gray-900 font-medium flex items-center gap-1\"
           >
             <X className=\"w-4 h-4\" />
             Clear Filter
@@ -288,7 +288,7 @@ export default function ResumeScoringDetailsView({
         {filteredStatusResumes.map((resume, index) => (
           <div
             key={resume.id}
-            className=\"bg-white rounded-xl border-2 border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all p-6\"
+            className=\"bg-white rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all p-6\"
           >
             <div className=\"flex items-start gap-6\">
               {/* Rank */}
@@ -339,9 +339,9 @@ export default function ResumeScoringDetailsView({
                 </div>
 
                 {/* AI Analysis */}
-                <div className=\"bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4\">
+                <div className=\"bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4\">
                   <div className=\"flex items-start gap-2\">
-                    <TrendingUp className=\"w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0\" />
+                    <TrendingUp className=\"w-5 h-5 text-gray-800 mt-0.5 flex-shrink-0\" />
                     <div>
                       <div className=\"text-sm font-medium text-blue-900 mb-1\">Score Analysis</div>
                       <p className=\"text-sm text-gray-700\">{resume.matchReason}</p>
@@ -351,7 +351,7 @@ export default function ResumeScoringDetailsView({
 
                 {/* Score Breakdown */}
                 {resume.scoreBreakdown && (
-                  <div className=\"bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4 mb-4\">
+                  <div className=\"bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-4 mb-4\">
                     <div className=\"text-sm font-medium text-gray-900 mb-3\">Detailed Score Breakdown</div>
                     <div className=\"grid grid-cols-2 gap-3\">
                       <div>
@@ -361,7 +361,7 @@ export default function ResumeScoringDetailsView({
                         </div>
                         <div className=\"h-2 bg-white rounded-full overflow-hidden\">
                           <div 
-                            className=\"h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full\"
+                            className=\"h-full bg-gradient-to-r from-gray-700 to-gray-800 rounded-full\"
                             style={{ width: `${resume.scoreBreakdown.skillsMatch}%` }}
                           ></div>
                         </div>
@@ -373,7 +373,7 @@ export default function ResumeScoringDetailsView({
                         </div>
                         <div className=\"h-2 bg-white rounded-full overflow-hidden\">
                           <div 
-                            className=\"h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full\"
+                            className=\"h-full bg-gradient-to-r from-gray-700 to-gray-800 rounded-full\"
                             style={{ width: `${resume.scoreBreakdown.experienceMatch}%` }}
                           ></div>
                         </div>
@@ -433,7 +433,7 @@ export default function ResumeScoringDetailsView({
 
                 {/* Actions */}
                 <div className=\"flex items-center gap-2 pt-4 border-t border-gray-200\">
-                  <button className=\"px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-2\">
+                  <button className=\"px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm flex items-center gap-2\">
                     <FileText className=\"w-4 h-4\" />
                     View Resume
                   </button>
@@ -446,7 +446,7 @@ export default function ResumeScoringDetailsView({
                     Contact
                   </button>
                   {resume.status === 'invitation_sent' && (
-                    <button className=\"px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-2\">
+                    <button className=\"px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm flex items-center gap-2\">
                       <Send className=\"w-4 h-4\" />
                       Resend Invitation
                     </button>
@@ -468,7 +468,7 @@ export default function ResumeScoringDetailsView({
           </p>
           <button
             onClick={() => setSelectedStatusFilter('all')}
-            className=\"px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium\"
+            className=\"px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium\"
           >
             Show All Candidates
           </button>

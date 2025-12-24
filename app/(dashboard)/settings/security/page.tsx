@@ -20,7 +20,7 @@ export default function SecurityPage() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -44,7 +44,7 @@ export default function SecurityPage() {
               <input
                 type="password"
                 placeholder="Enter current password"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
               />
             </div>
             <div>
@@ -52,7 +52,7 @@ export default function SecurityPage() {
               <input
                 type="password"
                 placeholder="Enter new password"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
               />
             </div>
             <div>
@@ -60,12 +60,12 @@ export default function SecurityPage() {
               <input
                 type="password"
                 placeholder="Confirm new password"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
               />
             </div>
             <button
               onClick={handleChangePassword}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
             >
               {passwordChanged ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
               {passwordChanged ? 'Password Updated!' : 'Change Password'}
@@ -110,8 +110,8 @@ export default function SecurityPage() {
         {/* Session Timeout */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Clock className="w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Clock className="w-5 h-5 text-gray-800" />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Session Timeout</h2>
@@ -121,7 +121,7 @@ export default function SecurityPage() {
           <select
             value={sessionTimeout}
             onChange={(e) => setSessionTimeout(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
           >
             <option value="15">15 minutes</option>
             <option value="30">30 minutes</option>

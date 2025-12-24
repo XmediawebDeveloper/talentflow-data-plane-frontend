@@ -34,7 +34,7 @@ export default function QuickActions({ isOpen, onClose, actions }: QuickActionsP
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Zap className="w-5 h-5 text-blue-600" />
+                <Zap className="w-5 h-5 text-gray-800" />
                 <h2 className="text-gray-900">Quick Actions</h2>
               </div>
               <div className="flex items-center gap-2">
@@ -61,7 +61,7 @@ export default function QuickActions({ isOpen, onClose, actions }: QuickActionsP
                       action.onClick();
                       onClose();
                     }}
-                    className="flex items-start gap-4 p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all text-left group"
+                    className="flex items-start gap-4 p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left group"
                   >
                     <div className={`p-2 rounded-lg ${action.color} group-hover:scale-110 transition-transform`}>
                       <Icon className="w-5 h-5 text-white" />

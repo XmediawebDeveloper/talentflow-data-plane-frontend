@@ -135,8 +135,8 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <div>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <GitBranch className="w-6 h-6 text-purple-600" />
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <GitBranch className="w-6 h-6 text-gray-800" />
                 </div>
                 <div>
                   <h2 className="text-xl text-gray-900">Version Upload</h2>
@@ -156,15 +156,15 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
 
           <div className="p-6">
             {/* Info Banner */}
-            <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+            <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <div className="flex items-start gap-3">
-                <GitBranch className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+                <GitBranch className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="text-sm text-purple-900 mb-1">Version Management</h3>
-                  <p className="text-xs text-purple-700">
+                  <p className="text-xs text-gray-900">
                     Upload updated versions of candidate resumes. You'll be able to choose how to handle each version:
                   </p>
-                  <ul className="text-xs text-purple-700 mt-2 space-y-1 ml-4">
+                  <ul className="text-xs text-gray-900 mt-2 space-y-1 ml-4">
                     <li>• <strong>Discard New Resume</strong> - Keep only the existing version</li>
                     <li>• <strong>Overwrite Existing</strong> - Replace with the new version</li>
                     <li>• <strong>Save as New Version</strong> - Keep both versions</li>
@@ -181,11 +181,11 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
               onClick={() => fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
                 isDragging
-                  ? 'border-purple-600 bg-purple-50'
+                  ? 'border-gray-800 bg-gray-50'
                   : 'border-gray-300 bg-gray-50 hover:bg-gray-100'
               }`}
             >
-              <Upload className={`w-16 h-16 mx-auto mb-4 ${isDragging ? 'text-purple-600' : 'text-gray-400'}`} />
+              <Upload className={`w-16 h-16 mx-auto mb-4 ${isDragging ? 'text-gray-800' : 'text-gray-400'}`} />
               <p className="text-gray-900 mb-2">
                 Drop updated resumes here or click to browse
               </p>
@@ -227,9 +227,9 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                   {selectedFiles.map((file, index) => (
                     <div
                       key={index}
-                      className="flex items-center gap-3 p-3 bg-purple-50 border border-purple-200 rounded-lg"
+                      className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg"
                     >
-                      <File className="w-5 h-5 text-purple-600 flex-shrink-0" />
+                      <File className="w-5 h-5 text-gray-800 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-gray-900 truncate">{file.name}</div>
                         <div className="text-xs text-gray-500">{formatFileSize(file.size)}</div>
@@ -286,7 +286,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
             <button
               onClick={handleProceedToResolution}
               disabled={selectedFiles.length === 0}
-              className="flex items-center gap-2 px-8 py-2.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-8 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <GitBranch className="w-4 h-4" />
               Proceed to Version Resolution

@@ -16,7 +16,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-5 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <h2 className="text-xl text-white">Assessment Preview</h2>
@@ -25,7 +25,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                 Candidate View
               </span>
             </div>
-            <p className="text-blue-100 text-sm">
+            <p className="text-gray-100 text-sm">
               This is how candidates will see the assessment
             </p>
           </div>
@@ -40,7 +40,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {/* Assessment Header */}
-          <div className="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+          <div className="bg-gradient-to-br from-gray-50 to-gray-50 border-2 border-gray-200 rounded-lg p-6 mb-6">
             <h1 className="text-2xl text-gray-900 mb-3">{assessment.title}</h1>
             {assessment.job && (
               <div className="text-sm text-gray-700 mb-4">
@@ -50,14 +50,14 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
             
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-blue-600" />
+                <Clock className="w-5 h-5 text-gray-800" />
                 <div>
                   <div className="text-xs text-gray-600">Duration</div>
                   <div className="text-sm text-gray-900">{assessment.duration}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-purple-600" />
+                <FileText className="w-5 h-5 text-gray-800" />
                 <div>
                   <div className="text-xs text-gray-600">Questions</div>
                   <div className="text-sm text-gray-900">{assessment.questions} total</div>
@@ -72,9 +72,9 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
               </div>
             </div>
 
-            <div className="bg-blue-100 border border-blue-300 rounded-lg p-4">
+            <div className="bg-gray-100 border border-gray-300 rounded-lg p-4">
               <div className="flex items-start gap-2">
-                <Info className="w-5 h-5 text-blue-700 flex-shrink-0 mt-0.5" />
+                <Info className="w-5 h-5 text-gray-900 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-blue-900">
                   <strong>Instructions:</strong> Please complete all sections within the time limit. 
                   You cannot pause or return to previous sections once submitted. Ensure you have a 
@@ -91,7 +91,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
               {assessment.sections.map((section: any, index: number) => (
                 <div
                   key={index}
-                  className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-blue-300 transition-colors"
+                  className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors"
                 >
                   {/* Section Header */}
                   <button
@@ -99,7 +99,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                     className="w-full px-6 py-4 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-medium">
+                      <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center text-white font-medium">
                         {index + 1}
                       </div>
                       <div className="text-left">
@@ -132,7 +132,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                         {/* Question 1 */}
                         <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                           <div className="flex items-start gap-3 mb-3">
-                            <span className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium">Q1</span>
+                            <span className="px-2 py-1 bg-gray-800 text-white rounded text-xs font-medium">Q1</span>
                             <div className="flex-1">
                               <div className="text-sm text-gray-900 mb-3">
                                 {section.name.includes('Technical') && 
@@ -166,7 +166,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                         {/* Question 2 */}
                         <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                           <div className="flex items-start gap-3 mb-3">
-                            <span className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium">Q2</span>
+                            <span className="px-2 py-1 bg-gray-800 text-white rounded text-xs font-medium">Q2</span>
                             <div className="flex-1">
                               <div className="text-sm text-gray-900 mb-3">
                                 {section.name.includes('Technical') && 
@@ -238,7 +238,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
               alert('Opening test mode - Full candidate simulation');
               onClose();
             }}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
           >
             <Sparkles className="w-4 h-4" />
             Take Test (Simulation)

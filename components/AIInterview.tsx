@@ -87,7 +87,7 @@ export default function AIInterview() {
           </div>
           <button
             onClick={handleScheduleInterview}
-            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-md hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-md hover:bg-gray-900 transition-colors"
           >
             <Calendar className="w-5 h-5" />
             Schedule Interview
@@ -98,8 +98,8 @@ export default function AIInterview() {
         <div className="grid grid-cols-4 gap-6 mb-6">
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Video className="w-5 h-5 text-blue-600" />
+              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                <Video className="w-5 h-5 text-gray-800" />
               </div>
               <span className="text-sm text-gray-500">Total Interviews</span>
             </div>
@@ -118,8 +118,8 @@ export default function AIInterview() {
 
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-purple-600" />
+              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 text-gray-800" />
               </div>
               <span className="text-sm text-gray-500">Completed</span>
             </div>
@@ -146,7 +146,7 @@ export default function AIInterview() {
                 onClick={() => setActiveTab('scheduled')}
                 className={`py-4 text-sm border-b-2 transition-colors ${
                   activeTab === 'scheduled'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-gray-800 text-gray-800'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -156,7 +156,7 @@ export default function AIInterview() {
                 onClick={() => setActiveTab('completed')}
                 className={`py-4 text-sm border-b-2 transition-colors ${
                   activeTab === 'completed'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-gray-800 text-gray-800'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -166,7 +166,7 @@ export default function AIInterview() {
                 onClick={() => setActiveTab('settings')}
                 className={`py-4 text-sm border-b-2 transition-colors ${
                   activeTab === 'settings'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-gray-800 text-gray-800'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -182,7 +182,7 @@ export default function AIInterview() {
                 {filteredInterviews.map((interview) => (
                   <div
                     key={interview.id}
-                    className="flex items-center justify-between p-6 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all"
+                    className="flex items-center justify-between p-6 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all"
                   >
                     <div className="flex items-start gap-4 flex-1">
                       <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
@@ -218,7 +218,7 @@ export default function AIInterview() {
                         <span
                           className={`px-3 py-1 rounded-full text-xs ${
                             interview.status === 'Scheduled'
-                              ? 'bg-blue-100 text-blue-700'
+                              ? 'bg-gray-100 text-gray-900'
                               : 'bg-green-100 text-green-700'
                           }`}
                         >
@@ -226,7 +226,7 @@ export default function AIInterview() {
                         </span>
                       </div>
                       {interview.status === 'Scheduled' && (
-                        <button className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                        <button className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors">
                           <Play className="w-4 h-4" />
                           Start
                         </button>
@@ -258,7 +258,7 @@ export default function AIInterview() {
                       <label className="block text-sm text-gray-700 mb-2">
                         Default Interview Duration
                       </label>
-                      <select className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600">
+                      <select className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600">
                         <option>30 minutes</option>
                         <option>45 minutes</option>
                         <option>60 minutes</option>
@@ -269,7 +269,7 @@ export default function AIInterview() {
                       <label className="block text-sm text-gray-700 mb-2">
                         AI Voice Language
                       </label>
-                      <select className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600">
+                      <select className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600">
                         <option>English (US)</option>
                         <option>English (UK)</option>
                         <option>Spanish</option>
@@ -282,7 +282,7 @@ export default function AIInterview() {
                         type="checkbox"
                         id="auto-record"
                         defaultChecked
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                        className="rounded border-gray-300 text-gray-800 focus:ring-gray-600"
                       />
                       <label htmlFor="auto-record" className="text-sm text-gray-700">
                         Automatically record all interviews
@@ -294,7 +294,7 @@ export default function AIInterview() {
                         type="checkbox"
                         id="send-reminders"
                         defaultChecked
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                        className="rounded border-gray-300 text-gray-800 focus:ring-gray-600"
                       />
                       <label htmlFor="send-reminders" className="text-sm text-gray-700">
                         Send reminder emails to candidates
@@ -306,7 +306,7 @@ export default function AIInterview() {
                         type="checkbox"
                         id="ai-analysis"
                         defaultChecked
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                        className="rounded border-gray-300 text-gray-800 focus:ring-gray-600"
                       />
                       <label htmlFor="ai-analysis" className="text-sm text-gray-700">
                         Enable AI-powered sentiment analysis
@@ -316,7 +316,7 @@ export default function AIInterview() {
                 </div>
 
                 <div className="pt-6 border-t border-gray-200">
-                  <button className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                  <button className="px-6 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors">
                     Save Settings
                   </button>
                 </div>
@@ -340,7 +340,7 @@ export default function AIInterview() {
               ].map((template, index) => (
                 <div
                   key={index}
-                  className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
+                  className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all cursor-pointer"
                 >
                   <div className="text-3xl mb-2">{template.icon}</div>
                   <div className="text-sm text-gray-900 mb-1">{template.name}</div>

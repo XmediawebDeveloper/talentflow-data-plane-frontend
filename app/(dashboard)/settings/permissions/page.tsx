@@ -63,12 +63,12 @@ export default function PermissionsPage() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
               <Shield className="w-7 h-7 text-white" />
             </div>
             <div>
@@ -92,7 +92,7 @@ export default function PermissionsPage() {
                   }}
                   className={`w-full p-4 rounded-lg text-left transition-colors ${
                     selectedRole.id === role.id
-                      ? 'bg-blue-50 border-blue-200 border'
+                      ? 'bg-gray-50 border-gray-200 border'
                       : 'hover:bg-gray-50 border border-gray-200'
                   }`}
                 >
@@ -113,7 +113,7 @@ export default function PermissionsPage() {
               {selectedRole.editable && !isEditing && (
                 <button
                   onClick={startEditing}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
                 >
                   <Edit2 className="w-4 h-4" />
                   Edit
@@ -129,7 +129,7 @@ export default function PermissionsPage() {
                   </button>
                   <button
                     onClick={saveChanges}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
                   >
                     <Save className="w-4 h-4" />
                     Save

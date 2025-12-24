@@ -15,7 +15,7 @@ export default function AboutPage() {
       <div className="container mx-auto max-w-[1400px] px-6">
         {/* Hero */}
         <div className="text-center mb-16">
-          <Badge className="mb-4 px-4 py-2 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-0">
+          <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0">
             About Us
           </Badge>
           <h1 className="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-4">
@@ -33,7 +33,7 @@ export default function AboutPage() {
             const Icon = stat.icon;
             return (
               <Card key={index} className="p-6 text-center">
-                <Icon className="w-8 h-8 text-purple-500 mx-auto mb-4" />
+                <Icon className="w-8 h-8 text-gray-700 mx-auto mb-4" />
                 <div className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
                   {stat.value}
                 </div>

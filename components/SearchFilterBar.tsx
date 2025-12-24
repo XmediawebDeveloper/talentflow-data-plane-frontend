@@ -108,7 +108,7 @@ export default function SearchFilterBar({
             placeholder="Search by name, email, phone, or skills..."
             value={localSearchQuery}
             onChange={(e) => setLocalSearchQuery(e.target.value)}
-            className="w-full h-10 pl-10 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+            className="w-full h-10 pl-10 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent transition-all"
           />
           {localSearchQuery && (
             <button
@@ -123,7 +123,7 @@ export default function SearchFilterBar({
           )}
           {localSearchQuery && localSearchQuery !== debouncedSearch && (
             <div className="absolute right-12 top-1/2 -translate-y-1/2">
-              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-4 h-4 border-2 border-gray-800 border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
           <button
@@ -139,14 +139,14 @@ export default function SearchFilterBar({
           onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
           className={`flex items-center gap-2 h-10 px-4 border rounded-md transition-colors ${
             activeFilterCount > 0
-              ? 'border-blue-600 bg-blue-50 text-blue-600'
+              ? 'border-gray-800 bg-gray-50 text-gray-800'
               : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
           }`}
         >
           <SlidersHorizontal className="w-4 h-4" />
           Advanced Filters
           {activeFilterCount > 0 && (
-            <span className="bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+            <span className="bg-gray-800 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
               {activeFilterCount}
             </span>
           )}
@@ -179,7 +179,7 @@ export default function SearchFilterBar({
                     setShowSort(false);
                   }}
                   className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
-                    sortBy === option.value ? 'text-blue-600 bg-blue-50' : 'text-gray-700'
+                    sortBy === option.value ? 'text-gray-800 bg-gray-50' : 'text-gray-700'
                   }`}
                 >
                   {option.label}
@@ -207,14 +207,14 @@ export default function SearchFilterBar({
                       type="checkbox"
                       checked={(tempFilters.skills || []).includes(skill)}
                       onChange={() => handleSkillToggle(skill)}
-                      className="text-blue-600 rounded"
+                      className="text-gray-800 rounded"
                     />
                     <span className="text-sm text-gray-700">{skill}</span>
                   </label>
                 ))}
               </div>
               {(tempFilters.skills || []).length > 0 && (
-                <div className="mt-2 text-xs text-blue-600">
+                <div className="mt-2 text-xs text-gray-800">
                   {tempFilters.skills.length} skill{tempFilters.skills.length !== 1 ? 's' : ''} selected
                 </div>
               )}
@@ -242,7 +242,7 @@ export default function SearchFilterBar({
                         min: e.target.value ? parseInt(e.target.value) : undefined
                       }
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
                 <div>
@@ -260,7 +260,7 @@ export default function SearchFilterBar({
                         max: e.target.value ? parseInt(e.target.value) : undefined
                       }
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
                 <div className="pt-2 border-t border-gray-200">
@@ -280,7 +280,7 @@ export default function SearchFilterBar({
                         })}
                         className={`w-full text-left px-3 py-2 text-xs rounded-md transition-colors ${
                           tempFilters.experienceRange?.min === range.min && tempFilters.experienceRange?.max === range.max
-                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                            ? 'bg-gray-100 text-gray-900 border border-gray-300'
                             : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
                         }`}
                       >
@@ -306,7 +306,7 @@ export default function SearchFilterBar({
                       name="education"
                       checked={tempFilters.education === level}
                       onChange={() => setTempFilters({ ...tempFilters, education: level })}
-                      className="text-blue-600"
+                      className="text-gray-800"
                     />
                     <span className="text-sm text-gray-700">{level}</span>
                   </label>
@@ -333,7 +333,7 @@ export default function SearchFilterBar({
                 placeholder="e.g., San Francisco, CA"
                 value={tempFilters.location || ''}
                 onChange={(e) => setTempFilters({ ...tempFilters, location: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
               />
             </div>
 
@@ -348,7 +348,7 @@ export default function SearchFilterBar({
                 placeholder="e.g., Google, Microsoft"
                 value={tempFilters.currentCompany || ''}
                 onChange={(e) => setTempFilters({ ...tempFilters, currentCompany: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
               />
             </div>
 
@@ -363,7 +363,7 @@ export default function SearchFilterBar({
                 placeholder="e.g., Amazon, Facebook"
                 value={tempFilters.previousCompany || ''}
                 onChange={(e) => setTempFilters({ ...tempFilters, previousCompany: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
               />
             </div>
 
@@ -381,7 +381,7 @@ export default function SearchFilterBar({
                       name="noticePeriod"
                       checked={tempFilters.noticePeriod === period}
                       onChange={() => setTempFilters({ ...tempFilters, noticePeriod: period })}
-                      className="text-blue-600"
+                      className="text-gray-800"
                     />
                     <span className="text-sm text-gray-700">{period}</span>
                   </label>
@@ -416,7 +416,7 @@ export default function SearchFilterBar({
                         start: e.target.value
                       }
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
                 <div>
@@ -431,7 +431,7 @@ export default function SearchFilterBar({
                         end: e.target.value
                       }
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
               </div>
@@ -456,7 +456,7 @@ export default function SearchFilterBar({
                         start: e.target.value
                       }
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
                 <div>
@@ -471,7 +471,7 @@ export default function SearchFilterBar({
                         end: e.target.value
                       }
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
               </div>
@@ -491,7 +491,7 @@ export default function SearchFilterBar({
                       name="source"
                       checked={tempFilters.source === source}
                       onChange={() => setTempFilters({ ...tempFilters, source: source })}
-                      className="text-blue-600"
+                      className="text-gray-800"
                     />
                     <span className="text-sm text-gray-700">{source}</span>
                   </label>
@@ -512,7 +512,7 @@ export default function SearchFilterBar({
           <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200">
             <div className="text-sm text-gray-600">
               {activeFilterCount > 0 ? (
-                <span className="text-blue-600">
+                <span className="text-gray-800">
                   {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active
                 </span>
               ) : (
@@ -528,7 +528,7 @@ export default function SearchFilterBar({
               </button>
               <button
                 onClick={handleApplyFilters}
-                className="px-8 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="px-8 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
               >
                 Apply Filters
               </button>
@@ -539,10 +539,10 @@ export default function SearchFilterBar({
 
       {/* Search Tips Panel */}
       {showSearchTips && (
-        <div className="mt-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-lg border-2 border-blue-200 p-6">
+        <div className="mt-4 bg-gradient-to-br from-gray-50 to-indigo-50 rounded-lg shadow-lg border-2 border-gray-200 p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-600 rounded-lg">
+              <div className="p-2 bg-gray-800 rounded-lg">
                 <HelpCircle className="w-5 h-5 text-white" />
               </div>
               <div>
@@ -570,11 +570,11 @@ export default function SearchFilterBar({
               <p className="text-xs text-gray-600 mb-3">Search with partial keywords to find candidates</p>
               <div className="space-y-2">
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
-                  <code className="text-xs text-blue-600">react</code>
+                  <code className="text-xs text-gray-800">react</code>
                   <p className="text-xs text-gray-500 mt-1">Finds: React, ReactJS, React Native</p>
                 </div>
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
-                  <code className="text-xs text-blue-600">john</code>
+                  <code className="text-xs text-gray-800">john</code>
                   <p className="text-xs text-gray-500 mt-1">Finds: John, Johnson, Johnathan</p>
                 </div>
               </div>
@@ -583,19 +583,19 @@ export default function SearchFilterBar({
             {/* Exact Match */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <span className="text-purple-700">""</span>
+                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <span className="text-gray-900">""</span>
                 </div>
                 <h4 className="text-sm text-gray-900">Exact Match</h4>
               </div>
               <p className="text-xs text-gray-600 mb-3">Use quotes for exact phrase matching</p>
               <div className="space-y-2">
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
-                  <code className="text-xs text-purple-600">"Senior Developer"</code>
+                  <code className="text-xs text-gray-800">"Senior Developer"</code>
                   <p className="text-xs text-gray-500 mt-1">Finds only: Senior Developer</p>
                 </div>
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
-                  <code className="text-xs text-purple-600">"5+ years"</code>
+                  <code className="text-xs text-gray-800">"5+ years"</code>
                   <p className="text-xs text-gray-500 mt-1">Finds exact: 5+ years experience</p>
                 </div>
               </div>

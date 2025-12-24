@@ -166,7 +166,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
   const getScoreColor = (percentage: number) => {
     if (percentage >= 80) return 'text-green-600';
-    if (percentage >= 60) return 'text-blue-600';
+    if (percentage >= 60) return 'text-gray-800';
     if (percentage >= 40) return 'text-yellow-600';
     return 'text-red-600';
   };
@@ -202,7 +202,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               <>
                 <button
                   onClick={handleDownloadBulkPDFs}
-                  className="px-4 py-2 text-sm border border-purple-300 text-purple-700 bg-purple-50 rounded-md hover:bg-purple-100 transition-colors flex items-center gap-2"
+                  className="px-4 py-2 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2"
                 >
                   <Archive className="w-4 h-4" />
                   Download PDFs ({selectedResults.length})
@@ -228,7 +228,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               placeholder="Search by name or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
             />
           </div>
 
@@ -264,7 +264,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         type="checkbox"
                         checked={column.enabled}
                         onChange={() => handleToggleColumn(column.id)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-gray-800 rounded"
                       />
                       <span className="text-sm text-gray-700">{column.label}</span>
                     </label>
@@ -279,14 +279,14 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             onClick={() => setShowFilters(!showFilters)}
             className={`px-4 py-2 text-sm border rounded-md transition-colors flex items-center gap-2 ${
               showFilters || activeFiltersCount > 0
-                ? 'border-blue-300 text-blue-700 bg-blue-50'
+                ? 'border-gray-300 text-gray-900 bg-gray-50'
                 : 'border-gray-300 text-gray-700 hover:bg-gray-50'
             }`}
           >
             <Filter className="w-4 h-4" />
             Filters
             {activeFiltersCount > 0 && (
-              <span className="px-1.5 py-0.5 bg-blue-600 text-white rounded text-xs">
+              <span className="px-1.5 py-0.5 bg-gray-800 text-white rounded text-xs">
                 {activeFiltersCount}
               </span>
             )}
@@ -301,7 +301,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               {activeFiltersCount > 0 && (
                 <button
                   onClick={clearFilters}
-                  className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                  className="text-xs text-gray-800 hover:text-gray-900 flex items-center gap-1"
                 >
                   <X className="w-3 h-3" />
                   Clear All
@@ -316,7 +316,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 <select
                   value={filterPassFail}
                   onChange={(e) => setFilterPassFail(e.target.value as 'all' | 'Pass' | 'Fail')}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                 >
                   <option value="all">All</option>
                   <option value="Pass">Pass</option>
@@ -334,7 +334,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   placeholder="0"
                   value={filterScoreMin}
                   onChange={(e) => setFilterScoreMin(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
 
@@ -347,7 +347,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   placeholder="100"
                   value={filterScoreMax}
                   onChange={(e) => setFilterScoreMax(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
 
@@ -357,7 +357,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   type="date"
                   value={filterDateFrom}
                   onChange={(e) => setFilterDateFrom(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
 
@@ -367,7 +367,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   type="date"
                   value={filterDateTo}
                   onChange={(e) => setFilterDateTo(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
             </div>
@@ -383,7 +383,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               <th className="text-left py-3 px-4 w-12">
                 <button onClick={handleSelectAll} className="p-1 hover:bg-gray-100 rounded">
                   {selectedResults.length === filteredResults.length && filteredResults.length > 0 ? (
-                    <CheckSquare className="w-4 h-4 text-blue-600" />
+                    <CheckSquare className="w-4 h-4 text-gray-800" />
                   ) : (
                     <Square className="w-4 h-4 text-gray-400" />
                   )}
@@ -424,7 +424,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         className="p-1 hover:bg-gray-100 rounded"
                       >
                         {selectedResults.includes(result.id) ? (
-                          <CheckSquare className="w-4 h-4 text-blue-600" />
+                          <CheckSquare className="w-4 h-4 text-gray-800" />
                         ) : (
                           <Square className="w-4 h-4 text-gray-400" />
                         )}
@@ -529,14 +529,14 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleViewDetails(result)}
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                          className="p-1.5 text-gray-800 hover:bg-gray-50 rounded-md transition-colors"
                           title="View Details"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDownloadPDF(result.id)}
-                          className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
+                          className="p-1.5 text-gray-800 hover:bg-gray-50 rounded-md transition-colors"
                           title="Download PDF Report"
                         >
                           <FileText className="w-4 h-4" />
@@ -547,7 +547,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
                   {/* Expanded Detail Row */}
                   {selectedResultDetail === result.id && (
-                    <tr className="bg-blue-50 border-b border-blue-200">
+                    <tr className="bg-gray-50 border-b border-gray-200">
                       <td colSpan={enabledColumns.length + 2} className="p-6">
                         <div className="max-w-4xl">
                           <div className="grid grid-cols-2 gap-6">
@@ -584,7 +584,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                             {/* Right Column - AI Summary */}
                             <div>
                               <h4 className="text-sm text-gray-900 mb-3">AI Summary</h4>
-                              <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg p-4 border border-purple-200">
+                              <div className="bg-gradient-to-br from-gray-50 to-gray-50 rounded-lg p-4 border border-gray-200">
                                 <p className="text-sm text-gray-700 leading-relaxed">
                                   {result.aiSummary}
                                 </p>
@@ -639,7 +639,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   className="p-1 hover:bg-gray-100 rounded mt-1"
                 >
                   {selectedResults.includes(result.id) ? (
-                    <CheckSquare className="w-4 h-4 text-blue-600" />
+                    <CheckSquare className="w-4 h-4 text-gray-800" />
                   ) : (
                     <Square className="w-4 h-4 text-gray-400" />
                   )}
@@ -697,14 +697,14 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleViewDetails(result)}
-                      className="flex-1 px-3 py-1.5 text-xs text-blue-600 border border-blue-300 rounded-md hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5"
+                      className="flex-1 px-3 py-1.5 text-xs text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
                     >
                       <Eye className="w-3.5 h-3.5" />
                       {selectedResultDetail === result.id ? 'Hide' : 'View'} Details
                     </button>
                     <button
                       onClick={() => handleDownloadPDF(result.id)}
-                      className="flex-1 px-3 py-1.5 text-xs text-purple-600 border border-purple-300 rounded-md hover:bg-purple-50 transition-colors flex items-center justify-center gap-1.5"
+                      className="flex-1 px-3 py-1.5 text-xs text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
                     >
                       <FileText className="w-3.5 h-3.5" />
                       Download PDF
@@ -740,7 +740,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       {/* AI Summary */}
                       <div>
                         <h4 className="text-xs text-gray-900 mb-2">AI Summary</h4>
-                        <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg p-3 border border-purple-200">
+                        <div className="bg-gradient-to-br from-gray-50 to-gray-50 rounded-lg p-3 border border-gray-200">
                           <p className="text-xs text-gray-700 leading-relaxed">
                             {result.aiSummary}
                           </p>
@@ -764,7 +764,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             </span>
             <button
               onClick={() => setSelectedResults([])}
-              className="text-sm text-blue-600 hover:text-blue-700"
+              className="text-sm text-gray-800 hover:text-gray-900"
             >
               Clear selection
             </button>

@@ -28,7 +28,7 @@ export default function ResumeVersionsModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-purple-50 via-blue-50 to-white">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 via-blue-50 to-white">
           <div>
             <h2 className="text-2xl text-gray-900 mb-1">Resume Version History</h2>
             <p className="text-sm text-gray-600">{candidate.name}</p>
@@ -56,7 +56,7 @@ export default function ResumeVersionsModal({
                       <div className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md ${
                         index === 0 
                           ? 'bg-gradient-to-br from-green-500 to-emerald-600' 
-                          : 'bg-gradient-to-br from-purple-500 to-blue-600'
+                          : 'bg-gradient-to-br from-gray-700 to-gray-800'
                       }`}>
                         {index === 0 ? (
                           <FileText className="w-7 h-7 text-white" />
@@ -67,7 +67,7 @@ export default function ResumeVersionsModal({
                       <span className={`text-xs px-2 py-1 rounded-full border font-medium ${
                         index === 0
                           ? 'bg-green-100 text-green-700 border-green-200'
-                          : 'bg-purple-100 text-purple-700 border-purple-200'
+                          : 'bg-gray-100 text-gray-900 border-gray-200'
                       }`}>
                         v{versions.length - index}
                       </span>
@@ -134,7 +134,7 @@ export default function ResumeVersionsModal({
                             e.stopPropagation();
                             alert(`Downloading: ${version.name}`);
                           }}
-                          className="px-4 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors text-sm font-medium flex items-center gap-2 border border-purple-200"
+                          className="px-4 py-2 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium flex items-center gap-2 border border-gray-200"
                         >
                           <Download className="w-4 h-4" />
                           Download
@@ -166,7 +166,7 @@ export default function ResumeVersionsModal({
             </p>
             <button
               onClick={onClose}
-              className="px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm font-medium"
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-sm font-medium"
             >
               Close
             </button>

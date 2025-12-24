@@ -50,7 +50,7 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-blue-600" />
+              <Activity className="w-4 h-4 text-gray-800" />
               <h3 className="text-sm text-gray-900">Performance</h3>
             </div>
             <button
@@ -77,7 +77,7 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
             {/* Memory Usage */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Database className="w-3.5 h-3.5 text-purple-600" />
+                <Database className="w-3.5 h-3.5 text-gray-800" />
                 <span className="text-xs text-gray-600">Memory</span>
               </div>
               <span className={`text-xs ${metrics.memoryUsage < 50 ? 'text-green-600' : metrics.memoryUsage < 70 ? 'text-yellow-600' : 'text-red-600'}`}>
@@ -102,7 +102,7 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
               </div>
               <div className="w-full bg-gray-200 rounded-full h-1.5">
                 <div
-                  className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                  className="bg-gray-800 h-1.5 rounded-full transition-all duration-300"
                   style={{ width: `${metrics.cacheHitRate}%` }}
                 ></div>
               </div>
@@ -126,7 +126,7 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
           className="bg-white rounded-lg shadow-lg border border-gray-200 p-3 hover:shadow-xl transition-all group"
           title="Show performance metrics"
         >
-          <Activity className="w-5 h-5 text-blue-600 group-hover:scale-110 transition-transform" />
+          <Activity className="w-5 h-5 text-gray-800 group-hover:scale-110 transition-transform" />
         </button>
       )}
     </div>

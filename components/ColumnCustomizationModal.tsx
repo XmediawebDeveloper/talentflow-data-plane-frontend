@@ -64,7 +64,7 @@ export default function ColumnCustomizationModal({ columns, onClose, onApply }: 
                     type="checkbox"
                     checked={column.enabled}
                     onChange={() => toggleColumn(column.id)}
-                    className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-2 focus:ring-blue-600"
+                    className="w-5 h-5 text-gray-800 rounded border-gray-300 focus:ring-2 focus:ring-gray-600"
                   />
                   {column.enabled && (
                     <Check className="w-3 h-3 text-white absolute top-1 left-1 pointer-events-none" />
@@ -87,7 +87,7 @@ export default function ColumnCustomizationModal({ columns, onClose, onApply }: 
           <button
             onClick={handleApply}
             disabled={enabledCount === 0}
-            className="px-6 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Apply Changes
           </button>

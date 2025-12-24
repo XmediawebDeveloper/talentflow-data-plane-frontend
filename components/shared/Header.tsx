@@ -29,9 +29,9 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   };
 
   const roleBadgeColors = {
-    tenant_admin: 'bg-purple-100 text-purple-700 border-purple-200',
-    recruiter: 'bg-blue-100 text-blue-700 border-blue-200',
-    viewer: 'bg-gray-100 text-gray-700 border-gray-200',
+    tenant_admin: 'bg-gray-200 text-gray-700 border-gray-300',
+    recruiter: 'bg-gray-100 text-gray-600 border-gray-200',
+    viewer: 'bg-gray-50 text-gray-500 border-gray-200',
   };
 
   return (
@@ -42,7 +42,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           <input
             type="text"
             placeholder="Search candidates, jobs, assessments..."
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors"
           />
         </div>
       </div>
@@ -63,7 +63,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
         {onOpenTour && (
           <button
             onClick={onOpenTour}
-            className="px-3 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-200 flex items-center gap-2 group"
+            className="px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 hover:shadow-lg transition-all duration-200 flex items-center gap-2 group"
             title="Take a quick tour"
           >
             <Zap className="w-4 h-4 group-hover:animate-pulse" />
@@ -78,7 +78,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
               setShowPlanMenu(!showPlanMenu);
               setShowUserMenu(false);
             }}
-            className="flex items-center gap-2 px-3 py-2 bg-white border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-all duration-200 group"
+            className="flex items-center gap-2 px-3 py-2 bg-white border-2 border-gray-700 text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 group"
             title="View plan and unit balance"
           >
             <CreditCard className="w-4 h-4" />
@@ -96,11 +96,11 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 onClick={() => setShowPlanMenu(false)}
               ></div>
               <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20">
-                <div className="px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                <div className="px-4 py-3 bg-gray-800 text-white">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-medium">Professional Plan</h3>
-                      <p className="text-sm text-blue-100 mt-1">Active until Dec 31, 2025</p>
+                      <p className="text-sm text-gray-300 mt-1">Active until Dec 31, 2025</p>
                     </div>
                     <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
                       <Users className="w-5 h-5 text-white" />
@@ -109,14 +109,14 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 </div>
 
                 {/* Shared Pool Banner */}
-                <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                      <Users className="w-3.5 h-3.5 text-blue-600" />
+                    <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center">
+                      <Users className="w-3.5 h-3.5 text-gray-600" />
                     </div>
                     <div>
-                      <p className="text-xs text-blue-900">Organization-wide Shared Pool</p>
-                      <p className="text-xs text-blue-600">Available to all 8 team members</p>
+                      <p className="text-xs text-gray-900">Organization-wide Shared Pool</p>
+                      <p className="text-xs text-gray-600">Available to all 8 team members</p>
                     </div>
                   </div>
                 </div>
@@ -129,7 +129,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       <span className="text-lg font-medium text-gray-900">850 / 1,000</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full" style={{ width: '85%' }}></div>
+                      <div className="bg-gray-700 h-2 rounded-full" style={{ width: '85%' }}></div>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">150 units consumed this month</p>
                   </div>
@@ -146,7 +146,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center text-xs">
+                          <div className="w-6 h-6 rounded-full bg-gray-700 text-white flex items-center justify-center text-xs">
                             SM
                           </div>
                           <span className="text-gray-900">Sarah Mitchell</span>
@@ -154,13 +154,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         <div className="flex items-center gap-1">
                           <span className="text-gray-600">42 units</span>
                           <div className="w-12 bg-gray-200 rounded-full h-1">
-                            <div className="bg-blue-600 h-1 rounded-full" style={{ width: '70%' }}></div>
+                            <div className="bg-gray-700 h-1 rounded-full" style={{ width: '70%' }}></div>
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-600 to-purple-700 text-white flex items-center justify-center text-xs">
+                          <div className="w-6 h-6 rounded-full bg-gray-600 text-white flex items-center justify-center text-xs">
                             JD
                           </div>
                           <span className="text-gray-900">John Davis</span>
@@ -168,13 +168,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         <div className="flex items-center gap-1">
                           <span className="text-gray-600">38 units</span>
                           <div className="w-12 bg-gray-200 rounded-full h-1">
-                            <div className="bg-purple-600 h-1 rounded-full" style={{ width: '63%' }}></div>
+                            <div className="bg-gray-600 h-1 rounded-full" style={{ width: '63%' }}></div>
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-green-600 to-green-700 text-white flex items-center justify-center text-xs">
+                          <div className="w-6 h-6 rounded-full bg-gray-500 text-white flex items-center justify-center text-xs">
                             EP
                           </div>
                           <span className="text-gray-900">Emma Parker</span>
@@ -182,7 +182,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         <div className="flex items-center gap-1">
                           <span className="text-gray-600">31 units</span>
                           <div className="w-12 bg-gray-200 rounded-full h-1">
-                            <div className="bg-green-600 h-1 rounded-full" style={{ width: '52%' }}></div>
+                            <div className="bg-gray-500 h-1 rounded-full" style={{ width: '52%' }}></div>
                           </div>
                         </div>
                       </div>
@@ -204,21 +204,21 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-gray-700 rounded-full"></div>
                           <span className="text-gray-600">Resume Parsing</span>
                         </div>
                         <span className="text-gray-900">78 units</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
                           <span className="text-gray-600">AI Interviews</span>
                         </div>
                         <span className="text-gray-900">45 units</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
                           <span className="text-gray-600">Assessments</span>
                         </div>
                         <span className="text-gray-900">27 units</span>
@@ -247,7 +247,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
                   {/* Action Buttons */}
                   <div className="flex gap-2">
-                    <button className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                    <button className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium">
                       Buy More Units
                     </button>
                     <button className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
@@ -282,34 +282,34 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 onClick={() => setShowHelpMenu(false)}
               ></div>
               <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20">
-                <div className="px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                <div className="px-4 py-3 bg-gray-800 text-white">
                   <h3 className="font-medium flex items-center gap-2">
                     <HelpCircle className="w-5 h-5" />
                     Help & Support
                   </h3>
-                  <p className="text-sm text-blue-100 mt-1">Get the help you need</p>
+                  <p className="text-sm text-gray-300 mt-1">Get the help you need</p>
                 </div>
 
                 <div className="p-4">
                   {/* Quick Actions */}
                   <div className="grid grid-cols-2 gap-2 mb-4">
-                    <button className="p-3 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all group text-left">
-                      <Book className="w-5 h-5 text-blue-600 mb-2" />
+                    <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
+                      <Book className="w-5 h-5 text-gray-700 mb-2" />
                       <div className="text-sm text-gray-900">Knowledge Base</div>
                       <div className="text-xs text-gray-500">Browse articles</div>
                     </button>
-                    <button className="p-3 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all group text-left">
-                      <Video className="w-5 h-5 text-purple-600 mb-2" />
+                    <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
+                      <Video className="w-5 h-5 text-gray-600 mb-2" />
                       <div className="text-sm text-gray-900">Video Tutorials</div>
                       <div className="text-xs text-gray-500">Watch & learn</div>
                     </button>
-                    <button className="p-3 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all group text-left">
-                      <FileText className="w-5 h-5 text-green-600 mb-2" />
+                    <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
+                      <FileText className="w-5 h-5 text-gray-600 mb-2" />
                       <div className="text-sm text-gray-900">Documentation</div>
                       <div className="text-xs text-gray-500">Full guides</div>
                     </button>
-                    <button className="p-3 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all group text-left">
-                      <MessageCircle className="w-5 h-5 text-orange-600 mb-2" />
+                    <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
+                      <MessageCircle className="w-5 h-5 text-gray-500 mb-2" />
                       <div className="text-sm text-gray-900">Live Chat</div>
                       <div className="text-xs text-gray-500">Chat with us</div>
                     </button>
@@ -323,7 +323,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         <div className="flex items-start gap-2">
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                           <div>
-                            <div className="text-sm text-gray-900 group-hover:text-blue-600">Getting Started with TalentFlow</div>
+                            <div className="text-sm text-gray-900 group-hover:text-gray-700">Getting Started with TalentFlow</div>
                             <div className="text-xs text-gray-500">5 min read</div>
                           </div>
                         </div>
@@ -332,7 +332,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         <div className="flex items-start gap-2">
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                           <div>
-                            <div className="text-sm text-gray-900 group-hover:text-blue-600">How to Parse Resumes with AI</div>
+                            <div className="text-sm text-gray-900 group-hover:text-gray-700">How to Parse Resumes with AI</div>
                             <div className="text-xs text-gray-500">8 min read</div>
                           </div>
                         </div>
@@ -341,7 +341,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         <div className="flex items-start gap-2">
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                           <div>
-                            <div className="text-sm text-gray-900 group-hover:text-blue-600">Creating & Managing Assessments</div>
+                            <div className="text-sm text-gray-900 group-hover:text-gray-700">Creating & Managing Assessments</div>
                             <div className="text-xs text-gray-500">10 min read</div>
                           </div>
                         </div>
@@ -354,8 +354,8 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     <h4 className="text-sm text-gray-900 mb-3">Contact Support</h4>
                     <div className="space-y-2">
                       <button className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors text-left">
-                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <Mail className="w-4 h-4 text-blue-600" />
+                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                          <Mail className="w-4 h-4 text-gray-600" />
                         </div>
                         <div className="flex-1">
                           <div className="text-sm text-gray-900">Email Support</div>
@@ -364,8 +364,8 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         <ExternalLink className="w-4 h-4 text-gray-400" />
                       </button>
                       <button className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors text-left">
-                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                          <Phone className="w-4 h-4 text-green-600" />
+                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                          <Phone className="w-4 h-4 text-gray-600" />
                         </div>
                         <div className="flex-1">
                           <div className="text-sm text-gray-900">Phone Support</div>
@@ -378,7 +378,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
                   {/* Action Buttons */}
                   <div className="flex gap-2 mt-4">
-                    <button className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                    <button className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium">
                       Open Support Ticket
                     </button>
                   </div>
@@ -412,7 +412,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 onClick={() => setShowNotifications(false)}
               ></div>
               <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20">
-                <div className="px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                <div className="px-4 py-3 bg-gray-800 text-white">
                   <div className="flex items-center justify-between">
                     <h3 className="font-medium flex items-center gap-2">
                       <Bell className="w-5 h-5" />
@@ -420,12 +420,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     </h3>
                     <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">5 new</span>
                   </div>
-                  <p className="text-sm text-blue-100 mt-1">Stay updated with latest activities</p>
+                  <p className="text-sm text-gray-300 mt-1">Stay updated with latest activities</p>
                 </div>
 
                 {/* Filter Tabs */}
                 <div className="flex border-b border-gray-200 bg-gray-50">
-                  <button className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 border-b-2 border-blue-600 bg-white">
+                  <button className="flex-1 px-4 py-2 text-sm font-medium text-gray-900 border-b-2 border-gray-800 bg-white">
                     All (5)
                   </button>
                   <button className="flex-1 px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
@@ -440,7 +440,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   {/* Notification Items */}
                   <div className="p-2 space-y-1">
                     {/* Success Notification */}
-                    <button className="w-full text-left p-3 hover:bg-blue-50 rounded-lg transition-colors border-l-4 border-green-500 bg-green-50/30">
+                    <button className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors border-l-4 border-green-500 bg-green-50/30">
                       <div className="flex gap-3">
                         <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
                           <CheckCircle className="w-5 h-5 text-green-600" />
@@ -459,10 +459,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     </button>
 
                     {/* Info Notification */}
-                    <button className="w-full text-left p-3 hover:bg-blue-50 rounded-lg transition-colors border-l-4 border-blue-500 bg-blue-50/30">
+                    <button className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors border-l-4 border-gray-500 bg-gray-50/30">
                       <div className="flex gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                          <Info className="w-5 h-5 text-blue-600" />
+                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <Info className="w-5 h-5 text-gray-600" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
@@ -471,14 +471,14 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                           </div>
                           <p className="text-xs text-gray-600">John Smith applied for "Senior React Developer" position</p>
                           <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs text-blue-600 font-medium">Review Application</span>
+                            <span className="text-xs text-gray-700 font-medium">Review Application</span>
                           </div>
                         </div>
                       </div>
                     </button>
 
                     {/* Warning Notification */}
-                    <button className="w-full text-left p-3 hover:bg-blue-50 rounded-lg transition-colors border-l-4 border-orange-500 bg-orange-50/30">
+                    <button className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors border-l-4 border-orange-500 bg-orange-50/30">
                       <div className="flex gap-3">
                         <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
                           <AlertCircle className="w-5 h-5 text-orange-600" />
@@ -497,10 +497,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     </button>
 
                     {/* Clock Notification */}
-                    <button className="w-full text-left p-3 hover:bg-blue-50 rounded-lg transition-colors">
+                    <button className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors">
                       <div className="flex gap-3">
-                        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                          <Clock className="w-5 h-5 text-purple-600" />
+                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <Clock className="w-5 h-5 text-gray-600" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
@@ -513,7 +513,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     </button>
 
                     {/* Info Notification */}
-                    <button className="w-full text-left p-3 hover:bg-blue-50 rounded-lg transition-colors">
+                    <button className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors">
                       <div className="flex gap-3">
                         <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
                           <User className="w-5 h-5 text-gray-600" />
@@ -535,7 +535,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   <button className="flex-1 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium">
                     Mark All Read
                   </button>
-                  <button className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                  <button className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium">
                     View All
                   </button>
                 </div>
@@ -558,7 +558,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             }}
             className="flex items-center gap-3 hover:bg-gray-100 rounded-lg px-3 py-2 transition-colors"
           >
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center shadow-sm">
+            <div className="w-9 h-9 rounded-full bg-gray-700 text-white flex items-center justify-center shadow-sm">
               <span className="text-sm">{user.name.split(' ').map(n => n[0]).join('').toUpperCase()}</span>
             </div>
             <div className="text-left">

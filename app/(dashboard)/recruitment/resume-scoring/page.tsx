@@ -139,7 +139,7 @@ export default function ResumeScoringRoute() {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
         <span className="ml-3 text-gray-600">Loading job descriptions...</span>
       </div>
     );

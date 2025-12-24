@@ -51,9 +51,9 @@ const roleLabels: Record<UserRole, string> = {
 };
 
 const roleBadgeColors: Record<UserRole, string> = {
-  tenant_admin: 'bg-purple-100 text-purple-700',
-  recruiter: 'bg-blue-100 text-blue-700',
-  viewer: 'bg-gray-100 text-gray-700',
+  tenant_admin: 'bg-gray-200 text-gray-800',
+  recruiter: 'bg-gray-100 text-gray-700',
+  viewer: 'bg-gray-50 text-gray-600',
 };
 
 const permissionLabels: Record<keyof UserPermissions, string> = {
@@ -172,8 +172,8 @@ export default function UserManagement() {
   const [availableRoles, setAvailableRoles] = useState<RoleListItem[]>([]);
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
   const [isEditRoleDropdownOpen, setIsEditRoleDropdownOpen] = useState(false);
-  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
-  const [editSelectedRoleIds, setEditSelectedRoleIds] = useState<number[]>([]);
+  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
+  const [editSelectedRoleId, setEditSelectedRoleId] = useState<number | null>(null);
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
@@ -208,29 +208,75 @@ export default function UserManagement() {
     }
   };
 
-  const toggleRoleSelection = (roleId: number, isEdit: boolean = false) => {
+  const selectRole = (roleId: number, isEdit: boolean = false) => {
+    const role = availableRoles.find(r => r.id === roleId);
+    const roleCode = role?.code.toLowerCase() || '';
+
+    // Set default permissions based on role
+    let permissions = { ...defaultPermissions };
+    if (roleCode === 'admin' || roleCode === 'tenant_admin') {
+      permissions = {
+        can_create_jd: true,
+        can_manage_jd: true,
+        can_upload_resumes: true,
+        can_view_resumes: true,
+        can_access_internal_db: true,
+        can_create_assessments: true,
+        can_view_analytics: true,
+        can_manage_settings: true,
+        can_manage_users: true,
+      };
+    } else if (roleCode === 'recruiter') {
+      permissions = {
+        can_create_jd: true,
+        can_manage_jd: true,
+        can_upload_resumes: true,
+        can_view_resumes: true,
+        can_access_internal_db: true,
+        can_create_assessments: true,
+        can_view_analytics: true,
+        can_manage_settings: false,
+        can_manage_users: false,
+      };
+    }
+
     if (isEdit) {
-      setEditSelectedRoleIds(prev =>
-        prev.includes(roleId)
-          ? prev.filter(id => id !== roleId)
-          : [...prev, roleId]
-      );
+      setEditSelectedRoleId(roleId);
+      setIsEditRoleDropdownOpen(false);
+      if (editingUser) {
+        setEditingUser({ ...editingUser, permissions });
+      }
     } else {
-      setSelectedRoleIds(prev =>
-        prev.includes(roleId)
-          ? prev.filter(id => id !== roleId)
-          : [...prev, roleId]
-      );
+      setSelectedRoleId(roleId);
+      setIsRoleDropdownOpen(false);
+      setNewUser({ ...newUser, permissions });
     }
   };
 
-  const getSelectedRoleNames = (roleIds: number[]): string => {
-    if (roleIds.length === 0) return 'Select roles...';
-    const names = roleIds
-      .map(id => availableRoles.find(r => r.id === id)?.name)
-      .filter(Boolean);
-    if (names.length <= 2) return names.join(', ');
-    return `${names.slice(0, 2).join(', ')} +${names.length - 2} more`;
+  const getSelectedRoleName = (roleId: number | null): string => {
+    if (!roleId) return 'Select a role...';
+    const role = availableRoles.find(r => r.id === roleId);
+    return role?.name || 'Select a role...';
+  };
+
+  const getSelectedRolePermissions = (roleId: number | null): string[] => {
+    if (!roleId) return [];
+    const role = availableRoles.find(r => r.id === roleId);
+    // Return role description as permission summary for now
+    // In a real implementation, you'd fetch actual permissions from the API
+    if (role) {
+      // Map role to default permissions based on role code
+      const roleCode = role.code.toLowerCase();
+      if (roleCode === 'admin' || roleCode === 'tenant_admin') {
+        return ['Full Access', 'Manage Users', 'Manage Settings', 'View Analytics', 'Create JDs', 'Upload Resumes', 'Create Assessments'];
+      } else if (roleCode === 'recruiter') {
+        return ['Create JDs', 'Manage JDs', 'Upload Resumes', 'View Resumes', 'Create Assessments', 'View Analytics'];
+      } else if (roleCode === 'viewer') {
+        return ['View Resumes', 'View Analytics'];
+      }
+      return [role.description || 'No permissions defined'];
+    }
+    return [];
   };
 
   const loadUsers = async () => {
@@ -304,10 +350,18 @@ export default function UserManagement() {
       return;
     }
 
+    if (!selectedRoleId) {
+      toast.error('Please select a role');
+      return;
+    }
+
     if (newUser.password.length < 6) {
       toast.error('Password must be at least 6 characters');
       return;
     }
+
+    const selectedRole = availableRoles.find(r => r.id === selectedRoleId);
+    const roleCode = selectedRole?.code || 'viewer';
 
     setIsSaving(true);
     try {
@@ -321,7 +375,8 @@ export default function UserManagement() {
           name: newUser.name,
           email: newUser.email,
           password: newUser.password,
-          role: newUser.role,
+          role: roleCode,
+          role_id: selectedRoleId,
           ...newUser.permissions,
         }),
       });
@@ -329,14 +384,7 @@ export default function UserManagement() {
       if (!response.ok) throw new Error('Failed to create user');
 
       toast.success('User created successfully');
-      setNewUser({
-        name: '',
-        email: '',
-        password: '',
-        role: 'viewer',
-        permissions: { ...defaultPermissions },
-      });
-      setIsCreateModalOpen(false);
+      resetCreateModal();
       loadUsers();
     } catch (error) {
       console.warn('API unavailable, simulating create:', error);
@@ -345,24 +393,42 @@ export default function UserManagement() {
         id: String(Date.now()),
         name: newUser.name,
         email: newUser.email,
-        role: newUser.role,
+        role: roleCode as UserRole,
         permissions: newUser.permissions,
         is_active: true,
         last_login: undefined,
       };
       setUsers(prev => [...prev, newMockUser]);
       toast.success('User created successfully (offline mode)');
-      setNewUser({
-        name: '',
-        email: '',
-        password: '',
-        role: 'viewer',
-        permissions: { ...defaultPermissions },
-      });
-      setIsCreateModalOpen(false);
+      resetCreateModal();
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const resetCreateModal = () => {
+    setNewUser({
+      name: '',
+      email: '',
+      password: '',
+      role: 'viewer',
+      permissions: { ...defaultPermissions },
+    });
+    setSelectedRoleId(null);
+    setIsCreateModalOpen(false);
+  };
+
+  const openEditModal = (user: ApiUser) => {
+    setEditingUser(user);
+    // Find the role ID based on user's current role
+    const matchingRole = availableRoles.find(r => r.code.toLowerCase() === user.role.toLowerCase());
+    setEditSelectedRoleId(matchingRole?.id || null);
+  };
+
+  const resetEditModal = () => {
+    setEditingUser(null);
+    setEditSelectedRoleId(null);
+    setIsEditRoleDropdownOpen(false);
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -413,6 +479,14 @@ export default function UserManagement() {
   const handleUpdateUser = async () => {
     if (!editingUser) return;
 
+    if (!editSelectedRoleId) {
+      toast.error('Please select a role');
+      return;
+    }
+
+    const selectedRole = availableRoles.find(r => r.id === editSelectedRoleId);
+    const roleCode = selectedRole?.code || editingUser.role;
+
     setIsSaving(true);
     try {
       const response = await fetch(`${API_URL}/users/${editingUser.id}`, {
@@ -423,7 +497,8 @@ export default function UserManagement() {
         },
         body: JSON.stringify({
           name: editingUser.name,
-          role: editingUser.role,
+          role: roleCode,
+          role_id: editSelectedRoleId,
           ...editingUser.permissions,
         }),
       });
@@ -431,13 +506,14 @@ export default function UserManagement() {
       if (!response.ok) throw new Error('Failed to update user');
 
       toast.success('User updated successfully');
-      setEditingUser(null);
+      resetEditModal();
       loadUsers();
     } catch (error) {
       console.warn('API unavailable, simulating update:', error);
-      setUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u));
+      const updatedUser = { ...editingUser, role: roleCode as UserRole };
+      setUsers(prev => prev.map(u => u.id === editingUser.id ? updatedUser : u));
       toast.success('User updated (offline mode)');
-      setEditingUser(null);
+      resetEditModal();
     } finally {
       setIsSaving(false);
     }
@@ -453,12 +529,12 @@ export default function UserManagement() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
               <UserCog className="w-7 h-7 text-white" />
             </div>
             <div>
@@ -468,7 +544,7 @@ export default function UserManagement() {
           </div>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-md"
           >
             <Plus className="w-5 h-5" />
             Add User
@@ -485,7 +561,7 @@ export default function UserManagement() {
             placeholder="Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
           />
         </div>
       </div>
@@ -498,13 +574,13 @@ export default function UserManagement() {
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm text-gray-600">Admins</p>
-          <p className="text-3xl font-semibold text-purple-600 mt-1">
+          <p className="text-3xl font-semibold text-gray-800 mt-1">
             {users.filter(u => u.role === 'tenant_admin').length}
           </p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm text-gray-600">Recruiters</p>
-          <p className="text-3xl font-semibold text-blue-600 mt-1">
+          <p className="text-3xl font-semibold text-gray-700 mt-1">
             {users.filter(u => u.role === 'recruiter').length}
           </p>
         </div>
@@ -520,7 +596,7 @@ export default function UserManagement() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            <Loader2 className="w-8 h-8 text-gray-700 animate-spin" />
           </div>
         ) : (
           <table className="w-full">
@@ -553,10 +629,10 @@ export default function UserManagement() {
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                         user.role === 'tenant_admin'
-                          ? 'bg-gradient-to-br from-purple-600 to-purple-700'
+                          ? 'bg-gray-800'
                           : user.role === 'recruiter'
-                          ? 'bg-gradient-to-br from-blue-600 to-blue-700'
-                          : 'bg-gradient-to-br from-gray-500 to-gray-600'
+                          ? 'bg-gray-700'
+                          : 'bg-gray-600'
                       }`}>
                         <span className="text-white text-sm font-medium">
                           {user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
@@ -617,8 +693,8 @@ export default function UserManagement() {
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => setEditingUser(user)}
-                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        onClick={() => openEditModal(user)}
+                        className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
@@ -651,7 +727,7 @@ export default function UserManagement() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-gray-900">Create New User</h2>
               <button
-                onClick={() => setIsCreateModalOpen(false)}
+                onClick={resetCreateModal}
                 className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
               >
                 <X className="w-5 h-5" />
@@ -668,7 +744,7 @@ export default function UserManagement() {
                   value={newUser.name}
                   onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
                   placeholder="Enter full name"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
               <div>
@@ -680,7 +756,7 @@ export default function UserManagement() {
                   value={newUser.email}
                   onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
                   placeholder="user@company.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
               <div>
@@ -692,21 +768,21 @@ export default function UserManagement() {
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                   placeholder="Min. 6 characters"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Roles <span className="text-xs text-gray-500">(Select multiple)</span>
+                  Role <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <button
                     type="button"
                     onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-left flex items-center justify-between"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-left flex items-center justify-between"
                   >
-                    <span className={selectedRoleIds.length === 0 ? 'text-gray-400' : 'text-gray-900'}>
-                      {getSelectedRoleNames(selectedRoleIds)}
+                    <span className={!selectedRoleId ? 'text-gray-400' : 'text-gray-900'}>
+                      {getSelectedRoleName(selectedRoleId)}
                     </span>
                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isRoleDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
@@ -716,22 +792,24 @@ export default function UserManagement() {
                         <button
                           key={role.id}
                           type="button"
-                          onClick={() => toggleRoleSelection(role.id)}
-                          className="w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-center gap-3"
+                          onClick={() => selectRole(role.id)}
+                          className={`w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-center gap-3 ${
+                            selectedRoleId === role.id ? 'bg-gray-100' : ''
+                          }`}
                         >
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                            selectedRoleIds.includes(role.id)
-                              ? 'bg-blue-600 border-blue-600'
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            selectedRoleId === role.id
+                              ? 'bg-gray-800 border-gray-800'
                               : 'border-gray-300'
                           }`}>
-                            {selectedRoleIds.includes(role.id) && <Check className="w-3 h-3 text-white" />}
+                            {selectedRoleId === role.id && <Check className="w-3 h-3 text-white" />}
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <Shield className="w-4 h-4 text-gray-400" />
                               <span className="text-sm font-medium text-gray-900">{role.name}</span>
                               {role.is_system && (
-                                <span className="px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">System</span>
+                                <span className="px-1.5 py-0.5 text-xs bg-gray-200 text-gray-700 rounded">System</span>
                               )}
                               {role.is_default && (
                                 <span className="px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded">Default</span>
@@ -746,68 +824,32 @@ export default function UserManagement() {
                     </div>
                   )}
                 </div>
-                {selectedRoleIds.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {selectedRoleIds.map(roleId => {
-                      const role = availableRoles.find(r => r.id === roleId);
-                      return role ? (
-                        <span
-                          key={roleId}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"
-                        >
-                          {role.name}
-                          <button
-                            type="button"
-                            onClick={() => toggleRoleSelection(roleId)}
-                            className="hover:text-blue-900"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </span>
-                      ) : null;
-                    })}
-                  </div>
-                )}
               </div>
 
-              {/* Legacy Role Selection (for backward compatibility) */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Legacy Role <span className="text-xs text-gray-500">(For backward compatibility)</span>
-                </label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => handleRoleChange(e.target.value as UserRole)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
-                >
-                  <option value="viewer">Viewer</option>
-                  <option value="recruiter">Recruiter</option>
-                  <option value="tenant_admin">Admin</option>
-                </select>
-              </div>
-
-              {/* Permissions */}
+              {/* Permissions - Editable based on selected role */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Permissions
+                  Permissions {selectedRoleId && <span className="text-xs text-gray-500">(Pre-filled based on role, customize as needed)</span>}
                 </label>
                 <div className="grid grid-cols-2 gap-3">
-                  {(Object.entries(permissionLabels) as [keyof UserPermissions, string][]).map(([key, label]) => (
+                  {Object.entries(permissionLabels).map(([key, label]) => (
                     <label
                       key={key}
-                      className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
+                      className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer"
                     >
                       <input
                         type="checkbox"
-                        checked={newUser.permissions[key]}
-                        onChange={(e) => setNewUser({
-                          ...newUser,
-                          permissions: {
-                            ...newUser.permissions,
-                            [key]: e.target.checked
-                          }
-                        })}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-600"
+                        checked={newUser.permissions[key as keyof UserPermissions]}
+                        onChange={(e) =>
+                          setNewUser({
+                            ...newUser,
+                            permissions: {
+                              ...newUser.permissions,
+                              [key]: e.target.checked,
+                            },
+                          })
+                        }
+                        className="w-4 h-4 text-gray-700 border-gray-300 rounded focus:ring-gray-500"
                       />
                       <span className="text-sm text-gray-700">{label}</span>
                     </label>
@@ -818,7 +860,7 @@ export default function UserManagement() {
 
             <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={() => setIsCreateModalOpen(false)}
+                onClick={resetCreateModal}
                 className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                 disabled={isSaving}
               >
@@ -827,7 +869,7 @@ export default function UserManagement() {
               <button
                 onClick={handleCreateUser}
                 disabled={isSaving}
-                className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 Create User
@@ -844,7 +886,7 @@ export default function UserManagement() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-gray-900">Edit User</h2>
               <button
-                onClick={() => setEditingUser(null)}
+                onClick={resetEditModal}
                 className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
               >
                 <X className="w-5 h-5" />
@@ -860,7 +902,7 @@ export default function UserManagement() {
                   type="text"
                   value={editingUser.name}
                   onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
               <div>
@@ -876,16 +918,16 @@ export default function UserManagement() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Roles <span className="text-xs text-gray-500">(Select multiple)</span>
+                  Role <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <button
                     type="button"
                     onClick={() => setIsEditRoleDropdownOpen(!isEditRoleDropdownOpen)}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-left flex items-center justify-between"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-left flex items-center justify-between"
                   >
-                    <span className={editSelectedRoleIds.length === 0 ? 'text-gray-400' : 'text-gray-900'}>
-                      {getSelectedRoleNames(editSelectedRoleIds)}
+                    <span className={!editSelectedRoleId ? 'text-gray-400' : 'text-gray-900'}>
+                      {getSelectedRoleName(editSelectedRoleId)}
                     </span>
                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isEditRoleDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
@@ -895,22 +937,24 @@ export default function UserManagement() {
                         <button
                           key={role.id}
                           type="button"
-                          onClick={() => toggleRoleSelection(role.id, true)}
-                          className="w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-center gap-3"
+                          onClick={() => selectRole(role.id, true)}
+                          className={`w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-center gap-3 ${
+                            editSelectedRoleId === role.id ? 'bg-gray-100' : ''
+                          }`}
                         >
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                            editSelectedRoleIds.includes(role.id)
-                              ? 'bg-blue-600 border-blue-600'
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            editSelectedRoleId === role.id
+                              ? 'bg-gray-800 border-gray-800'
                               : 'border-gray-300'
                           }`}>
-                            {editSelectedRoleIds.includes(role.id) && <Check className="w-3 h-3 text-white" />}
+                            {editSelectedRoleId === role.id && <Check className="w-3 h-3 text-white" />}
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <Shield className="w-4 h-4 text-gray-400" />
                               <span className="text-sm font-medium text-gray-900">{role.name}</span>
                               {role.is_system && (
-                                <span className="px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">System</span>
+                                <span className="px-1.5 py-0.5 text-xs bg-gray-200 text-gray-700 rounded">System</span>
                               )}
                             </div>
                             {role.description && (
@@ -922,68 +966,32 @@ export default function UserManagement() {
                     </div>
                   )}
                 </div>
-                {editSelectedRoleIds.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {editSelectedRoleIds.map(roleId => {
-                      const role = availableRoles.find(r => r.id === roleId);
-                      return role ? (
-                        <span
-                          key={roleId}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"
-                        >
-                          {role.name}
-                          <button
-                            type="button"
-                            onClick={() => toggleRoleSelection(roleId, true)}
-                            className="hover:text-blue-900"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </span>
-                      ) : null;
-                    })}
-                  </div>
-                )}
               </div>
 
-              {/* Legacy Role Selection (for backward compatibility) */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Legacy Role
-                </label>
-                <select
-                  value={editingUser.role}
-                  onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as UserRole })}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
-                >
-                  <option value="viewer">Viewer</option>
-                  <option value="recruiter">Recruiter</option>
-                  <option value="tenant_admin">Admin</option>
-                </select>
-              </div>
-
-              {/* Permissions */}
+              {/* Permissions - Editable */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Permissions
+                  Permissions {editSelectedRoleId && <span className="text-xs text-gray-500">(Pre-filled based on role, customize as needed)</span>}
                 </label>
                 <div className="grid grid-cols-2 gap-3">
-                  {(Object.entries(permissionLabels) as [keyof UserPermissions, string][]).map(([key, label]) => (
+                  {Object.entries(permissionLabels).map(([key, label]) => (
                     <label
                       key={key}
-                      className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
+                      className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer"
                     >
                       <input
                         type="checkbox"
-                        checked={editingUser.permissions[key]}
-                        onChange={(e) => setEditingUser({
-                          ...editingUser,
-                          permissions: {
-                            ...editingUser.permissions,
-                            [key]: e.target.checked
-                          }
-                        })}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-600"
+                        checked={editingUser.permissions[key as keyof UserPermissions]}
+                        onChange={(e) =>
+                          setEditingUser({
+                            ...editingUser,
+                            permissions: {
+                              ...editingUser.permissions,
+                              [key]: e.target.checked,
+                            },
+                          })
+                        }
+                        className="w-4 h-4 text-gray-700 border-gray-300 rounded focus:ring-gray-500"
                       />
                       <span className="text-sm text-gray-700">{label}</span>
                     </label>
@@ -994,7 +1002,7 @@ export default function UserManagement() {
 
             <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={() => setEditingUser(null)}
+                onClick={resetEditModal}
                 className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                 disabled={isSaving}
               >
@@ -1003,7 +1011,7 @@ export default function UserManagement() {
               <button
                 onClick={handleUpdateUser}
                 disabled={isSaving}
-                className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 Save Changes

@@ -30,7 +30,7 @@ export function ProgressIndicator({ steps, currentStep }: ProgressIndicatorProps
                 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all
                 ${isCompleted ? 'bg-green-500' : ''}
                 ${isError ? 'bg-red-500' : ''}
-                ${isProcessing ? 'bg-blue-500 animate-pulse' : ''}
+                ${isProcessing ? 'bg-gray-700 animate-pulse' : ''}
                 ${step.status === 'pending' ? 'bg-gray-200' : ''}
               `}
             >
@@ -47,7 +47,7 @@ export function ProgressIndicator({ steps, currentStep }: ProgressIndicatorProps
                   text-sm font-medium transition-colors
                   ${isCompleted ? 'text-green-700' : ''}
                   ${isError ? 'text-red-700' : ''}
-                  ${isProcessing ? 'text-blue-700' : ''}
+                  ${isProcessing ? 'text-gray-900' : ''}
                   ${step.status === 'pending' ? 'text-gray-500' : ''}
                 `}
               >
@@ -55,7 +55,7 @@ export function ProgressIndicator({ steps, currentStep }: ProgressIndicatorProps
               </div>
               {isProcessing && (
                 <div className="mt-1 h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 animate-loading-bar w-1/4"></div>
+                  <div className="h-full bg-gray-700 animate-loading-bar w-1/4"></div>
                 </div>
               )}
             </div>
@@ -80,7 +80,7 @@ export function LinearProgress({ progress, label }: { progress: number; label?: 
       )}
       <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 ease-out rounded-full"
+          className="h-full bg-gradient-to-r from-gray-700 to-gray-800 transition-all duration-300 ease-out rounded-full"
           style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
         />
       </div>

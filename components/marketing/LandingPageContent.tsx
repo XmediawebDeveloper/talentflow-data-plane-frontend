@@ -42,7 +42,7 @@ export function LandingPageContent() {
 
         <div className="absolute top-20 left-10 w-72 h-72 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
         <div
-          className="absolute top-40 right-20 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"
+          className="absolute top-40 right-20 w-96 h-96 bg-gray-600 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"
           style={{ animationDelay: "2s" }}
         ></div>
         <div
@@ -141,7 +141,7 @@ export function LandingPageContent() {
             <Card className="overflow-hidden relative bg-white dark:bg-gray-900">
               <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/80 to-transparent p-6 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-700 to-pink-500 flex items-center justify-center">
                     <Play className="w-6 h-6 text-white" />
                   </div>
                   <div>
@@ -166,7 +166,7 @@ export function LandingPageContent() {
               >
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center space-y-6 p-8">
-                    <div className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center animate-pulse">
+                    <div className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-gray-700 to-pink-500 flex items-center justify-center animate-pulse">
                       <Video className="w-16 h-16 text-white" />
                     </div>
                     <div className="space-y-3">
@@ -203,7 +203,7 @@ export function LandingPageContent() {
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
                       <Button
                         size="lg"
-                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-12 px-8 rounded-2xl shadow-lg"
+                        className="bg-gradient-to-r from-gray-700 to-pink-500 h-12 px-8 rounded-2xl shadow-lg"
                         onClick={() => setDemoModalOpen(false)}
                         asChild
                       >
@@ -235,8 +235,8 @@ export function LandingPageContent() {
         <div className="container mx-auto max-w-[1400px] px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
-              { number: "2,500+", label: "Active Customers", icon: Users, gradient: "from-blue-500 to-purple-500" },
-              { number: "5M+", label: "Resumes Processed", icon: FileText, gradient: "from-purple-500 to-pink-500" },
+              { number: "2,500+", label: "Active Customers", icon: Users, gradient: "from-gray-700 to-gray-700" },
+              { number: "5M+", label: "Resumes Processed", icon: FileText, gradient: "from-gray-700 to-pink-500" },
               { number: "40%", label: "Faster Hiring", icon: TrendingUp, gradient: "from-green-500 to-teal-500" },
               { number: "98%", label: "Satisfaction", icon: Star, gradient: "from-orange-500 to-red-500" },
             ].map((stat, index) => {
@@ -259,7 +259,7 @@ export function LandingPageContent() {
       <section className="py-24 bg-gray-50 dark:bg-[#1E293B]/50">
         <div className="container mx-auto max-w-[1400px] px-6">
           <div className="text-center mb-16">
-            <Badge className="mb-4 px-4 py-2 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-0">
+            <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0">
               <Zap className="w-4 h-4 mr-2" />
               Powerful Features
             </Badge>
@@ -273,12 +273,12 @@ export function LandingPageContent() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
-              { icon: Sparkles, title: "AI Resume Scoring", description: "Automatically rank candidates based on job requirements with 95% accuracy", gradient: "from-blue-500 to-purple-500" },
-              { icon: Video, title: "Video Interviews", description: "Conduct and record video interviews with AI-powered sentiment analysis", gradient: "from-purple-500 to-pink-500" },
+              { icon: Sparkles, title: "AI Resume Scoring", description: "Automatically rank candidates based on job requirements with 95% accuracy", gradient: "from-gray-700 to-gray-700" },
+              { icon: Video, title: "Video Interviews", description: "Conduct and record video interviews with AI-powered sentiment analysis", gradient: "from-gray-700 to-pink-500" },
               { icon: BarChart3, title: "Advanced Analytics", description: "Get insights into your hiring pipeline with real-time dashboards", gradient: "from-green-500 to-teal-500" },
               { icon: FileText, title: "Smart Assessments", description: "Create custom tests and quizzes with automatic grading", gradient: "from-orange-500 to-red-500" },
-              { icon: Users, title: "Team Collaboration", description: "Work together with hiring managers and interviewers in real-time", gradient: "from-pink-500 to-purple-500" },
-              { icon: Shield, title: "Enterprise Security", description: "SOC 2 Type II certified with bank-level encryption", gradient: "from-teal-500 to-blue-500" },
+              { icon: Users, title: "Team Collaboration", description: "Work together with hiring managers and interviewers in real-time", gradient: "from-pink-500 to-gray-700" },
+              { icon: Shield, title: "Enterprise Security", description: "SOC 2 Type II certified with bank-level encryption", gradient: "from-teal-500 to-gray-500" },
             ].map((feature, index) => {
               const Icon = feature.icon;
               return (
@@ -313,8 +313,8 @@ export function LandingPageContent() {
 
           <div className="grid md:grid-cols-3 gap-12 max-w-5xl mx-auto">
             {[
-              { step: "01", title: "Create Your Account", description: "Sign up in under 2 minutes with no credit card required", gradient: "from-blue-500 to-purple-500" },
-              { step: "02", title: "Post Your Jobs", description: "Add job descriptions and let our AI automatically parse requirements", gradient: "from-purple-500 to-pink-500" },
+              { step: "01", title: "Create Your Account", description: "Sign up in under 2 minutes with no credit card required", gradient: "from-gray-700 to-gray-700" },
+              { step: "02", title: "Post Your Jobs", description: "Add job descriptions and let our AI automatically parse requirements", gradient: "from-gray-700 to-pink-500" },
               { step: "03", title: "Start Hiring", description: "Receive ranked candidates and schedule interviews instantly", gradient: "from-pink-500 to-orange-500" },
             ].map((item, index) => (
               <div key={index} className="text-center group">
@@ -346,7 +346,7 @@ export function LandingPageContent() {
               Join 2,500+ companies using TalentFlow to build amazing teams faster
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
-              <Button size="lg" className="h-16 px-12 text-lg rounded-2xl bg-white text-purple-600 hover:bg-gray-50 shadow-2xl" asChild>
+              <Button size="lg" className="h-16 px-12 text-lg rounded-2xl bg-white text-gray-800 hover:bg-gray-50 shadow-2xl" asChild>
                 <Link href="/signup">
                   Start Free Trial
                   <ArrowRight className="w-5 h-5 ml-2" />

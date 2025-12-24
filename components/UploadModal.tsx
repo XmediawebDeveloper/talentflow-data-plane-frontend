@@ -274,9 +274,9 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
 
         <div className="p-6">
           {/* Storage Usage Indicator */}
-          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+          <div className="mb-6 p-4 bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg">
             <div className="flex items-start gap-3">
-              <HardDrive className="w-5 h-5 text-blue-600 mt-0.5" />
+              <HardDrive className="w-5 h-5 text-gray-800 mt-0.5" />
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-900">Storage Usage</span>
@@ -289,7 +289,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                     className={`h-2 rounded-full transition-all ${
                       storagePercentage >= 90 ? 'bg-red-600' : 
                       storagePercentage >= 70 ? 'bg-yellow-500' : 
-                      'bg-blue-600'
+                      'bg-gray-800'
                     }`}
                     style={{ width: `${Math.min(100, storagePercentage)}%` }}
                   />
@@ -314,13 +314,13 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               onClick={() => setActiveTab('single')}
               className={`flex-1 p-4 rounded-lg border-2 transition-all ${
                 activeTab === 'single'
-                  ? 'border-blue-600 bg-blue-50'
+                  ? 'border-gray-800 bg-gray-50'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
               <div className="text-center">
-                <Upload className={`w-8 h-8 mx-auto mb-2 ${activeTab === 'single' ? 'text-blue-600' : 'text-gray-400'}`} />
-                <div className={`text-sm mb-1 ${activeTab === 'single' ? 'text-blue-600' : 'text-gray-900'}`}>
+                <Upload className={`w-8 h-8 mx-auto mb-2 ${activeTab === 'single' ? 'text-gray-800' : 'text-gray-400'}`} />
+                <div className={`text-sm mb-1 ${activeTab === 'single' ? 'text-gray-800' : 'text-gray-900'}`}>
                   Single Upload
                 </div>
                 <div className="text-xs text-gray-500">Upload one resume at a time</div>
@@ -330,13 +330,13 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               onClick={() => setActiveTab('bulk')}
               className={`flex-1 p-4 rounded-lg border-2 transition-all ${
                 activeTab === 'bulk'
-                  ? 'border-blue-600 bg-blue-50'
+                  ? 'border-gray-800 bg-gray-50'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
               <div className="text-center">
-                <Upload className={`w-8 h-8 mx-auto mb-2 ${activeTab === 'bulk' ? 'text-blue-600' : 'text-gray-400'}`} />
-                <div className={`text-sm mb-1 ${activeTab === 'bulk' ? 'text-blue-600' : 'text-gray-900'}`}>
+                <Upload className={`w-8 h-8 mx-auto mb-2 ${activeTab === 'bulk' ? 'text-gray-800' : 'text-gray-400'}`} />
+                <div className={`text-sm mb-1 ${activeTab === 'bulk' ? 'text-gray-800' : 'text-gray-900'}`}>
                   Bulk Upload
                 </div>
                 <div className="text-xs text-gray-500">Upload multiple resumes (up to 100)</div>
@@ -351,11 +351,11 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
             onClick={() => fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
               isDragging
-                ? 'border-blue-600 bg-blue-50'
+                ? 'border-gray-800 bg-gray-50'
                 : 'border-gray-300 bg-gray-50 hover:bg-gray-100'
             }`}
           >
-            <Upload className={`w-16 h-16 mx-auto mb-4 ${isDragging ? 'text-blue-600' : 'text-gray-400'}`} />
+            <Upload className={`w-16 h-16 mx-auto mb-4 ${isDragging ? 'text-gray-800' : 'text-gray-400'}`} />
             <p className="text-gray-900 mb-2">
               {activeTab === 'single' ? 'Drop your resume here or click to browse' : 'Drop multiple resumes here or click to browse'}
             </p>
@@ -391,7 +391,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                       e.stopPropagation();
                       fileInputRef.current?.click();
                     }}
-                    className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-blue-50 transition-colors"
+                    className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
                   >
                     <Upload className="w-3.5 h-3.5" />
                     Add More Files
@@ -486,7 +486,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 <select
                   value={selectedFolder}
                   onChange={(e) => setSelectedFolder(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                 >
                   <option value="">Choose folder...</option>
                   {folders.filter(f => f.id !== 'all').map(folder => (
@@ -498,7 +498,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 
                 <button
                   onClick={() => setShowCreateFolder(true)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm border-2 border-dashed border-gray-300 text-gray-700 rounded-md hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm border-2 border-dashed border-gray-300 text-gray-700 rounded-md hover:border-gray-700 hover:text-gray-800 hover:bg-gray-50 transition-all"
                 >
                   <FolderPlus className="w-4 h-4" />
                   Create New Folder
@@ -506,10 +506,10 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                   <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <FolderPlus className="w-5 h-5 text-blue-600" />
+                    <div className="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                      <FolderPlus className="w-5 h-5 text-gray-800" />
                     </div>
                     <div className="flex-1">
                       <label className="block text-sm text-gray-700 mb-2">
@@ -529,7 +529,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                         }}
                         placeholder="e.g., Senior Developers, Frontend Team..."
                         autoFocus
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                       />
                       <p className="text-xs text-gray-500 mt-1">Press Enter to create, Esc to cancel</p>
                     </div>
@@ -539,7 +539,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                     <button
                       onClick={handleCreateFolder}
                       disabled={!newFolderName.trim()}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                      className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                     >
                       Create Folder
                     </button>
@@ -569,7 +569,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           <button
             onClick={handleValidateAndUpload}
             disabled={selectedFiles.length === 0}
-            className="px-8 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-8 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {selectedFiles.length === 0 
               ? 'Upload' 

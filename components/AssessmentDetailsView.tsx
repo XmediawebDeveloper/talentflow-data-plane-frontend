@@ -43,7 +43,7 @@ export default function AssessmentDetailsView({
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto">
       {/* Sticky Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 border-b-2 border-blue-700 sticky top-0 z-20 shadow-lg">
+      <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-blue-700 sticky top-0 z-20 shadow-lg">
         <div className="px-8 py-5">
           <button
             onClick={onBack}
@@ -62,7 +62,7 @@ export default function AssessmentDetailsView({
                 <div className="flex items-center gap-3 mb-2">
                   <h1 className="text-2xl text-white">{assessment.title}</h1>
                   {assessment.sections && (
-                    <span className="px-2 py-1 bg-purple-500/30 backdrop-blur-sm text-white rounded text-xs flex items-center gap-1 border border-white/20">
+                    <span className="px-2 py-1 bg-gray-700/30 backdrop-blur-sm text-white rounded text-xs flex items-center gap-1 border border-white/20">
                       <Sparkles className="w-3 h-3" />
                       AI-Generated
                     </span>
@@ -80,14 +80,14 @@ export default function AssessmentDetailsView({
                 
                 {assessment.job && (
                   <div className="flex items-center gap-2 mb-3">
-                    <Briefcase className="w-4 h-4 text-blue-200" />
-                    <span className="text-blue-100 text-sm">
+                    <Briefcase className="w-4 h-4 text-gray-200" />
+                    <span className="text-gray-100 text-sm">
                       Linked to: {assessment.job.title} • {assessment.job.department}
                     </span>
                   </div>
                 )}
 
-                <div className="flex items-center gap-6 text-sm text-blue-100">
+                <div className="flex items-center gap-6 text-sm text-gray-100">
                   <span className="flex items-center gap-2">
                     <Clock className="w-4 h-4" />
                     {assessment.duration}
@@ -126,7 +126,7 @@ export default function AssessmentDetailsView({
               </button>
               <button
                 onClick={onShare}
-                className="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-2 font-medium"
+                className="px-4 py-2 bg-white text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2 font-medium"
               >
                 <Mail className="w-4 h-4" />
                 Share
@@ -144,7 +144,7 @@ export default function AssessmentDetailsView({
               onClick={() => setActiveTab('overview')}
               className={`py-4 text-sm border-b-2 transition-colors ${
                 activeTab === 'overview'
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-gray-800 text-gray-800'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -154,7 +154,7 @@ export default function AssessmentDetailsView({
               onClick={() => setActiveTab('sections')}
               className={`py-4 text-sm border-b-2 transition-colors ${
                 activeTab === 'sections'
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-gray-800 text-gray-800'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -164,7 +164,7 @@ export default function AssessmentDetailsView({
               onClick={() => setActiveTab('analytics')}
               className={`py-4 text-sm border-b-2 transition-colors ${
                 activeTab === 'analytics'
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-gray-800 text-gray-800'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -174,7 +174,7 @@ export default function AssessmentDetailsView({
               onClick={() => setActiveTab('activity')}
               className={`py-4 text-sm border-b-2 transition-colors ${
                 activeTab === 'activity'
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-gray-800 text-gray-800'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -193,8 +193,8 @@ export default function AssessmentDetailsView({
             <div className="grid grid-cols-4 gap-6">
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                    <Users className="w-5 h-5 text-blue-600" />
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <Users className="w-5 h-5 text-gray-800" />
                   </div>
                   <span className="text-sm text-gray-600">Total Invites</span>
                 </div>
@@ -217,8 +217,8 @@ export default function AssessmentDetailsView({
 
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-purple-600" />
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-gray-800" />
                   </div>
                   <span className="text-sm text-gray-600">Avg. Score</span>
                 </div>
@@ -241,7 +241,7 @@ export default function AssessmentDetailsView({
             {/* Assessment Details */}
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
               <h3 className="text-lg text-gray-900 mb-4 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-600" />
+                <FileText className="w-5 h-5 text-gray-800" />
                 Assessment Details
               </h3>
               
@@ -283,18 +283,18 @@ export default function AssessmentDetailsView({
                     navigator.clipboard.writeText(`https://talentflow.app/assessment/${assessment.id}`);
                     alert('Assessment link copied!');
                   }}
-                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all text-left"
+                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
-                  <Link2 className="w-6 h-6 text-blue-600 mb-2" />
+                  <Link2 className="w-6 h-6 text-gray-800 mb-2" />
                   <div className="text-sm font-medium text-gray-900">Copy Link</div>
                   <div className="text-xs text-gray-600 mt-1">Share assessment URL</div>
                 </button>
 
                 <button
                   onClick={() => alert('Downloading PDF...')}
-                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-purple-300 hover:bg-purple-50 transition-all text-left"
+                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
-                  <Download className="w-6 h-6 text-purple-600 mb-2" />
+                  <Download className="w-6 h-6 text-gray-800 mb-2" />
                   <div className="text-sm font-medium text-gray-900">Export PDF</div>
                   <div className="text-xs text-gray-600 mt-1">Download template</div>
                 </button>
@@ -314,9 +314,9 @@ export default function AssessmentDetailsView({
                 {assessment.candidates > 0 && (
                   <button
                     onClick={onViewResults}
-                    className="p-4 border-2 border-blue-200 bg-blue-50 rounded-lg hover:border-blue-400 hover:bg-blue-100 transition-all text-left"
+                    className="p-4 border-2 border-gray-200 bg-gray-50 rounded-lg hover:border-gray-400 hover:bg-gray-100 transition-all text-left"
                   >
-                    <BarChart className="w-6 h-6 text-blue-600 mb-2" />
+                    <BarChart className="w-6 h-6 text-gray-800 mb-2" />
                     <div className="text-sm font-medium text-gray-900">View Results</div>
                     <div className="text-xs text-gray-600 mt-1">{assessment.candidates} responses</div>
                   </button>
@@ -362,7 +362,7 @@ export default function AssessmentDetailsView({
                   <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-medium">
+                        <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center text-white font-medium">
                           {index + 1}
                         </div>
                         <div>
@@ -373,7 +373,7 @@ export default function AssessmentDetailsView({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                        <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-xs font-medium">
                           {section.percentage} points
                         </span>
                       </div>
@@ -444,9 +444,9 @@ export default function AssessmentDetailsView({
                   <div className="text-2xl text-gray-900">{analyticsData.notStarted}</div>
                 </div>
 
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp className="w-5 h-5 text-blue-600" />
+                    <TrendingUp className="w-5 h-5 text-gray-800" />
                     <span className="text-sm text-gray-600">Avg. Time</span>
                   </div>
                   <div className="text-2xl text-gray-900">{analyticsData.averageTime}</div>
@@ -500,7 +500,7 @@ export default function AssessmentDetailsView({
                   {assessment.sections.map((section: any, index: number) => (
                     <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-sm font-medium">
+                        <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center text-white text-sm font-medium">
                           {index + 1}
                         </div>
                         <span className="text-sm text-gray-900">{section.name}</span>
@@ -514,7 +514,7 @@ export default function AssessmentDetailsView({
                         </div>
                         <div className="w-24 bg-gray-200 rounded-full h-2">
                           <div 
-                            className="bg-blue-600 h-2 rounded-full" 
+                            className="bg-gray-800 h-2 rounded-full" 
                             style={{ width: `${Math.floor(Math.random() * 20) + 70}%` }}
                           ></div>
                         </div>
@@ -538,9 +538,9 @@ export default function AssessmentDetailsView({
               {recentActivity.map((activity) => {
                 const Icon = activity.icon;
                 const colorClasses = {
-                  blue: { bg: 'bg-blue-100', text: 'text-blue-600' },
+                  blue: { bg: 'bg-gray-100', text: 'text-gray-800' },
                   green: { bg: 'bg-green-100', text: 'text-green-600' },
-                  purple: { bg: 'bg-purple-100', text: 'text-purple-600' },
+                  purple: { bg: 'bg-gray-100', text: 'text-gray-800' },
                   yellow: { bg: 'bg-yellow-100', text: 'text-yellow-600' },
                 };
                 const colors = colorClasses[activity.color as keyof typeof colorClasses] || colorClasses.blue;

@@ -149,14 +149,14 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-5 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
               <Mail className="w-5 h-5 text-white" />
             </div>
             <div>
               <h2 className="text-white">Share Assessment via Email</h2>
-              <p className="text-blue-100 text-sm">{assessment.title}</p>
+              <p className="text-gray-100 text-sm">{assessment.title}</p>
             </div>
           </div>
           <button
@@ -170,9 +170,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {/* Assessment Info Banner */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+              <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
                 <FileText className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1">
@@ -201,7 +201,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                   onClick={() => setInputMode('manual')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
                     inputMode === 'manual'
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-gray-800 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -212,7 +212,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                   onClick={() => setInputMode('database')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
                     inputMode === 'database'
-                      ? 'bg-purple-600 text-white'
+                      ? 'bg-gray-800 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -229,7 +229,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                   <p className="text-sm text-gray-600">Enter candidate details manually</p>
                   <button
                     onClick={addCandidate}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     Add Candidate
@@ -240,12 +240,12 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                   {candidates.map((candidate, index) => (
                     <div key={candidate.id} className={`flex items-center gap-3 p-4 border rounded-lg ${
                       candidate.source === 'database'
-                        ? 'bg-purple-50 border-purple-300'
+                        ? 'bg-gray-50 border-gray-300'
                         : 'bg-gray-50 border-gray-200'
                     }`}>
                       {candidate.source === 'database' && (
                         <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
+                          <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
                             <Database className="w-4 h-4 text-white" />
                           </div>
                         </div>
@@ -259,7 +259,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                             onChange={(e) => updateCandidate(candidate.id, 'name', e.target.value)}
                             placeholder="e.g., John Doe"
                             readOnly={candidate.source === 'database'}
-                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 ${
                               candidate.source === 'database' ? 'bg-gray-100 cursor-not-allowed' : ''
                             }`}
                           />
@@ -272,7 +272,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                             onChange={(e) => updateCandidate(candidate.id, 'email', e.target.value)}
                             placeholder="e.g., john.doe@email.com"
                             readOnly={candidate.source === 'database'}
-                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 ${
                               candidate.source === 'database' ? 'bg-gray-100 cursor-not-allowed' : ''
                             }`}
                           />
@@ -294,7 +294,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
 
             {/* Database Selection Mode */}
             {inputMode === 'database' && (
-              <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-4">
+              <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-4">
                 {/* Search */}
                 <div className="mb-4">
                   <input
@@ -302,7 +302,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search by name, email, or position..."
-                    className="w-full px-4 py-2 border border-purple-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
@@ -314,15 +314,15 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                       onClick={() => toggleResumeSelection(resume.id)}
                       className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
                         selectedResumes.includes(resume.id)
-                          ? 'bg-purple-100 border-purple-600'
-                          : 'bg-white border-gray-200 hover:border-purple-300'
+                          ? 'bg-gray-100 border-gray-800'
+                          : 'bg-white border-gray-200 hover:border-gray-300'
                       }`}
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex-shrink-0 mt-1">
                           <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
                             selectedResumes.includes(resume.id)
-                              ? 'bg-purple-600 border-purple-600'
+                              ? 'bg-gray-800 border-gray-800'
                               : 'bg-white border-gray-300'
                           }`}>
                             {selectedResumes.includes(resume.id) && (
@@ -343,7 +343,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                           </div>
                           <div className="flex flex-wrap gap-1">
                             {resume.skills.slice(0, 3).map((skill, idx) => (
-                              <span key={idx} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">
+                              <span key={idx} className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
                                 {skill}
                               </span>
                             ))}
@@ -360,14 +360,14 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex items-center justify-between pt-4 border-t border-purple-300">
+                <div className="flex items-center justify-between pt-4 border-t border-gray-300">
                   <div className="text-sm text-purple-900">
                     {selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected
                   </div>
                   <button
                     onClick={handleAddFromDatabase}
                     disabled={selectedResumes.length === 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
                     <Users className="w-4 h-4" />
                     Add Selected Candidates
@@ -410,7 +410,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
               rows={8}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none"
             />
             <p className="text-xs text-gray-500 mt-1">
               Use [Candidate Name] as a placeholder - it will be replaced with each candidate's name
@@ -424,7 +424,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
               <select
                 value={expiryDays}
                 onChange={(e) => setExpiryDays(Number(e.target.value))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
               >
                 <option value={1}>1 day</option>
                 <option value={3}>3 days</option>
@@ -440,7 +440,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                   type="checkbox"
                   checked={sendCopy}
                   onChange={(e) => setSendCopy(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
                 />
                 <span className="text-sm text-gray-700">Send me a copy</span>
               </label>
@@ -461,7 +461,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
               <div className="whitespace-pre-wrap text-gray-700 mb-4">
                 {customMessage.replace('[Candidate Name]', candidates[0].name || '[Candidate Name]')}
               </div>
-              <div className="bg-blue-600 text-white px-6 py-3 rounded-lg text-center inline-block">
+              <div className="bg-gray-800 text-white px-6 py-3 rounded-lg text-center inline-block">
                 Start Assessment
               </div>
               <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500">
@@ -486,7 +486,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
             <button
               onClick={handleSend}
               disabled={!isValid || isSubmitting}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSubmitting ? (
                 <>

@@ -67,9 +67,9 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
               <Briefcase className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -88,9 +88,9 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {/* Selected Candidates Summary */}
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
             <div className="flex items-start gap-3">
-              <Users className="w-5 h-5 text-blue-600 mt-0.5" />
+              <Users className="w-5 h-5 text-gray-800 mt-0.5" />
               <div className="flex-1">
                 <h3 className="text-sm text-blue-900 mb-2">
                   {resumes.length} Candidate{resumes.length > 1 ? 's' : ''} Selected
@@ -98,7 +98,7 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
                 <div className="space-y-2">
                   {resumes.slice(0, 3).map(resume => (
                     <div key={resume.id} className="flex items-center gap-3 p-2 bg-white rounded-lg">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs text-blue-700">
+                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-900">
                         {resume.name.split(' ').map(n => n[0]).join('')}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -108,7 +108,7 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
                     </div>
                   ))}
                   {resumes.length > 3 && (
-                    <div className="text-xs text-blue-700 pl-2">
+                    <div className="text-xs text-gray-900 pl-2">
                       +{resumes.length - 3} more candidate{resumes.length - 3 > 1 ? 's' : ''}
                     </div>
                   )}
@@ -127,7 +127,7 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
                 placeholder="Search by job title..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
               />
             </div>
           </div>
@@ -141,7 +141,7 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
               {selectedJobs.length > 0 && (
                 <button
                   onClick={() => setSelectedJobs([])}
-                  className="text-xs text-blue-600 hover:text-blue-700"
+                  className="text-xs text-gray-800 hover:text-gray-900"
                 >
                   Clear Selection
                 </button>
@@ -159,21 +159,21 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
                       <label
                         className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all ${
                           isSelected
-                            ? 'border-blue-600 bg-blue-50'
-                            : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                            ? 'border-gray-800 bg-gray-50'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleJob(job.id)}
-                          className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                          className="mt-1 rounded border-gray-300 text-gray-800 focus:ring-gray-600"
                         />
                         <div className="flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="text-sm text-gray-900 mb-1.5">{job.title}</div>
                             {isSelected && (
-                              <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                              <CheckCircle className="w-5 h-5 text-gray-800 flex-shrink-0" />
                             )}
                           </div>
                           <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
@@ -250,9 +250,9 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
 
           {/* Info Box */}
           {selectedJobs.length > 0 && (
-            <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+            <div className="mt-4 p-4 bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg">
               <div className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+                <CheckCircle className="w-5 h-5 text-gray-800 mt-0.5" />
                 <div>
                   <h4 className="text-sm text-gray-900 mb-1">Next Steps</h4>
                   <ul className="text-xs text-gray-700 space-y-1">
@@ -282,13 +282,13 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
             {selectedJobs.length === 0 && 'Select at least one job to continue'}
             {selectedJobs.length === 1 && (
               <span className="flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-blue-600" />
+                <CheckCircle className="w-4 h-4 text-gray-800" />
                 Ready to apply to job
               </span>
             )}
             {selectedJobs.length > 1 && (
               <span className="flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-blue-600" />
+                <CheckCircle className="w-4 h-4 text-gray-800" />
                 Ready to apply to {selectedJobs.length} jobs
               </span>
             )}
@@ -304,7 +304,7 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
             <button
               onClick={handleApply}
               disabled={selectedJobs.length === 0 || isApplying}
-              className="px-6 py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isApplying ? (
                 <>

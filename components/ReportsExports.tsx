@@ -186,9 +186,9 @@ export default function ReportsExports() {
 
   const getCategoryColor = (color: string) => {
     const colors = {
-      blue: 'bg-blue-100 text-blue-600',
+      blue: 'bg-gray-100 text-gray-800',
       green: 'bg-green-100 text-green-600',
-      purple: 'bg-purple-100 text-purple-600',
+      purple: 'bg-gray-100 text-gray-800',
       yellow: 'bg-yellow-100 text-yellow-600'
     };
     return colors[color as keyof typeof colors] || colors.blue;
@@ -215,7 +215,7 @@ export default function ReportsExports() {
                 type="date"
                 value={dateRange.from}
                 onChange={(e) => setDateRange({ ...dateRange, from: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
               />
             </div>
 
@@ -225,7 +225,7 @@ export default function ReportsExports() {
                 type="date"
                 value={dateRange.to}
                 onChange={(e) => setDateRange({ ...dateRange, to: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
               />
             </div>
 
@@ -235,7 +235,7 @@ export default function ReportsExports() {
               <select
                 value={selectedFormat}
                 onChange={(e) => setSelectedFormat(e.target.value as any)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
               >
                 <option value="excel">Excel (.xlsx)</option>
                 <option value="pdf">PDF (.pdf)</option>
@@ -249,7 +249,7 @@ export default function ReportsExports() {
               <button
                 onClick={handleGenerateReports}
                 disabled={selectedReports.length === 0}
-                className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {getFormatIcon()}
                 Generate ({selectedReports.length})
@@ -261,7 +261,7 @@ export default function ReportsExports() {
           <div className="flex items-center justify-between pt-4 border-t border-gray-200">
             <button
               onClick={handleSelectAll}
-              className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-2"
+              className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-2"
             >
               {selectedReports.length === reportCategories.flatMap(c => c.reports).length ? (
                 <CheckSquare className="w-4 h-4" />
@@ -273,7 +273,7 @@ export default function ReportsExports() {
 
             <button
               onClick={handleScheduleReport}
-              className="text-sm text-purple-600 hover:text-purple-700 flex items-center gap-2"
+              className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-2"
             >
               <Calendar className="w-4 h-4" />
               Schedule Automated Reports
@@ -305,7 +305,7 @@ export default function ReportsExports() {
                     </div>
 
                     {categorySelectedCount > 0 && (
-                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+                      <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-sm">
                         {categorySelectedCount} selected
                       </span>
                     )}
@@ -322,7 +322,7 @@ export default function ReportsExports() {
                       <div
                         key={report.id}
                         className={`p-6 hover:bg-gray-50 transition-colors cursor-pointer ${
-                          isSelected ? 'bg-blue-50' : ''
+                          isSelected ? 'bg-gray-50' : ''
                         }`}
                         onClick={() => handleSelectReport(report.id)}
                       >
@@ -336,15 +336,15 @@ export default function ReportsExports() {
                             }}
                           >
                             {isSelected ? (
-                              <CheckSquare className="w-5 h-5 text-blue-600" />
+                              <CheckSquare className="w-5 h-5 text-gray-800" />
                             ) : (
                               <Square className="w-5 h-5 text-gray-400" />
                             )}
                           </button>
 
                           {/* Icon */}
-                          <div className={`w-12 h-12 rounded-lg ${isSelected ? 'bg-blue-100' : 'bg-gray-100'} flex items-center justify-center flex-shrink-0`}>
-                            <ReportIcon className={`w-6 h-6 ${isSelected ? 'text-blue-600' : 'text-gray-600'}`} />
+                          <div className={`w-12 h-12 rounded-lg ${isSelected ? 'bg-gray-100' : 'bg-gray-100'} flex items-center justify-center flex-shrink-0`}>
+                            <ReportIcon className={`w-6 h-6 ${isSelected ? 'text-gray-800' : 'text-gray-600'}`} />
                           </div>
 
                           {/* Content */}
@@ -400,7 +400,7 @@ export default function ReportsExports() {
             </div>
             <button
               onClick={handleScheduleReport}
-              className="px-4 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors flex items-center gap-2"
             >
               <Calendar className="w-4 h-4" />
               New Schedule
@@ -412,7 +412,7 @@ export default function ReportsExports() {
             <div className="p-4 border border-gray-200 rounded-lg">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Mail className="w-5 h-5 text-blue-600" />
+                  <Mail className="w-5 h-5 text-gray-800" />
                   <div>
                     <div className="text-sm text-gray-900">Weekly Recruitment Summary</div>
                     <div className="text-xs text-gray-500">Every Monday at 9:00 AM • Excel format</div>
@@ -425,7 +425,7 @@ export default function ReportsExports() {
             <div className="p-4 border border-gray-200 rounded-lg">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Mail className="w-5 h-5 text-purple-600" />
+                  <Mail className="w-5 h-5 text-gray-800" />
                   <div>
                     <div className="text-sm text-gray-900">Monthly Assessment Analytics</div>
                     <div className="text-xs text-gray-500">1st of every month • PDF format</div>
@@ -438,9 +438,9 @@ export default function ReportsExports() {
         </div>
 
         {/* Help Text */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="flex gap-3">
-            <FileDown className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <FileDown className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-900">
               <p className="mb-2">
                 <strong>Pro Tips for Reports:</strong>

@@ -416,9 +416,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/30 flex items-center justify-center">
         <div className="flex items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-gray-700" />
           <span className="text-lg text-gray-600">Loading usage data...</span>
         </div>
       </div>
@@ -471,13 +471,13 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   const getModuleColor = (module: string) => {
     switch (module) {
       case 'Resume Upload':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
+        return 'bg-gray-100 text-gray-700 border-gray-200';
       case 'Resume Scoring':
-        return 'bg-purple-100 text-purple-700 border-purple-200';
+        return 'bg-gray-100 text-gray-700 border-gray-200';
       case 'AI Interview':
-        return 'bg-orange-100 text-orange-700 border-orange-200';
+        return 'bg-gray-100 text-gray-700 border-gray-200';
       case 'Assessment':
-        return 'bg-green-100 text-green-700 border-green-200';
+        return 'bg-gray-100 text-gray-700 border-gray-200';
       default:
         return 'bg-gray-100 text-gray-700 border-gray-200';
     }
@@ -488,13 +488,13 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/30">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
                 <Zap className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -514,7 +514,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               </button>
               <button
                 onClick={handleUpgradeClick}
-                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors font-medium flex items-center gap-2"
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium flex items-center gap-2"
               >
                 <TrendingUp className="w-4 h-4" />
                 Upgrade Plan
@@ -542,7 +542,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
           <div className="mb-8 bg-white rounded-xl shadow-md border border-gray-200 p-6">
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
                   <Zap className="w-6 h-6 text-white" />
                 </div>
                 <div>
@@ -559,7 +559,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       subscriptionSummary.status === 'active'
                         ? 'text-green-600 bg-green-100'
                         : subscriptionSummary.status === 'trialing'
-                        ? 'text-blue-600 bg-blue-100'
+                        ? 'text-gray-600 bg-gray-100'
                         : 'text-gray-600 bg-gray-100'
                     }`}>
                       {subscriptionSummary.status?.toUpperCase() || 'UNKNOWN'}
@@ -591,7 +591,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   </>
                 )}
                 {subscriptionSummary.isolation_type && (
-                  <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 text-xs font-medium text-purple-600 bg-purple-100 rounded-full">
+                  <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 text-xs font-medium text-gray-800 bg-gray-100 rounded-full">
                     {subscriptionSummary.isolation_type === 'database' ? 'Database Isolation' : 'Schema Isolation'}
                   </span>
                 )}
@@ -606,7 +606,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   {Object.entries(subscriptionSummary.plan.features).map(([key, value]) => (
                     <span
                       key={key}
-                      className="px-3 py-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full"
+                      className="px-3 py-1 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-full"
                     >
                       {key.replace(/_/g, ' ')}: {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
                     </span>
@@ -650,12 +650,12 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-6">
               {quotaSummary.quotas?.map((quota: QuotaInfo) => {
                 const colors: Record<string, { bg: string; text: string; border: string }> = {
-                  'RU': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-                  'RS': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+                  'RU': { bg: 'bg-gray-50', text: 'text-gray-900', border: 'border-gray-200' },
+                  'RS': { bg: 'bg-gray-50', text: 'text-gray-900', border: 'border-gray-200' },
                   'AS': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
                   'AIU': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
                   'storage_gb': { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
-                  'max_jobs': { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
+                  'max_jobs': { bg: 'bg-gray-50', text: 'text-indigo-700', border: 'border-indigo-200' },
                   'max_seats': { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200' },
                 };
                 const defaultColor = { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' };
@@ -715,7 +715,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <BarChart3 className="w-5 h-5 text-blue-600" />
+              <BarChart3 className="w-5 h-5 text-gray-700" />
               <h3 className="text-lg text-gray-900 font-medium">Recent Activity</h3>
             </div>
             <button
@@ -743,7 +743,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search by job, candidate, operation..."
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                     />
                     {searchQuery && (
                       <button
@@ -763,7 +763,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   <select
                     value={selectedModule}
                     onChange={(e) => setSelectedModule(e.target.value as any)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                   >
                     <option value="all">All Modules</option>
                     <option value="Resume Upload">Resume Upload</option>
@@ -828,9 +828,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       <div className="text-sm text-gray-700 max-w-md">{record.details}</div>
                     </td>
                     <td className="py-4 px-4 text-right">
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg">
-                        <Zap className="w-3.5 h-3.5 text-blue-600" />
-                        <span className="text-sm font-bold text-blue-700">{record.unitsConsumed}</span>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 border border-gray-200 rounded-lg">
+                        <Zap className="w-3.5 h-3.5 text-gray-700" />
+                        <span className="text-sm font-bold text-gray-800">{record.unitsConsumed}</span>
                       </div>
                     </td>
                     <td className="py-4 px-4 text-center">
@@ -974,8 +974,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               </div>
 
               {/* API Info */}
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <p className="text-xs text-blue-700">
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                <p className="text-xs text-gray-900">
                   <strong>API:</strong> POST /api/v1/usage/record<br />
                   <strong>Auth:</strong> Bearer token (JWT)
                 </p>

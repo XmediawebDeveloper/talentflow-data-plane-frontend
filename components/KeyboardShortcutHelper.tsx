@@ -65,14 +65,14 @@ export default function KeyboardShortcutHelper({ isOpen, onClose }: KeyboardShor
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden pointer-events-auto animate-in zoom-in-95 duration-200">
               {/* Header */}
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-5 flex items-center justify-between">
+              <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
                     <Command className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <h2 className="text-xl text-white font-semibold">Keyboard Shortcuts</h2>
-                    <p className="text-sm text-blue-100">Boost your productivity</p>
+                    <p className="text-sm text-gray-100">Boost your productivity</p>
                   </div>
                 </div>
                 <button

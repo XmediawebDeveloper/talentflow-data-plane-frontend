@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
 
@@ -67,8 +68,8 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
   };
 
   const roleBadgeColors = {
-    tenant_admin: 'bg-purple-100 text-purple-700 border-purple-200',
-    recruiter: 'bg-blue-100 text-blue-700 border-blue-200',
+    tenant_admin: 'bg-gray-100 text-gray-900 border-gray-200',
+    recruiter: 'bg-gray-100 text-gray-900 border-gray-200',
     viewer: 'bg-gray-100 text-gray-700 border-gray-200',
   };
 
@@ -244,29 +245,30 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
   };
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm h-screen">
+    <aside className="w-64 bg-gray-900 border-r border-gray-700 flex flex-col shadow-lg h-screen">
       {/* Logo */}
-      <div className="p-6 border-b border-gray-200">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-md">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-xl font-bold text-gray-900">TalentFlow</span>
+      <div className="p-4 border-b border-gray-700 bg-white">
+        <Link href="/dashboard" className="flex items-center justify-center">
+         <img
+              src="/logos/talent_flow_logo.png"
+              alt="TalentFlow"
+              className="h-10 w-auto"
+            />
         </Link>
       </div>
 
       {/* User Info */}
       {user && (
-        <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+        <div className="px-4 py-3 border-b border-gray-700 bg-gray-800">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center shadow-sm">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-600 to-gray-700 text-white flex items-center justify-center shadow-sm">
               <span className="text-sm font-medium">
                 {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-              <span className={`inline-flex px-2 py-0.5 rounded text-xs border ${roleBadgeColors[user.role]}`}>
+              <p className="text-sm font-medium text-gray-100 truncate">{user.name}</p>
+              <span className="inline-flex px-2 py-0.5 rounded text-xs border border-gray-600 bg-gray-700 text-gray-300">
                 {roleLabels[user.role]}
               </span>
             </div>
@@ -284,29 +286,29 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
                   onClick={() => toggleSection(item.id)}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
                     isParentActive(item)
-                      ? 'text-blue-600 bg-blue-50'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'text-white bg-gray-700'
+                      : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
                 >
                   <item.icon className="w-5 h-5 flex-shrink-0" />
                   <span className="flex-1 text-sm font-medium">{item.label}</span>
                   {expandedSections.includes(item.id) ? (
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                    <ChevronDown className="w-4 h-4 text-gray-500" />
                   ) : (
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                    <ChevronRight className="w-4 h-4 text-gray-500" />
                   )}
                 </button>
 
                 {expandedSections.includes(item.id) && (
-                  <div className="mt-1 ml-4 border-l border-gray-200">
+                  <div className="mt-1 ml-4 border-l border-gray-700">
                     {item.children.map((child) => (
                       <Link
                         key={child.id}
                         href={child.href || '#'}
                         className={`w-full flex items-center gap-3 px-4 py-2 pl-6 text-sm transition-colors ${
                           isActive(child.href)
-                            ? 'text-blue-600 bg-blue-50 font-medium border-l-2 border-blue-600 -ml-px'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                            ? 'text-white bg-gray-700 font-medium border-l-2 border-gray-400 -ml-px'
+                            : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
                         }`}
                       >
                         <child.icon className="w-4 h-4 flex-shrink-0" />
@@ -321,8 +323,8 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
                 href={item.href || '#'}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${
                   isActive(item.href)
-                    ? 'text-blue-600 bg-blue-50 font-medium'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    ? 'text-white bg-gray-700 font-medium'
+                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                 }`}
               >
                 <item.icon className="w-5 h-5 flex-shrink-0" />
@@ -334,7 +336,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-gray-700">
         <p className="text-xs text-gray-500 text-center">
           {tenant?.name || 'TalentFlow'} v1.0
         </p>

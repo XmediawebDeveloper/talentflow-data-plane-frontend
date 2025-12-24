@@ -100,7 +100,7 @@ export default function BulkScoringProgressModal({
       case 'Queued':
         return <Clock className="w-4 h-4 text-gray-500" />;
       case 'Scoring in progress':
-        return <Loader className="w-4 h-4 text-blue-500 animate-spin" />;
+        return <Loader className="w-4 h-4 text-gray-700 animate-spin" />;
       case 'Scored successfully':
         return <CheckCircle2 className="w-4 h-4 text-green-500" />;
       case 'Failed':
@@ -115,7 +115,7 @@ export default function BulkScoringProgressModal({
       case 'Queued':
         return 'bg-gray-100 text-gray-700 border-gray-300';
       case 'Scoring in progress':
-        return 'bg-blue-100 text-blue-700 border-blue-300';
+        return 'bg-gray-100 text-gray-900 border-gray-300';
       case 'Scored successfully':
         return 'bg-green-100 text-green-700 border-green-300';
       case 'Failed':
@@ -159,9 +159,9 @@ export default function BulkScoringProgressModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-50">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md">
               <Target className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -205,13 +205,13 @@ export default function BulkScoringProgressModal({
               <div className="text-xs text-gray-500 mt-1">Waiting</div>
             </div>
 
-            <div className="bg-white rounded-xl border-2 border-blue-300 p-4 shadow-sm">
+            <div className="bg-white rounded-xl border-2 border-gray-300 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-blue-700">In Progress</span>
-                <Loader className="w-5 h-5 text-blue-600 animate-spin" />
+                <span className="text-sm font-medium text-gray-900">In Progress</span>
+                <Loader className="w-5 h-5 text-gray-800 animate-spin" />
               </div>
-              <div className="text-3xl font-bold text-blue-700">{inProgressCount}</div>
-              <div className="text-xs text-blue-600 mt-1">Processing</div>
+              <div className="text-3xl font-bold text-gray-900">{inProgressCount}</div>
+              <div className="text-xs text-gray-800 mt-1">Processing</div>
             </div>
 
             <div className="bg-white rounded-xl border-2 border-green-300 p-4 shadow-sm">
@@ -253,7 +253,7 @@ export default function BulkScoringProgressModal({
                     style={{ width: `${(failedCount / totalResumes) * 100}%` }}
                   />
                   <div 
-                    className="bg-blue-500 animate-pulse" 
+                    className="bg-gray-700 animate-pulse" 
                     style={{ width: `${(inProgressCount / totalResumes) * 100}%` }}
                   />
                 </div>
@@ -261,12 +261,12 @@ export default function BulkScoringProgressModal({
               
               {/* Estimated Time Remaining */}
               {remainingResumes > 0 && (
-                <div className="mt-3 flex items-center justify-center gap-2 text-sm bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5">
-                  <Clock className="w-4 h-4 text-blue-600 animate-pulse" />
+                <div className="mt-3 flex items-center justify-center gap-2 text-sm bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5">
+                  <Clock className="w-4 h-4 text-gray-800 animate-pulse" />
                   <span className="text-blue-900 font-medium">
                     {getEstimatedTimeDisplay()}
                   </span>
-                  <span className="text-blue-600 text-xs">
+                  <span className="text-gray-800 text-xs">
                     ({remainingResumes} {remainingResumes === 1 ? 'resume' : 'resumes'} remaining • ~{avgTimePerResume}s per resume)
                   </span>
                 </div>
@@ -300,7 +300,7 @@ export default function BulkScoringProgressModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
               />
             </div>
 
@@ -311,7 +311,7 @@ export default function BulkScoringProgressModal({
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
               >
                 <option value="all">All Status</option>
                 <option value="queued">Queued</option>
@@ -328,7 +328,7 @@ export default function BulkScoringProgressModal({
               <select
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
               >
                 <option value="all">All Sources</option>
                 <option value="internal-db">Internal DB</option>
@@ -348,7 +348,7 @@ export default function BulkScoringProgressModal({
                   setStatusFilter('all');
                   setSourceFilter('all');
                 }}
-                className="text-blue-600 hover:text-blue-700 font-medium"
+                className="text-gray-800 hover:text-gray-900 font-medium"
               >
                 Clear Filters
               </button>
@@ -385,7 +385,7 @@ export default function BulkScoringProgressModal({
                     {!filterByJobId && (
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-2">
-                          <Target className="w-4 h-4 text-blue-600" />
+                          <Target className="w-4 h-4 text-gray-800" />
                           <span className="text-sm text-gray-900 font-medium">{item.jobTitle}</span>
                         </div>
                       </td>
@@ -393,8 +393,8 @@ export default function BulkScoringProgressModal({
                     <td className="py-4 px-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${
                         item.source === 'Internal DB' 
-                          ? 'bg-blue-50 text-blue-700 border-blue-200' 
-                          : 'bg-purple-50 text-purple-700 border-purple-200'
+                          ? 'bg-gray-50 text-gray-900 border-gray-200' 
+                          : 'bg-gray-50 text-gray-900 border-gray-200'
                       }`}>
                         {item.source === 'Internal DB' ? (
                           <Database className="w-3 h-3" />

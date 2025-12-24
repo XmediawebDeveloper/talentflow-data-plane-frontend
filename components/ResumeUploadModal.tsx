@@ -66,7 +66,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-gray-900 mb-1">Upload Resumes</h2>
-            <p className="text-sm text-gray-600">Add applicants to: <span className="text-blue-600">{jobTitle}</span></p>
+            <p className="text-sm text-gray-600">Add applicants to: <span className="text-gray-800">{jobTitle}</span></p>
           </div>
           <button
             onClick={onClose}
@@ -82,7 +82,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
           <div
             className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
               dragActive
-                ? 'border-blue-500 bg-blue-50'
+                ? 'border-gray-700 bg-gray-50'
                 : 'border-gray-300 hover:border-gray-400'
             }`}
             onDragEnter={handleDrag}
@@ -90,8 +90,8 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
             onDragOver={handleDrag}
             onDrop={handleDrop}
           >
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Upload className="w-8 h-8 text-blue-600" />
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Upload className="w-8 h-8 text-gray-800" />
             </div>
             <h3 className="text-gray-900 mb-2">Drop resumes here</h3>
             <p className="text-sm text-gray-600 mb-4">
@@ -107,7 +107,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
             />
             <label
               htmlFor="resume-upload"
-              className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 bg-gray-800 text-white px-6 py-3 rounded-lg hover:bg-gray-900 transition-colors cursor-pointer"
             >
               <Upload className="w-5 h-5" />
               Browse Files
@@ -129,8 +129,8 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                     key={index}
                     className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200"
                   >
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <FileText className="w-5 h-5 text-blue-600" />
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <FileText className="w-5 h-5 text-gray-800" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-900 truncate">{file.name}</p>
@@ -150,12 +150,12 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
           )}
 
           {/* Info Box */}
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
             <div className="flex gap-3">
-              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
               <div>
                 <h5 className="text-sm text-blue-900 mb-1">What happens next?</h5>
-                <p className="text-xs text-blue-700">
+                <p className="text-xs text-gray-900">
                   Resumes will be automatically parsed and scored against the job requirements. 
                   You'll see the scoring results after submission.
                 </p>
@@ -186,7 +186,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
             <button
               onClick={handleSubmit}
               disabled={selectedFiles.length === 0}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               Upload & Score Resumes
             </button>

@@ -11,7 +11,7 @@ export default function TabView({ activeTab, onTabChange }: TabViewProps) {
           onClick={() => onTabChange('my-resumes')}
           className={`px-6 py-3 text-sm transition-colors ${
             activeTab === 'my-resumes'
-              ? 'text-gray-900 border-b-2 border-blue-600'
+              ? 'text-gray-900 border-b-2 border-gray-800'
               : 'text-gray-700 hover:bg-gray-50'
           }`}
         >
@@ -21,7 +21,7 @@ export default function TabView({ activeTab, onTabChange }: TabViewProps) {
           onClick={() => onTabChange('internal-db')}
           className={`px-6 py-3 text-sm transition-colors ${
             activeTab === 'internal-db'
-              ? 'text-gray-900 border-b-2 border-blue-600'
+              ? 'text-gray-900 border-b-2 border-gray-800'
               : 'text-gray-700 hover:bg-gray-50'
           }`}
         >

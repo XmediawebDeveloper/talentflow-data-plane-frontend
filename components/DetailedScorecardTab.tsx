@@ -131,7 +131,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
   const getRatingBgColor = (rating: number): string => {
     if (rating === 10) return 'bg-green-100 border-green-300 text-green-700';
     if (rating === 9) return 'bg-green-100 border-green-300 text-green-700';
-    if (rating === 8) return 'bg-blue-100 border-blue-300 text-blue-700';
+    if (rating === 8) return 'bg-gray-100 border-gray-300 text-gray-900';
     if (rating === 7) return 'bg-yellow-100 border-yellow-300 text-yellow-700';
     return 'bg-red-100 border-red-300 text-red-700';
   };
@@ -154,7 +154,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
   const getRatingRangeColor = (rating: number): string => {
     if (rating === 10) return 'text-green-700 font-semibold';
     if (rating === 9) return 'text-green-700 font-semibold';
-    if (rating === 8) return 'text-blue-700 font-semibold';
+    if (rating === 8) return 'text-gray-900 font-semibold';
     if (rating === 7) return 'text-yellow-700 font-semibold';
     return 'text-red-700 font-semibold';
   };
@@ -162,10 +162,10 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
   return (
     <div className="space-y-6">
       {/* Comprehensive Scorecard Header */}
-      <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-6">
+      <div className="bg-gradient-to-r from-gray-50 to-gray-50 border-2 border-gray-200 rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
               <BarChart3 className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -174,15 +174,15 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
             </div>
           </div>
           <div className="text-right">
-            <div className="text-3xl font-bold text-blue-600">{resume.scorePercentage}%</div>
+            <div className="text-3xl font-bold text-gray-800">{resume.scorePercentage}%</div>
             <div className="text-xs text-gray-600">Overall Score</div>
           </div>
         </div>
         
         {/* Timestamp Information */}
-        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-blue-200">
+        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-blue-600" />
+            <Clock className="w-4 h-4 text-gray-800" />
             <div>
               <div className="text-xs text-gray-600">Scored On</div>
               <div className="text-sm font-medium text-gray-900">
@@ -195,7 +195,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-purple-600" />
+            <Calendar className="w-4 h-4 text-gray-800" />
             <div>
               <div className="text-xs text-gray-600">Time</div>
               <div className="text-sm font-medium text-gray-900">
@@ -220,7 +220,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
           <h4 className="text-gray-900 flex items-center gap-2">
-            <CheckSquare className="w-5 h-5 text-blue-600" />
+            <CheckSquare className="w-5 h-5 text-gray-800" />
             Scoring Rubric & Evaluation
           </h4>
         </div>
@@ -283,7 +283,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
                       <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
                         criteria.criteriaType === 'Required' 
                           ? 'bg-red-100 text-red-700 border border-red-300' 
-                          : 'bg-blue-100 text-blue-700 border border-blue-300'
+                          : 'bg-gray-100 text-gray-900 border border-gray-300'
                       }`}>
                         {criteria.criteriaType}
                       </span>
@@ -313,14 +313,14 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
           </div>
           <div className="text-sm text-gray-700 mt-1">Not Eligible Criteria</div>
         </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-blue-700">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div className="text-2xl font-bold text-gray-900">
             {criteriaScores.filter(c => c.criteriaType === 'Required').length}
           </div>
           <div className="text-sm text-gray-700 mt-1">Required Criteria</div>
         </div>
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-purple-700">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div className="text-2xl font-bold text-gray-900">
             {(criteriaScores.reduce((sum, c) => sum + c.rating, 0) / criteriaScores.length).toFixed(1)}
           </div>
           <div className="text-sm text-gray-700 mt-1">Average Rating</div>

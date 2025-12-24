@@ -270,13 +270,13 @@ export default function PaymentMethodsPage() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-green-700 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
                 <Wallet className="w-7 h-7 text-white" />
               </div>
               <div>
@@ -286,7 +286,7 @@ export default function PaymentMethodsPage() {
             </div>
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Add Payment Method
@@ -297,7 +297,7 @@ export default function PaymentMethodsPage() {
         {/* Loading State */}
         {loading && (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-gray-700" />
           </div>
         )}
 
@@ -311,7 +311,7 @@ export default function PaymentMethodsPage() {
             <p className="text-gray-500 mb-6">Add a payment method to manage your subscription</p>
             <button
               onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Add Payment Method
@@ -350,7 +350,7 @@ export default function PaymentMethodsPage() {
                     {!method.is_default && (
                       <button
                         onClick={() => setAsDefault(method.id)}
-                        className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                       >
                         Set as Default
                       </button>
@@ -374,14 +374,14 @@ export default function PaymentMethodsPage() {
         )}
 
         {/* Add Payment Method Info */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-6">
+        <div className="mt-8 bg-gray-50 border border-gray-200 rounded-xl p-6">
           <div className="flex items-start gap-4">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Building2 className="w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Building2 className="w-5 h-5 text-gray-600" />
             </div>
             <div>
-              <h3 className="text-sm font-medium text-blue-900">Secure Payments</h3>
-              <p className="text-sm text-blue-700 mt-1">
+              <h3 className="text-sm font-medium text-gray-900">Secure Payments</h3>
+              <p className="text-sm text-gray-600 mt-1">
                 All payment information is securely processed and stored. We use industry-standard encryption to protect your data.
               </p>
             </div>
@@ -396,8 +396,8 @@ export default function PaymentMethodsPage() {
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-blue-600" />
+                <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Add Payment Method</h2>
@@ -428,7 +428,7 @@ export default function PaymentMethodsPage() {
                     value={formData.cardholderName}
                     onChange={(e) => setFormData({ ...formData, cardholderName: e.target.value })}
                     placeholder="John Doe"
-                    className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 ${
                       formErrors.cardholderName ? 'border-red-300' : 'border-gray-300'
                     }`}
                   />
@@ -448,7 +448,7 @@ export default function PaymentMethodsPage() {
                     onChange={(e) => setFormData({ ...formData, cardNumber: formatCardNumber(e.target.value) })}
                     placeholder="1234 5678 9012 3456"
                     maxLength={19}
-                    className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 ${
                       formErrors.cardNumber ? 'border-red-300' : 'border-gray-300'
                     }`}
                   />
@@ -469,7 +469,7 @@ export default function PaymentMethodsPage() {
                       onChange={(e) => setFormData({ ...formData, expiryMonth: e.target.value.replace(/\D/g, '').slice(0, 2) })}
                       placeholder="MM"
                       maxLength={2}
-                      className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 ${
                         formErrors.expiryMonth ? 'border-red-300' : 'border-gray-300'
                       }`}
                     />
@@ -487,7 +487,7 @@ export default function PaymentMethodsPage() {
                       onChange={(e) => setFormData({ ...formData, expiryYear: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                       placeholder="YYYY"
                       maxLength={4}
-                      className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 ${
                         formErrors.expiryYear ? 'border-red-300' : 'border-gray-300'
                       }`}
                     />
@@ -505,7 +505,7 @@ export default function PaymentMethodsPage() {
                       onChange={(e) => setFormData({ ...formData, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                       placeholder="•••"
                       maxLength={4}
-                      className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 ${
                         formErrors.cvv ? 'border-red-300' : 'border-gray-300'
                       }`}
                     />
@@ -529,7 +529,7 @@ export default function PaymentMethodsPage() {
                     value={formData.billingAddress}
                     onChange={(e) => setFormData({ ...formData, billingAddress: e.target.value })}
                     placeholder="123 Main Street"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   />
                 </div>
 
@@ -543,7 +543,7 @@ export default function PaymentMethodsPage() {
                       value={formData.billingCity}
                       onChange={(e) => setFormData({ ...formData, billingCity: e.target.value })}
                       placeholder="New York"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                     />
                   </div>
                   <div>
@@ -555,7 +555,7 @@ export default function PaymentMethodsPage() {
                       value={formData.billingZip}
                       onChange={(e) => setFormData({ ...formData, billingZip: e.target.value })}
                       placeholder="10001"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                     />
                   </div>
                 </div>
@@ -567,7 +567,7 @@ export default function PaymentMethodsPage() {
                   <select
                     value={formData.billingCountry}
                     onChange={(e) => setFormData({ ...formData, billingCountry: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   >
                     <option value="">Select Country</option>
                     <option value="US">United States</option>
@@ -590,7 +590,7 @@ export default function PaymentMethodsPage() {
                   id="setAsDefault"
                   checked={formData.setAsDefault}
                   onChange={(e) => setFormData({ ...formData, setAsDefault: e.target.checked })}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-gray-700 border-gray-300 rounded focus:ring-gray-500"
                 />
                 <label htmlFor="setAsDefault" className="text-sm text-gray-700">
                   Set as default payment method
@@ -609,7 +609,7 @@ export default function PaymentMethodsPage() {
               <button
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? (
                   <>

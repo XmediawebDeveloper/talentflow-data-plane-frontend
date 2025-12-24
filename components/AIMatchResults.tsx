@@ -19,14 +19,14 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
 
   const getMatchColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-blue-600';
+    if (score >= 70) return 'text-gray-800';
     if (score >= 50) return 'text-yellow-600';
     return 'text-gray-600';
   };
 
   const getMatchBgColor = (score: number) => {
     if (score >= 85) return 'bg-green-100 border-green-300';
-    if (score >= 70) return 'bg-blue-100 border-blue-300';
+    if (score >= 70) return 'bg-gray-100 border-gray-300';
     if (score >= 50) return 'bg-yellow-100 border-yellow-300';
     return 'bg-gray-100 border-gray-300';
   };
@@ -80,7 +80,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
 
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-gray-700 to-gray-500 rounded-xl flex items-center justify-center">
                 <Sparkles className="w-7 h-7 text-white" />
               </div>
               <div>
@@ -117,7 +117,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
         </div>
 
         {/* Stats Bar */}
-        <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-t border-gray-200 px-6 py-4">
+        <div className="bg-gradient-to-r from-gray-50 to-gray-50 border-t border-gray-200 px-6 py-4">
           <div className="flex items-center gap-8">
             <div>
               <div className="text-2xl text-gray-900">{results.length}</div>
@@ -132,7 +132,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
             </div>
             <div className="w-px h-10 bg-gray-300" />
             <div>
-              <div className="text-2xl text-blue-600">
+              <div className="text-2xl text-gray-800">
                 {results.filter(r => r.matchScore >= 70 && r.matchScore < 85).length}
               </div>
               <div className="text-sm text-gray-600">Good Matches (70-84%)</div>
@@ -170,14 +170,14 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
               onClick={() => setShowFilters(!showFilters)}
               className={`px-5 py-2.5 rounded-lg border-2 transition-all flex items-center gap-2 font-medium ${
                 activeFiltersCount > 0
-                  ? 'bg-purple-50 border-purple-600 text-purple-700 shadow-sm'
+                  ? 'bg-gray-50 border-gray-800 text-gray-900 shadow-sm'
                   : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
               <Filter className="w-5 h-5" />
               Filters
               {activeFiltersCount > 0 && (
-                <span className="px-2 py-0.5 bg-purple-600 text-white rounded-full text-xs font-medium">
+                <span className="px-2 py-0.5 bg-gray-800 text-white rounded-full text-xs font-medium">
                   {activeFiltersCount}
                 </span>
               )}
@@ -185,7 +185,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
             </button>
 
             <div className="text-sm text-gray-700 bg-gray-100 px-4 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
-              <span className="text-purple-600">{filteredResults.length}</span> of {results.length} candidates
+              <span className="text-gray-800">{filteredResults.length}</span> of {results.length} candidates
             </div>
           </div>
 
@@ -287,7 +287,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
               <span className="text-sm text-gray-600">
                 {selectedCandidates.length} selected
               </span>
-              <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors">
+              <button className="px-4 py-2 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-900 transition-colors">
                 Apply to Job
               </button>
             </div>
@@ -298,7 +298,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
           {filteredResults.map((candidate, index) => (
             <div
               key={candidate.id}
-              className="bg-white rounded-lg border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all cursor-pointer"
+              className="bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all cursor-pointer"
               onClick={() => onSelectCandidate(candidate)}
             >
               <div className="p-6">
@@ -374,11 +374,11 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
                     </div>
 
                     {/* Match Reason */}
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-3">
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-3">
                       <div className="flex items-start gap-2">
-                        <Sparkles className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                        <Sparkles className="w-4 h-4 text-gray-800 mt-0.5 flex-shrink-0" />
                         <div>
-                          <div className="text-xs text-purple-700 mb-1">AI Analysis</div>
+                          <div className="text-xs text-gray-900 mb-1">AI Analysis</div>
                           <p className="text-sm text-gray-700">{candidate.matchReason}</p>
                         </div>
                       </div>
@@ -417,7 +417,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
                         e.stopPropagation();
                         handleSelectCandidate(candidate.id);
                       }}
-                      className="w-5 h-5 text-purple-600 rounded"
+                      className="w-5 h-5 text-gray-800 rounded"
                     />
                   </div>
                 </div>
@@ -439,7 +439,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
                 setNoticePeriodFilter('');
                 setSkillFilter('');
               }}
-              className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+              className="px-6 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
             >
               Clear All Filters
             </button>

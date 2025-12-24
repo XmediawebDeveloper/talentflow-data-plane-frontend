@@ -161,7 +161,7 @@ export default function JobOpeningsPage() {
           </div>
           <button
             onClick={() => router.push('/recruitment/jd-creation')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium shadow-sm"
           >
             <Plus className="w-4 h-4" />
             Create New Job
@@ -176,8 +176,8 @@ export default function JobOpeningsPage() {
                 <p className="text-sm text-gray-500 mb-1">Total Jobs</p>
                 <p className="text-2xl font-semibold text-gray-900">{stats.totalJobs}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center">
+                <Briefcase className="w-6 h-6 text-gray-800" />
               </div>
             </div>
           </div>
@@ -210,10 +210,10 @@ export default function JobOpeningsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Applicants</p>
-                <p className="text-2xl font-semibold text-purple-600">{stats.totalApplicants}</p>
+                <p className="text-2xl font-semibold text-gray-800">{stats.totalApplicants}</p>
               </div>
-              <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center">
-                <Users className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center">
+                <Users className="w-6 h-6 text-gray-800" />
               </div>
             </div>
           </div>
@@ -230,7 +230,7 @@ export default function JobOpeningsPage() {
                 placeholder="Search jobs by title, department, or location..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm"
               />
             </div>
 
@@ -282,7 +282,7 @@ export default function JobOpeningsPage() {
         {/* Jobs Display */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
             <span className="ml-3 text-gray-600">Loading job openings...</span>
           </div>
         ) : jobs.length === 0 ? (
@@ -297,7 +297,7 @@ export default function JobOpeningsPage() {
             {!searchQuery && activeFilter === 'all' && (
               <button
                 onClick={() => router.push('/recruitment/jd-creation')}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
               >
                 <Plus className="w-4 h-4" />
                 Create New Job
@@ -315,7 +315,7 @@ export default function JobOpeningsPage() {
                 {/* Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 text-base mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors">
+                    <h3 className="font-semibold text-gray-900 text-base mb-1 line-clamp-1 group-hover:text-gray-800 transition-colors">
                       {job.title}
                     </h3>
                     {getStatusBadge(job.status)}
@@ -403,7 +403,7 @@ export default function JobOpeningsPage() {
                   </div>
                   <button
                     onClick={() => router.push(`/recruitment/job-details?id=${job.id}`)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
                   >
                     <Eye className="w-4 h-4" />
                     View
@@ -434,7 +434,7 @@ export default function JobOpeningsPage() {
                     <td className="px-6 py-4">
                       <button
                         onClick={() => router.push(`/recruitment/job-details?id=${job.id}`)}
-                        className="font-medium text-gray-900 hover:text-blue-600 transition-colors text-left"
+                        className="font-medium text-gray-900 hover:text-gray-800 transition-colors text-left"
                       >
                         {job.title}
                       </button>
