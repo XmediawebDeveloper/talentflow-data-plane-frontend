@@ -445,7 +445,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 </button>
                                 <button
                                   onClick={() => {
-                                    navigator.clipboard.writeText(`https://talentflow.app/assessment/${assessment.id}`);
+                                    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_APP_URL || 'https://talentflow.app'}/assessment/${assessment.id}`);
                                     alert('Assessment link copied to clipboard!');
                                     setOpenMenuId(null);
                                   }}
@@ -554,7 +554,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             setSelectedAssessmentForShare(assessment);
                             setShowShareModal(true);
                           }}
-                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-blue-700 hover:to-gray-900 transition-all text-sm shadow-md"
+                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-gray-700 hover:to-gray-900 transition-all text-sm shadow-md"
                         >
                           <Mail className="w-4 h-4" />
                           Share via Email

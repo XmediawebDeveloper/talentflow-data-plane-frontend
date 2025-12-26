@@ -125,7 +125,7 @@ export default function AITalentMatchPageJobsList({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by job title, department, or location..."
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
               />
             </div>
           </div>
@@ -164,7 +164,7 @@ export default function AITalentMatchPageJobsList({
                 <select
                   value={departmentFilter}
                   onChange={(e) => setDepartmentFilter(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 >
                   <option value="">All Departments</option>
                   {departments.map(dept => (
@@ -180,7 +180,7 @@ export default function AITalentMatchPageJobsList({
                 <select
                   value={locationFilter}
                   onChange={(e) => setLocationFilter(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 >
                   <option value="">All Locations</option>
                   {locations.map(loc => (
@@ -196,7 +196,7 @@ export default function AITalentMatchPageJobsList({
                 <select
                   value={employmentTypeFilter}
                   onChange={(e) => setEmploymentTypeFilter(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 >
                   <option value="">All Types</option>
                   {employmentTypes.map(type => (
@@ -244,7 +244,7 @@ export default function AITalentMatchPageJobsList({
                   key={job.id}
                   className={`bg-white rounded-xl border-2 transition-all p-6 ${
                     selectedJobs.includes(job.id)
-                      ? 'border-purple-400 shadow-md'
+                      ? 'border-gray-300 shadow-md'
                       : 'border-gray-200 hover:border-gray-300 hover:shadow-lg'
                   }`}
                 >
@@ -255,7 +255,7 @@ export default function AITalentMatchPageJobsList({
                         type="checkbox"
                         checked={selectedJobs.includes(job.id)}
                         onChange={() => handleSelectJob(job.id)}
-                        className="w-5 h-5 text-gray-800 rounded border-gray-300 focus:ring-purple-500 cursor-pointer"
+                        className="w-5 h-5 text-gray-800 rounded border-gray-300 focus:ring-gray-500 cursor-pointer"
                       />
                     </div>
                     
@@ -328,7 +328,7 @@ export default function AITalentMatchPageJobsList({
                     <div className="flex-shrink-0 flex items-center justify-center">
                       <button 
                         onClick={() => onSelectJob(job.id)}
-                        className="px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-purple-700 hover:to-gray-900 transition-all font-medium shadow-md group-hover:shadow-lg flex items-center gap-2 whitespace-nowrap"
+                        className="px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-gray-700 hover:to-gray-900 transition-all font-medium shadow-md group-hover:shadow-lg flex items-center gap-2 whitespace-nowrap"
                       >
                         <Sparkles className="w-5 h-5" />
                         Run AI Match

@@ -246,7 +246,7 @@ export default function BulkScoringProgress({
             <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg">
               <Loader2 className="w-5 h-5 text-gray-800 animate-spin" />
               <div className="text-sm">
-                <div className="text-blue-900">Processing...</div>
+                <div className="text-gray-800">Processing...</div>
                 <div className="text-gray-900">Est. {formatTime(estimatedTimeRemaining)} remaining</div>
               </div>
             </div>
@@ -286,10 +286,10 @@ export default function BulkScoringProgress({
 
         <div className="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-blue-900">In Progress</span>
+            <span className="text-sm text-gray-800">In Progress</span>
             <Loader2 className="w-5 h-5 text-gray-800 animate-spin" />
           </div>
-          <div className="text-3xl text-blue-900">{inProgress}</div>
+          <div className="text-3xl text-gray-800">{inProgress}</div>
           <div className="text-xs text-gray-900 mt-1">Currently scoring</div>
         </div>
 
@@ -345,7 +345,7 @@ export default function BulkScoringProgress({
             <Sparkles className="w-5 h-5 text-gray-800" />
           </div>
           <div>
-            <h3 className="text-sm text-purple-900 mb-1">AI-Powered Resume Scoring</h3>
+            <h3 className="text-sm text-gray-800 mb-1">AI-Powered Resume Scoring</h3>
             <p className="text-xs text-gray-900">
               Each resume is analyzed by our AI engine against the job description. This process may take 3-6 seconds per resume. 
               You can navigate away and return anytime - progress will continue in the background.

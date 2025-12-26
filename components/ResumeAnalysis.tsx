@@ -80,7 +80,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
       maxScore: 25,
       weight: 25,
       icon: Briefcase,
-      color: 'purple',
+      color: 'gray',
       details: [
         {
           criterion: 'Years of Experience',
@@ -237,7 +237,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
       description: 'Kubernetes training could make this candidate a perfect fit.',
       priority: 'low',
       icon: TrendingUp,
-      color: 'purple'
+      color: 'gray'
     }
   ];
 

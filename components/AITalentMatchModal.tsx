@@ -239,7 +239,7 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="flex items-start gap-3 mb-3">
                     <Database className="w-5 h-5 text-gray-800 mt-0.5" />
-                    <p className="text-sm text-purple-900">{processDetails}</p>
+                    <p className="text-sm text-gray-800">{processDetails}</p>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
@@ -306,7 +306,7 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="flex items-start gap-3 mb-3">
                     <Sparkles className="w-5 h-5 text-gray-800 mt-0.5" />
-                    <p className="text-sm text-purple-900">{processDetails}</p>
+                    <p className="text-sm text-gray-800">{processDetails}</p>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div

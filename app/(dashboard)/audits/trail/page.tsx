@@ -63,7 +63,7 @@ const actionColors: Record<string, string> = {
   login: 'bg-gray-100 text-gray-900',
   logout: 'bg-gray-100 text-gray-700',
   upload: 'bg-teal-100 text-teal-700',
-  publish: 'bg-gray-100 text-indigo-700',
+  publish: 'bg-gray-100 text-gray-700',
   default: 'bg-gray-100 text-gray-700',
 };
 

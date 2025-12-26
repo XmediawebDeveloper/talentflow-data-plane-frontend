@@ -75,7 +75,7 @@ export default function ReportsExports() {
       id: 'assessments',
       name: 'Assessment Reports',
       icon: ClipboardList,
-      color: 'purple',
+      color: 'gray',
       reports: [
         {
           id: 'assessment-results',
@@ -188,7 +188,7 @@ export default function ReportsExports() {
     const colors = {
       blue: 'bg-gray-100 text-gray-800',
       green: 'bg-green-100 text-green-600',
-      purple: 'bg-gray-100 text-gray-800',
+      gray: 'bg-gray-100 text-gray-800',
       yellow: 'bg-yellow-100 text-yellow-600'
     };
     return colors[color as keyof typeof colors] || colors.blue;
@@ -349,7 +349,7 @@ export default function ReportsExports() {
 
                           {/* Content */}
                           <div className="flex-1">
-                            <h3 className={`text-sm mb-1 ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
+                            <h3 className={`text-sm mb-1 ${isSelected ? 'text-gray-800' : 'text-gray-900'}`}>
                               {report.name}
                             </h3>
                             <p className="text-sm text-gray-600 mb-3">
@@ -441,11 +441,11 @@ export default function ReportsExports() {
         <div className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="flex gap-3">
             <FileDown className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-blue-900">
+            <div className="text-sm text-gray-800">
               <p className="mb-2">
                 <strong>Pro Tips for Reports:</strong>
               </p>
-              <ul className="list-disc list-inside space-y-1 text-blue-800">
+              <ul className="list-disc list-inside space-y-1 text-gray-700">
                 <li>Use date filters to generate reports for specific time periods</li>
                 <li>Select multiple reports to download them as a ZIP archive</li>
                 <li>Schedule automated reports for regular team updates</li>

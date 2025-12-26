@@ -336,14 +336,14 @@ export default function AITalentMatchPage({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by name, title, email, or skills..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
 
               <select
                 value={filterThreshold}
                 onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
               >
                 <option value={0}>All Matches</option>
                 <option value={50}>50%+ Match</option>
@@ -392,7 +392,7 @@ export default function AITalentMatchPage({
               key={candidate.id}
               className={`bg-white rounded-xl border-2 transition-all p-6 ${
                 selectedCandidates.includes(candidate.id)
-                  ? 'border-purple-400 shadow-md'
+                  ? 'border-gray-300 shadow-md'
                   : 'border-gray-200 hover:border-gray-300 hover:shadow-lg'
               }`}
             >
@@ -403,7 +403,7 @@ export default function AITalentMatchPage({
                     type="checkbox"
                     checked={selectedCandidates.includes(candidate.id)}
                     onChange={() => handleSelectCandidate(candidate.id)}
-                    className="w-5 h-5 text-gray-800 rounded border-gray-300 focus:ring-purple-500"
+                    className="w-5 h-5 text-gray-800 rounded border-gray-300 focus:ring-gray-500"
                   />
                   <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-base font-medium ${
                     index === 0 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
@@ -536,7 +536,7 @@ export default function AITalentMatchPage({
             </div>
             
             {/* Units Display */}
-            <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-purple-400">
+            <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-gray-300">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
                   <DollarSign className="w-5 h-5 text-white" />
@@ -576,7 +576,7 @@ export default function AITalentMatchPage({
                   value={historySearchQuery}
                   onChange={(e) => setHistorySearchQuery(e.target.value)}
                   placeholder="Search by job title..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
             </div>
@@ -616,7 +616,7 @@ export default function AITalentMatchPage({
                     type="date"
                     value={historyDateFrom}
                     onChange={(e) => setHistoryDateFrom(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                   />
                 </div>
 
@@ -628,7 +628,7 @@ export default function AITalentMatchPage({
                     type="date"
                     value={historyDateTo}
                     onChange={(e) => setHistoryDateTo(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                   />
                 </div>
 
@@ -675,7 +675,7 @@ export default function AITalentMatchPage({
                     setSelectedHistoryItem(item);
                     setViewMode('details');
                   }}
-                  className="bg-white rounded-xl border-2 border-gray-200 hover:border-purple-400 hover:shadow-lg transition-all p-6 cursor-pointer group"
+                  className="bg-white rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all p-6 cursor-pointer group"
                   role="button"
                   tabIndex={0}
                 >
@@ -912,14 +912,14 @@ export default function AITalentMatchPage({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by name, title, email, or skills..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
               </div>
 
               <select
                 value={filterThreshold}
                 onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
               >
                 <option value={0}>All Matches</option>
                 <option value={50}>50%+ Match</option>
@@ -968,7 +968,7 @@ export default function AITalentMatchPage({
                 key={candidate.id}
                 className={`bg-white rounded-xl border-2 transition-all p-6 ${
                   selectedCandidates.includes(candidate.id)
-                    ? 'border-purple-400 shadow-md'
+                    ? 'border-gray-300 shadow-md'
                     : 'border-gray-200 hover:border-gray-300 hover:shadow-lg'
                 }`}
               >
@@ -979,7 +979,7 @@ export default function AITalentMatchPage({
                       type="checkbox"
                       checked={selectedCandidates.includes(candidate.id)}
                       onChange={() => handleSelectCandidate(candidate.id)}
-                      className="w-5 h-5 text-gray-800 rounded border-gray-300 focus:ring-purple-500"
+                      className="w-5 h-5 text-gray-800 rounded border-gray-300 focus:ring-gray-500"
                     />
                     <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-base font-medium ${
                       index === 0 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :

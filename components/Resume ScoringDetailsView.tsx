@@ -110,7 +110,7 @@ export default function ResumeScoringDetailsView({
   };
 
   return (
-    <main className=\"flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-purple-50 to-white\">
+    <main className=\"flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-gray-100 to-white\">
       {/* Header with Back Button */}
       <div className=\"mb-6\">
         <button
@@ -199,7 +199,7 @@ export default function ResumeScoringDetailsView({
         <button
           onClick={() => setSelectedStatusFilter(selectedStatusFilter === 'link_opened' ? 'all' : 'link_opened')}
           className={`bg-white rounded-xl shadow-sm border-2 transition-all p-4 text-left hover:shadow-lg ${
-            selectedStatusFilter === 'link_opened' ? 'border-purple-500 bg-gray-50' : 'border-gray-200 hover:border-gray-300'
+            selectedStatusFilter === 'link_opened' ? 'border-gray-500 bg-gray-50' : 'border-gray-200 hover:border-gray-300'
           }`}
         >
           <div className=\"flex items-center justify-between mb-3\">
@@ -343,7 +343,7 @@ export default function ResumeScoringDetailsView({
                   <div className=\"flex items-start gap-2\">
                     <TrendingUp className=\"w-5 h-5 text-gray-800 mt-0.5 flex-shrink-0\" />
                     <div>
-                      <div className=\"text-sm font-medium text-blue-900 mb-1\">Score Analysis</div>
+                      <div className=\"text-sm font-medium text-gray-800 mb-1\">Score Analysis</div>
                       <p className=\"text-sm text-gray-700\">{resume.matchReason}</p>
                     </div>
                   </div>

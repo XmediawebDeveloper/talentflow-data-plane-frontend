@@ -127,7 +127,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
 
   const isValid = candidates.every(c => c.name.trim() && c.email.trim() && c.email.includes('@'));
 
-  const assessmentLink = `https://talentflow.app/assessment/${assessment.id}`;
+  const assessmentLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://talentflow.app'}/assessment/${assessment.id}`;
 
   if (showSuccess) {
     return (
@@ -302,7 +302,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search by name, email, or position..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                   />
                 </div>
 
@@ -361,7 +361,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
 
                 {/* Action Buttons */}
                 <div className="flex items-center justify-between pt-4 border-t border-gray-300">
-                  <div className="text-sm text-purple-900">
+                  <div className="text-sm text-gray-800">
                     {selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected
                   </div>
                   <button

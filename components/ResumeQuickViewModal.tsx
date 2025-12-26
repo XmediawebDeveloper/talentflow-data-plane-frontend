@@ -221,7 +221,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                   
                   <div className="space-y-3">
                     {/* Current Version */}
-                    <div className="bg-gradient-to-r from-gray-50 to-indigo-50 rounded-lg border-2 border-gray-200 p-4">
+                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border-2 border-gray-200 p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-3 flex-1">
                           <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0">
@@ -343,7 +343,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                       <span className="text-white text-xs">ℹ</span>
                     </div>
                     <div>
-                      <h4 className="text-sm text-blue-900 mb-1">Older versions available under version history</h4>
+                      <h4 className="text-sm text-gray-800 mb-1">Older versions available under version history</h4>
                       <p className="text-xs text-gray-900">
                         All previous versions are stored securely and can be accessed anytime. Click on any version to view or download.
                       </p>

@@ -273,7 +273,7 @@ export default function ResumeScoringPage({
     const scoredResumesData = convertToScoredResumesFormat(selectedHistoryItem);
 
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-purple-50 to-white">
+      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-gray-50 to-white">
         {/* Header with Back Button */}
         <div className="mb-6">
           <button
@@ -404,7 +404,7 @@ export default function ResumeScoringPage({
     ].filter(Boolean).length;
 
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-purple-50 to-white">
+      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-gray-50 to-white">
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-4 mb-4">
@@ -426,7 +426,7 @@ export default function ResumeScoringPage({
             </div>
 
             {/* Available Units Display */}
-            <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-purple-400 mr-4">
+            <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-gray-300 mr-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
                   <DollarSign className="w-5 h-5 text-white" />
@@ -527,7 +527,7 @@ export default function ResumeScoringPage({
                   value={historySearchQuery}
                   onChange={(e) => setHistorySearchQuery(e.target.value)}
                   placeholder="Search by job title..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition-shadow"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent transition-shadow"
                 />
               </div>
             </div>
@@ -566,7 +566,7 @@ export default function ResumeScoringPage({
                   <select
                     value={historySourceFilter}
                     onChange={(e) => setHistorySourceFilter(e.target.value as 'all' | 'my-resumes' | 'database')}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent bg-white transition-shadow"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white transition-shadow"
                   >
                     <option value="all">All Sources</option>
                     <option value="my-resumes">My Resumes</option>
@@ -582,7 +582,7 @@ export default function ResumeScoringPage({
                     type="date"
                     value={historyDateFrom}
                     onChange={(e) => setHistoryDateFrom(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent bg-white transition-shadow"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white transition-shadow"
                   />
                 </div>
 
@@ -594,7 +594,7 @@ export default function ResumeScoringPage({
                     type="date"
                     value={historyDateTo}
                     onChange={(e) => setHistoryDateTo(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent bg-white transition-shadow"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white transition-shadow"
                   />
                 </div>
 
@@ -609,7 +609,7 @@ export default function ResumeScoringPage({
                     step="5"
                     value={historyMinCandidates}
                     onChange={(e) => setHistoryMinCandidates(Number(e.target.value))}
-                    className="w-full accent-purple-600"
+                    className="w-full accent-gray-600"
                   />
                   <div className="flex justify-between text-xs text-gray-500 mt-1">
                     <span>0</span>
@@ -629,7 +629,7 @@ export default function ResumeScoringPage({
                     step="5"
                     value={historyAvgScoreMin}
                     onChange={(e) => setHistoryAvgScoreMin(Number(e.target.value))}
-                    className="w-full accent-purple-600"
+                    className="w-full accent-gray-600"
                   />
                   <div className="flex justify-between text-xs text-gray-500 mt-1">
                     <span>0%</span>
@@ -960,7 +960,7 @@ export default function ResumeScoringPage({
 
   // New Scoring Flow
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-purple-50 to-white">
+    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-gray-50 to-white">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-4 mb-6">
@@ -985,7 +985,7 @@ export default function ResumeScoringPage({
           </div>
 
           {/* Available Units Display */}
-          <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-purple-400">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-gray-300">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
                 <DollarSign className="w-6 h-6 text-white" />
@@ -1128,7 +1128,7 @@ export default function ResumeScoringPage({
                   </div>
                   <button
                     onClick={() => setShowResumeSelectionModal(true)}
-                    className="px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-blue-700 hover:to-gray-900 transition-all text-sm font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
+                    className="px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-gray-700 hover:to-gray-900 transition-all text-sm font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
                   >
                     <Target className="w-5 h-5" />
                     Select Resumes

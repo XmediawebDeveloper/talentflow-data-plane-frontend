@@ -75,7 +75,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
             <div className="bg-gray-100 border border-gray-300 rounded-lg p-4">
               <div className="flex items-start gap-2">
                 <Info className="w-5 h-5 text-gray-900 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-blue-900">
+                <div className="text-sm text-gray-800">
                   <strong>Instructions:</strong> Please complete all sections within the time limit. 
                   You cannot pause or return to previous sections once submitted. Ensure you have a 
                   stable internet connection before starting.

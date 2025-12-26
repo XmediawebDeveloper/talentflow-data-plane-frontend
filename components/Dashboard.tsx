@@ -433,7 +433,7 @@ export default function Dashboard({
                       <>
                         <button 
                           onClick={() => onAIMatch(job)}
-                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-purple-700 hover:to-gray-900 transition-all text-sm shadow-sm"
+                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-gray-700 hover:to-gray-900 transition-all text-sm shadow-sm"
                         >
                           <Sparkles className="w-4 h-4" />
                           AI Talent Match
@@ -501,7 +501,7 @@ export default function Dashboard({
                   },
                   {
                     icon: Video,
-                    color: 'purple',
+                    color: 'gray',
                     title: 'AI Interview completed',
                     description: 'Michael Chen - Product Manager position',
                     time: '1 hour ago',
@@ -531,13 +531,13 @@ export default function Dashboard({
                   const Icon = activity.icon;
                   const bgColor = {
                     blue: 'bg-gray-100',
-                    purple: 'bg-gray-100',
+                    gray: 'bg-gray-100',
                     green: 'bg-green-100',
                     yellow: 'bg-yellow-100',
                   }[activity.color];
                   const iconColor = {
                     blue: 'text-gray-800',
-                    purple: 'text-gray-800',
+                    gray: 'text-gray-800',
                     green: 'text-green-600',
                     yellow: 'text-yellow-600',
                   }[activity.color];
@@ -647,7 +647,7 @@ export default function Dashboard({
             <div className="space-y-4">
               {[
                 { stage: 'Applied', count: 156, color: 'blue', icon: Users },
-                { stage: 'Screening', count: 84, color: 'purple', icon: FileText },
+                { stage: 'Screening', count: 84, color: 'gray', icon: FileText },
                 { stage: 'Interview', count: 42, color: 'yellow', icon: Video },
                 { stage: 'Offer', count: 12, color: 'green', icon: CheckCircle },
               ].map((stage, index) => {

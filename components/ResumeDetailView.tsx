@@ -441,9 +441,9 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   {detailedResume.languages.map((lang, index) => (
-                    <div key={index} className="p-4 bg-gray-50 border border-indigo-200 rounded-lg text-center">
+                    <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
                       <div className="text-gray-900 mb-1">{lang.name}</div>
-                      <div className="text-sm text-indigo-700">{lang.proficiency}</div>
+                      <div className="text-sm text-gray-700">{lang.proficiency}</div>
                     </div>
                   ))}
                 </div>

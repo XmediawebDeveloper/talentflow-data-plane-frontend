@@ -27,13 +27,13 @@ export default function RoleAccessDemo({ user }: RoleAccessDemoProps) {
       <div className="flex items-start gap-3">
         <Shield className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
         <div className="flex-1">
-          <h4 className="text-blue-900 mb-2 flex items-center gap-2">
+          <h4 className="text-gray-800 mb-2 flex items-center gap-2">
             Role-Based Access Control
             <span className="px-2 py-0.5 bg-gray-800 text-white text-xs rounded">
               {roleLabels[user.role]}
             </span>
           </h4>
-          <p className="text-sm text-blue-800 mb-3">
+          <p className="text-sm text-gray-700 mb-3">
             Your current role determines what actions you can perform in the system.
           </p>
           

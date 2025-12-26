@@ -71,7 +71,7 @@ export default function SelectSourceModal({
         <div className="p-6">
           {/* Job Context */}
           <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-            <div className="text-sm text-blue-900 mb-1">Scoring resumes for:</div>
+            <div className="text-sm text-gray-800 mb-1">Scoring resumes for:</div>
             <div className="text-gray-900">{jobTitle}</div>
           </div>
 

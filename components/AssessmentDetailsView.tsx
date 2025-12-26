@@ -35,7 +35,7 @@ export default function AssessmentDetailsView({
   const recentActivity = [
     { id: 1, action: 'Assessment shared', user: 'Sarah Johnson', timestamp: '2 hours ago', icon: Mail, color: 'blue' },
     { id: 2, action: 'Candidate completed', user: 'John Doe', timestamp: '5 hours ago', icon: CheckCircle, color: 'green' },
-    { id: 3, action: 'Assessment edited', user: 'You', timestamp: '1 day ago', icon: Edit2, color: 'purple' },
+    { id: 3, action: 'Assessment edited', user: 'You', timestamp: '1 day ago', icon: Edit2, color: 'gray' },
     { id: 4, action: 'Candidate invited', user: 'Sarah Johnson', timestamp: '2 days ago', icon: Users, color: 'blue' },
     { id: 5, action: 'Assessment created', user: 'You', timestamp: '5 days ago', icon: Sparkles, color: 'yellow' },
   ];
@@ -43,7 +43,7 @@ export default function AssessmentDetailsView({
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto">
       {/* Sticky Header */}
-      <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-blue-700 sticky top-0 z-20 shadow-lg">
+      <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-gray-600 sticky top-0 z-20 shadow-lg">
         <div className="px-8 py-5">
           <button
             onClick={onBack}
@@ -280,7 +280,7 @@ export default function AssessmentDetailsView({
               <div className="grid grid-cols-3 gap-4">
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(`https://talentflow.app/assessment/${assessment.id}`);
+                    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_APP_URL || 'https://talentflow.app'}/assessment/${assessment.id}`);
                     alert('Assessment link copied!');
                   }}
                   className="p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
@@ -540,7 +540,7 @@ export default function AssessmentDetailsView({
                 const colorClasses = {
                   blue: { bg: 'bg-gray-100', text: 'text-gray-800' },
                   green: { bg: 'bg-green-100', text: 'text-green-600' },
-                  purple: { bg: 'bg-gray-100', text: 'text-gray-800' },
+                  gray: { bg: 'bg-gray-100', text: 'text-gray-800' },
                   yellow: { bg: 'bg-yellow-100', text: 'text-yellow-600' },
                 };
                 const colors = colorClasses[activity.color as keyof typeof colorClasses] || colorClasses.blue;

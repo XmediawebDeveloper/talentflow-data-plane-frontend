@@ -400,7 +400,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         <div className="px-8 py-6">
           {/* Round Filter */}
           {availableRounds.length > 1 && (
-            <div className="bg-gradient-to-r from-indigo-50 to-gray-50 border-2 border-indigo-300 rounded-lg p-6 mb-6">
+            <div className="bg-gradient-to-r from-gray-50 to-gray-50 border-2 border-gray-300 rounded-lg p-6 mb-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
@@ -422,7 +422,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     className={`px-6 py-3 rounded-lg transition-all flex items-center gap-2 ${
                       selectedRound === 'all'
                         ? 'bg-gray-800 text-white shadow-lg'
-                        : 'bg-white text-gray-700 border border-gray-300 hover:border-indigo-400 hover:bg-gray-50'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-400 hover:bg-gray-50'
                     }`}
                   >
                     <Layers className="w-4 h-4" />
@@ -444,7 +444,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         className={`px-6 py-3 rounded-lg transition-all flex items-center gap-2 ${
                           selectedRound === round
                             ? 'bg-gray-800 text-white shadow-lg'
-                            : 'bg-white text-gray-700 border border-gray-300 hover:border-indigo-400 hover:bg-gray-50'
+                            : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-400 hover:bg-gray-50'
                         }`}
                       >
                         <span>Round {round}</span>
@@ -595,7 +595,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto">
       {/* Sticky Header - Assessment & JD Title */}
-      <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-blue-700 sticky top-0 z-20 shadow-lg">
+      <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-gray-600 sticky top-0 z-20 shadow-lg">
         <div className="px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -964,7 +964,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
                                   <User className="w-4 h-4 text-gray-800" />
                                 </div>
-                                <div className="text-sm font-medium text-blue-900">CANDIDATE'S ANSWER</div>
+                                <div className="text-sm font-medium text-gray-800">CANDIDATE'S ANSWER</div>
                               </div>
                               <div className={`rounded-lg p-4 ${
                                 q.type === 'coding' 
@@ -998,7 +998,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
                                   <FileText className="w-4 h-4 text-gray-800" />
                                 </div>
-                                <div className="text-sm font-medium text-purple-900">AI FEEDBACK & EVALUATION</div>
+                                <div className="text-sm font-medium text-gray-800">AI FEEDBACK & EVALUATION</div>
                               </div>
                               <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                                 <div className="text-gray-800 leading-relaxed">{q.feedback}</div>

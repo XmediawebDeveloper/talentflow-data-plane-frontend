@@ -417,7 +417,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                     <div
                       key={index}
                       className={`flex items-center justify-between p-4 border rounded-lg ${getStatusBg(item.status)} hover:shadow-md transition-shadow ${
-                        selectedVersioned.includes(item.fileName) ? 'ring-2 ring-purple-500' : ''
+                        selectedVersioned.includes(item.fileName) ? 'ring-2 ring-gray-500' : ''
                       }`}
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -425,7 +425,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           type="checkbox"
                           checked={selectedVersioned.includes(item.fileName)}
                           onChange={() => handleVersionedSelect(item.fileName)}
-                          className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-purple-500 cursor-pointer"
+                          className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-500 cursor-pointer"
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">

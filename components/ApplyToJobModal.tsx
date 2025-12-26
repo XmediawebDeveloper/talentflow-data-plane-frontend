@@ -92,7 +92,7 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
             <div className="flex items-start gap-3">
               <Users className="w-5 h-5 text-gray-800 mt-0.5" />
               <div className="flex-1">
-                <h3 className="text-sm text-blue-900 mb-2">
+                <h3 className="text-sm text-gray-800 mb-2">
                   {resumes.length} Candidate{resumes.length > 1 ? 's' : ''} Selected
                 </h3>
                 <div className="space-y-2">

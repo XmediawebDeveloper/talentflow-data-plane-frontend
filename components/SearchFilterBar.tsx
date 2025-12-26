@@ -539,7 +539,7 @@ export default function SearchFilterBar({
 
       {/* Search Tips Panel */}
       {showSearchTips && (
-        <div className="mt-4 bg-gradient-to-br from-gray-50 to-indigo-50 rounded-lg shadow-lg border-2 border-gray-200 p-6">
+        <div className="mt-4 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg shadow-lg border-2 border-gray-200 p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-gray-800 rounded-lg">

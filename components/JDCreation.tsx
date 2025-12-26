@@ -1038,7 +1038,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
           <div className="space-y-6">
             {/* Drag & Drop Tips */}
             {showDragTips && (
-              <div className="bg-gradient-to-r from-gray-50 to-indigo-50 border border-gray-200 rounded-xl p-5">
+              <div className="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-5">
                 <div className="flex items-start gap-4">
                   <div className="flex-shrink-0">
                     <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
@@ -1047,7 +1047,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-blue-900">💡 Pro Tips: Managing Skills</h3>
+                      <h3 className="text-gray-800">💡 Pro Tips: Managing Skills</h3>
                       <button
                         onClick={() => setShowDragTips(false)}
                         className="text-gray-800 hover:text-gray-900 text-sm flex items-center gap-1"
@@ -1056,7 +1056,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         Dismiss
                       </button>
                     </div>
-                    <div className="grid grid-cols-3 gap-4 text-sm text-blue-800">
+                    <div className="grid grid-cols-3 gap-4 text-sm text-gray-700">
                       <div className="flex items-start gap-2">
                         <GripVertical className="w-4 h-4 mt-0.5 text-gray-800 flex-shrink-0" />
                         <div>
@@ -1852,7 +1852,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       <h3 className="text-xl text-gray-900 mb-3">Location{extractedData.locations.length > 1 ? 's' : ''}</h3>
                       <div className="flex flex-wrap gap-2">
                         {extractedData.locations.map((loc, index) => (
-                          <div key={index} className="bg-gray-50 border border-gray-200 text-blue-900 px-4 py-2 rounded-lg">
+                          <div key={index} className="bg-gray-50 border border-gray-200 text-gray-800 px-4 py-2 rounded-lg">
                             📍 {loc.city} <span className="text-gray-800 text-sm">(within {loc.radius} miles)</span>
                           </div>
                         ))}
@@ -1977,7 +1977,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {extractedData.locations.map((loc, index) => (
-                      <div key={index} className="bg-gray-50 text-blue-900 px-3 py-2 rounded-lg text-sm">
+                      <div key={index} className="bg-gray-50 text-gray-800 px-3 py-2 rounded-lg text-sm">
                         {loc.city} <span className="text-gray-800">(+{loc.radius}mi)</span>
                       </div>
                     ))}
