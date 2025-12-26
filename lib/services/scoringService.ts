@@ -14,6 +14,12 @@ export interface ScoreBreakdownItem {
   reasoning: string;
 }
 
+export interface ScoringBreakdownItem {
+  category: string;
+  score: number;
+  reasoning: string;
+}
+
 export interface ScoringResponse {
   id: string;
   jd_id: string;
@@ -21,13 +27,25 @@ export interface ScoringResponse {
   resume_id: string;
   candidate_name?: string;
   candidate_email?: string;
+  phone?: string;
+  // Additional resume details
+  current_title?: string;
+  current_company?: string;
+  location?: string;
+  experience_years?: number;
+  education?: any[];
+  skills?: string[];
   scored_by: string;
   scored_by_name?: string;
   overall_score: number;
-  match_status: 'excellent' | 'partial' | 'no_match';
+  essential_score?: number;
+  non_essential_score?: number;
+  match_status: 'excellent' | 'partial' | 'no_match' | 'exact_match' | 'partial_match';
   ai_summary?: string;
   strengths: string[];
   gaps: string[];
+  score_breakdown?: ScoringBreakdownItem[];
+  criteria_scores?: Record<string, { score: number; eligible: boolean; reasoning: string }>;
   unit_consumed: boolean;
   created_at: string;
 }
