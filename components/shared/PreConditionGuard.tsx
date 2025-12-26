@@ -229,7 +229,7 @@ export default function PreConditionGuard({
         <div className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-blue-800">
+            <div className="text-sm text-gray-700">
               <p className="mb-1">
                 <strong>Need help?</strong>
               </p>

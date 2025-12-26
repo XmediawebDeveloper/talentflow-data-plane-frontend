@@ -677,7 +677,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   'AS': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
                   'AIU': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
                   'storage_gb': { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
-                  'max_jobs': { bg: 'bg-gray-50', text: 'text-indigo-700', border: 'border-indigo-200' },
+                  'max_jobs': { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' },
                   'max_seats': { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200' },
                 };
                 const defaultColor = { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' };

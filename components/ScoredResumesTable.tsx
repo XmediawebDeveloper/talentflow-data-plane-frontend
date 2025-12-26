@@ -581,7 +581,7 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                         onViewCandidate(resume);
                       }
                     }}
-                    className="px-3 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors flex items-center gap-1.5"
+                    className="px-3 py-1.5 text-xs text-white bg-gray-800 hover:bg-gray-900 rounded-md transition-colors flex items-center gap-1.5"
                   >
                     <Eye className="w-3.5 h-3.5" />
                     View

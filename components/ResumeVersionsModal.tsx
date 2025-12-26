@@ -48,7 +48,7 @@ export default function ResumeVersionsModal({
               {versions.map((version, index) => (
                 <div
                   key={version.id}
-                  className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-purple-400 hover:shadow-lg transition-all"
+                  className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-gray-400 hover:shadow-lg transition-all"
                 >
                   <div className="flex items-start gap-6">
                     {/* Version Icon & Number */}

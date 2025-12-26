@@ -331,7 +331,7 @@ export default function ResumeScoringStatusPanel({
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden pointer-events-auto animate-in zoom-in-95 duration-200 flex flex-col">
           {/* Header */}
-          <div className="bg-gradient-to-r from-gray-800 via-purple-600 to-gray-900 px-6 py-5">
+          <div className="bg-gradient-to-r from-gray-800 via-gray-700 to-gray-900 px-6 py-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
                 <Target className="w-6 h-6 text-white" />
@@ -597,7 +597,7 @@ export default function ResumeScoringStatusPanel({
                     <div className="ml-16 mr-4 mb-2 bg-gray-50 border border-gray-200 rounded-lg p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <History className="w-4 h-4 text-gray-800" />
-                        <h4 className="font-medium text-blue-900">Attempt History</h4>
+                        <h4 className="font-medium text-gray-800">Attempt History</h4>
                       </div>
                       <div className="space-y-2">
                         {resume.attemptHistory.map((attempt) => (

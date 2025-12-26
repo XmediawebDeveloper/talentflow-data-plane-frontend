@@ -210,7 +210,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
             <div className="flex gap-3">
               <AlertCircle className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
               <div>
-                <h5 className="text-sm text-blue-900 mb-1">What happens next?</h5>
+                <h5 className="text-sm text-gray-800 mb-1">What happens next?</h5>
                 <p className="text-xs text-gray-900">
                   Resumes will be automatically parsed and scored against the job requirements. 
                   You'll see the scoring results after submission.

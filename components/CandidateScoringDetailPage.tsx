@@ -94,21 +94,21 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
 
   const getScoreColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-blue-600';
+    if (score >= 70) return 'text-gray-800';
     if (score >= 60) return 'text-yellow-600';
     return 'text-red-600';
   };
 
   const getScoreBgColor = (score: number) => {
     if (score >= 85) return 'bg-green-100 border-green-300 text-green-700';
-    if (score >= 70) return 'bg-blue-100 border-blue-300 text-blue-700';
+    if (score >= 70) return 'bg-gray-100 border-gray-300 text-gray-700';
     if (score >= 60) return 'bg-yellow-100 border-yellow-300 text-yellow-700';
     return 'bg-red-100 border-red-300 text-red-700';
   };
 
   const getProgressBarColor = (score: number) => {
     if (score >= 85) return 'bg-green-600';
-    if (score >= 70) return 'bg-blue-600';
+    if (score >= 70) return 'bg-gray-600';
     if (score >= 60) return 'bg-yellow-600';
     return 'bg-red-600';
   };
@@ -124,12 +124,12 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-white">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-white">
       {/* Back Button */}
       <div className="px-8 pt-6">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium transition-colors hover:gap-3"
+          className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors hover:gap-3"
         >
           <ArrowLeft className="w-5 h-5" />
           Back to Scored Resumes
@@ -138,10 +138,10 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
 
       {/* Header */}
       <div className="px-8 py-6">
-        <div className="bg-white rounded-xl shadow-lg border-2 border-blue-200 p-6">
+        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-6">
           <div className="flex items-start justify-between mb-6">
             <div className="flex items-center gap-4 flex-1">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg">
+              <div className="w-20 h-20 bg-gradient-to-br from-gray-700 to-gray-800 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg">
                 <Target className="w-10 h-10 text-white" />
               </div>
               <div className="flex-1">
@@ -149,7 +149,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
                 <p className="text-lg text-gray-700 mb-3 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
                 <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
                   <span className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
-                    <Mail className="w-4 h-4 text-blue-600" />
+                    <Mail className="w-4 h-4 text-gray-800" />
                     <span className="text-gray-900">{resume.email}</span>
                   </span>
                   <span className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
@@ -167,7 +167,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
             </div>
             <button
               onClick={handleDownloadScorecard}
-              className="px-4 py-2 text-sm text-blue-700 border-2 border-blue-300 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-2"
+              className="px-4 py-2 text-sm text-gray-700 border-2 border-gray-300 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
               Download Scorecard
@@ -175,7 +175,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
           </div>
 
           {/* Score Display */}
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border-2 border-blue-200">
+          <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-6 border-2 border-gray-200">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm text-gray-600 mb-2 font-medium">Overall Match Score</div>
@@ -214,7 +214,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`px-6 py-3 text-sm font-medium transition-colors rounded-t-lg ${
                   activeTab === tab.id
-                    ? 'text-blue-600 bg-blue-50 border-b-2 border-blue-600'
+                    ? 'text-gray-800 bg-gray-50 border-b-2 border-gray-600'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
@@ -231,9 +231,9 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* AI Analysis */}
-              <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl p-6">
+              <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-2 border-gray-200 rounded-xl p-6">
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Zap className="w-6 h-6 text-white" />
                   </div>
                   <div className="flex-1">
@@ -322,13 +322,13 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
               {/* Recommendations */}
               <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-blue-600" />
+                  <Award className="w-5 h-5 text-gray-800" />
                   Next Steps
                 </h3>
                 <ul className="space-y-3">
                   {recommendations.map((rec, idx) => (
                     <li key={idx} className="flex items-start gap-3 text-gray-700">
-                      <ChevronRight className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <ChevronRight className="w-5 h-5 text-gray-800 mt-0.5 flex-shrink-0" />
                       <span>{rec}</span>
                     </li>
                   ))}
@@ -346,19 +346,19 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
                     <h4 className="font-medium text-gray-700 mb-4 text-lg">What We're Looking For</h4>
                     <ul className="space-y-3 text-gray-600">
                       <li className="flex items-start gap-3">
-                        <div className="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                        <div className="w-2 h-2 bg-gray-600 rounded-full mt-2 flex-shrink-0"></div>
                         <span>Senior-level experience (5+ years)</span>
                       </li>
                       <li className="flex items-start gap-3">
-                        <div className="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                        <div className="w-2 h-2 bg-gray-600 rounded-full mt-2 flex-shrink-0"></div>
                         <span>Strong technical skills in required areas</span>
                       </li>
                       <li className="flex items-start gap-3">
-                        <div className="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                        <div className="w-2 h-2 bg-gray-600 rounded-full mt-2 flex-shrink-0"></div>
                         <span>Proven track record in similar roles</span>
                       </li>
                       <li className="flex items-start gap-3">
-                        <div className="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                        <div className="w-2 h-2 bg-gray-600 rounded-full mt-2 flex-shrink-0"></div>
                         <span>Relevant education and certifications</span>
                       </li>
                     </ul>
@@ -400,7 +400,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
                 resume.scorePercentage >= 85
                   ? 'bg-green-50 border-green-300'
                   : resume.scorePercentage >= 70
-                  ? 'bg-blue-50 border-blue-300'
+                  ? 'bg-gray-50 border-gray-300'
                   : resume.scorePercentage >= 60
                   ? 'bg-yellow-50 border-yellow-300'
                   : 'bg-red-50 border-red-300'
@@ -470,11 +470,11 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
               {/* Work Experience */}
               <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
                 <div className="flex items-center gap-2 mb-6">
-                  <Briefcase className="w-5 h-5 text-blue-600" />
+                  <Briefcase className="w-5 h-5 text-gray-800" />
                   <h3 className="text-lg font-semibold text-gray-900">Work Experience</h3>
                 </div>
-                <div className="relative pl-6 border-l-2 border-blue-200">
-                  <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-blue-600 border-2 border-white"></div>
+                <div className="relative pl-6 border-l-2 border-gray-200">
+                  <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gray-600 border-2 border-white"></div>
                   <div className="mb-4">
                     <h4 className="font-semibold text-gray-900 mb-1">{resume.title || 'Current Position'}</h4>
                     <div className="flex items-center gap-2 text-gray-700 mb-1">
@@ -488,7 +488,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
                           {resume.location}
                         </span>
                       )}
-                      <span className="text-blue-600">({resume.experience || 'N/A'})</span>
+                      <span className="text-gray-800">({resume.experience || 'N/A'})</span>
                     </div>
                   </div>
                 </div>
@@ -497,10 +497,10 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
               {/* Education */}
               <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
                 <div className="flex items-center gap-2 mb-6">
-                  <GraduationCap className="w-5 h-5 text-purple-600" />
+                  <GraduationCap className="w-5 h-5 text-gray-800" />
                   <h3 className="text-lg font-semibold text-gray-900">Education</h3>
                 </div>
-                <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                   <h4 className="font-semibold text-gray-900 mb-2">{resume.education || 'Education not specified'}</h4>
                 </div>
               </div>

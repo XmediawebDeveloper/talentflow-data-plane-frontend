@@ -40,7 +40,7 @@ export function LandingPageContent() {
       <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-[#667EEA] via-[#764BA2] to-[#F093FB] opacity-10 dark:opacity-20"></div>
 
-        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
+        <div className="absolute top-20 left-10 w-72 h-72 bg-gray-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
         <div
           className="absolute top-40 right-20 w-96 h-96 bg-gray-600 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"
           style={{ animationDelay: "2s" }}
@@ -162,7 +162,7 @@ export function LandingPageContent() {
               </div>
 
               <div
-                className={`relative ${isFullscreen ? "h-screen" : "aspect-video"} bg-gradient-to-br from-gray-900 via-purple-900 to-pink-900`}
+                className={`relative ${isFullscreen ? "h-screen" : "aspect-video"} bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700`}
               >
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center space-y-6 p-8">
@@ -259,7 +259,7 @@ export function LandingPageContent() {
       <section className="py-24 bg-gray-50 dark:bg-[#1E293B]/50">
         <div className="container mx-auto max-w-[1400px] px-6">
           <div className="text-center mb-16">
-            <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0">
+            <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800/30 text-gray-900 dark:text-gray-300 border-0">
               <Zap className="w-4 h-4 mr-2" />
               Powerful Features
             </Badge>

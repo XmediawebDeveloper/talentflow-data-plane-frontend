@@ -85,7 +85,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
                   <div>
-                    <div className="text-sm font-medium text-blue-900 mb-1">How it works</div>
+                    <div className="text-sm font-medium text-gray-800 mb-1">How it works</div>
                     <div className="text-sm text-gray-900">
                       Upload a resume file and we'll check if this candidate already exists in your database based on name, email, and phone number.
                     </div>

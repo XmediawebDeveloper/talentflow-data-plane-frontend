@@ -641,7 +641,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
             {/* AI Talent Match Button */}
             <button
               onClick={handleAITalentMatch}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-md hover:from-purple-700 hover:to-gray-900 transition-colors shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-md hover:from-gray-700 hover:to-gray-900 transition-colors shadow-sm"
             >
               <Sparkles className="w-4 h-4" />
               AI Talent Match
@@ -853,7 +853,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                   <select
                     value={filterThreshold}
                     onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                    className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                    className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                   >
                     <option value={0}>All Matches</option>
                     <option value={50}>50%+ Match</option>
@@ -1009,7 +1009,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
           {/* Complete Job Description */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             {/* JD Header */}
-            <div className="bg-gradient-to-r from-gray-50 to-indigo-50 border-b border-gray-100 px-8 py-6">
+            <div className="bg-gradient-to-r from-gray-50 to-gray-50 border-b border-gray-100 px-8 py-6">
               <h1 className="text-2xl text-gray-900 mb-2">{job.title}</h1>
               <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                 {job.department && (
@@ -1185,7 +1185,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                     onNavigateToAITalentMatch(job.id);
                   }
                 }}
-                className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-gray-800 to-gray-800 text-white hover:from-purple-700 hover:to-gray-900 rounded-md transition-all shadow-sm text-left flex items-center justify-between"
+                className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-gray-800 to-gray-800 text-white hover:from-gray-700 hover:to-gray-900 rounded-md transition-all shadow-sm text-left flex items-center justify-between"
               >
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4" />

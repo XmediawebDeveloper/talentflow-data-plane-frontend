@@ -76,7 +76,7 @@ export default function IntegrationsPage() {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl flex items-center justify-center shadow-lg">
               <LinkIcon className="w-7 h-7 text-white" />
             </div>
             <div>

@@ -160,7 +160,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
               <div className="flex items-start gap-3">
                 <GitBranch className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="text-sm text-purple-900 mb-1">Version Management</h3>
+                  <h3 className="text-sm text-gray-800 mb-1">Version Management</h3>
                   <p className="text-xs text-gray-900">
                     Upload updated versions of candidate resumes. You'll be able to choose how to handle each version:
                   </p>

@@ -285,7 +285,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
           {view === 'main' && (
             <div className="p-6 space-y-4">
               <div className="bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-4">
-                <h3 className="text-sm text-blue-900 mb-1">Need Help?</h3>
+                <h3 className="text-sm text-gray-800 mb-1">Need Help?</h3>
                 <p className="text-xs text-gray-900">
                   Submit a ticket or browse your existing support requests.
                 </p>

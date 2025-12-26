@@ -127,7 +127,7 @@ export default function Settings() {
             {/* Role Info */}
             <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div className="text-xs text-gray-800 uppercase tracking-wider mb-1">Role</div>
-              <div className="text-sm text-blue-900 font-medium">Recruiter</div>
+              <div className="text-sm text-gray-800 font-medium">Recruiter</div>
               <div className="text-xs text-gray-900 mt-1">Access Level: Standard</div>
             </div>
           </div>
@@ -393,7 +393,7 @@ export default function Settings() {
                     <div className="flex items-start gap-3">
                       <Target className="w-5 h-5 text-gray-800 mt-0.5" />
                       <div>
-                        <div className="text-sm font-medium text-blue-900 mb-1">Quick Tip</div>
+                        <div className="text-sm font-medium text-gray-800 mb-1">Quick Tip</div>
                         <div className="text-sm text-gray-900">These settings will be pre-filled when you create a new job posting, saving you time.</div>
                       </div>
                     </div>

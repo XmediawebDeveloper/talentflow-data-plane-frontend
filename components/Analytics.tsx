@@ -53,7 +53,7 @@ export default function Analytics() {
             <select
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white text-sm"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
             >
               <option value="7days">Last 7 days</option>
               <option value="30days">Last 30 days</option>
@@ -209,7 +209,7 @@ export default function Analytics() {
               <div key={idx} className="flex-1 flex flex-col items-center gap-2">
                 <div className="relative w-full flex items-end justify-center" style={{ height: '100%' }}>
                   <div 
-                    className="w-full bg-gradient-to-t from-gray-800 to-gray-800 rounded-t-lg hover:from-purple-700 hover:to-gray-900 transition-all cursor-pointer group relative"
+                    className="w-full bg-gradient-to-t from-gray-800 to-gray-800 rounded-t-lg hover:from-gray-700 hover:to-gray-900 transition-all cursor-pointer group relative"
                     style={{ height: `${(value / 48) * 100}%` }}
                   >
                     <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-700 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
@@ -251,7 +251,7 @@ export default function Analytics() {
               { stage: 'Applications', count: 342, percentage: 100, color: 'bg-gray-800', conversion: null },
               { stage: 'Screened', count: 247, percentage: 72, color: 'bg-gray-800', conversion: 72 },
               { stage: 'Assessment Sent', count: 186, percentage: 54, color: 'bg-gray-800', conversion: 75 },
-              { stage: 'Assessment Passed', count: 142, percentage: 42, color: 'bg-violet-600', conversion: 76 },
+              { stage: 'Assessment Passed', count: 142, percentage: 42, color: 'bg-gray-600', conversion: 76 },
               { stage: 'Interviews', count: 89, percentage: 26, color: 'bg-fuchsia-600', conversion: 63 },
               { stage: 'Offers', count: 32, percentage: 9, color: 'bg-orange-600', conversion: 36 },
               { stage: 'Hired', count: 28, percentage: 8, color: 'bg-green-600', conversion: 88 },
@@ -496,7 +496,7 @@ export default function Analytics() {
               { stage: 'Application to Screening', days: 1.2, color: 'bg-gray-800', percentage: 7 },
               { stage: 'Screening to Assessment', days: 2.8, color: 'bg-gray-800', percentage: 16 },
               { stage: 'Assessment to Interview', days: 3.5, color: 'bg-gray-800', percentage: 20 },
-              { stage: 'Interview to Offer', days: 6.2, color: 'bg-violet-600', percentage: 35 },
+              { stage: 'Interview to Offer', days: 6.2, color: 'bg-gray-600', percentage: 35 },
               { stage: 'Offer to Acceptance', days: 3.9, color: 'bg-fuchsia-600', percentage: 22 },
             ].map((stage, idx) => (
               <div key={idx}>

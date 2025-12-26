@@ -205,7 +205,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
           <div className="p-6">
             {/* Candidate Info */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
-              <div className="text-sm text-blue-900 mb-2">Assessment Details</div>
+              <div className="text-sm text-gray-800 mb-2">Assessment Details</div>
               <div className="text-gray-900 mb-1">{assessment.title}</div>
               <div className="text-sm text-gray-600">
                 {assessment.jobTitle} • {assessment.companyName} • {assessment.duration} minutes
@@ -493,7 +493,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                           <div className="mt-4 p-4 bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg">
                             <div className="flex items-start gap-2 mb-2">
                               <FileText className="w-4 h-4 text-gray-800 mt-0.5 flex-shrink-0" />
-                              <span className="text-sm text-blue-900">Scenario:</span>
+                              <span className="text-sm text-gray-800">Scenario:</span>
                             </div>
                             <p className="text-sm text-gray-700 whitespace-pre-line ml-6">{currentQ.scenario}</p>
                           </div>
@@ -555,7 +555,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                                       <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
                                         <FileText className="w-4 h-4 text-gray-800" />
                                       </div>
-                                      <span className="text-sm font-semibold text-blue-900">Problem Description</span>
+                                      <span className="text-sm font-semibold text-gray-800">Problem Description</span>
                                     </div>
                                     <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{currentQ.scenario}</p>
                                   </div>

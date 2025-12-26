@@ -147,7 +147,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
             <div>
-              <div className="text-sm text-blue-900 mb-1">AI-Powered Assessment Generation</div>
+              <div className="text-sm text-gray-800 mb-1">AI-Powered Assessment Generation</div>
               <div className="text-sm text-gray-900">
                 Our LLM will automatically generate questions based on the JD, adjusting difficulty, topics, and time allocation based on your configuration. <strong>Each candidate receives a unique, freshly generated question set</strong> to ensure fairness and prevent question sharing.
               </div>
@@ -346,7 +346,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     <span className="text-gray-700">Displayed in reports</span>
                   </div>
                   <div className="px-3 py-2 bg-gray-50 rounded-lg mt-2">
-                    <span className="text-xs text-blue-900">
+                    <span className="text-xs text-gray-700">
                       ℹ️ <strong>NOT part of PASS/FAIL</strong>
                     </span>
                   </div>
@@ -369,7 +369,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     <span className="text-gray-700">Min passing score: 7/10</span>
                   </div>
                   <div className="px-3 py-2 bg-gray-100 rounded-lg mt-2">
-                    <span className="text-xs text-purple-900">
+                    <span className="text-xs text-gray-800">
                       ✅ <strong>Counts toward PASS/FAIL</strong>
                     </span>
                   </div>
@@ -555,7 +555,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               {topic}
                               <button
                                 onClick={() => removeTopic(section.name, idx)}
-                                className="hover:text-blue-900"
+                                className="hover:text-gray-900"
                               >
                                 <X className="w-4 h-4" />
                               </button>
@@ -713,8 +713,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             <div className="flex items-start gap-3 mb-4">
               <BarChart className="w-6 h-6 text-gray-800 flex-shrink-0" />
               <div>
-                <h3 className="text-purple-900 mb-2">🎯 Evaluation & Scoring Logic</h3>
-                <p className="text-sm text-purple-800">
+                <h3 className="text-gray-800 mb-2">🎯 Evaluation & Scoring Logic</h3>
+                <p className="text-sm text-gray-700">
                   How candidates will be evaluated when taking this assessment
                 </p>
               </div>
@@ -811,7 +811,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
                 {/* Note: Questions NOT generated yet */}
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="text-sm text-blue-900">
+                  <div className="text-sm text-gray-800">
                     ℹ️ <strong>Questions will be generated dynamically</strong> when candidates are assigned to this assessment based on the configured topics and difficulty level.
                   </div>
                 </div>

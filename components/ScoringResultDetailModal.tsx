@@ -608,17 +608,17 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
                   <h2 className="text-gray-900">Languages</h2>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="p-4 bg-gray-50 border border-indigo-200 rounded-lg text-center">
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
                     <div className="text-gray-900 mb-1">English</div>
-                    <div className="text-sm text-indigo-700">Native</div>
+                    <div className="text-sm text-gray-700">Native</div>
                   </div>
-                  <div className="p-4 bg-gray-50 border border-indigo-200 rounded-lg text-center">
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
                     <div className="text-gray-900 mb-1">Spanish</div>
-                    <div className="text-sm text-indigo-700">Professional Working</div>
+                    <div className="text-sm text-gray-700">Professional Working</div>
                   </div>
-                  <div className="p-4 bg-gray-50 border border-indigo-200 rounded-lg text-center">
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
                     <div className="text-gray-900 mb-1">French</div>
-                    <div className="text-sm text-indigo-700">Elementary</div>
+                    <div className="text-sm text-gray-700">Elementary</div>
                   </div>
                 </div>
               </div>

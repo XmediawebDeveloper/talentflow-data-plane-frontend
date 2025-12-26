@@ -170,28 +170,28 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <FileText className="w-4 h-4 text-gray-800" />
-                  <span className="text-sm text-blue-900">New Resume (Uploading)</span>
+                  <span className="text-sm text-gray-800">New Resume (Uploading)</span>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
                     <FileText className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="text-xs text-gray-800">File Name</div>
-                      <div className="text-sm text-blue-900 truncate">{currentFile.fileName}</div>
+                      <div className="text-sm text-gray-800 truncate">{currentFile.fileName}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Calendar className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="text-xs text-gray-800">Upload Date</div>
-                      <div className="text-sm text-blue-900">{currentFile.newResumeDate}</div>
+                      <div className="text-sm text-gray-800">{currentFile.newResumeDate}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <FileText className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="text-xs text-gray-800">File Size</div>
-                      <div className="text-sm text-blue-900">{currentFile.newResumeSize}</div>
+                      <div className="text-sm text-gray-800">{currentFile.newResumeSize}</div>
                     </div>
                   </div>
                 </div>
@@ -343,7 +343,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
           <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-gray-800 mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-blue-900">
+              <div className="text-xs text-gray-800">
                 <strong>Note:</strong> All actions are fully audit logged. Overwriting or saving as a new version will consume 1 resume upload unit from your quota.
               </div>
             </div>

@@ -157,7 +157,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
   const getMatchColor = (type: string) => {
     switch (type) {
       case 'excellent': return 'bg-green-100 text-green-800 border-green-200';
-      case 'good': return 'bg-gray-100 text-blue-800 border-gray-200';
+      case 'good': return 'bg-gray-100 text-gray-800 border-gray-200';
       case 'fair': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'poor': return 'bg-red-100 text-red-800 border-red-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -368,7 +368,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
 
           return (
             <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-lg mb-6">
-              <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 border-b-4 border-blue-700">
+              <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 border-b-4 border-gray-600">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-white mb-2">📊 Detailed Score Breakdown</h3>
@@ -407,7 +407,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                       const getStatusColor = (status: string) => {
                         switch (status) {
                           case 'Excellent': return 'bg-green-100 text-green-800 border-green-200';
-                          case 'Good': return 'bg-gray-100 text-blue-800 border-gray-200';
+                          case 'Good': return 'bg-gray-100 text-gray-800 border-gray-200';
                           case 'Partial': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
                           case 'Poor': return 'bg-red-100 text-red-800 border-red-200';
                           default: return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -467,16 +467,16 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                             </td>
                           </tr>
                           {isExpanded && (
-                            <tr className="bg-gradient-to-r from-gray-50 to-indigo-50 border-b-2 border-gray-200">
+                            <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
                               <td className="border-r border-gray-200"></td>
                               <td colSpan={5} className="px-6 py-5">
                                 <div className="flex items-start gap-4">
-                                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-800 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg">
+                                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-800 to-gray-700 flex items-center justify-center flex-shrink-0 shadow-lg">
                                     <Star className="w-5 h-5 text-white" />
                                   </div>
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-2">
-                                      <div className="text-xs text-blue-900 px-2 py-1 bg-gray-200 rounded-md">AI REASONING</div>
+                                      <div className="text-xs text-gray-800 px-2 py-1 bg-gray-200 rounded-md">AI REASONING</div>
                                     </div>
                                     <p className="text-sm text-gray-800 leading-relaxed bg-white px-4 py-3 rounded-lg border border-gray-200 shadow-sm">
                                       {category.reasoning}
