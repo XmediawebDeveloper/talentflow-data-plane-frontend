@@ -122,8 +122,8 @@ export default function ResumeScoringPage({
   const [historyViewMode, setHistoryViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedHistoryItems, setSelectedHistoryItems] = useState<Set<string>>(new Set());
 
-  // Split resumes - myResumes are in folders, databaseResumes are all resumes
-  const myResumes = resumes.filter(r => r.folderId && r.folderId !== 'all');
+  // Split resumes - myResumes are all user-uploaded resumes, databaseResumes are all resumes
+  const myResumes = resumes; // All resumes belong to the user (My Resumes)
   const databaseResumes = resumes;
 
   const availableResumes = resumeSource === 'my-resumes' ? myResumes :
@@ -214,7 +214,9 @@ export default function ResumeScoringPage({
 
   // Convert scored resumes to ScoredResumesTable format
   const convertToScoredResumesFormat = (scoredData: ScoredResumeData) => {
+    console.log('[ResumeScoringPage] Converting scored resumes:', scoredData.scoredResumes);
     return scoredData.scoredResumes.map((resume, index) => {
+      console.log('[ResumeScoringPage] Resume:', resume.id, 'candidateName:', resume.candidateName, 'candidateEmail:', resume.candidateEmail);
       const getResumeVersion = () => {
         if (resume.name === 'Sarah Johnson') return 'Current';
         if (resume.name === 'Michael Chen') return 'Version 2';
@@ -225,8 +227,9 @@ export default function ResumeScoringPage({
 
       return {
         id: resume.id,
-        candidateName: resume.name || 'Unknown Candidate',
-        email: resume.email || 'N/A',
+        // Use candidateName from API, fallback to name, then 'Unknown Candidate'
+        candidateName: resume.candidateName || resume.name || 'Unknown Candidate',
+        email: resume.candidateEmail || resume.email || 'N/A',
         phone: resume.phone || 'N/A',
         matchStatus: resume.matchScore >= 85 ? 'Exact Match' :
                      resume.matchScore >= 70 ? 'Partial Match' : 'No Match',
@@ -884,10 +887,16 @@ export default function ResumeScoringPage({
                       </div>
 
                       <div className="mt-4 flex flex-col gap-2">
-                        <div className="text-gray-800 group-hover:text-gray-900 text-sm font-medium flex items-center gap-1 justify-center">
+                        <button
+                          onClick={() => {
+                            setSelectedHistoryItem(item);
+                            setViewMode('details');
+                          }}
+                          className="text-gray-800 hover:text-gray-900 text-sm font-medium flex items-center gap-1 justify-center cursor-pointer"
+                        >
                           View Details
-                          <ArrowLeft className="w-4 h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
-                        </div>
+                          <ArrowLeft className="w-4 h-4 rotate-180 hover:translate-x-1 transition-transform" />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1187,7 +1196,15 @@ export default function ResumeScoringPage({
 
             const selectedResumesData = resumes.filter(r => selectedIds.includes(r.id));
 
-            setResumesToScore(selectedResumesData.map(r => ({ id: r.id, name: r.name })));
+            // Pass all available resume data to the scoring panel
+            setResumesToScore(selectedResumesData.map(r => ({
+              id: r.id,
+              name: r.name,
+              // Include candidate info if available from resume list
+              candidateName: r.candidateName || r.candidate_name,
+              candidateEmail: r.candidateEmail || r.candidate_email || r.email,
+              phone: r.phone,
+            })));
             setScoringSource(source);
             setShowScoringPanel(true);
           }}

@@ -12,6 +12,12 @@ interface AttemptHistory {
   score?: number;
 }
 
+interface ScoreBreakdownItem {
+  category: string;
+  score: number;
+  reasoning: string;
+}
+
 interface ScoringResume {
   id: string;
   name: string;
@@ -23,10 +29,30 @@ interface ScoringResume {
   aiSummary?: string;
   strengths?: string[];
   gaps?: string[];
+  scoreBreakdown?: ScoreBreakdownItem[];
+  essentialScore?: number;
+  nonEssentialScore?: number;
+  // Candidate info from API
+  candidateName?: string;
+  candidateEmail?: string;
+  phone?: string;
+  // Additional resume details
+  title?: string;
+  currentCompany?: string;
+  location?: string;
+  experience?: string;
+  education?: string;
+  skills?: string[];
 }
 
 interface ResumeScoringStatusPanelProps {
-  resumes: Array<{ id: string; name: string }>;
+  resumes: Array<{
+    id: string;
+    name: string;
+    candidateName?: string;
+    candidateEmail?: string;
+    phone?: string;
+  }>;
   onComplete: (scoredResumes: any[]) => void;
   jobTitle: string;
   jobId: string;
@@ -93,7 +119,7 @@ export default function ResumeScoringStatusPanel({
             score: result.overall_score,
           };
 
-          // Update with real score
+          // Update with real score and breakdown from API
           setScoringResumes(prev => prev.map((r) =>
             r.id === resume.id ? {
               ...r,
@@ -102,6 +128,20 @@ export default function ResumeScoringStatusPanel({
               aiSummary: result.ai_summary,
               strengths: result.strengths,
               gaps: result.gaps,
+              scoreBreakdown: result.score_breakdown,
+              essentialScore: result.essential_score,
+              nonEssentialScore: result.non_essential_score,
+              // Capture candidate info from API response
+              candidateName: result.candidate_name,
+              candidateEmail: result.candidate_email,
+              phone: result.phone,
+              // Additional resume details
+              title: result.current_title,
+              currentCompany: result.current_company,
+              location: result.location,
+              experience: result.experience_years ? `${result.experience_years} years` : undefined,
+              education: result.education?.[0]?.degree || (typeof result.education === 'string' ? result.education : undefined),
+              skills: result.skills,
               attemptHistory: [...(r.attemptHistory || []), newAttempt],
             } : r
           ));
@@ -151,7 +191,10 @@ export default function ResumeScoringStatusPanel({
       // If all completed (no errors), auto-complete after delay
       if (errorCount === 0 && completedCount === resumes.length) {
         setTimeout(() => {
-          const scoredResults = scoringResumes.map(resume => ({
+          console.log('[Scoring] Building final results, scoringResumes:', scoringResumes);
+          const scoredResults = scoringResumes.map(resume => {
+            console.log('[Scoring] Resume data:', resume.id, 'candidateName:', resume.candidateName, 'candidateEmail:', resume.candidateEmail);
+            return {
             ...resume,
             matchScore: resume.score || 0,
             skillMatches: resume.strengths?.slice(0, 3) || [],
@@ -162,16 +205,29 @@ export default function ResumeScoringStatusPanel({
                   ? 'Good match with relevant skills and experience.'
                   : 'Moderate match with some relevant skills.'
             ),
-            scoreBreakdown: {
-              skillsMatch: resume.score || 70,
-              experienceMatch: resume.score || 70,
-              educationMatch: resume.score || 70,
-              overallFit: resume.score || 70,
-            },
+            scoreBreakdown: (() => {
+              // Use real breakdown data from API
+              const breakdown = resume.scoreBreakdown || [];
+              const findScore = (category: string) => {
+                const item = breakdown.find(b => b.category.toLowerCase().includes(category.toLowerCase()));
+                return item?.score || resume.score || 0;
+              };
+              return {
+                skillsMatch: findScore('skill'),
+                experienceMatch: findScore('experience'),
+                educationMatch: findScore('education'),
+                overallFit: resume.score || 0,
+              };
+            })(),
+            // Raw breakdown with full details from API
+            rawBreakdown: resume.scoreBreakdown || [],
+            essentialScore: resume.essentialScore,
+            nonEssentialScore: resume.nonEssentialScore,
             // Ensure real scoring data is passed
             strengths: resume.strengths || [],
             gaps: resume.gaps || [],
-          }));
+          };
+          });
 
           onComplete(scoredResults);
         }, 1000);
@@ -264,12 +320,24 @@ export default function ResumeScoringStatusPanel({
               ? 'Good match with relevant skills and experience.'
               : 'Moderate match with some relevant skills.'
         ),
-      scoreBreakdown: {
-        skillsMatch: resume.score || 0,
-        experienceMatch: resume.score || 0,
-        educationMatch: resume.score || 0,
-        overallFit: resume.score || 0,
-      },
+      scoreBreakdown: (() => {
+        // Use real breakdown data from API
+        const breakdown = resume.scoreBreakdown || [];
+        const findScore = (category: string) => {
+          const item = breakdown.find(b => b.category.toLowerCase().includes(category.toLowerCase()));
+          return item?.score || resume.score || 0;
+        };
+        return {
+          skillsMatch: findScore('skill'),
+          experienceMatch: findScore('experience'),
+          educationMatch: findScore('education'),
+          overallFit: resume.score || 0,
+        };
+      })(),
+      // Raw breakdown with full details from API
+      rawBreakdown: resume.scoreBreakdown || [],
+      essentialScore: resume.essentialScore,
+      nonEssentialScore: resume.nonEssentialScore,
       // Ensure real scoring data is passed
       strengths: resume.strengths || [],
       gaps: resume.gaps || [],

@@ -1507,20 +1507,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   <h3 className="text-gray-900 mb-4">Salary Range</h3>
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
-                      <input
-                        type="text"
-                        value={extractedData.salaryFrom || ''}
-                        onChange={(e) => setExtractedData(prev => ({ ...prev, salaryFrom: e.target.value }))}
-                        placeholder="From"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
-                      />
-                      <input
-                        type="text"
-                        value={extractedData.salaryTo || ''}
-                        onChange={(e) => setExtractedData(prev => ({ ...prev, salaryTo: e.target.value }))}
-                        placeholder="To"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
-                      />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
+                        <input
+                          type="text"
+                          value={extractedData.salaryFrom || ''}
+                          onChange={(e) => setExtractedData(prev => ({ ...prev, salaryFrom: e.target.value }))}
+                          placeholder="From"
+                          className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                        />
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
+                        <input
+                          type="text"
+                          value={extractedData.salaryTo || ''}
+                          onChange={(e) => setExtractedData(prev => ({ ...prev, salaryTo: e.target.value }))}
+                          placeholder="To"
+                          className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                        />
+                      </div>
                     </div>
                     <select
                       value={extractedData.compensationType}
@@ -1608,40 +1614,43 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                                 autoFocus
                               >
                                 <option value="">Select a location</option>
-                                <optgroup label="Major US Cities">
-                                  <option value="New York, NY">New York, NY</option>
-                                  <option value="Los Angeles, CA">Los Angeles, CA</option>
-                                  <option value="Chicago, IL">Chicago, IL</option>
-                                  <option value="Houston, TX">Houston, TX</option>
-                                  <option value="Phoenix, AZ">Phoenix, AZ</option>
-                                  <option value="Philadelphia, PA">Philadelphia, PA</option>
-                                  <option value="San Antonio, TX">San Antonio, TX</option>
-                                  <option value="San Diego, CA">San Diego, CA</option>
-                                  <option value="Dallas, TX">Dallas, TX</option>
-                                  <option value="San Jose, CA">San Jose, CA</option>
+                                <optgroup label="Metro Cities">
+                                  <option value="Mumbai, Maharashtra">Mumbai, Maharashtra</option>
+                                  <option value="Delhi NCR">Delhi NCR</option>
+                                  <option value="Bangalore, Karnataka">Bangalore, Karnataka</option>
+                                  <option value="Hyderabad, Telangana">Hyderabad, Telangana</option>
+                                  <option value="Chennai, Tamil Nadu">Chennai, Tamil Nadu</option>
+                                  <option value="Kolkata, West Bengal">Kolkata, West Bengal</option>
+                                  <option value="Pune, Maharashtra">Pune, Maharashtra</option>
+                                  <option value="Ahmedabad, Gujarat">Ahmedabad, Gujarat</option>
                                 </optgroup>
-                                <optgroup label="Tech Hubs">
-                                  <option value="San Francisco, CA">San Francisco, CA</option>
-                                  <option value="Seattle, WA">Seattle, WA</option>
-                                  <option value="Austin, TX">Austin, TX</option>
-                                  <option value="Boston, MA">Boston, MA</option>
-                                  <option value="Denver, CO">Denver, CO</option>
-                                  <option value="Atlanta, GA">Atlanta, GA</option>
-                                  <option value="Portland, OR">Portland, OR</option>
-                                  <option value="Raleigh, NC">Raleigh, NC</option>
-                                  <option value="Miami, FL">Miami, FL</option>
+                                <optgroup label="IT/Tech Hubs">
+                                  <option value="Gurgaon, Haryana">Gurgaon, Haryana</option>
+                                  <option value="Noida, Uttar Pradesh">Noida, Uttar Pradesh</option>
+                                  <option value="Navi Mumbai, Maharashtra">Navi Mumbai, Maharashtra</option>
+                                  <option value="Thane, Maharashtra">Thane, Maharashtra</option>
+                                  <option value="Chandigarh">Chandigarh</option>
+                                  <option value="Jaipur, Rajasthan">Jaipur, Rajasthan</option>
+                                  <option value="Coimbatore, Tamil Nadu">Coimbatore, Tamil Nadu</option>
+                                  <option value="Kochi, Kerala">Kochi, Kerala</option>
+                                  <option value="Thiruvananthapuram, Kerala">Thiruvananthapuram, Kerala</option>
                                 </optgroup>
                                 <optgroup label="Other Cities">
-                                  <option value="Washington, DC">Washington, DC</option>
-                                  <option value="Minneapolis, MN">Minneapolis, MN</option>
-                                  <option value="Detroit, MI">Detroit, MI</option>
-                                  <option value="Nashville, TN">Nashville, TN</option>
-                                  <option value="Charlotte, NC">Charlotte, NC</option>
-                                  <option value="Las Vegas, NV">Las Vegas, NV</option>
-                                  <option value="Salt Lake City, UT">Salt Lake City, UT</option>
-                                  <option value="Pittsburgh, PA">Pittsburgh, PA</option>
-                                  <option value="Columbus, OH">Columbus, OH</option>
-                                  <option value="Indianapolis, IN">Indianapolis, IN</option>
+                                  <option value="Lucknow, Uttar Pradesh">Lucknow, Uttar Pradesh</option>
+                                  <option value="Indore, Madhya Pradesh">Indore, Madhya Pradesh</option>
+                                  <option value="Bhopal, Madhya Pradesh">Bhopal, Madhya Pradesh</option>
+                                  <option value="Nagpur, Maharashtra">Nagpur, Maharashtra</option>
+                                  <option value="Visakhapatnam, Andhra Pradesh">Visakhapatnam, Andhra Pradesh</option>
+                                  <option value="Surat, Gujarat">Surat, Gujarat</option>
+                                  <option value="Vadodara, Gujarat">Vadodara, Gujarat</option>
+                                  <option value="Mysore, Karnataka">Mysore, Karnataka</option>
+                                  <option value="Mangalore, Karnataka">Mangalore, Karnataka</option>
+                                  <option value="Bhubaneswar, Odisha">Bhubaneswar, Odisha</option>
+                                </optgroup>
+                                <optgroup label="Remote">
+                                  <option value="Remote - India">Remote - India</option>
+                                  <option value="Remote - Anywhere">Remote - Anywhere</option>
+                                  <option value="Hybrid - Flexible">Hybrid - Flexible</option>
                                 </optgroup>
                               </select>
                             </div>
@@ -1654,13 +1663,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                                 onChange={(e) => setNewLocation(prev => ({ ...prev, radius: e.target.value }))}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
                               >
-                                <option value="10">10 miles</option>
-                                <option value="25">25 miles</option>
-                                <option value="50">50 miles</option>
-                                <option value="75">75 miles</option>
-                                <option value="100">100 miles</option>
-                                <option value="150">150 miles</option>
-                                <option value="200">200 miles</option>
+                                <option value="10">10 km</option>
+                                <option value="25">25 km</option>
+                                <option value="50">50 km</option>
+                                <option value="75">75 km</option>
+                                <option value="100">100 km</option>
+                                <option value="150">150 km</option>
+                                <option value="200">200 km</option>
                               </select>
                             </div>
                             
@@ -1683,7 +1692,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="text-sm text-gray-900">{location.city}</div>
-                          <div className="text-xs text-gray-600">{location.radius} miles radius</div>
+                          <div className="text-xs text-gray-600">{location.radius} km radius</div>
                         </div>
                         <button
                           onClick={() => handleRemoveLocation(index)}
@@ -1838,8 +1847,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       <h3 className="text-xl text-gray-900 mb-3">Compensation</h3>
                       <div className="bg-green-50 border border-green-200 rounded-lg p-4 inline-block">
                         <p className="text-lg text-gray-900">
-                          ${extractedData.salaryFrom ? parseInt(extractedData.salaryFrom).toLocaleString() : '0'} - 
-                          ${extractedData.salaryTo ? parseInt(extractedData.salaryTo).toLocaleString() : '0'}
+                          ₹{extractedData.salaryFrom ? parseInt(extractedData.salaryFrom).toLocaleString('en-IN') : '0'} -
+                          ₹{extractedData.salaryTo ? parseInt(extractedData.salaryTo).toLocaleString('en-IN') : '0'}
                           <span className="text-gray-600 text-sm ml-2">per {extractedData.compensationType}</span>
                         </p>
                       </div>
@@ -1853,7 +1862,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       <div className="flex flex-wrap gap-2">
                         {extractedData.locations.map((loc, index) => (
                           <div key={index} className="bg-gray-50 border border-gray-200 text-gray-800 px-4 py-2 rounded-lg">
-                            📍 {loc.city} <span className="text-gray-800 text-sm">(within {loc.radius} miles)</span>
+                            📍 {loc.city} <span className="text-gray-800 text-sm">(within {loc.radius} km)</span>
                           </div>
                         ))}
                       </div>
@@ -1959,8 +1968,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                 <h3 className="text-gray-900 mb-4">Compensation</h3>
                 <div className="bg-green-50 p-4 rounded-lg inline-flex items-center gap-2">
                   <span className="text-gray-900">
-                    ${extractedData.salaryFrom ? parseInt(extractedData.salaryFrom).toLocaleString() : '0'} - 
-                    ${extractedData.salaryTo ? parseInt(extractedData.salaryTo).toLocaleString() : '0'}
+                    ₹{extractedData.salaryFrom ? parseInt(extractedData.salaryFrom).toLocaleString('en-IN') : '0'} -
+                    ₹{extractedData.salaryTo ? parseInt(extractedData.salaryTo).toLocaleString('en-IN') : '0'}
                   </span>
                   <span className="text-gray-600 text-sm">/ {extractedData.compensationType}</span>
                 </div>
@@ -1978,7 +1987,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   <div className="flex flex-wrap gap-2">
                     {extractedData.locations.map((loc, index) => (
                       <div key={index} className="bg-gray-50 text-gray-800 px-3 py-2 rounded-lg text-sm">
-                        {loc.city} <span className="text-gray-800">(+{loc.radius}mi)</span>
+                        {loc.city} <span className="text-gray-800">(+{loc.radius}km)</span>
                       </div>
                     ))}
                   </div>
