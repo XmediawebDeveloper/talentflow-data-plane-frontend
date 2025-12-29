@@ -624,10 +624,13 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                   {job.department}
                 </div>
               )}
+              {/* Location hidden for now */}
+              {false && (
               <div className="flex items-center gap-1">
                 <MapPin className="w-4 h-4" />
                 {job.location}
               </div>
+              )}
               {job.experience && (
                 <div className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
@@ -1018,10 +1021,13 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                     <span>{job.department}</span>
                   </div>
                 )}
+                {/* Location hidden for now */}
+                {false && (
                 <div className="flex items-center gap-1.5">
                   <MapPin className="w-4 h-4 text-gray-800" />
                   <span>{job.location}</span>
                 </div>
+                )}
                 {job.experience && (
                   <div className="flex items-center gap-1.5">
                     <Briefcase className="w-4 h-4 text-gray-800" />

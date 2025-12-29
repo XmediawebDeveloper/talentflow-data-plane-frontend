@@ -379,7 +379,8 @@ export default function JobOpeningsPage() {
                       <span>{job.department}</span>
                     </div>
                   )}
-                  {job.location && (
+                  {/* Location hidden for now */}
+                  {false && job.location && (
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <MapPin className="w-4 h-4 text-gray-400" />
                       <span>{job.location}</span>
@@ -420,7 +421,7 @@ export default function JobOpeningsPage() {
                 <tr>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Job Title</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
+                  {/* Location column hidden for now */}
                   <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Experience</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Applicants</th>
@@ -442,12 +443,7 @@ export default function JobOpeningsPage() {
                     <td className="px-6 py-4 text-sm text-gray-600">
                       {job.department || '-'}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      <div className="flex items-center gap-1.5">
-                        {job.location && <MapPin className="w-3.5 h-3.5 text-gray-400" />}
-                        <span>{job.location || '-'}</span>
-                      </div>
-                    </td>
+                    {/* Location column hidden for now */}
                     <td className="px-6 py-4 text-sm text-gray-600">
                       {getExperienceText(job.experience_min, job.experience_max)}
                     </td>

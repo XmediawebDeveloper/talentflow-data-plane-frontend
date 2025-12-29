@@ -1561,7 +1561,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                 </div>
               </div>
 
-              {/* Locations Section */}
+              {/* Locations Section - Hidden for now */}
+              {false && (
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -1584,12 +1585,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       <Plus className="w-4 h-4" />
                       Add Location
                     </button>
-                    
+
                     {/* Location Add Menu */}
                     {showLocationMenu && (
                       <>
-                        <div 
-                          className="fixed inset-0 z-10" 
+                        <div
+                          className="fixed inset-0 z-10"
                           onClick={() => setShowLocationMenu(false)}
                         />
                         <div className="absolute right-0 top-12 z-20 w-80 bg-white rounded-lg shadow-lg border border-gray-200 p-4">
@@ -1602,7 +1603,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                               <X className="w-4 h-4" />
                             </button>
                           </div>
-                          
+
                           <div className="space-y-3">
                             {/* Location Dropdown */}
                             <div>
@@ -1654,7 +1655,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                                 </optgroup>
                               </select>
                             </div>
-                            
+
                             {/* Radius Dropdown */}
                             <div>
                               <label className="block text-sm text-gray-700 mb-1">Search Radius</label>
@@ -1672,7 +1673,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                                 <option value="200">200 km</option>
                               </select>
                             </div>
-                            
+
                             {/* Add Button */}
                             <button
                               onClick={handleAddLocation}
@@ -1705,6 +1706,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   ))}
                 </div>
               </div>
+              )}
             </div>
 
             <div className="flex justify-between">
@@ -1787,7 +1789,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   <div className="mb-6 pb-6 border-b border-gray-200">
                     <h1 className="text-3xl text-gray-900 mb-2">{jobTitle}</h1>
                     <div className="flex items-center gap-4 text-sm text-gray-600">
-                      {extractedData.locations.length > 0 && (
+                      {/* Location hidden for now */}
+                      {false && extractedData.locations.length > 0 && (
                         <span>📍 {extractedData.locations[0].city}</span>
                       )}
                       {extractedData.compensationType && (
@@ -1855,8 +1858,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                     </div>
                   )}
 
-                  {/* Locations */}
-                  {extractedData.locations.length > 0 && (
+                  {/* Locations - Hidden for now */}
+                  {false && extractedData.locations.length > 0 && (
                     <div className="mt-6 pt-6 border-t border-gray-200">
                       <h3 className="text-xl text-gray-900 mb-3">Location{extractedData.locations.length > 1 ? 's' : ''}</h3>
                       <div className="flex flex-wrap gap-2">
@@ -1975,8 +1978,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                 </div>
               </div>
 
-              {/* Locations */}
-              {extractedData.locations.length > 0 && (
+              {/* Locations - Hidden for now */}
+              {false && extractedData.locations.length > 0 && (
                 <div className="p-6 border-b border-gray-200">
                   <h3 className="text-gray-900 mb-4">
                     Locations ({extractedData.locations.length})
