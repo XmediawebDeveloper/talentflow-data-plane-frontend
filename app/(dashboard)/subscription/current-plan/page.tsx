@@ -2,6 +2,7 @@
 
 import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, Crown, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import api from '@/lib/services/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -247,6 +248,7 @@ const formatCardNumber = (value: string): string => {
 };
 
 export default function CurrentPlanPage() {
+  const router = useRouter();
   const [plans, setPlans] = useState<DisplayPlan[]>([]);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -294,6 +296,8 @@ export default function CurrentPlanPage() {
   const [currentPlanPrice, setCurrentPlanPrice] = useState<number | null>(null);
   const [currentPlanCurrency, setCurrentPlanCurrency] = useState<string>('INR');
   const [currentPlanBillingPeriod, setCurrentPlanBillingPeriod] = useState<string>('MONTHLY');
+  // Subscription status from quota-status API (source of truth for plan status)
+  const [quotaSubscriptionStatus, setQuotaSubscriptionStatus] = useState<string | null>(null);
 
   // Get tenant ID from token on mount
   useEffect(() => {
@@ -365,6 +369,15 @@ export default function CurrentPlanPage() {
         }
         if (quotaData.plan_info?.billing_period) {
           setCurrentPlanBillingPeriod(quotaData.plan_info.billing_period);
+        }
+        // Store subscription status from quota-status API (source of truth)
+        if (quotaData.subscription_status) {
+          setQuotaSubscriptionStatus(quotaData.subscription_status);
+          console.log('[CurrentPlan] Setting subscription_status from quota:', quotaData.subscription_status);
+        } else if (quotaData.plan_name && quotaData.plan_name.toLowerCase() !== 'free trial') {
+          // If plan_name is not "Free Trial", consider it active
+          setQuotaSubscriptionStatus('active');
+          console.log('[CurrentPlan] Setting subscription_status as active based on plan_name:', quotaData.plan_name);
         }
       }
 
@@ -539,7 +552,7 @@ export default function CurrentPlanPage() {
     setModalStep('isolation');
     setIsolationType('schema');
     setIsNewTenant(false);
-    setIsYearly(true);
+    // Don't reset isYearly - preserve the user's selection from the page toggle
     setPaymentMode('card');
     setExternalTransactionId('');
     setTransactionResult(null);
@@ -617,17 +630,31 @@ export default function CurrentPlanPage() {
         return;
       }
 
-      // Call billing API with Bearer token
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+      // Call billing API with Bearer token and timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
 
-      const data = await response.json();
+      let response;
+      let data;
+      try {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        data = await response.json();
+      } catch (fetchErr: any) {
+        clearTimeout(timeoutId);
+        if (fetchErr.name === 'AbortError') {
+          throw new Error('Request timed out. Please try again or contact support.');
+        }
+        throw fetchErr;
+      }
 
       if (response.ok && (data.status === 'success' || response.status === 200)) {
         console.log('[CurrentPlan] Plan selection successful:', data);
@@ -637,6 +664,21 @@ export default function CurrentPlanPage() {
         setModalStep('result');
 
         // Also update company_settings in tenant database via data-plane API
+        // Add delay to allow tenant database to be configured after billing API migration
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // First, sync database config to ensure tenant record has database_name
+        try {
+          await api.post('/settings/sync-database-config');
+          console.log('[CurrentPlan] Database config synced');
+        } catch (syncErr) {
+          console.warn('[CurrentPlan] Could not sync database config:', syncErr);
+        }
+
+        // Small delay after sync
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        let dataPlaneUpdateFailed = false;
         try {
           // First, set the selected plan in tenant database with quotas
           await api.post('/settings/select-plan', {
@@ -661,8 +703,18 @@ export default function CurrentPlanPage() {
             payment_method: 'card',
           });
           console.log('[CurrentPlan] Company settings updated:', updateResponse.data);
-        } catch (updateErr) {
+        } catch (updateErr: any) {
           console.error('[CurrentPlan] Failed to update company settings:', updateErr);
+          dataPlaneUpdateFailed = true;
+          // If 401 error, suggest re-login
+          if (updateErr?.response?.status === 401) {
+            setSuccessMessage('Plan upgraded! Please log out and log back in to see updated settings.');
+          }
+        }
+
+        // If data-plane update failed, show warning
+        if (dataPlaneUpdateFailed) {
+          setSuccessMessage('Plan upgraded successfully! You may need to refresh or re-login to see all changes.');
         }
 
         // Update local state with the new plan and quotas
@@ -740,8 +792,11 @@ export default function CurrentPlanPage() {
 
   const currentPlan = plans.find(p => p.isCurrent);
   const selectedPlan = plans.find(p => p.numericId === companySettings?.selected_plan_id);
-  const isOnTrial = companySettings?.status?.toLowerCase() === 'trial' ||
-                    companySettings?.subscription_status?.toLowerCase() === 'trial';
+  // Use quota-status API as source of truth for subscription status
+  const isOnTrial = quotaSubscriptionStatus
+    ? quotaSubscriptionStatus.toLowerCase() === 'trial'
+    : (companySettings?.status?.toLowerCase() === 'trial' ||
+       companySettings?.subscription_status?.toLowerCase() === 'trial');
   const isPendingPayment = companySettings?.subscription_status?.toLowerCase() === 'pending_payment' ||
                            companySettings?.payment_status === 'pending';
   const isLocked = companySettings?.status?.toLowerCase() === 'locked';
@@ -1509,6 +1564,7 @@ export default function CurrentPlanPage() {
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">Plan Upgrade Successful!</h3>
                   <p className="text-gray-600">Your subscription has been updated successfully.</p>
+                  <p className="text-sm text-gray-500 mt-2">Please log in again to refresh your session.</p>
                 </div>
 
                 <div className="bg-gray-50 rounded-xl p-4 space-y-3">
@@ -1535,10 +1591,15 @@ export default function CurrentPlanPage() {
                 </div>
 
                 <button
-                  onClick={() => { setShowPaymentModal(false); setModalStep('isolation'); }}
+                  onClick={() => {
+                    // Clear tokens and redirect to login
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
+                    router.push('/login');
+                  }}
                   className="w-full px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
                 >
-                  Done
+                  Continue to Login
                 </button>
               </div>
             )}

@@ -6,8 +6,6 @@ import {
   Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft,
   Building2, User, CheckCircle, Loader2, Phone, ShieldCheck
 } from 'lucide-react';
-import { User as UserType } from '@/lib/types/tenant';
-import { useAuth } from '@/lib/hooks/useAuth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -39,7 +37,6 @@ type SignUpStep = 'form' | 'verification' | 'success';
 export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login } = useAuth();
 
   // Get plan_id from URL query params (e.g., /signup?plan_id=21)
   const planIdFromUrl = searchParams.get('plan_id');
@@ -176,43 +173,12 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         throw new Error(errorMessage);
       }
 
-      // Create user object from response
-      const user: UserType = {
-        id: data.tenant_id || crypto.randomUUID(),
-        tenantId: data.tenant_id || crypto.randomUUID(),
-        email: data.email || form.adminEmail,
-        name: data.full_name || form.adminName,
-        role: 'tenant_admin',
-        isActive: true,
-        permissions: {
-          canCreateJD: true,
-          canManageJD: true,
-          canUploadResumes: true,
-          canViewResumes: true,
-          canAccessInternalDB: true,
-          canCreateAssessments: true,
-          canViewAnalytics: true,
-          canManageSettings: true,
-          canManageUsers: true,
-        },
-        createdAt: new Date().toISOString(),
-      };
-
-      // If we got tokens, store them
-      if (data.access_token) {
-        localStorage.setItem('access_token', data.access_token);
-      }
-      if (data.refresh_token) {
-        localStorage.setItem('refresh_token', data.refresh_token);
-      }
-
-      login(user);
       setStep('success');
 
-      // Redirect to dashboard after brief success message
+      // Redirect to login page after brief success message
       setTimeout(() => {
-        router.push('/dashboard');
-      }, 1500);
+        router.push('/login');
+      }, 2000);
 
     } catch (err: any) {
       console.error('Signup error:', err);
@@ -575,10 +541,10 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             <CheckCircle style={{ width: 40, height: 40, color: '#16A34A' }} />
           </div>
           <h2 style={{ fontSize: 28, fontWeight: 700, color: '#111827', marginBottom: 8 }}>Welcome to TalentFlow!</h2>
-          <p style={{ color: '#6B7280', marginBottom: 24 }}>Your account has been created successfully.</p>
+          <p style={{ color: '#6B7280', marginBottom: 24 }}>Your account has been created successfully. Please sign in to continue.</p>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#6B7280' }}>
             <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
-            Redirecting to dashboard...
+            Redirecting to login...
           </div>
         </div>
         <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>

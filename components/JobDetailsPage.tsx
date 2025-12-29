@@ -93,7 +93,6 @@ export default function JobDetailsPage() {
       const content = `
 Job Title: ${job.title}
 Department: ${job.department || 'N/A'}
-Location: ${job.location || 'N/A'}
 Employment Type: ${job.employment_type || 'N/A'}
 Experience: ${job.experience_min || 0} - ${job.experience_max || 0} years
 
@@ -212,7 +211,8 @@ ${job.certifications?.join(', ') || 'N/A'}
                     {job.department}
                   </span>
                 )}
-                {job.location && (
+                {/* Location hidden for now */}
+                {false && job.location && (
                   <span className="flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
                     {job.location}
