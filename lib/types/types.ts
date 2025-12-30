@@ -17,6 +17,16 @@ export interface Resume {
   previousCompany?: string;
   noticePeriod?: string;
   lastUpdated?: string;
+  versions?: ResumeVersion[];
+  assignedTo?: string; // Team member ID
+}
+
+export interface ResumeVersion {
+  id: string;
+  name: string;
+  uploadDate: string;
+  size: string;
+  uploadedBy: string;
 }
 
 export interface Folder {
@@ -25,6 +35,23 @@ export interface Folder {
   count: number;
   parentId?: string;
   children?: Folder[];
+}
+
+export interface JobSnapshot {
+  version: number;
+  publishedAt: string;
+  publishedBy: string;
+  snapshotData: {
+    title: string;
+    location: string;
+    department?: string;
+    experience?: string;
+    description?: string;
+    skills?: string[];
+    requiredMatch: number;
+    assessmentGuidance?: string;
+    employmentType?: string;
+  };
 }
 
 export interface Job {
@@ -39,4 +66,12 @@ export interface Job {
   applicants?: number;
   description?: string;
   skills?: string[];
+  postedDate?: string;
+  postedBy?: string;
+  internalRecruiterComments?: string[];
+  assessmentGuidance?: string;
+  employmentType?: string;
+  currentVersion?: number;
+  versionHistory?: JobSnapshot[];
+  assignedTo?: string; // Team member ID
 }

@@ -99,8 +99,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       label: 'Recruitment Tools',
       icon: FileText,
       children: [
-        { id: 'job-openings', label: 'Job Openings', icon: Briefcase, href: '/recruitment/job-openings', permission: 'canCreateJD' },
-        { id: 'jd-creation', label: 'JD Creation', icon: FileText, href: '/recruitment/jd-creation', permission: 'canCreateJD' },
+        { id: 'job-openings', label: 'Job Descriptions', icon: Briefcase, href: '/recruitment/job-openings', permission: 'canCreateJD' },
         { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permission: 'canViewResumes' },
         { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permission: 'canViewResumes' },
         { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permission: 'canCreateAssessments' },

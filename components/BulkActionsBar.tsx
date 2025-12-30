@@ -1,7 +1,9 @@
+'use client'
+
 import { X, FolderInput, Briefcase, Download, Trash2, CheckCircle2, Target, ClipboardCheck } from 'lucide-react';
 import { Folder } from '@/lib/types/types';
 import { useState } from 'react';
-import { toast } from '@/components/ui/enhanced-toast';
+import { toast } from './ui/enhanced-toast';
 
 interface BulkActionsBarProps {
   selectedCount: number;
@@ -27,18 +29,18 @@ export default function BulkActionsBar({
   const [showFolderMenu, setShowFolderMenu] = useState(false);
 
   return (
-    <div className="mb-4 bg-gradient-to-r from-gray-800 to-gray-900 rounded-xl shadow-lg border border-gray-700 animate-fadeIn overflow-hidden">
+    <div className="mb-4 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl shadow-lg border border-blue-500 animate-fadeIn overflow-hidden">
       <div className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm">
-              <CheckCircle2 className="w-5 h-5 text-gray-800" />
+              <CheckCircle2 className="w-5 h-5 text-blue-600" />
             </div>
             <div>
               <div className="text-white">
                 <span className="font-medium">{selectedCount}</span> resume{selectedCount !== 1 ? 's' : ''} selected
               </div>
-              <div className="text-gray-100 text-xs">Choose an action below</div>
+              <div className="text-blue-100 text-xs">Choose an action below</div>
             </div>
           </div>
           
@@ -82,7 +84,7 @@ export default function BulkActionsBar({
                           }
                         });
                       }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-2"
                     >
                       <FolderInput className="w-4 h-4 text-gray-400" />
                       {folder.name}

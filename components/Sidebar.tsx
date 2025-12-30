@@ -25,7 +25,8 @@ import {
   Activity,
   TrendingUp,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Briefcase
 } from 'lucide-react';
 import { useState } from 'react';
 import { User, Tenant } from '@/lib/types/tenant';
@@ -87,6 +88,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
       icon: FileText,
       children: [
         { id: 'jd-creation', label: 'JD Creation', icon: FileText, permission: 'canCreateJD' },
+        { id: 'job-openings', label: 'Job Openings', icon: Briefcase, permission: 'canViewResumes' },
         { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, permission: 'canViewResumes' },
         { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, permission: 'canViewResumes' },
         { id: 'assessments', label: 'Assessments', icon: ClipboardList, permission: 'canCreateAssessments' },

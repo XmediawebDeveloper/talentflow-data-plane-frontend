@@ -8,7 +8,6 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
-import { recordUsage } from '@/lib/services/usageTrackingService';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 
 type CreationMode = 'ai' | 'manual';
@@ -614,19 +613,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
       const publishedJd = await jdService.publish(createdJd.id);
       console.log('[DEBUG] JD published successfully:', publishedJd.id);
 
-      // Track usage - POST /api/v1/external/usage/record
-      // JD Creation uses RU quota (or can be tracked separately)
-      recordUsage({
-        quota_type: 'RU',
-        amount: 0, // JD creation doesn't deduct quota, just logs
-        operation_type: 'jd_creation',
-        resource_id: publishedJd.id,
-        metadata: {
-          title: jobTitle,
-          mode: mode,
-          skills_count: extractedData.mustHaveSkills.length + extractedData.niceToHaveSkills.length
-        }
-      });
+      // Usage tracking is now handled by the backend publish endpoint
+      // which calls the external usage API (talentflowapi.mo.vc)
 
       setIsPublishing(false);
       setIsPublished(true);
@@ -1561,8 +1549,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                 </div>
               </div>
 
-              {/* Locations Section - Hidden for now */}
-              {false && (
+              {/* Locations Section */}
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -1706,7 +1693,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   ))}
                 </div>
               </div>
-              )}
             </div>
 
             <div className="flex justify-between">
@@ -1789,8 +1775,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   <div className="mb-6 pb-6 border-b border-gray-200">
                     <h1 className="text-3xl text-gray-900 mb-2">{jobTitle}</h1>
                     <div className="flex items-center gap-4 text-sm text-gray-600">
-                      {/* Location hidden for now */}
-                      {false && extractedData.locations.length > 0 && (
+                      {extractedData.locations.length > 0 && (
                         <span>📍 {extractedData.locations[0].city}</span>
                       )}
                       {extractedData.compensationType && (
@@ -1858,8 +1843,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                     </div>
                   )}
 
-                  {/* Locations - Hidden for now */}
-                  {false && extractedData.locations.length > 0 && (
+                  {/* Locations */}
+                  {extractedData.locations.length > 0 && (
                     <div className="mt-6 pt-6 border-t border-gray-200">
                       <h3 className="text-xl text-gray-900 mb-3">Location{extractedData.locations.length > 1 ? 's' : ''}</h3>
                       <div className="flex flex-wrap gap-2">

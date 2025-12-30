@@ -1,3 +1,5 @@
+'use client'
+
 import { LucideIcon } from 'lucide-react';
 import { ReactNode } from 'react';
 
@@ -32,8 +34,8 @@ export function EmptyState({
     <div className="flex-1 flex items-center justify-center py-20">
       <div className="text-center max-w-md mx-auto px-6">
         {/* Icon */}
-        <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-          <Icon className="w-10 h-10 text-gray-800" />
+        <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
+          <Icon className="w-10 h-10 text-blue-600" />
         </div>
 
         {/* Title */}
@@ -53,7 +55,7 @@ export function EmptyState({
                   ${
                     action.variant === 'secondary'
                       ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
-                      : 'bg-gray-800 text-white hover:bg-gray-900 shadow-sm hover:shadow-md'
+                      : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
                   }
                 `}
               >
