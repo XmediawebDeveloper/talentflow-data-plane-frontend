@@ -211,8 +211,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                     {job.department}
                   </span>
                 )}
-                {/* Location hidden for now */}
-                {false && job.location && (
+                {job.location && (
                   <span className="flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
                     {job.location}

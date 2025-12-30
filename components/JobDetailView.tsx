@@ -1,6 +1,9 @@
-import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, Trash2, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star } from 'lucide-react';
+'use client'
+
+import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User, Ban, Archive, History, FileText, Edit, XCircle, RefreshCw } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
+import { jdService, JDVersion } from '@/lib/services/jdService';
 import ResumeUploadModal from './ResumeUploadModal';
 import ResumeScoring from './ResumeScoring';
 import JobApplicants from './JobApplicants';
@@ -8,6 +11,10 @@ import ScoredResumesTable from './ScoredResumesTable';
 import InviteToAssessmentModal from './InviteToAssessmentModal';
 import SelectSourceModal from './SelectSourceModal';
 import AssessmentResultsTable from './AssessmentResultsTable';
+import VersionHistoryModal from './VersionHistoryModal';
+import JDVersionHistoryModal from './JDVersionHistoryModal';
+import ResumeQuickViewModal from './ResumeQuickViewModal';
+import { Resume } from '@/lib/types/types';
 
 interface JobDetailViewProps {
   job: Job;
@@ -16,9 +23,12 @@ interface JobDetailViewProps {
   resumes?: any[]; // All resumes for selection
   onScoreResumes?: (resumeIds: string[], jobId: string, source: 'my-resumes' | 'internal-db') => void;
   onNavigateToAITalentMatch?: (jobId: string) => void; // Navigate to AI Talent Match page
+  onDisable?: (job: Job) => void; // Disable job
+  onArchive?: (job: Job) => void; // Archive job
+  onViewAssessmentResult?: (assessmentResult: any, jobTitle: string) => void; // Navigate to assessment result detail
 }
 
-export default function JobDetailView({ job, onBack, resumes = [], onScoreResumes, onNavigateToAITalentMatch }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onArchive, onViewAssessmentResult }: JobDetailViewProps) {
   const [showAddApplicantsMenu, setShowAddApplicantsMenu] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showScoringView, setShowScoringView] = useState(false);
@@ -26,12 +36,143 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
   const [uploadedResumes, setUploadedResumes] = useState<any[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
   const [showInviteToAssessmentModal, setShowInviteToAssessmentModal] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showSelectSourceModal, setShowSelectSourceModal] = useState(false);
-  
+  const [showJDHistory, setShowJDHistory] = useState(false);
+  const [jdHistory, setJdHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Scored resumes state
+  const [scoredResumes, setScoredResumes] = useState<any[]>([]);
+  const [loadingScoredResumes, setLoadingScoredResumes] = useState(false);
+  const [scoredResumesStats, setScoredResumesStats] = useState({
+    total: 0,
+    exactMatch: 0,
+    partialMatch: 0,
+    noMatch: 0
+  });
+
+  // Resume quick view modal state
+  const [viewingResume, setViewingResume] = useState<Resume | null>(null);
+
+  // Fetch JD History when modal opens
+  useEffect(() => {
+    if (showJDHistory && job.id) {
+      fetchJDHistory();
+    }
+  }, [showJDHistory, job.id]);
+
+  // Fetch scored resumes on component mount
+  useEffect(() => {
+    if (job.id) {
+      fetchScoredResumes();
+    }
+  }, [job.id]);
+
+  const fetchJDHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const versionData = await jdService.getVersionHistory(job.id);
+
+      // Convert version history to JD history events
+      const historyEvents = versionData.versions.map((version, index) => {
+        const isLatest = index === 0;
+        const publishDate = new Date(version.published_at);
+
+        return {
+          id: version.id,
+          action: `Published (v${version.version_number}.0)`,
+          description: isLatest
+            ? 'Current published version'
+            : `Version ${version.version_number} published`,
+          performedBy: 'User', // Would need user service to get actual name
+          performedByRole: 'Recruiter',
+          timestamp: publishDate.toLocaleString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          date: publishDate.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          }),
+          icon: 'check-circle',
+          color: 'green',
+          version: version,
+        };
+      });
+
+      setJdHistory(historyEvents);
+    } catch (error) {
+      console.error('Failed to fetch JD history:', error);
+      setJdHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  // Fetch scored resumes from API
+  const fetchScoredResumes = async () => {
+    setLoadingScoredResumes(true);
+    try {
+      const response = await jdService.getScoredResumes(job.id, { page_size: 100 });
+
+      // Convert API response to ScoredResume format
+      const convertedResumes = (response.items || []).map((item: any) => {
+        // Map match_status from API to display format
+        let matchStatus = 'No Match';
+        if (item.match_status === 'exact_match') {
+          matchStatus = 'Exact Match';
+        } else if (item.match_status === 'partial_match') {
+          matchStatus = 'Partial Match';
+        }
+
+        return {
+          id: item.id,
+          candidateName: item.candidate_name || 'Unknown',
+          email: item.candidate_email || '',
+          phone: item.phone || '',
+          matchStatus: matchStatus,
+          scorePercentage: Math.round(item.overall_score || 0),
+          scoredDate: item.created_at || new Date().toISOString(),
+          scoredBy: item.scored_by_name || 'System',
+          experience: item.experience_years ? `${item.experience_years} years` : undefined,
+          education: item.education || undefined,
+          certifications: item.certifications || [],
+          aiSummary: item.ai_summary,
+          strengths: item.strengths || [],
+          gaps: item.gaps || [],
+          title: item.current_title,
+          currentCompany: item.current_company,
+          location: item.location,
+        };
+      });
+
+      setScoredResumes(convertedResumes);
+
+      // Update stats from response
+      setScoredResumesStats({
+        total: response.total || convertedResumes.length,
+        exactMatch: response.excellent_count || convertedResumes.filter((r: any) => r.matchStatus === 'Exact Match').length,
+        partialMatch: response.partial_count || convertedResumes.filter((r: any) => r.matchStatus === 'Partial Match').length,
+        noMatch: response.no_match_count || convertedResumes.filter((r: any) => r.matchStatus === 'No Match').length,
+      });
+    } catch (error) {
+      console.error('Failed to fetch scored resumes:', error);
+      setScoredResumes([]);
+      setScoredResumesStats({ total: 0, exactMatch: 0, partialMatch: 0, noMatch: 0 });
+    } finally {
+      setLoadingScoredResumes(false);
+    }
+  };
+
   // Generate mock AI match results for published jobs
   const generateMockAIResults = () => {
     if (job.status !== 'Published') return [];
-    
+
     return [
       {
         id: '1',
@@ -150,7 +291,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
 
     document.addEventListener('mousedown', handleClickOutside);
     window.addEventListener('showApplicants' as any, handleShowApplicants);
-    
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener('showApplicants' as any, handleShowApplicants);
@@ -174,10 +315,15 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
     console.log('Changing status to:', newStatus);
   };
 
-  const handleDelete = () => {
-    if (confirm('Are you sure you want to delete this job? This action cannot be undone.')) {
-      console.log('Deleting job:', job.id);
-      onBack();
+  const handleDisable = () => {
+    if (onDisable) {
+      onDisable(job);
+    }
+  };
+
+  const handleArchive = () => {
+    if (onArchive) {
+      onArchive(job);
     }
   };
 
@@ -201,14 +347,14 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
 
   const getMatchColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-gray-800';
+    if (score >= 70) return 'text-blue-600';
     if (score >= 50) return 'text-yellow-600';
     return 'text-gray-600';
   };
 
   const getMatchBgColor = (score: number) => {
     if (score >= 85) return 'bg-green-100 border-green-300';
-    if (score >= 70) return 'bg-gray-100 border-gray-300';
+    if (score >= 70) return 'bg-blue-100 border-blue-300';
     if (score >= 50) return 'bg-yellow-100 border-yellow-300';
     return 'bg-gray-100 border-gray-300';
   };
@@ -221,114 +367,6 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
   };
 
   const filteredAIResults = aiMatchResults.filter(r => r.matchScore >= filterThreshold);
-
-  // Mock scored resumes data
-  const mockScoredResumes = [
-    {
-      id: 'sr-1',
-      candidateName: 'Sarah Johnson',
-      email: 'sarah.johnson@email.com',
-      phone: '+1 (555) 123-4567',
-      matchStatus: 'Exact Match',
-      scorePercentage: 92,
-      scoredDate: '2025-12-01',
-      scoredBy: 'Alex Morgan',
-      experience: '5-7 years',
-      education: 'Master\'s in Computer Science',
-      certifications: ['AWS Certified', 'PMP']
-    },
-    {
-      id: 'sr-2',
-      candidateName: 'Michael Chen',
-      email: 'michael.chen@email.com',
-      phone: '+1 (555) 234-5678',
-      matchStatus: 'Partial Match',
-      scorePercentage: 88,
-      scoredDate: '2025-12-02',
-      scoredBy: 'Jessica Lee',
-      experience: '3-5 years',
-      education: 'Bachelor\'s in Engineering',
-      certifications: ['Java SE 11', 'Scrum Master']
-    },
-    {
-      id: 'sr-3',
-      candidateName: 'Emily Rodriguez',
-      email: 'emily.rodriguez@email.com',
-      phone: '+1 (555) 345-6789',
-      matchStatus: 'Exact Match',
-      scorePercentage: 90,
-      scoredDate: '2025-11-30',
-      scoredBy: 'Alex Morgan',
-      experience: '7-10 years',
-      education: 'Master\'s in Data Science',
-      certifications: ['Azure Certified', 'TOGAF']
-    },
-    {
-      id: 'sr-4',
-      candidateName: 'David Kim',
-      email: 'david.kim@email.com',
-      phone: '+1 (555) 456-7890',
-      matchStatus: 'Partial Match',
-      scorePercentage: 78,
-      scoredDate: '2025-12-01',
-      scoredBy: 'Jessica Lee',
-      experience: '3-5 years',
-      education: 'Bachelor\'s in Information Technology',
-      certifications: ['Google Cloud']
-    },
-    {
-      id: 'sr-5',
-      candidateName: 'Amanda White',
-      email: 'amanda.white@email.com',
-      phone: '+1 (555) 567-8901',
-      matchStatus: 'Exact Match',
-      scorePercentage: 95,
-      scoredDate: '2025-11-29',
-      scoredBy: 'Alex Morgan',
-      experience: '10+ years',
-      education: 'PhD in Computer Science',
-      certifications: ['AWS Solutions Architect', 'Kubernetes']
-    },
-    {
-      id: 'sr-6',
-      candidateName: 'Robert Taylor',
-      email: 'robert.taylor@email.com',
-      phone: '+1 (555) 678-9012',
-      matchStatus: 'No Match',
-      scorePercentage: 45,
-      scoredDate: '2025-12-02',
-      scoredBy: 'Jessica Lee',
-      experience: '1-2 years',
-      education: 'Bachelor\'s in Computer Science',
-      certifications: []
-    },
-    {
-      id: 'sr-7',
-      candidateName: 'Jennifer Martinez',
-      email: 'jennifer.m@email.com',
-      phone: '+1 (555) 789-0123',
-      matchStatus: 'Partial Match',
-      scorePercentage: 82,
-      scoredDate: '2025-11-28',
-      scoredBy: 'Alex Morgan',
-      experience: '5-7 years',
-      education: 'Master\'s in Software Engineering',
-      certifications: ['CISSP', 'CompTIA Security+']
-    },
-    {
-      id: 'sr-8',
-      candidateName: 'Christopher Lee',
-      email: 'chris.lee@email.com',
-      phone: '+1 (555) 890-1234',
-      matchStatus: 'Exact Match',
-      scorePercentage: 91,
-      scoredDate: '2025-11-30',
-      scoredBy: 'Jessica Lee',
-      experience: '7-10 years',
-      education: 'Master\'s in Business Administration',
-      certifications: ['PMP', 'Six Sigma Black Belt']
-    }
-  ];
 
   // Mock assessment results data
   const mockAssessmentResults = [
@@ -608,43 +646,93 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
           <ArrowLeft className="w-5 h-5" />
           Back to Jobs
         </button>
-        
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-gray-900">{job.title}</h1>
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm border ${getStatusBadgeClass(job.status)}`}>
-                {job.status}
-              </span>
-            </div>
-            <div className="flex items-center gap-4 text-sm text-gray-600">
-              {job.department && (
-                <div className="flex items-center gap-1">
-                  <Briefcase className="w-4 h-4" />
-                  {job.department}
-                </div>
-              )}
-              {/* Location hidden for now */}
-              {false && (
-              <div className="flex items-center gap-1">
-                <MapPin className="w-4 h-4" />
-                {job.location}
+
+        {/* Job Details Card */}
+        <div className="bg-white rounded-lg shadow-sm border-2 border-blue-200 p-6">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-3">
+                <h1 className="text-gray-900">{job.title}</h1>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm border ${getStatusBadgeClass(job.status)}`}>
+                  {job.status}
+                </span>
               </div>
-              )}
-              {job.experience && (
+              <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
+                {job.department && (
+                  <div className="flex items-center gap-1">
+                    <Briefcase className="w-4 h-4" />
+                    {job.department}
+                  </div>
+                )}
+                {job.location && (
                 <div className="flex items-center gap-1">
-                  <Calendar className="w-4 h-4" />
-                  {job.experience}
+                  <MapPin className="w-4 h-4" />
+                  {job.location}
                 </div>
-              )}
+                )}
+                {job.experience && (
+                  <div className="flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    {job.experience}
+                  </div>
+                )}
+              </div>
+
+              {/* Job Meta Information */}
+              <div className="flex items-center gap-6 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Calendar className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Posted On</div>
+                    <div className="text-sm text-gray-900">
+                      {job.postedDate
+                        ? new Date(job.postedDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })
+                        : 'N/A'}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <User className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Posted By</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm text-gray-900">{job.postedBy || 'Unknown'}</div>
+                      <span className="text-gray-400">•</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-gray-500">Version</span>
+                        {job.currentVersion && job.currentVersion > 0 ? (
+                          <button
+                            onClick={() => setShowVersionHistory(true)}
+                            className="text-sm text-blue-600 hover:text-blue-700 hover:underline font-medium"
+                            title="View version history"
+                          >
+                            {job.currentVersion}.0
+                          </button>
+                        ) : (
+                          <span className="text-sm text-gray-900 font-medium">1.0</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
+
+            <div className="flex items-center gap-3 ml-6">
             {/* AI Talent Match Button */}
             <button
               onClick={handleAITalentMatch}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-md hover:from-gray-700 hover:to-gray-900 transition-colors shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-md hover:from-purple-700 hover:to-blue-700 transition-colors shadow-sm"
             >
               <Sparkles className="w-4 h-4" />
               AI Talent Match
@@ -689,73 +777,32 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
               )}
             </div>
 
-            {/* Delete Button */}
-            <button
-              onClick={handleDelete}
-              className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
+            {/* Action Buttons - Only for Published jobs */}
+            {job.status === 'Published' && (
+              <div className="flex items-center gap-2">
+                {onArchive && (
+                  <button
+                    onClick={handleArchive}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-all flex items-center gap-2"
+                  >
+                    <Archive className="w-4 h-4" />
+                    <span className="font-medium">Archive</span>
+                  </button>
+                )}
+                {onDisable && (
+                  <button
+                    onClick={handleDisable}
+                    className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all flex items-center gap-2"
+                  >
+                    <Ban className="w-4 h-4" />
+                    <span className="font-medium">Disable</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Days Active</span>
-            <Calendar className="w-5 h-5 text-gray-400" />
-          </div>
-          <div className="text-3xl text-gray-900">{job.daysActive}</div>
-          <div className="text-xs text-gray-500 mt-1">
-            {job.status === 'Published' ? 'Currently active' : job.status === 'Draft' ? 'Not published' : 'Position closed'}
-          </div>
         </div>
-
-        <button
-          onClick={() => setShowApplicantsView(true)}
-          className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:border-gray-300 hover:shadow-md transition-all text-left group"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600 group-hover:text-gray-800 transition-colors">Applicants</span>
-            <Users className="w-5 h-5 text-gray-400 group-hover:text-gray-800 transition-colors" />
-          </div>
-          <div className="text-3xl text-gray-900 group-hover:text-gray-800 transition-colors">{job.applicants || 0}</div>
-          <div className="text-xs text-gray-500 mt-1 group-hover:text-gray-800 transition-colors">Click to view all →</div>
-        </button>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Required Match</span>
-            <Target className="w-5 h-5 text-gray-400" />
-          </div>
-          <div className="text-3xl text-gray-900">{job.requiredMatch}%</div>
-          <div className="text-xs text-gray-500 mt-1">Minimum threshold</div>
-        </div>
-
-        <button
-          onClick={() => setActiveTab('ai-matches')}
-          disabled={aiMatchResults.length === 0}
-          className={`rounded-lg shadow-sm border p-5 text-left transition-all ${
-            aiMatchResults.length > 0
-              ? 'bg-gradient-to-br from-gray-50 to-gray-50 border-gray-200 hover:border-gray-300 hover:shadow-md group'
-              : 'bg-white border-gray-200 cursor-not-allowed opacity-60'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className={`text-sm ${aiMatchResults.length > 0 ? 'text-gray-800 group-hover:text-gray-900' : 'text-gray-600'}`}>
-              AI Matches
-            </span>
-            <Sparkles className={`w-5 h-5 ${aiMatchResults.length > 0 ? 'text-gray-800 group-hover:text-gray-900' : 'text-gray-400'}`} />
-          </div>
-          <div className={`text-3xl ${aiMatchResults.length > 0 ? 'text-gray-800 group-hover:text-gray-900' : 'text-gray-900'}`}>
-            {aiMatchResults.length > 0 ? aiMatchResults.length : '0'}
-          </div>
-          <div className={`text-xs mt-1 ${aiMatchResults.length > 0 ? 'text-gray-800 group-hover:text-gray-900' : 'text-gray-500'}`}>
-            {aiMatchResults.length > 0 ? 'Click to view matches →' : 'Run AI Match first'}
-          </div>
-        </button>
       </div>
 
       {/* Tab Navigation */}
@@ -763,55 +810,55 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
         <div className="flex items-center border-b border-gray-200">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-6 py-4 text-sm transition-colors relative ${ 
-              activeTab === 'overview' 
-                ? 'text-gray-800 bg-gray-50' 
+            className={`px-6 py-4 text-sm transition-colors relative ${
+              activeTab === 'overview'
+                ? 'text-blue-600 bg-blue-50'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             Overview
             {activeTab === 'overview' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
             )}
           </button>
           <button
             onClick={() => setActiveTab('scored-resumes')}
-            className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${ 
-              activeTab === 'scored-resumes' 
-                ? 'text-gray-800 bg-gray-50' 
+            className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${
+              activeTab === 'scored-resumes'
+                ? 'text-blue-600 bg-blue-50'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             Scored Resumes
             <span className={`px-2 py-0.5 rounded-full text-xs ${
               activeTab === 'scored-resumes'
-                ? 'bg-gray-800 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-gray-200 text-gray-600'
             }`}>
-              {mockScoredResumes.length}
+              {scoredResumesStats.total}
             </span>
             {activeTab === 'scored-resumes' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
             )}
           </button>
           <button
             onClick={() => setActiveTab('assessment-results')}
-            className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${ 
-              activeTab === 'assessment-results' 
-                ? 'text-gray-800 bg-gray-50' 
+            className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${
+              activeTab === 'assessment-results'
+                ? 'text-blue-600 bg-blue-50'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             Assessment Results
             <span className={`px-2 py-0.5 rounded-full text-xs ${
               activeTab === 'assessment-results'
-                ? 'bg-gray-800 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-gray-200 text-gray-600'
             }`}>
               {mockAssessmentResults.length}
             </span>
             {activeTab === 'assessment-results' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
             )}
           </button>
         </div>
@@ -821,11 +868,11 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
       {activeTab === 'ai-matches' && aiMatchResults.length > 0 && (
         <div className="mb-6">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-50">
+            <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-blue-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <Sparkles className="w-6 h-6 text-gray-800" />
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <Sparkles className="w-6 h-6 text-purple-600" />
                   </div>
                   <div>
                     <h2 className="text-gray-900">AI Talent Match Results</h2>
@@ -834,7 +881,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-4">
                   {/* Stats */}
                   <div className="flex items-center gap-6">
@@ -845,7 +892,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                       <div className="text-xs text-gray-600">Excellent</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-lg text-gray-800">
+                      <div className="text-lg text-blue-600">
                         {aiMatchResults.filter(r => r.matchScore >= 70 && r.matchScore < 85).length}
                       </div>
                       <div className="text-xs text-gray-600">Good</div>
@@ -856,7 +903,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                   <select
                     value={filterThreshold}
                     onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                    className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                    className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
                   >
                     <option value={0}>All Matches</option>
                     <option value={50}>50%+ Match</option>
@@ -879,7 +926,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                 {filteredAIResults.map((candidate, index) => (
                   <div
                     key={candidate.id}
-                    className="bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all p-5"
+                    className="bg-white rounded-lg border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all p-5"
                   >
                     <div className="flex items-start gap-4">
                       {/* Rank Badge */}
@@ -941,11 +988,11 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                         </div>
 
                         {/* AI Analysis */}
-                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3">
                           <div className="flex items-start gap-2">
-                            <Sparkles className="w-3.5 h-3.5 text-gray-800 mt-0.5 flex-shrink-0" />
+                            <Sparkles className="w-3.5 h-3.5 text-purple-600 mt-0.5 flex-shrink-0" />
                             <div>
-                              <div className="text-xs text-gray-900 mb-0.5">AI Analysis</div>
+                              <div className="text-xs text-purple-700 mb-0.5">AI Analysis</div>
                               <p className="text-xs text-gray-700">{candidate.matchReason}</p>
                             </div>
                           </div>
@@ -977,7 +1024,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                             type="checkbox"
                             checked={selectedCandidates.includes(candidate.id)}
                             onChange={() => handleSelectCandidate(candidate.id)}
-                            className="w-4 h-4 text-gray-800 rounded"
+                            className="w-4 h-4 text-purple-600 rounded"
                           />
                           <span className="text-xs text-gray-600">Select candidate</span>
                         </div>
@@ -993,7 +1040,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                     <span className="text-sm text-gray-600">
                       {selectedCandidates.length} candidate{selectedCandidates.length !== 1 ? 's' : ''} selected
                     </span>
-                    <button className="px-6 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors shadow-sm">
+                    <button className="px-6 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm">
                       Add as Applicants
                     </button>
                   </div>
@@ -1012,30 +1059,38 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
           {/* Complete Job Description */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             {/* JD Header */}
-            <div className="bg-gradient-to-r from-gray-50 to-gray-50 border-b border-gray-100 px-8 py-6">
-              <h1 className="text-2xl text-gray-900 mb-2">{job.title}</h1>
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 px-8 py-6">
+              <div className="flex items-start justify-between mb-2">
+                <h1 className="text-2xl text-gray-900">{job.title}</h1>
+                {/* Current Version Badge */}
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg shadow-sm">
+                  <History className="w-4 h-4" />
+                  <span className="text-sm font-medium">
+                    Version {job.currentVersion && job.currentVersion > 0 ? `${job.currentVersion}.0` : '1.0'}
+                  </span>
+                </div>
+              </div>
               <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                 {job.department && (
                   <div className="flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4 text-gray-800" />
+                    <Building2 className="w-4 h-4 text-blue-600" />
                     <span>{job.department}</span>
                   </div>
                 )}
-                {/* Location hidden for now */}
-                {false && (
+                {job.location && (
                 <div className="flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-gray-800" />
+                  <MapPin className="w-4 h-4 text-blue-600" />
                   <span>{job.location}</span>
                 </div>
                 )}
                 {job.experience && (
                   <div className="flex items-center gap-1.5">
-                    <Briefcase className="w-4 h-4 text-gray-800" />
+                    <Briefcase className="w-4 h-4 text-blue-600" />
                     <span>{job.experience}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-1.5">
-                  <Calendar className="w-4 h-4 text-gray-800" />
+                  <Calendar className="w-4 h-4 text-blue-600" />
                   <span>Posted {job.daysActive} days ago</span>
                 </div>
               </div>
@@ -1046,17 +1101,17 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
               <div className="space-y-8">
                 {/* About the Role */}
                 <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-gray-800 inline-block">
+                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
                     About the Role
                   </h2>
                   <div className="mt-4 space-y-3 text-gray-700 leading-relaxed">
                     <p>
-                      We are seeking a talented <strong>{job.title}</strong> to join our {job.department || 'team'}. 
-                      This is a {job.location.toLowerCase()} position requiring {job.experience || 'relevant experience'}.
+                      We are seeking a talented <strong>{job.title}</strong> to join our {job.department || 'team'}.
+                      This is a {job.location?.toLowerCase() || 'flexible'} position requiring {job.experience || 'relevant experience'}.
                     </p>
                     <p>
-                      The ideal candidate will have strong expertise in the required skills and a proven track record 
-                      of delivering high-quality results. You will work closely with cross-functional teams to drive 
+                      The ideal candidate will have strong expertise in the required skills and a proven track record
+                      of delivering high-quality results. You will work closely with cross-functional teams to drive
                       innovation and achieve business objectives.
                     </p>
                   </div>
@@ -1064,28 +1119,28 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
 
                 {/* Key Responsibilities */}
                 <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-gray-800 inline-block">
+                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
                     Key Responsibilities
                   </h2>
                   <ul className="mt-4 space-y-3">
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Lead technical design and implementation of solutions</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Collaborate with team members on complex projects</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Mentor junior team members and conduct code reviews</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Contribute to architectural decisions and best practices</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Ensure code quality, performance, and scalability</span>
                     </li>
                   </ul>
@@ -1094,14 +1149,14 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                 {/* Required Skills */}
                 {job.skills && job.skills.length > 0 && (
                   <div>
-                    <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-gray-800 inline-block">
+                    <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
                       Required Skills
                     </h2>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {job.skills.map((skill, index) => (
                         <span
                           key={index}
-                          className="px-3 py-1.5 bg-gray-100 text-gray-900 rounded-md text-sm border border-gray-200"
+                          className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md text-sm border border-blue-200"
                         >
                           {skill}
                         </span>
@@ -1112,36 +1167,36 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
 
                 {/* Qualifications */}
                 <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-gray-800 inline-block">
+                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
                     Qualifications
                   </h2>
                   <ul className="mt-4 space-y-3">
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
                       <span>{job.experience || 'Relevant years of'} professional experience</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Strong proficiency in required technologies</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Excellent problem-solving and communication skills</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
                       <span>Bachelor's degree in Computer Science or related field (or equivalent experience)</span>
                     </li>
                     <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-gray-800 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Ability to work in a {job.location.toLowerCase()} environment</span>
+                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                      <span>Ability to work in a {job.location?.toLowerCase() || 'flexible'} environment</span>
                     </li>
                   </ul>
                 </div>
 
                 {/* What We Offer */}
                 <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-gray-800 inline-block">
+                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
                     What We Offer
                   </h2>
                   <ul className="mt-4 space-y-3">
@@ -1176,7 +1231,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
             <h3 className="text-gray-900 mb-4">Quick Actions</h3>
             <div className="space-y-2">
               {/* Invite for Assessment */}
-              <button 
+              <button
                 onClick={() => setShowInviteToAssessmentModal(true)}
                 className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-md hover:from-green-700 hover:to-teal-700 transition-colors shadow-sm text-left flex items-center gap-2"
               >
@@ -1185,13 +1240,13 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
               </button>
 
               {/* AI Talent Match Results */}
-              <button 
+              <button
                 onClick={() => {
                   if (onNavigateToAITalentMatch) {
                     onNavigateToAITalentMatch(job.id);
                   }
                 }}
-                className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-gray-800 to-gray-800 text-white hover:from-gray-700 hover:to-gray-900 rounded-md transition-all shadow-sm text-left flex items-center justify-between"
+                className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 rounded-md transition-all shadow-sm text-left flex items-center justify-between"
               >
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4" />
@@ -1199,8 +1254,17 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                 </div>
               </button>
 
+              {/* View JD History */}
+              <button
+                onClick={() => setShowJDHistory(true)}
+                className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
+              >
+                <History className="w-4 h-4" />
+                <span>View JD History</span>
+              </button>
+
               {job.status === 'Published' && (
-                <button 
+                <button
                   onClick={() => handleStatusChange('Closed')}
                   className="w-full px-4 py-2.5 text-sm border border-red-300 text-red-700 rounded-md hover:bg-red-50 transition-colors text-left"
                 >
@@ -1222,14 +1286,14 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                 </div>
               </div>
               <div className="flex gap-3">
-                <div className="w-2 h-2 bg-gray-700 rounded-full mt-1.5 flex-shrink-0"></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
                 <div>
                   <div className="text-sm text-gray-900">Job posting shared</div>
                   <div className="text-xs text-gray-500">5 hours ago</div>
                 </div>
               </div>
               <div className="flex gap-3">
-                <div className="w-2 h-2 bg-gray-700 rounded-full mt-1.5 flex-shrink-0"></div>
+                <div className="w-2 h-2 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></div>
                 <div>
                   <div className="text-sm text-gray-900">Match score updated</div>
                   <div className="text-xs text-gray-500">1 day ago</div>
@@ -1260,31 +1324,68 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
             <div className="space-y-4">
               <div>
                 <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Qualified</span>
-                  <span className="text-gray-900">{Math.floor((job.applicants || 0) * 0.65)}</span>
+                  <span className="text-gray-600">Total Scored Resumes</span>
+                  <span className="text-gray-900">{scoredResumesStats.total}</span>
                 </div>
                 <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-green-600 h-2 rounded-full" style={{ width: '65%' }}></div>
+                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: '100%' }}></div>
                 </div>
               </div>
               <div>
                 <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Under Review</span>
-                  <span className="text-gray-900">{Math.floor((job.applicants || 0) * 0.20)}</span>
+                  <span className="text-gray-600">Exact Match</span>
+                  <span className="text-gray-900">{scoredResumesStats.exactMatch}</span>
                 </div>
                 <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-yellow-600 h-2 rounded-full" style={{ width: '20%' }}></div>
+                  <div className="bg-green-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.exactMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
                 </div>
               </div>
               <div>
                 <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Not Qualified</span>
-                  <span className="text-gray-900">{Math.floor((job.applicants || 0) * 0.15)}</span>
+                  <span className="text-gray-600">Partial Match</span>
+                  <span className="text-gray-900">{scoredResumesStats.partialMatch}</span>
                 </div>
                 <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-red-600 h-2 rounded-full" style={{ width: '15%' }}></div>
+                  <div className="bg-yellow-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.partialMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
                 </div>
               </div>
+              <div>
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-gray-600">No Match</span>
+                  <span className="text-gray-900">{scoredResumesStats.noMatch}</span>
+                </div>
+                <div className="bg-gray-200 rounded-full h-2">
+                  <div className="bg-red-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.noMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Internal Recruiter Notes */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-gray-900 mb-4">Internal Recruiter Notes</h3>
+            <div className="text-sm text-gray-600 space-y-2">
+              {job.internalRecruiterComments && job.internalRecruiterComments.length > 0 ? (
+                <ul className="list-disc list-inside space-y-1">
+                  {job.internalRecruiterComments.map((note, index) => (
+                    <li key={index}>{note}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-500 italic">No internal notes added</p>
+              )}
+            </div>
+          </div>
+
+          {/* Assessment Guidance */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-gray-900 mb-4">Assessment Guidance</h3>
+            <div className="text-sm text-gray-600">
+              {job.assessmentGuidance ? (
+                <p className="whitespace-pre-wrap">{job.assessmentGuidance}</p>
+              ) : (
+                <p className="text-gray-500 italic">No assessment guidance provided</p>
+              )}
             </div>
           </div>
         </div>
@@ -1295,14 +1396,63 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
       {/* Scored Resumes Tab Content */}
       {activeTab === 'scored-resumes' && (
         <div className="mt-0">
-          <ScoredResumesTable resumes={mockScoredResumes} jobTitle={job.title} jobId={job.id} availableUnits={15} />
+          {loadingScoredResumes ? (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="ml-3 text-gray-600">Loading scored resumes...</span>
+            </div>
+          ) : scoredResumes.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+              <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">No scored resumes yet</p>
+              <p className="text-gray-400 text-sm mt-2">
+                Upload and score resumes against this job description to see them here
+              </p>
+            </div>
+          ) : (
+            <ScoredResumesTable
+              resumes={scoredResumes}
+              jobTitle={job.title}
+              jobId={job.id}
+              availableUnits={15}
+              onViewCandidate={(resume) => {
+                // Convert scored resume to Resume format for the modal
+                const resumeForModal: Resume = {
+                  id: resume.id,
+                  name: resume.candidateName || 'Unknown',
+                  email: resume.email || '',
+                  phone: resume.phone || '',
+                  title: resume.title || 'Candidate',
+                  experience: resume.experience || 'N/A',
+                  education: resume.education || 'N/A',
+                  location: resume.location || 'N/A',
+                  skills: resume.strengths || [],
+                  source: 'Manual' as const,
+                  folderId: '',
+                  uploadDate: resume.scoredDate || new Date().toISOString(),
+                  attachments: 1,
+                  uploadedBy: resume.scoredBy || 'System',
+                };
+                setViewingResume(resumeForModal);
+              }}
+            />
+          )}
         </div>
       )}
 
       {/* Assessment Results Tab Content */}
       {activeTab === 'assessment-results' && (
         <div className="mt-0">
-          <AssessmentResultsTable results={mockAssessmentResults} jobTitle={job.title} jobId={job.id} />
+          <AssessmentResultsTable
+            results={mockAssessmentResults}
+            jobTitle={job.title}
+            jobId={job.id}
+            onViewResultDetail={(result) => {
+              if (onViewAssessmentResult) {
+                onViewAssessmentResult(result, job.title);
+              }
+            }}
+          />
         </div>
       )}
 
@@ -1338,6 +1488,202 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
               alert(`${resumeIds.length} resumes submitted for scoring from ${source === 'my-resumes' ? 'My Resumes' : 'Internal Database'}`);
             }
           }}
+        />
+      )}
+
+      {/* Version History Modal */}
+      <JDVersionHistoryModal
+        isOpen={showVersionHistory}
+        onClose={() => setShowVersionHistory(false)}
+        jdId={job.id}
+        jdTitle={job.title}
+      />
+
+      {/* JD History Modal */}
+      {showJDHistory && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                  <History className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-white">Job Description History</h2>
+                  <p className="text-sm text-indigo-100">{job.title}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowJDHistory(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)]">
+              {loadingHistory ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                  <span className="ml-3 text-gray-600">Loading history...</span>
+                </div>
+              ) : jdHistory.length === 0 ? (
+                <div className="text-center py-12">
+                  <History className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 text-lg">No version history available</p>
+                  <p className="text-gray-400 text-sm mt-2">
+                    Versions are created when you publish the job description
+                  </p>
+                </div>
+              ) : (
+                <>
+              <div className="mb-4 flex items-center justify-between">
+                <p className="text-sm text-gray-600">
+                  Complete timeline of all published versions
+                </p>
+                <span className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full font-medium">
+                  {jdHistory.length} Version{jdHistory.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {/* Timeline */}
+              <div className="relative">
+                {/* Vertical Line */}
+                <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gradient-to-b from-indigo-200 via-purple-200 to-transparent"></div>
+
+                {/* Timeline Items */}
+                <div className="space-y-6">
+                  {jdHistory.map((item, index) => {
+                    const isFirst = index === 0;
+                    const isLast = index === jdHistory.length - 1;
+
+                    // Icon mapping
+                    const IconComponent = {
+                      'file-plus': FileText,
+                      'edit': Edit,
+                      'check-circle': CheckCircle,
+                      'x-circle': XCircle,
+                      'refresh': RefreshCw,
+                    }[item.icon] || History;
+
+                    // Color mapping
+                    const colorClasses = {
+                      blue: 'bg-blue-500 border-blue-600',
+                      green: 'bg-green-500 border-green-600',
+                      purple: 'bg-purple-500 border-purple-600',
+                      red: 'bg-red-500 border-red-600',
+                      orange: 'bg-orange-500 border-orange-600',
+                    }[item.color] || 'bg-gray-500 border-gray-600';
+
+                    const bgColorClasses = {
+                      blue: 'bg-blue-50 border-blue-200',
+                      green: 'bg-green-50 border-green-200',
+                      purple: 'bg-purple-50 border-purple-200',
+                      red: 'bg-red-50 border-red-200',
+                      orange: 'bg-orange-50 border-orange-200',
+                    }[item.color] || 'bg-gray-50 border-gray-200';
+
+                    const textColorClasses = {
+                      blue: 'text-blue-900',
+                      green: 'text-green-900',
+                      purple: 'text-purple-900',
+                      red: 'text-red-900',
+                      orange: 'text-orange-900',
+                    }[item.color] || 'text-gray-900';
+
+                    return (
+                      <div key={item.id} className="relative flex gap-6">
+                        {/* Timeline Icon */}
+                        <div className="relative flex-shrink-0">
+                          <div className={`w-12 h-12 rounded-full border-4 border-white ${colorClasses} flex items-center justify-center shadow-lg z-10 relative`}>
+                            <IconComponent className="w-5 h-5 text-white" />
+                          </div>
+                          {isFirst && (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-600 rounded-full border-2 border-white"></div>
+                          )}
+                        </div>
+
+                        {/* Content Card */}
+                        <div className={`flex-1 pb-6 ${!isLast ? '' : 'pb-0'}`}>
+                          <div className={`rounded-lg border-2 ${bgColorClasses} p-5 shadow-sm hover:shadow-md transition-shadow`}>
+                            {/* Action Header */}
+                            <div className="flex items-start justify-between mb-3">
+                              <div>
+                                <h3 className={`font-semibold ${textColorClasses} text-lg mb-1`}>
+                                  {item.action}
+                                </h3>
+                                <p className="text-sm text-gray-700 mb-2">
+                                  {item.description}
+                                </p>
+                              </div>
+                              <span className={`text-xs ${item.color === 'blue' ? 'bg-blue-200 text-blue-800' : item.color === 'green' ? 'bg-green-200 text-green-800' : item.color === 'purple' ? 'bg-purple-200 text-purple-800' : item.color === 'red' ? 'bg-red-200 text-red-800' : 'bg-orange-200 text-orange-800'} px-2 py-1 rounded-full font-medium whitespace-nowrap`}>
+                                {item.date}
+                              </span>
+                            </div>
+
+                            {/* Changes List */}
+                            {item.changes && item.changes.length > 0 && (
+                              <div className="mb-3 bg-white/60 rounded-lg p-3 border border-gray-200">
+                                <p className="text-xs text-gray-600 font-medium mb-2">Changes Made:</p>
+                                <ul className="space-y-1">
+                                  {item.changes.map((change, idx) => (
+                                    <li key={idx} className="text-sm text-gray-700 flex items-start gap-2">
+                                      <span className="text-indigo-600 mt-1">•</span>
+                                      <span>{change}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Performed By Info */}
+                            <div className="flex items-center gap-3 pt-3 border-t border-gray-200">
+                              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center">
+                                <User className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900">{item.performedBy}</p>
+                                <p className="text-xs text-gray-600">{item.performedByRole}</p>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <Clock className="w-3.5 h-3.5" />
+                                {item.timestamp}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
+              <p className="text-sm text-gray-600">
+                Showing complete history from creation to present
+              </p>
+              <button
+                onClick={() => setShowJDHistory(false)}
+                className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resume Quick View Modal */}
+      {viewingResume && (
+        <ResumeQuickViewModal
+          resume={viewingResume}
+          onClose={() => setViewingResume(null)}
         />
       )}
     </main>

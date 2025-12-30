@@ -86,6 +86,48 @@ export interface JDGenerateResponse {
   extracted_params?: JDExtractedParams;
 }
 
+export interface JDVersion {
+  id: string;
+  jd_id: string;
+  tenant_id: string;
+  version_number: number;
+  published_by: string;
+  published_at: string;
+  title: string;
+  description: string;
+  department?: string;
+  location?: string;
+  employment_type?: string;
+  remote_type?: string;
+  must_have_skills: string[];
+  nice_to_have_skills: string[];
+  education_requirements?: Record<string, any>;
+  certifications: string[];
+  experience_min?: number;
+  experience_max?: number;
+  domain_keywords: string[];
+  job_level?: string;
+  industry_type?: string;
+  salary_min?: number;
+  salary_max?: number;
+  salary_currency?: string;
+  compensation_type?: string;
+  assessment_guidance?: string;
+  internal_comments?: string;
+  coding_required: boolean;
+  supported_languages: string[];
+  allow_overqualified: boolean;
+  locations_snapshot: JDLocation[];
+  created_at: string;
+}
+
+export interface JDVersionHistoryResponse {
+  jd_id: string;
+  current_version: number;
+  versions: JDVersion[];
+  total: number;
+}
+
 export const jdService = {
   /**
    * List all JDs with filters
@@ -253,6 +295,44 @@ export const jdService = {
   async getAssessments(jdId: string) {
     try {
       const response = await api.get(`/jd/${jdId}/assessments`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  // ==================== Version History ====================
+
+  /**
+   * Get version history for a JD
+   */
+  async getVersionHistory(jdId: string): Promise<JDVersionHistoryResponse> {
+    try {
+      const response = await api.get<JDVersionHistoryResponse>(`/jd/${jdId}/versions`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Get a specific version of a JD
+   */
+  async getVersion(jdId: string, versionNumber: number): Promise<JDVersion> {
+    try {
+      const response = await api.get<JDVersion>(`/jd/${jdId}/versions/${versionNumber}`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Get the current (latest) version number for a JD
+   */
+  async getCurrentVersion(jdId: string): Promise<{ jd_id: string; current_version: number }> {
+    try {
+      const response = await api.get<{ jd_id: string; current_version: number }>(`/jd/${jdId}/current-version`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
