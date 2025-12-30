@@ -1,8 +1,28 @@
 'use client';
 
-import { TrendingUp, TrendingDown, Zap, Target, Video, ClipboardCheck, Calendar, Clock, DollarSign, ChevronDown, Download, Filter, Search, X, BarChart3, PieChart, AlertCircle, CheckCircle2, Loader2, AlertTriangle, ArrowUpRight, Plus, Send } from 'lucide-react';
+import { TrendingUp, TrendingDown, Zap, Target, Video, ClipboardCheck, Calendar, Clock, DollarSign, ChevronDown, Download, Filter, Search, X, BarChart3, PieChart, AlertCircle, CheckCircle2, Loader2, AlertTriangle, ArrowUpRight, Plus, Send, Briefcase, Sparkles, ShoppingCart } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import QuotaDisplay from './QuotaDisplay';
+
+// Addon interface
+interface Addon {
+  id: number;
+  name: string;
+  addon_name?: string;
+  addon_slug?: string;
+  addon_type?: string;
+  description?: string;
+  unit_price?: number;
+  price?: number;
+  currency?: string;
+  billing_unit?: string;
+  credit_amount?: number;
+  quota_type?: string;
+  min_quantity?: number;
+  max_quantity?: number;
+  is_active?: boolean;
+  is_public?: boolean;
+}
 
 export interface UsageRecord {
   id: string;
@@ -95,12 +115,40 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     resource_id: '',
   });
 
+  // Addon states
+  const [addons, setAddons] = useState<Addon[]>([]);
+  const [addonsLoading, setAddonsLoading] = useState(false);
+  const [showAddonModal, setShowAddonModal] = useState(false);
+  const [selectedAddon, setSelectedAddon] = useState<Addon | null>(null);
+  const [addonQuantity, setAddonQuantity] = useState(1);
+  const [purchasingAddon, setPurchasingAddon] = useState(false);
+  const [addonPurchaseSuccess, setAddonPurchaseSuccess] = useState<string | null>(null);
+  const [addonPurchaseError, setAddonPurchaseError] = useState<string | null>(null);
+
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
   const USAGE_API_BASE = process.env.NEXT_PUBLIC_USAGE_API_URL || 'http://localhost:8001/api/v1';
 
   useEffect(() => {
     fetchUsageData();
+    fetchAddons();
   }, []);
+
+  // Fetch available addons
+  const fetchAddons = async () => {
+    setAddonsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/addons?active_only=true&public_only=true`);
+      if (response.ok) {
+        const result = await response.json();
+        const data: Addon[] = result.data || result || [];
+        setAddons(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('[UsageDashboard] Error fetching addons:', error);
+    } finally {
+      setAddonsLoading(false);
+    }
+  };
 
   // Get API Key for usage tracking
   const getApiKey = (): string => {
@@ -271,12 +319,21 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
           if (q) {
             // New format: q.subscription contains { limit, used, remaining, percentage }
             const sub = q.subscription || {};
+            const addon = q.addon || {};
             // Handle "unlimited" values
             const isUnlimited = sub.limit === 'unlimited' || sub.limit === -1;
-            const limit = isUnlimited ? -1 : (sub.limit || 0);
+            // Include addon credits in the total limit for display
+            const addonRemaining = addon.remaining || 0;
+            const baseLimit = isUnlimited ? -1 : (sub.limit || 0);
+            const limit = isUnlimited ? -1 : (baseLimit + addonRemaining);
             const used = sub.used || 0;
             const remaining = isUnlimited ? -1 : (q.total_remaining !== undefined ? q.total_remaining : (sub.remaining || 0));
             const usagePercentage = isUnlimited ? 0 : (sub.percentage || (limit > 0 ? (used / limit) * 100 : 0));
+
+            // Log addon credits for debugging
+            if (addonRemaining > 0) {
+              console.log(`[UsageDashboard] ${quotaType} has ${addonRemaining} addon credits, total_remaining: ${q.total_remaining}`);
+            }
 
             // Status: OK, WARNING, CRITICAL, EXCEEDED
             const status = q.status || 'OK';
@@ -377,24 +434,26 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       }
 
       // Subscription summary endpoint commented out - using quota-status data only
-      // try {
-      //   const summaryResponse = await fetch(`${USAGE_API_BASE}/subscriptions/${tenantId}/summary`, {
-      //     method: 'GET',
-      //     headers: {
-      //       'Authorization': `Bearer ${token}`,
-      //       'Content-Type': 'application/json',
-      //     },
-      //   });
-      //
-      //   if (summaryResponse.ok) {
-      //     const summaryData = await summaryResponse.json();
-      //     console.log('[UsageDashboard] Subscription summary data:', summaryData);
-      //     const subData = summaryData.data || summaryData;
-      //     setSubscriptionSummary(subData);
-      //   }
-      // } catch (subError) {
-      //   console.warn('[UsageDashboard] Could not fetch subscription summary:', subError);
-      // }
+      // Fetch usage history for Recent Activity table
+      try {
+        const historyResponse = await fetch(`${API_BASE}/usage/history?limit=50`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (historyResponse.ok) {
+          const historyData = await historyResponse.json();
+          console.log('[UsageDashboard] Usage history data:', historyData);
+          // Backend returns: {status, data: {records: [...], total, limit, offset}}
+          const records = historyData.data?.records || historyData.records || historyData.data || [];
+          setUsageHistory(Array.isArray(records) ? records : []);
+        }
+      } catch (historyError) {
+        console.warn('[UsageDashboard] Could not fetch usage history:', historyError);
+      }
 
     } catch (error) {
       console.error('[UsageDashboard] Error fetching usage data:', error);
@@ -485,6 +544,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         return <Video className="w-4 h-4" />;
       case 'Assessment':
         return <ClipboardCheck className="w-4 h-4" />;
+      case 'Max Jobs':
+        return <Briefcase className="w-4 h-4" />;
       default:
         return <Zap className="w-4 h-4" />;
     }
@@ -500,13 +561,146 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         return 'bg-gray-100 text-gray-700 border-gray-200';
       case 'Assessment':
         return 'bg-gray-100 text-gray-700 border-gray-200';
+      case 'Max Jobs':
+        return 'bg-blue-100 text-blue-700 border-blue-200';
       default:
         return 'bg-gray-100 text-gray-700 border-gray-200';
     }
   };
 
   const handleUpgradeClick = () => {
-    window.location.href = '/subscription/plans';
+    window.location.href = '/subscription/current-plan';
+  };
+
+  const handleExportReport = () => {
+    // Get data to export (use filtered records if filters are applied, otherwise all)
+    const dataToExport = filteredRecords.length > 0 ? filteredRecords : transformedHistory;
+
+    if (dataToExport.length === 0) {
+      alert('No usage data to export');
+      return;
+    }
+
+    // Helper function to escape CSV field (wrap in quotes if needed)
+    const escapeCSV = (field: any): string => {
+      const str = String(field);
+      // If field contains comma, quote, or newline, wrap in quotes and escape existing quotes
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    // CSV headers
+    const headers = ['Date', 'Time', 'Module', 'Operation', 'Details', 'Units Used', 'Status'];
+
+    // Convert records to CSV rows
+    const rows = dataToExport.map((record: any) => {
+      const date = record.timestamp.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      }).replace(',', ''); // Remove comma from date like "Dec 29, 2025" -> "Dec 29 2025"
+      const time = record.timestamp.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      return [
+        escapeCSV(date),
+        escapeCSV(time),
+        escapeCSV(record.module),
+        escapeCSV(record.operation),
+        escapeCSV(record.details),
+        escapeCSV(record.unitsConsumed),
+        escapeCSV(record.status)
+      ].join(',');
+    });
+
+    // Combine headers and rows
+    const csvContent = [headers.join(','), ...rows].join('\n');
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `usage-report-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Handle addon buy click
+  const handleBuyAddon = (addon: Addon) => {
+    setSelectedAddon(addon);
+    setAddonQuantity(1);
+    setAddonPurchaseSuccess(null);
+    setAddonPurchaseError(null);
+    setShowAddonModal(true);
+  };
+
+  // Handle addon purchase
+  const handlePurchaseAddon = async () => {
+    if (!selectedAddon) return;
+
+    setPurchasingAddon(true);
+    setAddonPurchaseError(null);
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setAddonPurchaseError('Not authenticated. Please log in again.');
+        setPurchasingAddon(false);
+        return;
+      }
+
+      // Get tenant ID
+      const meResponse = await fetch(`${API_BASE}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!meResponse.ok) throw new Error('Failed to get user info');
+      const meData = await meResponse.json();
+      const tenantId = meData.tenant_id;
+
+      // Purchase addon via API
+      const response = await fetch(`${API_BASE}/addons/purchase`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          addon_id: selectedAddon.id,
+          quantity: addonQuantity,
+          tenant_id: tenantId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Purchase failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      const totalCredits = (selectedAddon.credit_amount || 0) * addonQuantity;
+      console.log('[UsageDashboard] Addon purchase result:', result);
+      setAddonPurchaseSuccess(`Successfully added ${totalCredits} credits to your ${selectedAddon.name || 'quota'}!`);
+
+      // Refresh quota data to show updated credits after a short delay
+      setTimeout(async () => {
+        console.log('[UsageDashboard] Refreshing quota data after addon purchase...');
+        await fetchUsageData();
+        setShowAddonModal(false);
+        setAddonPurchaseSuccess(null);
+      }, 1500);
+
+    } catch (error) {
+      console.error('[UsageDashboard] Addon purchase error:', error);
+      setAddonPurchaseError(error instanceof Error ? error.message : 'Purchase failed');
+    } finally {
+      setPurchasingAddon(false);
+    }
   };
 
   return (
@@ -528,20 +722,16 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setShowRecordModal(true)}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Record Usage
-              </button>
-              <button
                 onClick={handleUpgradeClick}
                 className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium flex items-center gap-2"
               >
                 <TrendingUp className="w-4 h-4" />
                 Upgrade Plan
               </button>
-              <button className="px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2">
+              <button
+                onClick={handleExportReport}
+                className="px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
+              >
                 <Download className="w-4 h-4" />
                 Export Report
               </button>
@@ -577,6 +767,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         TRIAL {subscriptionSummary.trial_days_remaining ? `(${subscriptionSummary.trial_days_remaining} days left)` : ''}
                       </span>
                     )}
+                  </div>
+                  <div className="mb-2">
                     <span className={`px-2 py-1 text-xs font-bold rounded-full ${
                       subscriptionSummary.status === 'active'
                         ? 'text-green-600 bg-green-100'
@@ -587,9 +779,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       {subscriptionSummary.status?.toUpperCase() || 'UNKNOWN'}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600 mb-2">
-                    Tenant: {subscriptionSummary.tenant_name || subscriptionSummary.tenant_id}
-                  </p>
                   {subscriptionSummary.plan?.description && (
                     <p className="text-sm text-gray-500">{subscriptionSummary.plan.description}</p>
                   )}
@@ -669,8 +858,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             )}
 
             {/* Quota Cards Grid - Dynamic */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-6">
-              {quotaSummary.quotas?.map((quota: QuotaInfo) => {
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-6">
+              {quotaSummary.quotas?.filter((quota: QuotaInfo) => quota.quota_type !== 'storage_gb').map((quota: QuotaInfo) => {
                 const colors: Record<string, { bg: string; text: string; border: string }> = {
                   'RU': { bg: 'bg-gray-50', text: 'text-gray-900', border: 'border-gray-200' },
                   'RS': { bg: 'bg-gray-50', text: 'text-gray-900', border: 'border-gray-200' },
@@ -882,8 +1071,86 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 <p className="text-gray-600">
                   {searchQuery || selectedModule !== 'all'
                     ? 'No activity matches your current filters.'
-                    : 'No usage activity recorded yet. Click "Record Usage" to track usage.'}
+                    : 'No usage activity recorded yet. Activity will appear here as you use the platform.'}
                 </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Add-ons Section */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Add-on Credits</h2>
+                <p className="text-sm text-gray-600">Purchase additional credits to extend your quota limits</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6">
+            {addonsLoading && (
+              <div className="flex flex-col items-center justify-center py-8">
+                <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+                <p className="mt-3 text-gray-500">Loading add-ons...</p>
+              </div>
+            )}
+
+            {!addonsLoading && addons.length === 0 && (
+              <div className="text-center py-8">
+                <div className="w-14 h-14 mx-auto mb-3 bg-gray-100 rounded-full flex items-center justify-center">
+                  <Sparkles className="w-7 h-7 text-gray-400" />
+                </div>
+                <p className="text-gray-500">No add-ons available at the moment.</p>
+              </div>
+            )}
+
+            {!addonsLoading && addons.length > 0 && (
+              <div className="space-y-3">
+                {addons.map((addon) => (
+                  <div
+                    key={addon.id}
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-purple-300 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <Zap className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">
+                          {addon.name || addon.addon_name || 'Credit Pack'}
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <div className="text-xl font-bold text-gray-900">
+                          {addon.credit_amount || addon.min_quantity || 0}
+                        </div>
+                        <div className="text-xs text-gray-500">credits</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xl font-bold text-purple-600">
+                          ₹{addon.price || addon.unit_price || 0}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleBuyAddon(addon)}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors flex items-center gap-2"
+                      >
+                        <ShoppingCart className="w-4 h-4" />
+                        Buy
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -949,7 +1216,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   <option value="RS">Resume Scoring (RS)</option>
                   <option value="AS">Assessment (AS)</option>
                   <option value="AIU">AI Interview Unit (AIU)</option>
-                  <option value="storage_gb">Storage (GB)</option>
+                  {/* <option value="storage_gb">Storage (GB)</option> */}
                 </select>
               </div>
 
@@ -1030,6 +1297,152 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     <>
                       <Send className="w-4 h-4" />
                       Record Usage
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Addon Purchase Modal */}
+      {showAddonModal && selectedAddon && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <ShoppingCart className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Purchase Add-on</h2>
+                    <p className="text-sm text-gray-600">Add credits to your quota</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowAddonModal(false);
+                    setAddonPurchaseError(null);
+                    setAddonPurchaseSuccess(null);
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Success Message */}
+              {addonPurchaseSuccess && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                  <p className="text-sm text-green-700">{addonPurchaseSuccess}</p>
+                </div>
+              )}
+
+              {/* Error Message */}
+              {addonPurchaseError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                  <p className="text-sm text-red-700">{addonPurchaseError}</p>
+                </div>
+              )}
+
+              {/* Addon Details */}
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                <h3 className="font-semibold text-gray-900">
+                  {selectedAddon.name || selectedAddon.addon_name || 'Credit Pack'}
+                </h3>
+              </div>
+
+              {/* Quantity Selector */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Quantity
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  {selectedAddon.credit_amount || 0} credits for ₹{selectedAddon.price || selectedAddon.unit_price || 0}
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setAddonQuantity(Math.max(1, addonQuantity - 1))}
+                    className="w-10 h-10 border border-gray-300 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors font-medium"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    max={100}
+                    value={addonQuantity}
+                    onChange={(e) => setAddonQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-20 text-center px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 font-semibold"
+                  />
+                  <button
+                    onClick={() => setAddonQuantity(Math.min(100, addonQuantity + 1))}
+                    className="w-10 h-10 border border-gray-300 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors font-medium"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Base unit</span>
+                  <span className="font-medium">{selectedAddon.credit_amount || 0} credits = ₹{selectedAddon.price || selectedAddon.unit_price || 0}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Quantity</span>
+                  <span className="font-medium">x{addonQuantity}</span>
+                </div>
+                <hr className="border-gray-200" />
+                <div className="flex justify-between items-center bg-purple-100 p-2 rounded-lg -mx-2">
+                  <span className="text-purple-800 font-medium">Credits to be added</span>
+                  <span className="text-2xl font-bold text-purple-600">
+                    +{(selectedAddon.credit_amount || 0) * addonQuantity}
+                  </span>
+                </div>
+                <hr className="border-gray-200" />
+                <div className="flex justify-between">
+                  <span className="font-medium text-gray-900">Total Price</span>
+                  <span className="text-xl font-bold text-purple-600">
+                    ₹{((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowAddonModal(false);
+                    setAddonPurchaseError(null);
+                    setAddonPurchaseSuccess(null);
+                  }}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePurchaseAddon}
+                  disabled={purchasingAddon || !!addonPurchaseSuccess}
+                  className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {purchasingAddon ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart className="w-4 h-4" />
+                      Purchase Now
                     </>
                   )}
                 </button>

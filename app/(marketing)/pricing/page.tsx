@@ -365,55 +365,6 @@ export default function PricingPage() {
               <>Start with a free trial. No credit card required.</>
             )}
           </p>
-
-          {/* Billing Toggle */}
-          <div className="flex items-center justify-center gap-4 mt-8">
-            <span className={`text-lg ${!isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
-              Monthly
-            </span>
-            <button
-              onClick={() => setIsYearly(!isYearly)}
-              className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ${
-                isYearly
-                  ? "bg-gray-800"
-                  : "bg-gray-300 dark:bg-gray-600"
-              }`}
-              aria-label="Toggle billing period"
-            >
-              <span
-                className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                  isYearly ? "translate-x-6" : "translate-x-0"
-                }`}
-              />
-            </button>
-            <span className={`text-lg ${isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
-              Yearly
-            </span>
-            <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-              Save {yearlyDiscountPercent}%
-            </Badge>
-          </div>
-
-          {/* Free Trial Banner */}
-          {freeTrial ? (
-            <div className="mt-8 inline-flex flex-wrap items-center justify-center gap-4 px-6 py-3 bg-gray-50 dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700">
-              {freeTrial.trial_includes && freeTrial.trial_includes.length > 0 ? (
-                freeTrial.trial_includes.map((item, idx) => (
-                  <span key={idx} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <Check className="w-4 h-4 text-green-500" />
-                    {item}
-                  </span>
-                ))
-              ) : (
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  <Check className="w-4 h-4 text-green-500 inline mr-2" />
-                  {freeTrial.trial_days} days free trial
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="mt-8 text-sm text-gray-500">Loading trial info...</div>
-          )}
         </div>
 
         {error && (
@@ -429,19 +380,146 @@ export default function PricingPage() {
           </div>
         )}
 
-        {/* Pricing Cards */}
-        <div className={`grid gap-8 max-w-6xl mx-auto ${
-          plans.length === 1 ? 'md:grid-cols-1 max-w-md' :
-          plans.length === 2 ? 'md:grid-cols-2 max-w-3xl' :
-          plans.length <= 3 ? 'md:grid-cols-3' :
-          'md:grid-cols-2 lg:grid-cols-3'
-        }`}>
-          {plans.map((plan) => {
+        {/* Trial Package - Separate Section */}
+        {(() => {
+          const trialPlan = plans.find(p =>
+            p.name.toLowerCase().includes('trial') ||
+            p.name.toLowerCase().includes('free')
+          );
+          if (!trialPlan && !freeTrial) return null;
+
+          const trialDays = freeTrial?.trial_days || trialPlan?.trialDays || 14;
+          const trialFeatures = freeTrial?.features || trialPlan?.quotas;
+
+          return (
+            <div className="mb-16">
+              <div className="max-w-2xl mx-auto">
+                <Card className="relative p-8 border-2 border-gray-800 dark:border-gray-600 bg-gray-50 dark:bg-gray-800">
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-gray-800 text-white px-4 py-1">
+                      Try Free
+                    </Badge>
+                  </div>
+
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center">
+                        <Sparkles className="w-7 h-7 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                          Free Trial
+                        </h3>
+                        <p className="text-gray-600 dark:text-gray-400">
+                          {trialDays} days free • No credit card required
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                      <div className="text-center">
+                        <span className="text-4xl font-bold text-gray-800 dark:text-gray-200">Free</span>
+                      </div>
+                      <Link
+                        href="/signup"
+                        className="inline-block px-8 py-3 bg-gray-800 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors whitespace-nowrap"
+                      >
+                        Start Free Trial
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* Trial Features Grid */}
+                  {trialFeatures && (
+                    <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        {(trialFeatures.RESUME_UPLOAD || trialFeatures.RU) && (
+                          <div className="flex items-center gap-2">
+                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.RESUME_UPLOAD || trialFeatures.RU} Resume Uploads</span>
+                          </div>
+                        )}
+                        {(trialFeatures.RESUME_SCORING || trialFeatures.RS) && (
+                          <div className="flex items-center gap-2">
+                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.RESUME_SCORING || trialFeatures.RS} Resume Scoring</span>
+                          </div>
+                        )}
+                        {(trialFeatures.ASSESSMENTS || trialFeatures.AS) && (
+                          <div className="flex items-center gap-2">
+                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.ASSESSMENTS || trialFeatures.AS} Assessments</span>
+                          </div>
+                        )}
+                        {(trialFeatures.AI_INTERVIEW || trialFeatures.AIU) && (
+                          <div className="flex items-center gap-2">
+                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.AI_INTERVIEW || trialFeatures.AIU} AI Interviews</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              </div>
+
+              {/* Divider */}
+              <div className="flex items-center gap-6 max-w-xl mx-auto mt-12">
+                <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600" />
+                <span className="text-gray-500 dark:text-gray-400 font-medium">Or choose a paid plan</span>
+                <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600" />
+              </div>
+
+              {/* Billing Toggle - Below Trial Package */}
+              <div className="flex items-center justify-center gap-4 mt-8">
+                <span className={`text-lg ${!isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
+                  Monthly
+                </span>
+                <button
+                  onClick={() => setIsYearly(!isYearly)}
+                  className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ${
+                    isYearly
+                      ? "bg-gray-800"
+                      : "bg-gray-300 dark:bg-gray-600"
+                  }`}
+                  aria-label="Toggle billing period"
+                >
+                  <span
+                    className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                      isYearly ? "translate-x-6" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+                <span className={`text-lg ${isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
+                  Yearly
+                </span>
+                <Badge className="bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                  Save {yearlyDiscountPercent}%
+                </Badge>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Pricing Cards - Excluding Trial/Free Plans */}
+        {(() => {
+          const paidPlans = plans.filter(p =>
+            !p.name.toLowerCase().includes('trial') &&
+            !p.name.toLowerCase().includes('free')
+          );
+          return (
+            <div className={`grid gap-8 max-w-6xl mx-auto items-stretch ${
+              paidPlans.length === 1 ? 'md:grid-cols-1 max-w-md' :
+              paidPlans.length === 2 ? 'md:grid-cols-2 max-w-3xl' :
+              paidPlans.length <= 3 ? 'md:grid-cols-3' :
+              'md:grid-cols-2 lg:grid-cols-3'
+            }`}>
+          {paidPlans.map((plan) => {
             const Icon = plan.icon;
             return (
+              <div key={plan.id} className="flex">
               <Card
-                key={plan.id}
-                className={`relative p-8 ${
+                className={`relative p-8 flex flex-col w-full ${
                   plan.popular
                     ? "border-2 border-gray-800 shadow-xl scale-105"
                     : "border border-gray-200 dark:border-gray-700"
@@ -550,10 +628,10 @@ export default function PricingPage() {
 
                 {/* Features Section */}
                 {plan.features.length > 0 && (
-                  <ul className="space-y-3 mb-8">
+                  <ul className="space-y-3 mb-6">
                     {plan.features.map((feature, idx) => (
                       <li key={idx} className="flex items-start gap-3">
-                        <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                        <Check className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
                         <span className="text-gray-700 dark:text-gray-300 text-sm">
                           {feature}
                         </span>
@@ -562,11 +640,10 @@ export default function PricingPage() {
                   </ul>
                 )}
 
-                {/* Empty state spacer when no features */}
-                {plan.features.length === 0 && (
-                  <div className="mb-8" />
-                )}
+                {/* Spacer to push button to bottom */}
+                <div className="flex-grow"></div>
 
+                {/* Button - Fixed at bottom */}
                 <Link
                   href={plan.basePrice ? `/signup?plan_id=${plan.id}` : "/contact"}
                   className={`block w-full h-12 rounded-lg font-medium text-center leading-[48px] transition-all ${
@@ -575,12 +652,15 @@ export default function PricingPage() {
                       : "border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                   }`}
                 >
-                  {plan.basePrice ? (plan.trialDays > 0 ? `Start ${plan.trialDays}-Day Trial` : "Get Started") : "Contact Sales"}
+                  {plan.basePrice ? "Choose Plan" : "Contact Sales"}
                 </Link>
               </Card>
+              </div>
             );
           })}
-        </div>
+            </div>
+          );
+        })()}
 
         {/* Addons Section */}
         <div className="mt-24">
@@ -651,117 +731,6 @@ export default function PricingPage() {
             </div>
           )}
         </div>
-
-        {/* Free Trial Section */}
-        {freeTrial && (
-          <div className="mt-24">
-            <div className="text-center mb-12">
-              <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-0">
-                <Sparkles className="w-4 h-4 mr-2" />
-                Free Trial
-              </Badge>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-                Start your {freeTrial.trial_days}-day free trial
-              </h2>
-              <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                Experience the full power of TalentFlow with no commitment.
-              </p>
-            </div>
-
-            <div className="max-w-4xl mx-auto">
-              {/* Trial Includes */}
-              {freeTrial.trial_includes && freeTrial.trial_includes.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                  {freeTrial.trial_includes.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800"
-                    >
-                      <Check className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Trial Features */}
-              {freeTrial.features && (
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 text-center">
-                    What&apos;s included in your trial
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                    {freeTrial.features.MAX_SEATS && (
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
-                          {freeTrial.features.MAX_SEATS}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Team Seats</div>
-                      </div>
-                    )}
-                    {freeTrial.features.MAX_JOBS && (
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
-                          {freeTrial.features.MAX_JOBS}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Job Postings</div>
-                      </div>
-                    )}
-                    {freeTrial.features.RESUME_UPLOAD && (
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
-                          {freeTrial.features.RESUME_UPLOAD}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Resume Uploads</div>
-                      </div>
-                    )}
-                    {freeTrial.features.RESUME_SCORING && (
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
-                          {freeTrial.features.RESUME_SCORING}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Resume Scoring</div>
-                      </div>
-                    )}
-                    {freeTrial.features.ASSESSMENTS && (
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
-                          {freeTrial.features.ASSESSMENTS}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Assessments</div>
-                      </div>
-                    )}
-                    {freeTrial.features.AI_INTERVIEW && (
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
-                          {freeTrial.features.AI_INTERVIEW}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">AI Interviews</div>
-                      </div>
-                    )}
-                    {freeTrial.features.TOTAL_RESUME_STORAGE && (
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-gray-800 dark:text-gray-200">
-                          {freeTrial.features.TOTAL_RESUME_STORAGE}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Resume Storage</div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-8 text-center">
-                    <Link
-                      href="/signup"
-                      className="inline-block px-8 py-3 bg-gray-800 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors"
-                    >
-                      Start Free Trial
-                    </Link>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* FAQ Section */}
         <div className="mt-24 text-center">

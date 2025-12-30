@@ -459,9 +459,151 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
           </div>
         )}
 
-        {/* Pricing Cards */}
+        {/* Trial Package - Separate Section */}
+        {(() => {
+          const trialPlan = plans.find(p => p.name.toLowerCase().includes('trial') || p.name.toLowerCase().includes('free'));
+          if (trialPlan) {
+            const Icon = trialPlan.icon;
+            const price = getDisplayPrice(trialPlan);
+            const currencySymbol = getCurrencySymbol(trialPlan.currency);
+
+            return (
+              <div style={{ marginBottom: '48px' }}>
+                <h2 style={{
+                  textAlign: 'center',
+                  fontSize: '24px',
+                  fontWeight: 600,
+                  color: isDark ? '#94A3B8' : '#6B7280',
+                  marginBottom: '24px'
+                }}>
+                  Start with a Free Trial
+                </h2>
+                <div style={{
+                  maxWidth: '500px',
+                  margin: '0 auto',
+                  padding: '32px',
+                  borderRadius: '24px',
+                  border: `2px solid ${isDark ? '#22C55E' : '#16A34A'}`,
+                  backgroundColor: isDark ? '#1E293B' : '#F0FDF4',
+                  position: 'relative',
+                }}>
+                  <div style={{
+                    position: 'absolute',
+                    top: '-14px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    padding: '6px 16px',
+                    borderRadius: '9999px',
+                    background: 'linear-gradient(135deg, #22C55E, #16A34A)',
+                    color: '#ffffff',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    Try Free
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+                    <div style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '16px',
+                      background: 'linear-gradient(135deg, #22C55E, #16A34A)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <Icon style={{ width: 28, height: 28, color: '#ffffff' }} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '24px', fontWeight: 700, color: isDark ? '#ffffff' : '#111827', margin: 0 }}>
+                        {trialPlan.name}
+                      </h3>
+                      <p style={{ color: isDark ? '#94A3B8' : '#6B7280', margin: '4px 0 0 0' }}>
+                        {trialPlan.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '20px' }}>
+                    {price !== null && price > 0 ? (
+                      <div>
+                        <span style={{ fontSize: '36px', fontWeight: 700, color: isDark ? '#ffffff' : '#111827' }}>
+                          {currencySymbol}{price}
+                        </span>
+                        <span style={{ fontSize: '16px', color: isDark ? '#94A3B8' : '#6B7280' }}>/month</span>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '36px', fontWeight: 700, color: '#22C55E' }}>Free</span>
+                    )}
+                  </div>
+
+                  <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px 0' }}>
+                    {trialPlan.features.map((feature, idx) => (
+                      <li key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px', color: isDark ? '#CBD5E1' : '#374151' }}>
+                        <Check style={{ width: 20, height: 20, color: '#22C55E', flexShrink: 0 }} />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <button
+                    onClick={() => onNavigate("signup")}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      padding: '16px 24px',
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #22C55E, #16A34A)',
+                      color: '#ffffff',
+                    }}
+                  >
+                    Start Free Trial
+                    <ArrowRight style={{ width: 18, height: 18 }} />
+                  </button>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
+        {/* Divider */}
+        {plans.some(p => p.name.toLowerCase().includes('trial') || p.name.toLowerCase().includes('free')) && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '24px',
+            marginBottom: '48px',
+            maxWidth: '800px',
+            margin: '0 auto 48px auto'
+          }}>
+            <div style={{ flex: 1, height: '1px', backgroundColor: isDark ? '#334155' : '#E5E7EB' }} />
+            <span style={{
+              fontSize: '16px',
+              fontWeight: 600,
+              color: isDark ? '#94A3B8' : '#6B7280',
+              padding: '0 16px'
+            }}>
+              Or choose a paid plan
+            </span>
+            <div style={{ flex: 1, height: '1px', backgroundColor: isDark ? '#334155' : '#E5E7EB' }} />
+          </div>
+        )}
+
+        {/* Pricing Cards - Excluding Trial */}
         <div style={gridStyle}>
-          {plans.map((plan, index) => {
+          {plans
+            .filter(p => !p.name.toLowerCase().includes('trial') && !p.name.toLowerCase().includes('free'))
+            .map((plan, index) => {
             const Icon = plan.icon;
             const price = getDisplayPrice(plan);
             const currencySymbol = getCurrencySymbol(plan.currency);
@@ -513,7 +655,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                   onClick={() => onNavigate(price !== null ? "signup" : "contact")}
                   style={buttonStyle(plan.popular)}
                 >
-                  {price !== null ? "Start Free Trial" : "Contact Sales"}
+                  {price !== null ? "Choose & Select" : "Contact Sales"}
                   <ArrowRight style={{ width: 18, height: 18 }} />
                 </button>
               </div>
