@@ -357,10 +357,34 @@ export default function CurrentPlanPage() {
         };
         setFreeTrialSettings(trialSettings);
 
-        // Update company settings with plan name from quota data
-        if (quotaData.plan_name) {
-          setCompanySettings(prev => prev ? { ...prev, current_plan_name: quotaData.plan_name } : prev);
-        }
+        // Update company settings with data from quota-status API
+        const quotas = quotaData.quotas;
+        // Get trial dates from trial_info (external API) or top-level (local fallback)
+        const trialStartDate = quotaData.trial_info?.trial_start_date || quotaData.trial_start_date;
+        const trialEndDate = quotaData.trial_info?.trial_end_date || quotaData.trial_end_date;
+        // Get plan dates (for paid plans) - prioritize plan dates over trial dates
+        const planStartDate = quotaData.plan_start_date || quotaData.billing_period?.start;
+        const planEndDate = quotaData.plan_expiry_date || quotaData.billing_period?.end;
+
+        setCompanySettings(prev => ({
+          ...prev!,
+          current_plan_name: quotaData.plan_name || prev?.current_plan_name,
+          current_plan_id: quotaData.plan_info?.plan_id || prev?.current_plan_id,
+          subscription_status: quotaData.subscription_status || (quotaData.is_trial ? 'trial' : 'active') || prev?.subscription_status,
+          status: quotaData.subscription_status || (quotaData.is_trial ? 'trial' : 'active') || prev?.status,
+          trial_start_date: trialStartDate || prev?.trial_start_date,
+          trial_end_date: trialEndDate || prev?.trial_end_date,
+          plan_start_date: planStartDate || prev?.plan_start_date,
+          plan_expiry_date: planEndDate || prev?.plan_expiry_date,
+          // Update quota limits from quota-status API
+          max_seats: quotas?.max_seats?.subscription?.limit || prev?.max_seats || 5,
+          max_jobs: quotas?.max_jobs?.subscription?.limit || prev?.max_jobs || 10,
+          max_resume_uploads: quotas?.RU?.subscription?.limit || prev?.max_resume_uploads || 100,
+          max_resume_searches: quotas?.RS?.subscription?.limit || prev?.max_resume_searches || 100,
+          max_assessments: quotas?.AS?.subscription?.limit || prev?.max_assessments || 50,
+          max_ai_interviews: quotas?.AIU?.subscription?.limit || prev?.max_ai_interviews || 25,
+          storage_limit_gb: quotas?.storage_gb?.subscription?.limit || prev?.storage_limit_gb || 10,
+        }));
 
         // Extract base_price from plan_info if available
         if (quotaData.plan_info?.base_price !== undefined) {
@@ -401,24 +425,28 @@ export default function CurrentPlanPage() {
       try {
         const settingsResponse = await api.get<CompanySettings>('/settings/company-settings');
         settings = settingsResponse.data;
-        setCompanySettings(settings);
+        // Merge company-settings with quota data (quota data takes priority for dates and quotas)
+        setCompanySettings(prev => ({
+          ...settings!,
+          // Keep quota data for these fields (from quota-status API)
+          current_plan_name: prev?.current_plan_name || settings?.current_plan_name,
+          trial_start_date: prev?.trial_start_date || settings?.trial_start_date,
+          trial_end_date: prev?.trial_end_date || settings?.trial_end_date,
+          plan_start_date: prev?.plan_start_date || settings?.plan_start_date,
+          plan_expiry_date: prev?.plan_expiry_date || settings?.plan_expiry_date,
+          subscription_status: prev?.subscription_status || settings?.subscription_status,
+          status: prev?.status || settings?.status,
+          max_seats: prev?.max_seats || settings?.max_seats,
+          max_jobs: prev?.max_jobs || settings?.max_jobs,
+          max_resume_uploads: prev?.max_resume_uploads || settings?.max_resume_uploads,
+          max_resume_searches: prev?.max_resume_searches || settings?.max_resume_searches,
+          max_assessments: prev?.max_assessments || settings?.max_assessments,
+          max_ai_interviews: prev?.max_ai_interviews || settings?.max_ai_interviews,
+          storage_limit_gb: prev?.storage_limit_gb || settings?.storage_limit_gb,
+        }));
       } catch (settingsError) {
-        console.log('Could not fetch company settings, using free trial defaults');
-        // Use free trial settings from API, or fallback to defaults
-        settings = {
-          subscription_status: 'trial',
-          status: 'trial',
-          current_plan_name: 'Free Trial',
-          max_seats: trialSettings?.features.MAX_SEATS || 5,
-          max_jobs: trialSettings?.features.MAX_JOBS || 5,
-          max_resume_uploads: trialSettings?.features.RESUME_UPLOAD || 100,
-          max_resume_searches: trialSettings?.features.RESUME_SCORING || 100,
-          max_assessments: trialSettings?.features.ASSESSMENTS || 10,
-          max_ai_interviews: trialSettings?.features.AI_INTERVIEW || 10,
-          storage_limit_gb: Math.ceil((trialSettings?.features.TOTAL_RESUME_STORAGE || 500) / 100) || 5,
-          payment_status: 'none',
-        };
-        setCompanySettings(settings);
+        console.log('Could not fetch company settings, using quota data');
+        // Company settings API failed - quota data already set, no need to overwrite
       }
 
       // Fetch tenant_id from /auth/me (using data-plane API)
@@ -550,19 +578,16 @@ export default function CurrentPlanPage() {
     }
     setSelectedPlanForPayment(plan);
     setModalStep('isolation');
-    setIsolationType('schema');
-    setIsNewTenant(false);
-    // Don't reset isYearly - preserve the user's selection from the page toggle
-    setPaymentMode('card');
-    setExternalTransactionId('');
+    setIsolationType('schema'); // Default to schema (checkbox unchecked)
+    setIsNewTenant(false); // Always use existing
+    setIsYearly(true); // Always yearly in popup
     setTransactionResult(null);
-    setFormErrors({});
     setError(null);
     setShowPaymentModal(true);
   };
 
   const handlePaymentSubmit = async () => {
-    console.log('handlePaymentSubmit called', { selectedPlanForPayment, tenantId, paymentMode });
+    console.log('handlePaymentSubmit called', { selectedPlanForPayment, tenantId });
 
     if (!selectedPlanForPayment) {
       setError('Please select a plan');
@@ -574,34 +599,8 @@ export default function CurrentPlanPage() {
       return;
     }
 
-    // Validate based on payment mode
-    let transactionId = externalTransactionId;
-
-    if (paymentMode === 'card') {
-      // Validate card details
-      if (!paymentForm.cardholderName.trim()) {
-        setError('Please enter cardholder name');
-        return;
-      }
-      const cardNum = paymentForm.cardNumber.replace(/\s/g, '');
-      if (!cardNum || cardNum.length < 13) {
-        setError('Please enter a valid card number');
-        return;
-      }
-      if (!paymentForm.expiryMonth || !paymentForm.expiryYear) {
-        setError('Please select card expiry date');
-        return;
-      }
-      if (!paymentForm.cvv || paymentForm.cvv.length < 3) {
-        setError('Please enter a valid CVV');
-        return;
-      }
-      // Generate transaction ID from card details
-      transactionId = generateTransactionId();
-    } else if (!externalTransactionId) {
-      setError('Please complete the payment details');
-      return;
-    }
+    // Generate transaction ID
+    const transactionId = generateTransactionId();
 
     try {
       setIsSelectingPlan(true);
@@ -609,15 +608,15 @@ export default function CurrentPlanPage() {
       setSuccessMessage(null);
 
       const token = localStorage.getItem('accessToken');
-      const apiUrl = `${BILLING_API_URL}/api/v1/subscriptions/${tenantId}/select-plan`;
+      const apiUrl = `${API_URL}/subscription/${tenantId}/select-plan`;
 
       // Request body per API spec
       const requestBody = {
         plan_id: selectedPlanForPayment.numericId,
         schema_per_tenant: isolationType === 'schema',
         database_per_tenant: isolationType === 'database',
-        external_transaction_id: transactionId || null,
-        billing_interval: 'MONTHLY',
+        external_transaction_id: transactionId,
+        billing_interval: isYearly ? 'ANNUAL' : 'MONTHLY',
       };
 
       console.log('Calling API:', apiUrl);
@@ -663,59 +662,11 @@ export default function CurrentPlanPage() {
         setTransactionResult(data.data || data);
         setModalStep('result');
 
-        // Also update company_settings in tenant database via data-plane API
-        // Add delay to allow tenant database to be configured after billing API migration
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // First, sync database config to ensure tenant record has database_name
-        try {
-          await api.post('/settings/sync-database-config');
-          console.log('[CurrentPlan] Database config synced');
-        } catch (syncErr) {
-          console.warn('[CurrentPlan] Could not sync database config:', syncErr);
-        }
-
-        // Small delay after sync
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        let dataPlaneUpdateFailed = false;
-        try {
-          // First, set the selected plan in tenant database with quotas
-          await api.post('/settings/select-plan', {
-            plan_id: selectedPlanForPayment.numericId,
-            plan_name: selectedPlanForPayment.name,
-            plan_price: (selectedPlanForPayment.price || 0) * 100, // Convert to cents
-            // Pass quotas from the plan
-            max_seats: selectedPlanForPayment.quotas?.max_seats || 5,
-            max_jobs: selectedPlanForPayment.quotas?.max_jobs || 5,
-            max_resume_uploads: selectedPlanForPayment.quotas?.RU || 100,
-            max_resume_searches: selectedPlanForPayment.quotas?.RS || 100,
-            max_assessments: selectedPlanForPayment.quotas?.AS || 10,
-            max_ai_interviews: selectedPlanForPayment.quotas?.AIU || 10,
-            storage_limit_gb: selectedPlanForPayment.quotas?.storage_gb || 5,
-          });
-          console.log('[CurrentPlan] Plan selected in tenant DB');
-
-          // Then mark payment as success to activate the plan
-          const updateResponse = await api.post('/settings/payment-status', {
-            payment_status: 'success',
-            payment_reference: transactionId,
-            payment_method: 'card',
-          });
-          console.log('[CurrentPlan] Company settings updated:', updateResponse.data);
-        } catch (updateErr: any) {
-          console.error('[CurrentPlan] Failed to update company settings:', updateErr);
-          dataPlaneUpdateFailed = true;
-          // If 401 error, suggest re-login
-          if (updateErr?.response?.status === 401) {
-            setSuccessMessage('Plan upgraded! Please log out and log back in to see updated settings.');
-          }
-        }
-
-        // If data-plane update failed, show warning
-        if (dataPlaneUpdateFailed) {
-          setSuccessMessage('Plan upgraded successfully! You may need to refresh or re-login to see all changes.');
-        }
+        // The /subscription/{tenant_id}/select-plan endpoint already updates:
+        // 1. tenants table in landlord DB
+        // 2. company_settings in tenant DB
+        // 3. POSTs to external admin API
+        // So no additional API calls needed here
 
         // Update local state with the new plan and quotas
         if (selectedPlanForPayment) {
@@ -932,10 +883,10 @@ export default function CurrentPlanPage() {
                   : isOnTrial
                     ? `You are on a Free Trial - ${trialDaysRemaining} days remaining`
                     : isActive
-                      ? `You are on the ${companySettings?.current_plan_name || currentPlan?.name || 'Unknown'} plan`
+                      ? `You are on the ${(companySettings?.current_plan_name || currentPlan?.name || 'Unknown').replace(/\s*\([^)]*\)\s*$/, '')} plan`
                       : isPendingPayment
                         ? 'Complete payment to activate your selected plan'
-                        : `You are on the ${companySettings?.current_plan_name || 'Unknown'} plan`
+                        : `You are on the ${(companySettings?.current_plan_name || 'Unknown').replace(/\s*\([^)]*\)\s*$/, '')} plan`
                 }
               </p>
             </div>
@@ -948,7 +899,7 @@ export default function CurrentPlanPage() {
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-600 mb-1">Plan</p>
               <p className="text-xl font-semibold text-gray-900">
-                {companySettings?.current_plan_name || (isOnTrial ? 'Free Trial' : 'No Plan')}
+                {(companySettings?.current_plan_name || (isOnTrial ? 'Free Trial' : 'No Plan')).replace(/\s*\([^)]*\)\s*$/, '')}
               </p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
@@ -993,44 +944,44 @@ export default function CurrentPlanPage() {
             </div>
           </div>
 
-          {/* Quotas - For trial users, always use freeTrialSettings from API */}
-          {(companySettings || freeTrialSettings) && (
+          {/* Quotas - Using data from quota-status API via companySettings */}
+          {companySettings && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <h3 className="text-sm font-medium text-gray-700 mb-4">Your Plan Limits</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.MAX_SEATS : companySettings?.max_seats}
+                    {companySettings.max_seats || '-'}
                   </p>
                   <p className="text-xs text-gray-600">Team Seats</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.MAX_JOBS : companySettings?.max_jobs}
+                    {companySettings.max_jobs || '-'}
                   </p>
                   <p className="text-xs text-gray-600">Job Postings</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.RESUME_UPLOAD : companySettings?.max_resume_uploads}
+                    {companySettings.max_resume_uploads || '-'}
                   </p>
                   <p className="text-xs text-gray-600">Resume Uploads</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.RESUME_SCORING : companySettings?.max_resume_searches}
+                    {companySettings.max_resume_searches || '-'}
                   </p>
                   <p className="text-xs text-gray-600">Resume Searches</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.ASSESSMENTS : companySettings?.max_assessments}
+                    {companySettings.max_assessments || '-'}
                   </p>
                   <p className="text-xs text-gray-600">Assessments</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {isOnTrial && freeTrialSettings ? freeTrialSettings.features.AI_INTERVIEW : companySettings?.max_ai_interviews}
+                    {companySettings.max_ai_interviews || '-'}
                   </p>
                   <p className="text-xs text-gray-600">AI Interviews</p>
                 </div>
@@ -1043,34 +994,9 @@ export default function CurrentPlanPage() {
         {plans.length > 0 && (
           <>
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 text-center mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 text-center">
                 {isOnTrial || isLocked ? 'Choose a Plan' : 'Available Plans'}
               </h2>
-              {/* Billing Toggle - Centered */}
-              <div className="flex items-center justify-center gap-3">
-                <span className={`text-sm font-medium ${!isYearly ? "text-gray-900" : "text-gray-400"}`}>
-                  Monthly
-                </span>
-                <button
-                  onClick={() => setIsYearly(!isYearly)}
-                  className={`relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ${
-                    isYearly ? "bg-gray-800" : "bg-gray-300"
-                  }`}
-                  aria-label="Toggle billing period"
-                >
-                  <span
-                    className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                      isYearly ? "translate-x-6" : "translate-x-0"
-                    }`}
-                  />
-                </button>
-                <span className={`text-sm font-medium ${isYearly ? "text-gray-900" : "text-gray-400"}`}>
-                  Yearly
-                </span>
-                <Badge className="bg-green-100 text-green-700 text-xs">
-                  Save {planSettings?.yearlyDiscountPercentage || 20}%
-                </Badge>
-              </div>
             </div>
             <div className={`grid gap-8 pt-8 ${
               plans.length === 1 ? 'md:grid-cols-1 max-w-md' :
@@ -1125,28 +1051,12 @@ export default function CurrentPlanPage() {
 
                     <div className="mb-6">
                       {plan.price ? (
-                        <>
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-4xl font-bold text-gray-900">
-                              {formatCurrency(
-                                isYearly
-                                  ? Math.round(plan.price * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100))
-                                  : plan.price,
-                                plan.currency
-                              )}
-                            </span>
-                          </div>
-                          {isYearly && (
-                            <div className="mt-2">
-                              <span className="text-sm text-gray-400 line-through">
-                                {formatCurrency(plan.price * 12, plan.currency)}
-                              </span>
-                              <span className="ml-2 text-sm font-medium text-green-600">
-                                Save {formatCurrency(plan.price * 12 - Math.round(plan.price * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)), plan.currency)}
-                              </span>
-                            </div>
-                          )}
-                        </>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-4xl font-bold text-gray-900">
+                            {formatCurrency(plan.price, plan.currency)}
+                          </span>
+                          <span className="text-gray-500 text-sm">/month</span>
+                        </div>
                       ) : (
                         <div className="text-4xl font-bold text-gray-900">Custom</div>
                       )}
@@ -1264,13 +1174,10 @@ export default function CurrentPlanPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900">
-                    {modalStep === 'isolation' && 'Step 1: Select Isolation Type'}
-                    {modalStep === 'tenant' && 'Step 2: Database Option'}
-                    {modalStep === 'payment' && 'Step 3: Payment Details'}
-                    {modalStep === 'result' && 'Upgrade Complete!'}
+                    {modalStep === 'result' ? 'Upgrade Complete!' : 'Upgrade Plan'}
                   </h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    {selectedPlanForPayment.name} - {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}
+                    {selectedPlanForPayment.name} - {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}/month
                   </p>
                 </div>
                 <button
@@ -1280,282 +1187,175 @@ export default function CurrentPlanPage() {
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
-              {/* Step Indicator */}
-              {modalStep !== 'result' && (
-                <div className="flex items-center gap-2 mt-4">
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${modalStep === 'isolation' ? 'bg-gray-800 text-white' : 'bg-green-500 text-white'}`}>1</div>
-                  <div className={`flex-1 h-1 ${modalStep !== 'isolation' ? 'bg-green-500' : 'bg-gray-200'}`}></div>
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${modalStep === 'tenant' ? 'bg-gray-800 text-white' : modalStep === 'payment' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>2</div>
-                  <div className={`flex-1 h-1 ${modalStep === 'payment' ? 'bg-green-500' : 'bg-gray-200'}`}></div>
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${modalStep === 'payment' ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-500'}`}>3</div>
-                </div>
-              )}
             </div>
 
-            {/* Step 1: Isolation Type Selection */}
-            {modalStep === 'isolation' && (
-              <div className="p-6 space-y-4">
-                <p className="text-gray-600">Choose how your data will be isolated:</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setIsolationType('schema')}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${isolationType === 'schema' ? 'border-gray-700 bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
-                  >
-                    <Layers className={`w-8 h-8 mb-2 ${isolationType === 'schema' ? 'text-gray-700' : 'text-gray-400'}`} />
-                    <h4 className="font-semibold text-gray-900">Schema</h4>
-                    <p className="text-sm text-gray-500 mt-1">Shared database, separate schema per tenant</p>
-                  </button>
-                  <button
-                    onClick={() => setIsolationType('database')}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${isolationType === 'database' ? 'border-gray-700 bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
-                  >
-                    <Database className={`w-8 h-8 mb-2 ${isolationType === 'database' ? 'text-gray-700' : 'text-gray-400'}`} />
-                    <h4 className="font-semibold text-gray-900">Database</h4>
-                    <p className="text-sm text-gray-500 mt-1">Dedicated database per tenant</p>
-                  </button>
-                </div>
-                {/* Extra charge info message - always visible */}
-                {planSettings?.databasePerTenantMonthlyPrice && (
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center shadow-md">
-                        <Database className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-700">Dedicated Database Option</p>
-                        <p className="text-xs text-gray-500">
-                          Additional charge of{' '}
-                          <span className="font-semibold text-gray-700">
-                            {formatCurrency(planSettings.databasePerTenantMonthlyPrice, selectedPlanForPayment?.currency || 'INR')}/month
-                          </span>
-                        </p>
-                      </div>
+            {/* Single Page Payment Summary */}
+            {modalStep !== 'result' && (
+              <div className="p-6 space-y-5">
+                {/* Payment Details */}
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
+                  <h4 className="font-semibold text-gray-900 mb-4">Payment Details</h4>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Plan:</span>
+                      <span className="font-medium text-gray-900">{selectedPlanForPayment?.name}</span>
                     </div>
-                  </div>
-                )}
-                <div className="flex justify-end pt-4">
-                  <button
-                    onClick={() => setModalStep('tenant')}
-                    className="px-6 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors flex items-center gap-2"
-                  >
-                    Next <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 2: New/Old Database Selection */}
-            {modalStep === 'tenant' && (
-              <div className="p-6 space-y-4">
-                <p className="text-gray-600 mb-4">Do you want to use an existing database or create a new one?</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setIsNewTenant(false)}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${!isNewTenant ? 'border-gray-700 bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
-                  >
-                    <Package className={`w-8 h-8 mb-2 ${!isNewTenant ? 'text-gray-700' : 'text-gray-400'}`} />
-                    <h4 className="font-semibold text-gray-900">Existing</h4>
-                    <p className="text-sm text-gray-500 mt-1">Use your current database/schema</p>
-                  </button>
-                  <button
-                    onClick={() => setIsNewTenant(true)}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${isNewTenant ? 'border-gray-700 bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
-                  >
-                    <Sparkles className={`w-8 h-8 mb-2 ${isNewTenant ? 'text-gray-700' : 'text-gray-400'}`} />
-                    <h4 className="font-semibold text-gray-900">New</h4>
-                    <p className="text-sm text-gray-500 mt-1">Create a fresh database/schema</p>
-                  </button>
-                </div>
-                <div className="flex justify-between pt-4">
-                  <button
-                    onClick={() => setModalStep('isolation')}
-                    className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors flex items-center gap-2"
-                  >
-                    <ArrowLeft className="w-4 h-4" /> Back
-                  </button>
-                  <button
-                    onClick={() => setModalStep('payment')}
-                    className="px-6 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors flex items-center gap-2"
-                  >
-                    Next <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Payment Form */}
-            {modalStep === 'payment' && (
-              <div className="p-6 space-y-4">
-                {/* Card Information */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Cardholder Name *
-                </label>
-                <input
-                  type="text"
-                  value={paymentForm.cardholderName}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, cardholderName: e.target.value })}
-                  placeholder="John Doe"
-                  className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500 ${
-                    formErrors.cardholderName ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                />
-                {formErrors.cardholderName && (
-                  <p className="text-red-500 text-xs mt-1">{formErrors.cardholderName}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Card Number *
-                </label>
-                <input
-                  type="text"
-                  value={paymentForm.cardNumber}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, cardNumber: formatCardNumber(e.target.value) })}
-                  placeholder="1234 5678 9012 3456"
-                  maxLength={19}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-colors font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Month *
-                  </label>
-                  <select
-                    value={paymentForm.expiryMonth}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, expiryMonth: e.target.value })}
-                    className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-colors"
-                  >
-                    <option value="">MM</option>
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                      <option key={m} value={String(m).padStart(2, '0')}>{String(m).padStart(2, '0')}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Year *
-                  </label>
-                  <select
-                    value={paymentForm.expiryYear}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, expiryYear: e.target.value })}
-                    className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-colors"
-                  >
-                    <option value="">YY</option>
-                    {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map(y => (
-                      <option key={y} value={String(y).slice(-2)}>{y}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    CVV *
-                  </label>
-                  <input
-                    type="password"
-                    value={paymentForm.cvv}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                    placeholder="***"
-                    maxLength={4}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-colors font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* Payment Summary */}
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                <h4 className="font-medium text-gray-900 mb-3">Payment Summary</h4>
-                <div className="text-sm space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Plan:</span>
-                    <span className="font-medium text-gray-900">{selectedPlanForPayment?.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Billing:</span>
-                    <span className="font-medium text-gray-900">{isYearly ? 'Yearly' : 'Monthly'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Plan Price:</span>
-                    <div className="text-right">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Monthly Price:</span>
                       <span className="font-medium text-gray-900">
-                        {formatCurrency(calculatePrices().planPrice, selectedPlanForPayment?.currency || 'INR')}
+                        {formatCurrency(selectedPlanForPayment?.price || 0, selectedPlanForPayment?.currency || 'INR')}
                       </span>
-                      {isYearly && (
-                        <div className="text-xs">
-                          <span className="text-gray-400 line-through mr-2">
-                            {formatCurrency(calculatePrices().yearlyFullPrice, selectedPlanForPayment?.currency || 'INR')}
+                    </div>
+                    {isolationType === 'database' && planSettings?.databasePerTenantMonthlyPrice ? (
+                      <div className="flex justify-between text-amber-700">
+                        <span>Dedicated Database:</span>
+                        <span className="font-medium">
+                          +{formatCurrency(planSettings.databasePerTenantMonthlyPrice, selectedPlanForPayment?.currency || 'INR')}/month
+                        </span>
+                      </div>
+                    ) : null}
+                    {isYearly && (
+                      <>
+                        <div className="flex justify-between pt-2 border-t border-gray-200 text-green-700">
+                          <span className="flex items-center gap-1">
+                            <Crown className="w-4 h-4" />
+                            Annual Plan ({planSettings?.yearlyDiscountPercentage || 20}% off):
                           </span>
-                          <span className="text-green-600 font-medium">
-                            Save {formatCurrency(calculatePrices().yearlyFullPrice - calculatePrices().yearlyPrice, selectedPlanForPayment?.currency || 'INR')}
+                          <span className="font-medium">
+                            {formatCurrency(
+                              Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)),
+                              selectedPlanForPayment?.currency || 'INR'
+                            )}
                           </span>
                         </div>
+                        {isolationType === 'database' && planSettings?.databasePerTenantMonthlyPrice ? (
+                          <div className="flex justify-between text-amber-700">
+                            <span>Database (12 months):</span>
+                            <span className="font-medium">
+                              +{formatCurrency(planSettings.databasePerTenantMonthlyPrice * 12, selectedPlanForPayment?.currency || 'INR')}
+                            </span>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Total Summary - Above checkboxes */}
+                <div className="bg-gray-800 text-white rounded-xl p-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="font-semibold">Total</span>
+                      <p className="text-xs text-gray-300">
+                        {isYearly ? 'Billed annually' : 'Billed monthly'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-bold text-2xl">
+                        {formatCurrency(
+                          isYearly
+                            ? Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)) +
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) * 12 : 0)
+                            : (selectedPlanForPayment?.price || 0) +
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) : 0),
+                          selectedPlanForPayment?.currency || 'INR'
+                        )}
+                      </span>
+                      {isYearly && (
+                        <p className="text-xs text-green-400">
+                          You save {formatCurrency(
+                            ((selectedPlanForPayment?.price || 0) * 12) -
+                            Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)),
+                            selectedPlanForPayment?.currency || 'INR'
+                          )}
+                        </p>
                       )}
                     </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Isolation:</span>
-                    <span className="font-medium text-gray-900 uppercase">{isolationType}</span>
-                  </div>
-                  {isolationType === 'database' && planSettings?.databasePerTenantMonthlyPrice ? (
-                    <div className="flex justify-between text-amber-700">
-                      <span>Database Extra Charge:</span>
-                      <span className="font-medium">
-                        +{formatCurrency(calculatePrices().dbChargeTotal, selectedPlanForPayment?.currency || 'INR')}
-                        {isYearly && <span className="text-xs ml-1">({formatCurrency(calculatePrices().dbExtraCharge, selectedPlanForPayment?.currency || 'INR')}/mo × 12)</span>}
-                      </span>
-                    </div>
-                  ) : null}
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Tenant:</span>
-                    <span className="font-medium text-gray-900">{isNewTenant ? 'New' : 'Existing'}</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-gray-200">
-                    <span className="text-gray-700 font-medium">Total Amount:</span>
-                    <span className="font-bold text-gray-900 text-lg">
-                      {formatCurrency(calculatePrices().totalAmount, selectedPlanForPayment?.currency || 'INR')}
-                    </span>
-                  </div>
                 </div>
-              </div>
 
-              {/* Payment Footer */}
-              <div className="pt-4 border-t border-gray-200">
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setModalStep('tenant')}
-                    className="px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors flex items-center gap-2"
-                  >
-                    <ArrowLeft className="w-4 h-4" /> Back
-                  </button>
-                  <button
-                    onClick={handlePaymentSubmit}
-                    disabled={isSelectingPlan}
-                    className="flex-1 px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {isSelectingPlan ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <CreditCard className="w-4 h-4" />
-                        Pay {formatCurrency(calculatePrices().totalAmount, selectedPlanForPayment.currency)}
-                      </>
-                    )}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 text-center mt-3">
-                  Your payment information is secure and encrypted
+                {/* Dedicated Database Checkbox */}
+                {planSettings?.databasePerTenantMonthlyPrice ? (
+                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
+                    isolationType === 'database' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={isolationType === 'database'}
+                      onChange={(e) => setIsolationType(e.target.checked ? 'database' : 'schema')}
+                      className="mt-1 w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <Database className="w-5 h-5 text-amber-600" />
+                        <span className="font-medium text-gray-900">Dedicated Database</span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Get your own dedicated database for enhanced isolation and performance
+                      </p>
+                      <p className="text-sm text-amber-600 font-medium mt-1">
+                        +{formatCurrency(planSettings.databasePerTenantMonthlyPrice, selectedPlanForPayment?.currency || 'INR')}/month extra
+                      </p>
+                    </div>
+                  </label>
+                ) : null}
+
+                {/* Annual Plan Offer Checkbox */}
+                <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
+                  isYearly ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:bg-gray-50'
+                }`}>
+                  <input
+                    type="checkbox"
+                    checked={isYearly}
+                    onChange={(e) => setIsYearly(e.target.checked)}
+                    className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <Crown className="w-5 h-5 text-green-600" />
+                      <span className="font-medium text-gray-900">Annual Plan</span>
+                      <Badge className="bg-green-100 text-green-700 text-xs">
+                        Save {planSettings?.yearlyDiscountPercentage || 20}%
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Pay for 12 months and get {planSettings?.yearlyDiscountPercentage || 20}% discount
+                    </p>
+                  </div>
+                </label>
+
+                {/* Pay Button */}
+                <button
+                  onClick={handlePaymentSubmit}
+                  disabled={isSelectingPlan}
+                  className="w-full py-3 bg-gray-800 text-white rounded-xl font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isSelectingPlan ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-5 h-5" />
+                      Pay {formatCurrency(
+                        isYearly
+                          ? Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)) +
+                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) * 12 : 0)
+                          : (selectedPlanForPayment?.price || 0) +
+                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) : 0),
+                        selectedPlanForPayment?.currency || 'INR'
+                      )}
+                    </>
+                  )}
+                </button>
+                <p className="text-xs text-gray-500 text-center">
+                  Secure payment processing. Your data is protected.
                 </p>
               </div>
-            </div>
             )}
 
-            {/* Step 4: Result */}
+            {/* Result */}
             {modalStep === 'result' && transactionResult && (
               <div className="p-6 space-y-4">
                 <div className="text-center">
@@ -1564,7 +1364,6 @@ export default function CurrentPlanPage() {
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">Plan Upgrade Successful!</h3>
                   <p className="text-gray-600">Your subscription has been updated successfully.</p>
-                  <p className="text-sm text-gray-500 mt-2">Please log in again to refresh your session.</p>
                 </div>
 
                 <div className="bg-gray-50 rounded-xl p-4 space-y-3">
@@ -1573,16 +1372,22 @@ export default function CurrentPlanPage() {
                     <span className="font-medium text-gray-900">{transactionResult.plan_name}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Isolation Type:</span>
-                    <span className="font-medium text-gray-900">{transactionResult.isolation_type}</span>
+                    <span className="text-gray-600">Billing:</span>
+                    <span className="font-medium text-gray-900">{transactionResult.billing_interval}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Invoice:</span>
                     <span className="font-medium text-gray-900">{transactionResult.invoice_number}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Amount:</span>
-                    <span className="font-medium text-green-600">${transactionResult.total_amount}</span>
+                    <span className="text-gray-600">Amount Paid:</span>
+                    <span className="font-medium text-green-600">
+                      {formatCurrency(transactionResult.total_amount, transactionResult.currency || 'INR')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Payment ID:</span>
+                    <span className="font-medium text-gray-500 text-xs">{transactionResult.stripe?.payment_intent_id}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Status:</span>
@@ -1591,15 +1396,15 @@ export default function CurrentPlanPage() {
                 </div>
 
                 <button
-                  onClick={() => {
-                    // Clear tokens and redirect to login
-                    localStorage.removeItem('accessToken');
-                    localStorage.removeItem('refreshToken');
-                    router.push('/login');
+                  onClick={async () => {
+                    setShowPaymentModal(false);
+                    setModalStep('isolation');
+                    // Refresh data to show updated plan
+                    await fetchData();
                   }}
                   className="w-full px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
                 >
-                  Continue to Login
+                  Done
                 </button>
               </div>
             )}

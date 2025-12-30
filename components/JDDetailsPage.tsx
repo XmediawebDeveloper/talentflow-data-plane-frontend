@@ -133,8 +133,7 @@ export default function JDDetailsPage() {
                     {jd.department}
                   </span>
                 )}
-                {/* Location hidden for now */}
-                {false && jd.location && (
+                {jd.location && (
                   <span className="flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
                     {jd.location}

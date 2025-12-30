@@ -1,4 +1,6 @@
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Upload } from 'lucide-react';
+'use client'
+
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Upload, Edit2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Folder as FolderType, Resume } from '@/lib/types/types';
 
@@ -7,6 +9,8 @@ interface FolderTreeProps {
   selectedFolder: string;
   onSelectFolder: (id: string) => void;
   onCreateFolder: (name: string, parentId?: string) => void;
+  onRenameFolder: (folderId: string, newName: string) => void;
+  onDeleteFolder: (folderId: string) => void;
   onUploadToFolder?: (folderId: string) => void;
   resumes: Resume[];
   width: number;
@@ -18,6 +22,8 @@ export default function FolderTree({
   selectedFolder,
   onSelectFolder,
   onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
   onUploadToFolder,
   resumes,
   width,
@@ -27,6 +33,8 @@ export default function FolderTree({
   const [creatingSubFolderFor, setCreatingSubFolderFor] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [showFolderMenu, setShowFolderMenu] = useState<string | null>(null);
+  const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
 
   const toggleFolder = (id: string) => {
     setExpandedFolders(prev =>
@@ -52,6 +60,14 @@ export default function FolderTree({
     }
   };
 
+  const handleRename = (folderId: string) => {
+    if (renameValue.trim()) {
+      onRenameFolder(folderId, renameValue);
+      setRenamingFolderId(null);
+      setRenameValue('');
+    }
+  };
+
   const renderFolder = (folder: FolderType, level: number = 0) => {
     const isExpanded = expandedFolders.includes(folder.id);
     const isSelected = selectedFolder === folder.id;
@@ -59,56 +75,79 @@ export default function FolderTree({
     const count = getResumeCount(folder.id);
     const isCreatingSubFolder = creatingSubFolderFor === folder.id;
     const hasMenu = showFolderMenu === folder.id;
+    const isRenaming = renamingFolderId === folder.id;
 
     return (
       <div key={folder.id} className="relative">
-        <div
-          className={`group w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer ${
-            isSelected
-              ? 'bg-gray-50 text-gray-800'
-              : 'text-gray-700 hover:bg-gray-100'
-          }`}
-          style={{ paddingLeft: `${12 + level * 16}px` }}
-          onClick={() => onSelectFolder(folder.id)}
-        >
-          {hasChildren && (
-            <span
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleFolder(folder.id);
+        {isRenaming ? (
+          // Inline rename mode
+          <div className="px-3 py-2" style={{ paddingLeft: `${12 + level * 16}px` }}>
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRename(folder.id);
+                if (e.key === 'Escape') {
+                  setRenamingFolderId(null);
+                  setRenameValue('');
+                }
               }}
-              className="p-0.5 cursor-pointer"
-            >
-              {isExpanded ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
-            </span>
-          )}
-          {!hasChildren && <div className="w-5" />}
-          {isExpanded && hasChildren ? (
-            <FolderOpen className="w-4 h-4" />
-          ) : (
-            <Folder className="w-4 h-4" />
-          )}
-          <span className="flex-1 text-left">{folder.name}</span>
-          <span className="text-xs text-gray-500">({count})</span>
-          {folder.id !== 'all' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowFolderMenu(hasMenu ? null : folder.id);
-              }}
-              className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-gray-100 text-gray-800 transition-opacity ${
-                hasMenu ? 'opacity-100 bg-gray-100' : ''
-              }`}
-              title="Folder actions"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
+              onBlur={() => handleRename(folder.id)}
+              placeholder="Folder name..."
+              autoFocus
+              className="w-full px-2 py-1 text-sm border border-blue-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-600"
+            />
+          </div>
+        ) : (
+          <div
+            className={`group w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer ${
+              isSelected
+                ? 'bg-blue-50 text-blue-600'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+            style={{ paddingLeft: `${12 + level * 16}px` }}
+            onClick={() => onSelectFolder(folder.id)}
+          >
+            {hasChildren && (
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFolder(folder.id);
+                }}
+                className="p-0.5 cursor-pointer"
+              >
+                {isExpanded ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronRight className="w-4 h-4" />
+                )}
+              </span>
+            )}
+            {!hasChildren && <div className="w-5" />}
+            {isExpanded && hasChildren ? (
+              <FolderOpen className="w-4 h-4" />
+            ) : (
+              <Folder className="w-4 h-4" />
+            )}
+            <span className="flex-1 text-left">{folder.name}</span>
+            <span className="text-xs text-gray-500">({count})</span>
+            {folder.id !== 'all' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowFolderMenu(hasMenu ? null : folder.id);
+                }}
+                className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-blue-100 text-blue-600 transition-opacity ${
+                  hasMenu ? 'opacity-100 bg-blue-100' : ''
+                }`}
+                title="Folder actions"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
 
         {hasMenu && folder.id !== 'all' && (
           <div 
@@ -123,7 +162,7 @@ export default function FolderTree({
                 }
                 setShowFolderMenu(null);
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-800 transition-colors flex items-center gap-2"
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
             >
               <Upload className="w-4 h-4" />
               Upload to Folder
@@ -135,10 +174,34 @@ export default function FolderTree({
                 setIsCreatingFolder(false);
                 setShowFolderMenu(null);
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-800 transition-colors flex items-center gap-2"
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Create Subfolder
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setRenameValue(folder.name);
+                setRenamingFolderId(folder.id);
+                setShowFolderMenu(null);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+            >
+              <Edit2 className="w-4 h-4" />
+              Rename Folder
+            </button>
+            <div className="border-t border-gray-200 my-1" />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteFolder(folder.id);
+                setShowFolderMenu(null);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Folder
             </button>
           </div>
         )}
@@ -158,12 +221,12 @@ export default function FolderTree({
               }}
               placeholder="Sub-folder name..."
               autoFocus
-              className="w-full px-2 py-1 text-xs border border-gray-800 rounded focus:outline-none focus:ring-1 focus:ring-gray-600"
+              className="w-full px-2 py-1 text-xs border border-blue-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
             <div className="flex gap-1.5 mt-1.5">
               <button
                 onClick={() => handleCreateFolder(folder.id)}
-                className="flex-1 px-2 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-900"
+                className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
               >
                 Create
               </button>
@@ -198,7 +261,7 @@ export default function FolderTree({
         <h3 className="text-gray-900">Folders</h3>
         <button
           onClick={() => setIsCreatingFolder(true)}
-          className="text-gray-800 hover:text-gray-900 text-sm flex items-center gap-1"
+          className="text-blue-600 hover:text-blue-700 text-sm flex items-center gap-1"
         >
           <Plus className="w-4 h-4" />
           New
@@ -220,12 +283,12 @@ export default function FolderTree({
             }}
             placeholder="Folder name..."
             autoFocus
-            className="w-full px-3 py-1.5 text-sm border border-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+            className="w-full px-3 py-1.5 text-sm border border-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
           />
           <div className="flex gap-2 mt-2">
             <button
               onClick={handleCreateFolder}
-              className="flex-1 px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-gray-900"
+              className="flex-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
             >
               Create
             </button>
