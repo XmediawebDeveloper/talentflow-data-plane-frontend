@@ -48,11 +48,50 @@ export default function ResumeScoringRoute() {
       if (saved) {
         const parsed = JSON.parse(saved);
         // Convert date strings back to Date objects
-        const history = parsed.map((item: any) => ({
+        const rawHistory = parsed.map((item: any) => ({
           ...item,
           scoredAt: new Date(item.scoredAt),
         }));
-        setScoredHistory(history);
+
+        // Consolidate duplicates by jobId - merge entries with same JD
+        const consolidatedMap = new Map<string, ScoredResumeData>();
+
+        rawHistory.forEach((item: ScoredResumeData) => {
+          if (consolidatedMap.has(item.jobId)) {
+            const existing = consolidatedMap.get(item.jobId)!;
+            // Get existing resume IDs to avoid duplicates
+            const existingResumeIds = new Set(existing.scoredResumes.map((r: any) => r.id));
+            // Filter out duplicates from current item
+            const newResumes = item.scoredResumes.filter((r: any) => !existingResumeIds.has(r.id));
+
+            // Keep the most recent timestamp
+            const latestDate = new Date(existing.scoredAt) > new Date(item.scoredAt)
+              ? existing.scoredAt
+              : item.scoredAt;
+
+            // Merge
+            consolidatedMap.set(item.jobId, {
+              ...existing,
+              scoredAt: latestDate,
+              totalScored: existing.scoredResumes.length + newResumes.length,
+              scoredResumes: [...existing.scoredResumes, ...newResumes],
+            });
+          } else {
+            consolidatedMap.set(item.jobId, item);
+          }
+        });
+
+        // Convert back to array and sort by date (most recent first)
+        const consolidatedHistory = Array.from(consolidatedMap.values())
+          .sort((a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime());
+
+        // Save consolidated history back if there were duplicates
+        if (consolidatedHistory.length < rawHistory.length) {
+          console.log('[ResumeScoringPage] Consolidated duplicates:', rawHistory.length, '->', consolidatedHistory.length);
+          localStorage.setItem('scoredHistory', JSON.stringify(consolidatedHistory));
+        }
+
+        setScoredHistory(consolidatedHistory);
       }
     } catch (error) {
       console.error('Failed to load scored history:', error);
@@ -60,13 +99,47 @@ export default function ResumeScoringRoute() {
   };
 
   const saveScoredHistory = (data: ScoredResumeData) => {
-    const newHistory = [data, ...scoredHistory];
+    // Check if there's already an entry for the same JD
+    const existingIndex = scoredHistory.findIndex(item => item.jobId === data.jobId);
+
+    let newHistory: ScoredResumeData[];
+
+    if (existingIndex !== -1) {
+      // Merge with existing entry - combine scored resumes and remove duplicates
+      const existingItem = scoredHistory[existingIndex];
+
+      // Get existing resume IDs to avoid duplicates
+      const existingResumeIds = new Set(existingItem.scoredResumes.map(r => r.id));
+
+      // Filter out duplicates from new resumes
+      const newResumes = data.scoredResumes.filter(r => !existingResumeIds.has(r.id));
+
+      // Create merged entry
+      const mergedEntry: ScoredResumeData = {
+        ...existingItem,
+        scoredAt: new Date(), // Update timestamp to latest
+        totalScored: existingItem.totalScored + newResumes.length,
+        scoredResumes: [...existingItem.scoredResumes, ...newResumes],
+      };
+
+      // Replace existing entry and move to top
+      newHistory = [
+        mergedEntry,
+        ...scoredHistory.filter((_, idx) => idx !== existingIndex)
+      ];
+
+      toast.success(`Added ${newResumes.length} new candidate(s) to existing scoring for "${data.jobTitle}"`);
+    } else {
+      // New JD entry - add to front
+      newHistory = [data, ...scoredHistory];
+      toast.success('Scoring results saved successfully');
+    }
+
     setScoredHistory(newHistory);
 
     // Save to localStorage
     try {
       localStorage.setItem('scoredHistory', JSON.stringify(newHistory));
-      toast.success('Scoring results saved successfully');
     } catch (error) {
       console.error('Failed to save scored history:', error);
     }

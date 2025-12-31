@@ -9,13 +9,27 @@ import { Job } from '@/lib/types/types';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 
+// Extended Job type with additional fields for JD view
+interface ExtendedJob extends Job {
+  niceToHaveSkills?: string[];
+  salaryMin?: number;
+  salaryMax?: number;
+  compensationType?: string;
+  creationStage?: string;
+  hasScoredResumes?: boolean;
+  hasAiMatchResults?: boolean;
+  rawDescription?: string;
+  mustHaveComments?: string[];
+}
+
 function JobDetailsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const jobId = searchParams.get('id');
 
-  const [job, setJob] = useState<Job | null>(null);
+  const [job, setJob] = useState<ExtendedJob | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rawJdData, setRawJdData] = useState<JDResponse | null>(null);
 
   useEffect(() => {
     if (jobId) {
@@ -28,12 +42,21 @@ function JobDetailsContent() {
     setLoading(true);
     try {
       const data = await jdService.getById(jobId);
+      setRawJdData(data);
+
+      // For Draft JDs, redirect to JD creation with the current stage
+      if (data.status === 'draft') {
+        const stage = data.creation_stage || 'create';
+        router.push(`/recruitment/jd-creation?id=${jobId}&stage=${stage}`);
+        return;
+      }
+
       // Convert JDResponse to Job type
-      const convertedJob: Job = {
+      const convertedJob: ExtendedJob = {
         id: data.id,
         title: data.title || 'Untitled',
         status: mapStatus(data.status),
-        location: data.location || 'Remote',
+        location: data.location || (data.locations && data.locations.length > 0 ? data.locations.map(l => l.city).join(', ') : ''),
         daysActive: calculateDaysActive(data.created_at),
         requiredMatch: 70,
         department: data.department,
@@ -45,12 +68,21 @@ function JobDetailsContent() {
         applicants: data.applicants_count || 0,
         description: data.description,
         skills: data.must_have_skills || [],
+        niceToHaveSkills: data.nice_to_have_skills || [],
         postedDate: data.published_at || data.created_at,
         postedBy: data.created_by_name || 'System',
         employmentType: data.employment_type,
         currentVersion: 1, // Will be fetched from API
         internalRecruiterComments: data.internal_comments ? [data.internal_comments] : [],
+        mustHaveComments: data.must_have_comments || [],
         assessmentGuidance: data.assessment_guidance,
+        salaryMin: data.salary_min,
+        salaryMax: data.salary_max,
+        compensationType: data.compensation_type,
+        creationStage: data.creation_stage,
+        rawDescription: data.description,
+        hasScoredResumes: (data.scored_resumes_count || 0) > 0,
+        hasAiMatchResults: false, // Will be checked separately
       };
 
       // Fetch current version number
@@ -59,6 +91,14 @@ function JobDetailsContent() {
         convertedJob.currentVersion = versionInfo.current_version;
       } catch (e) {
         // Version info not available yet
+      }
+
+      // Check if AI Talent Match has been executed for this JD
+      try {
+        const scoredResponse = await jdService.getScoredResumes(jobId, { page_size: 1 });
+        convertedJob.hasScoredResumes = (scoredResponse.total || 0) > 0;
+      } catch (e) {
+        // Ignore error
       }
 
       setJob(convertedJob);

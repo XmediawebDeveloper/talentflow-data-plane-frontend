@@ -13,11 +13,26 @@ import SelectSourceModal from './SelectSourceModal';
 import AssessmentResultsTable from './AssessmentResultsTable';
 import VersionHistoryModal from './VersionHistoryModal';
 import JDVersionHistoryModal from './JDVersionHistoryModal';
-import ResumeQuickViewModal from './ResumeQuickViewModal';
+import ResumeDetailView from './ResumeDetailView';
+import ScoringResultDetailModal from './ScoringResultDetailModal';
 import { Resume } from '@/lib/types/types';
+import { scoringService } from '@/lib/services/scoringService';
+
+// Extended Job interface with additional fields
+interface ExtendedJob extends Job {
+  niceToHaveSkills?: string[];
+  salaryMin?: number;
+  salaryMax?: number;
+  compensationType?: string;
+  creationStage?: string;
+  hasScoredResumes?: boolean;
+  hasAiMatchResults?: boolean;
+  rawDescription?: string;
+  mustHaveComments?: string[];
+}
 
 interface JobDetailViewProps {
-  job: Job;
+  job: ExtendedJob;
   onBack: () => void;
   onEdit?: (job: Job) => void;
   resumes?: any[]; // All resumes for selection
@@ -28,7 +43,15 @@ interface JobDetailViewProps {
   onViewAssessmentResult?: (assessmentResult: any, jobTitle: string) => void; // Navigate to assessment result detail
 }
 
-export default function JobDetailView({ job, onBack, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onArchive, onViewAssessmentResult }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onArchive, onViewAssessmentResult }: JobDetailViewProps) {
+  // Check if editing is allowed (not allowed if resume scoring or AI match executed)
+  const canEdit = job.status === 'Published' && !job.hasScoredResumes && !job.hasAiMatchResults;
+
+  const handleEdit = () => {
+    if (onEdit && canEdit) {
+      onEdit(job);
+    }
+  };
   const [showAddApplicantsMenu, setShowAddApplicantsMenu] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showScoringView, setShowScoringView] = useState(false);
@@ -54,6 +77,10 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
 
   // Resume quick view modal state
   const [viewingResume, setViewingResume] = useState<Resume | null>(null);
+
+  // Scored resume detail modal state
+  const [viewingScoredResume, setViewingScoredResume] = useState<any | null>(null);
+  const [loadingScoredDetail, setLoadingScoredDetail] = useState(false);
 
   // Fetch JD History when modal opens
   useEffect(() => {
@@ -124,11 +151,15 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
       const convertedResumes = (response.items || []).map((item: any) => {
         // Map match_status from API to display format
         let matchStatus = 'No Match';
-        if (item.match_status === 'exact_match') {
-          matchStatus = 'Exact Match';
-        } else if (item.match_status === 'partial_match') {
+        if (item.match_status === 'exact_match' || item.match_status === 'excellent') {
+          matchStatus = 'Excellent Match';
+        } else if (item.match_status === 'partial_match' || item.match_status === 'partial') {
           matchStatus = 'Partial Match';
         }
+
+        // Extract skills from score_breakdown or criteria_scores
+        const matchedSkills: string[] = item.skills || [];
+        const missingSkills: string[] = item.gaps || [];
 
         return {
           id: item.id,
@@ -140,7 +171,7 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by_name || 'System',
           experience: item.experience_years ? `${item.experience_years} years` : undefined,
-          education: item.education || undefined,
+          education: item.education,
           certifications: item.certifications || [],
           aiSummary: item.ai_summary,
           strengths: item.strengths || [],
@@ -148,6 +179,21 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
           title: item.current_title,
           currentCompany: item.current_company,
           location: item.location,
+          // Extended scoring data
+          skills: item.skills || [],
+          matchedSkills: matchedSkills,
+          missingSkills: missingSkills,
+          scoreBreakdown: item.score_breakdown || [],
+          criteriaScores: item.criteria_scores || {},
+          essentialScore: item.essential_score,
+          nonEssentialScore: item.non_essential_score,
+          // Experience and education details for Personal Info tab
+          experienceDetails: item.experience_details || item.experience || [],
+          educationDetails: item.education_details || item.education || [],
+          technicalSkills: item.technical_skills || item.skills || [],
+          softSkills: item.soft_skills || [],
+          languages: item.languages || [],
+          professionalSummary: item.professional_summary || item.ai_summary || '',
         };
       });
 
@@ -780,6 +826,16 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
             {/* Action Buttons - Only for Published jobs */}
             {job.status === 'Published' && (
               <div className="flex items-center gap-2">
+                {/* Edit Button - Only if no scored resumes or AI match results */}
+                {onEdit && canEdit && (
+                  <button
+                    onClick={handleEdit}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span className="font-medium">Edit & Republish</span>
+                  </button>
+                )}
                 {onArchive && (
                   <button
                     onClick={handleArchive}
@@ -1099,64 +1155,33 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
             {/* JD Content */}
             <div className="p-8">
               <div className="space-y-8">
-                {/* About the Role */}
-                <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
-                    About the Role
-                  </h2>
-                  <div className="mt-4 space-y-3 text-gray-700 leading-relaxed">
-                    <p>
-                      We are seeking a talented <strong>{job.title}</strong> to join our {job.department || 'team'}.
-                      This is a {job.location?.toLowerCase() || 'flexible'} position requiring {job.experience || 'relevant experience'}.
-                    </p>
-                    <p>
-                      The ideal candidate will have strong expertise in the required skills and a proven track record
-                      of delivering high-quality results. You will work closely with cross-functional teams to drive
-                      innovation and achieve business objectives.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Key Responsibilities */}
-                <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
-                    Key Responsibilities
-                  </h2>
-                  <ul className="mt-4 space-y-3">
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Lead technical design and implementation of solutions</span>
-                    </li>
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Collaborate with team members on complex projects</span>
-                    </li>
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Mentor junior team members and conduct code reviews</span>
-                    </li>
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Contribute to architectural decisions and best practices</span>
-                    </li>
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Ensure code quality, performance, and scalability</span>
-                    </li>
-                  </ul>
-                </div>
-
-                {/* Required Skills */}
-                {job.skills && job.skills.length > 0 && (
+                {/* Job Description - Actual Content */}
+                {job.description ? (
                   <div>
                     <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
-                      Required Skills
+                      Job Description
+                    </h2>
+                    <div className="mt-4 text-gray-700 leading-relaxed prose max-w-none whitespace-pre-wrap">
+                      {job.description}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-gray-500 italic text-center py-8">
+                    No job description provided
+                  </div>
+                )}
+
+                {/* Must-Have Skills */}
+                {job.skills && job.skills.length > 0 && (
+                  <div>
+                    <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-red-500 inline-block">
+                      Must-Have Skills
                     </h2>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {job.skills.map((skill, index) => (
                         <span
                           key={index}
-                          className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md text-sm border border-blue-200"
+                          className="px-3 py-1.5 bg-red-50 text-red-700 rounded-md text-sm border border-red-200"
                         >
                           {skill}
                         </span>
@@ -1165,58 +1190,79 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                   </div>
                 )}
 
-                {/* Qualifications */}
-                <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
-                    Qualifications
-                  </h2>
-                  <ul className="mt-4 space-y-3">
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>{job.experience || 'Relevant years of'} professional experience</span>
-                    </li>
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Strong proficiency in required technologies</span>
-                    </li>
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Excellent problem-solving and communication skills</span>
-                    </li>
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Bachelor's degree in Computer Science or related field (or equivalent experience)</span>
-                    </li>
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Ability to work in a {job.location?.toLowerCase() || 'flexible'} environment</span>
-                    </li>
-                  </ul>
-                </div>
+                {/* Nice-to-Have Skills */}
+                {job.niceToHaveSkills && job.niceToHaveSkills.length > 0 && (
+                  <div>
+                    <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-500 inline-block">
+                      Nice-to-Have Skills
+                    </h2>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {job.niceToHaveSkills.map((skill, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-md text-sm border border-blue-200"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                {/* What We Offer */}
+                {/* Compensation */}
+                {(job.salaryMin || job.salaryMax) && (
+                  <div>
+                    <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-green-500 inline-block">
+                      Compensation
+                    </h2>
+                    <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 inline-block">
+                      <p className="text-lg text-gray-900">
+                        {job.salaryMin && (
+                          <span>₹{job.salaryMin.toLocaleString('en-IN')}</span>
+                        )}
+                        {job.salaryMin && job.salaryMax && <span> - </span>}
+                        {job.salaryMax && (
+                          <span>₹{job.salaryMax.toLocaleString('en-IN')}</span>
+                        )}
+                        {job.compensationType && (
+                          <span className="text-gray-600 text-sm ml-2">per {job.compensationType}</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Job Details Grid */}
                 <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
-                    What We Offer
+                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-gray-400 inline-block">
+                    Job Details
                   </h2>
-                  <ul className="mt-4 space-y-3">
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-green-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Competitive salary and comprehensive benefits package</span>
-                    </li>
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-green-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Flexible work arrangements and work-life balance</span>
-                    </li>
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-green-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Professional development and learning opportunities</span>
-                    </li>
-                    <li className="flex items-start gap-3 text-gray-700">
-                      <div className="w-1.5 h-1.5 bg-green-600 rounded-full mt-2 flex-shrink-0"></div>
-                      <span>Collaborative and innovative work environment</span>
-                    </li>
-                  </ul>
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    {job.department && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-500 mb-1">Department</div>
+                        <div className="text-gray-900">{job.department}</div>
+                      </div>
+                    )}
+                    {job.experience && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-500 mb-1">Experience Required</div>
+                        <div className="text-gray-900">{job.experience}</div>
+                      </div>
+                    )}
+                    {job.location && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-500 mb-1">Location</div>
+                        <div className="text-gray-900">{job.location}</div>
+                      </div>
+                    )}
+                    {job.employmentType && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-500 mb-1">Employment Type</div>
+                        <div className="text-gray-900 capitalize">{job.employmentType}</div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1278,42 +1324,44 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h3 className="text-gray-900 mb-4">Recent Activity</h3>
             <div className="space-y-4">
-              <div className="flex gap-3">
-                <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                <div>
-                  <div className="text-sm text-gray-900">New application received</div>
-                  <div className="text-xs text-gray-500">2 hours ago</div>
+              {/* Show real activity based on JD data */}
+              {scoredResumesStats.total > 0 && (
+                <div className="flex gap-3">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                  <div>
+                    <div className="text-sm text-gray-900">{scoredResumesStats.total} resume(s) scored</div>
+                    <div className="text-xs text-gray-500">Resume scoring completed</div>
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-3">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                <div>
-                  <div className="text-sm text-gray-900">Job posting shared</div>
-                  <div className="text-xs text-gray-500">5 hours ago</div>
+              )}
+              {job.currentVersion && job.currentVersion > 1 && (
+                <div className="flex gap-3">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                  <div>
+                    <div className="text-sm text-gray-900">JD updated to version {job.currentVersion}.0</div>
+                    <div className="text-xs text-gray-500">Job description republished</div>
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-3">
-                <div className="w-2 h-2 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                <div>
-                  <div className="text-sm text-gray-900">Match score updated</div>
-                  <div className="text-xs text-gray-500">1 day ago</div>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <div className="w-2 h-2 bg-yellow-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                <div>
-                  <div className="text-sm text-gray-900">Job description edited</div>
-                  <div className="text-xs text-gray-500">2 days ago</div>
-                </div>
-              </div>
+              )}
               {job.status === 'Published' && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
                   <div>
                     <div className="text-sm text-gray-900">Job published</div>
-                    <div className="text-xs text-gray-500">{job.daysActive} days ago</div>
+                    <div className="text-xs text-gray-500">
+                      {job.postedDate
+                        ? new Date(job.postedDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })
+                        : `${job.daysActive} days ago`}
+                    </div>
                   </div>
                 </div>
+              )}
+              {scoredResumesStats.total === 0 && job.status !== 'Published' && !job.currentVersion && (
+                <div className="text-sm text-gray-500 italic">No recent activity</div>
               )}
             </div>
           </div>
@@ -1358,6 +1406,22 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
                   <div className="bg-red-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.noMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Must-Have Comments */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-gray-900 mb-4">Must-Have Comments</h3>
+            <div className="text-sm text-gray-600 space-y-2">
+              {job.mustHaveComments && job.mustHaveComments.length > 0 ? (
+                <ul className="list-disc list-inside space-y-1">
+                  {job.mustHaveComments.map((comment, index) => (
+                    <li key={index}>{comment}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-500 italic">No must-have comments added</p>
+              )}
             </div>
           </div>
 
@@ -1415,25 +1479,76 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
               jobTitle={job.title}
               jobId={job.id}
               availableUnits={15}
-              onViewCandidate={(resume) => {
-                // Convert scored resume to Resume format for the modal
-                const resumeForModal: Resume = {
+              onViewCandidate={async (resume) => {
+                // Extract scores from criteriaScores (keys: job_title, experience, must_have_skills, education, location, nice_to_have_skills, industry)
+                const cs = resume.criteriaScores || {};
+                // Convert 0-10 scores to percentages (0-100)
+                const getScore = (key: string, fallback: number = 70) => {
+                  const criteria = cs[key];
+                  if (criteria && typeof criteria.score === 'number') {
+                    return criteria.score <= 10 ? criteria.score * 10 : criteria.score;
+                  }
+                  return fallback;
+                };
+
+                // Extract matched skills from must_have_skills breakdown or use resume skills
+                const mustHaveBreakdown = cs.must_have_skills?.skill_breakdown || {};
+                const niceToHaveBreakdown = cs.nice_to_have_skills?.skill_breakdown || {};
+                const matchedSkillsFromScoring = [
+                  ...Object.keys(mustHaveBreakdown).filter(skill => mustHaveBreakdown[skill]?.score >= 6),
+                  ...Object.keys(niceToHaveBreakdown).filter(skill => niceToHaveBreakdown[skill]?.score >= 6),
+                ];
+                const missingSkillsFromScoring = [
+                  ...Object.keys(mustHaveBreakdown).filter(skill => mustHaveBreakdown[skill]?.score < 6),
+                  ...Object.keys(niceToHaveBreakdown).filter(skill => niceToHaveBreakdown[skill]?.score < 6),
+                ];
+
+                // Prepare scored resume data for the modal
+                const scoredResumeForModal = {
                   id: resume.id,
-                  name: resume.candidateName || 'Unknown',
+                  candidateName: resume.candidateName || 'Unknown',
                   email: resume.email || '',
                   phone: resume.phone || '',
-                  title: resume.title || 'Candidate',
-                  experience: resume.experience || 'N/A',
-                  education: resume.education || 'N/A',
-                  location: resume.location || 'N/A',
-                  skills: resume.strengths || [],
-                  source: 'Manual' as const,
-                  folderId: '',
-                  uploadDate: resume.scoredDate || new Date().toISOString(),
-                  attachments: 1,
-                  uploadedBy: resume.scoredBy || 'System',
+                  matchStatus: resume.matchStatus || 'No Match',
+                  scorePercentage: resume.scorePercentage || 0,
+                  scoredDate: resume.scoredDate || new Date().toISOString(),
+                  scoredBy: resume.scoredBy || 'System',
+                  experience: resume.experience,
+                  education: resume.education,
+                  certifications: resume.certifications || [],
+                  currentCompany: resume.currentCompany,
+                  location: resume.location,
+                  title: resume.title,
+                  // Scoring details - map from API keys to frontend expected keys
+                  detailedScores: {
+                    titleMatch: getScore('job_title', resume.scorePercentage || 75),
+                    experienceMatch: getScore('experience', resume.essentialScore || 80),
+                    skillsMatch: getScore('must_have_skills', resume.scorePercentage || 85),
+                    educationMatch: getScore('education', 70),
+                    locationMatch: getScore('location', 90),
+                  },
+                  // Use matched/missing from scoring breakdown or fallback to resume data
+                  matchedSkills: matchedSkillsFromScoring.length > 0
+                    ? matchedSkillsFromScoring
+                    : (resume.matchedSkills || resume.skills || resume.technicalSkills || []),
+                  missingSkills: missingSkillsFromScoring.length > 0
+                    ? missingSkillsFromScoring
+                    : (resume.missingSkills || resume.gaps || []),
+                  keyStrengths: resume.strengths || [],
+                  improvementAreas: resume.gaps || [],
+                  aiReasoning: resume.aiSummary || resume.professionalSummary || 'AI analysis based on resume scoring against job requirements.',
+                  recommendations: resume.strengths?.slice(0, 3) || [],
+                  // Extended data for all tabs
+                  scoreBreakdown: resume.scoreBreakdown || [],
+                  criteriaScores: resume.criteriaScores || {},
+                  experienceDetails: resume.experienceDetails || [],
+                  educationDetails: resume.educationDetails || [],
+                  technicalSkills: resume.technicalSkills || resume.skills || [],
+                  softSkills: resume.softSkills || [],
+                  languages: resume.languages || [],
+                  professionalSummary: resume.professionalSummary || resume.aiSummary || '',
                 };
-                setViewingResume(resumeForModal);
+                setViewingScoredResume(scoredResumeForModal);
               }}
             />
           )}
@@ -1679,11 +1794,20 @@ export default function JobDetailView({ job, onBack, resumes = [], onScoreResume
         </div>
       )}
 
-      {/* Resume Quick View Modal */}
+      {/* Resume Detail View Modal */}
       {viewingResume && (
-        <ResumeQuickViewModal
+        <ResumeDetailView
           resume={viewingResume}
           onClose={() => setViewingResume(null)}
+        />
+      )}
+
+      {/* Scored Resume Detail Modal */}
+      {viewingScoredResume && (
+        <ScoringResultDetailModal
+          resume={viewingScoredResume}
+          jobTitle={job.title}
+          onClose={() => setViewingScoredResume(null)}
         />
       )}
     </main>

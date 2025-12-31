@@ -6,7 +6,7 @@ import { recordResumeUpload } from '@/lib/services/usageTrackingService';
 
 // Default constants for fallback
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const MAX_BULK_FILES = 100;
+const MAX_BULK_FILES = 300; // Async processing supports up to 300 files
 const ALLOWED_FORMATS = [
   'application/pdf',
   'application/msword',
@@ -339,7 +339,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 <div className={`text-sm mb-1 ${activeTab === 'bulk' ? 'text-gray-800' : 'text-gray-900'}`}>
                   Bulk Upload
                 </div>
-                <div className="text-xs text-gray-500">Upload multiple resumes (up to 100)</div>
+                <div className="text-xs text-gray-500">Upload multiple resumes (up to 300)</div>
               </div>
             </button>
           </div>
@@ -367,7 +367,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 <FileText className="w-3 h-3" />
                 Max file size: {maxFileSizeMB} MB
               </span>
-              {activeTab === 'bulk' && <span>• Max files: 100 resumes</span>}
+              {activeTab === 'bulk' && <span>• Max files: 300 resumes</span>}
             </div>
             <input
               ref={fileInputRef}

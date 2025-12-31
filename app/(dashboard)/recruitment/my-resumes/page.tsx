@@ -9,6 +9,7 @@ import FolderTree from '@/components/FolderTree';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadHistoryPanel from '@/components/UploadHistoryPanel';
 import UploadModal from '@/components/UploadModal';
+import ResumeDetailView from '@/components/ResumeDetailView';
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import { Resume, Folder } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
@@ -31,6 +32,7 @@ export default function MyResumesPage() {
   const [showUploadHistory, setShowUploadHistory] = useState(false);
   const [uploadHistory, setUploadHistory] = useState<any[]>([]);
   const [viewingResume, setViewingResume] = useState<Resume | null>(null);
+  const [quickViewResume, setQuickViewResume] = useState<Resume | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -40,7 +42,7 @@ export default function MyResumesPage() {
     setLoading(true);
     try {
       const [resumeResponse, folderResponse] = await Promise.all([
-        resumeService.list({ page_size: 100 }),
+        resumeService.list({ source: 'my-resumes', page_size: 100 }),
         folderService.list().catch(() => []),
       ]);
 
@@ -60,6 +62,42 @@ export default function MyResumesPage() {
         uploadDate: r.created_at,
         attachments: r.file_name ? 1 : 0,
         uploadedBy: 'current-user',
+        currentCompany: r.current_company,
+        previousCompany: r.previous_company,
+        noticePeriod: r.notice_period,
+        lastUpdated: r.updated_at,
+        // Extended fields for detailed view
+        professionalSummary: r.professional_summary,
+        technicalSkills: r.technical_skills,
+        softSkills: r.soft_skills,
+        educationDetails: r.education?.map((edu: any) => ({
+          degree: edu.degree || '',
+          school: edu.school || edu.institution || '',
+          location: edu.location || '',
+          year: edu.year || edu.graduation_year || '',
+          gpa: edu.gpa || '',
+          honors: edu.honors || '',
+        })),
+        experienceDetails: r.experience?.map((exp: any) => ({
+          title: exp.title || exp.position || '',
+          company: exp.company || '',
+          location: exp.location || '',
+          startDate: exp.start_date || '',
+          endDate: exp.end_date || 'Present',
+          duration: exp.duration || '',
+          description: exp.description || '',
+          achievements: exp.achievements || exp.responsibilities || [],
+        })),
+        certifications: r.certifications?.map((cert: any) => ({
+          name: cert.name || cert.title || '',
+          issuer: cert.issuer || cert.organization || '',
+          date: cert.date || cert.issued_date || '',
+          credentialId: cert.credential_id || cert.credentialId || '',
+        })),
+        languages: r.languages?.map((lang: any) => ({
+          name: typeof lang === 'string' ? lang : (lang.name || lang.language || ''),
+          proficiency: typeof lang === 'string' ? 'Fluent' : (lang.proficiency || lang.level || 'Fluent'),
+        })),
       }));
 
       // Convert API Folder to component Folder type
@@ -163,46 +201,141 @@ export default function MyResumesPage() {
   };
 
   const handleUploadResumes = async (files: File[], folderId?: string) => {
-    for (const file of files) {
-      try {
-        const resume = await resumeService.upload(file, folderId);
-        const converted: Resume = {
-          id: resume.id,
-          name: resume.candidate_name || resume.file_name?.replace(/\.[^/.]+$/, '') || 'Unknown',
-          email: resume.email || 'No email',
-          phone: resume.phone || 'No phone',
-          title: resume.current_title || 'N/A',
-          experience: resume.experience_years ? `${resume.experience_years} years` : 'N/A',
-          education: resume.education?.[0]?.degree || 'N/A',
-          location: resume.location || 'N/A',
-          skills: resume.skills || [],
-          source: 'Manual',
-          folderId: resume.folder_id || '',
-          uploadDate: resume.created_at,
-          attachments: 1,
-          uploadedBy: 'current-user',
-        };
-        setResumes(prev => [converted, ...prev]);
-      } catch (error) {
-        toast.error(`Failed to upload ${file.name}`);
-      }
-    }
-    toast.success('Upload completed');
     setIsUploadModalOpen(false);
+
+    // For single file, use single upload endpoint
+    if (files.length === 1) {
+      try {
+        const r = await resumeService.upload(files[0], folderId);
+        const converted = convertApiResume(r);
+        setResumes(prev => [converted, ...prev]);
+        toast.success('Resume uploaded successfully');
+      } catch (error) {
+        toast.error(`Failed to upload ${files[0].name}`);
+      }
+      return;
+    }
+
+    // For multiple files, use bulk upload with async processing
+    try {
+      const toastId = toast.loading(`Uploading ${files.length} resumes...`);
+
+      // Start bulk upload - returns immediately with batch info
+      const batch = await resumeService.uploadBulk(files, folderId);
+
+      toast.loading(`Processing ${batch.total_files} resumes...`, { id: toastId });
+
+      // Poll for batch status until complete
+      const pollInterval = setInterval(async () => {
+        try {
+          const status = await resumeService.getBatchStatus(batch.id);
+
+          const processed = status.completed + status.errors;
+          const total = status.total_files;
+          const percentage = Math.round((processed / total) * 100);
+
+          toast.loading(`Processing resumes: ${processed}/${total} (${percentage}%)`, { id: toastId });
+
+          // Check if batch is complete
+          if (status.status === 'completed' || status.pending === 0) {
+            clearInterval(pollInterval);
+
+            if (status.errors > 0) {
+              toast.warning(
+                `Upload complete: ${status.completed} succeeded, ${status.errors} failed`,
+                { id: toastId, duration: 5000 }
+              );
+            } else {
+              toast.success(
+                `Successfully uploaded ${status.completed} resumes`,
+                { id: toastId, duration: 3000 }
+              );
+            }
+
+            // Refresh the resume list
+            fetchData();
+          }
+        } catch (pollError) {
+          console.error('Error polling batch status:', pollError);
+        }
+      }, 2000); // Poll every 2 seconds
+
+      // Set a timeout to stop polling after 10 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+      }, 600000);
+
+    } catch (error) {
+      toast.error('Failed to start bulk upload');
+      console.error('Bulk upload error:', error);
+    }
   };
 
-  // Filter resumes
+  // Helper function to convert API resume to component type
+  const convertApiResume = (r: ApiResume): Resume => ({
+    id: r.id,
+    name: r.candidate_name || r.file_name?.replace(/\.[^/.]+$/, '') || 'Unknown',
+    email: r.email || 'No email',
+    phone: r.phone || 'No phone',
+    title: r.current_title || 'N/A',
+    experience: r.experience_years ? `${r.experience_years} years` : 'N/A',
+    education: r.education?.[0]?.degree || 'N/A',
+    location: r.location || 'N/A',
+    skills: r.skills || [],
+    source: 'Manual',
+    folderId: r.folder_id || '',
+    uploadDate: r.created_at,
+    attachments: 1,
+    uploadedBy: 'current-user',
+    currentCompany: r.current_company,
+    previousCompany: r.previous_company,
+    noticePeriod: r.notice_period,
+    lastUpdated: r.updated_at,
+    professionalSummary: r.professional_summary,
+    technicalSkills: r.technical_skills,
+    softSkills: r.soft_skills,
+    educationDetails: r.education?.map((edu: any) => ({
+      degree: edu.degree || '',
+      school: edu.school || edu.institution || '',
+      location: edu.location || '',
+      year: edu.year || edu.graduation_year || '',
+      gpa: edu.gpa || '',
+      honors: edu.honors || '',
+    })),
+    experienceDetails: r.experience?.map((exp: any) => ({
+      title: exp.title || exp.position || '',
+      company: exp.company || '',
+      location: exp.location || '',
+      startDate: exp.start_date || '',
+      endDate: exp.end_date || 'Present',
+      duration: exp.duration || '',
+      description: exp.description || '',
+      achievements: exp.achievements || exp.responsibilities || [],
+    })),
+    certifications: r.certifications?.map((cert: any) => ({
+      name: cert.name || cert.title || '',
+      issuer: cert.issuer || cert.organization || '',
+      date: cert.date || cert.issued_date || '',
+      credentialId: cert.credential_id || cert.credentialId || '',
+    })),
+    languages: r.languages?.map((lang: any) => ({
+      name: typeof lang === 'string' ? lang : (lang.name || lang.language || ''),
+      proficiency: typeof lang === 'string' ? 'Fluent' : (lang.proficiency || lang.level || 'Fluent'),
+    })),
+  });
+
+  // Filter resumes (user filtering is done by API via source: 'my-resumes')
   const filteredResumes = resumes.filter(r => {
     const matchesFolder = !selectedFolder || r.folderId === selectedFolder;
     const matchesSearch = !searchQuery ||
       r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFolder && matchesSearch && r.uploadedBy === 'current-user';
+    return matchesFolder && matchesSearch;
   });
 
-  // Stats
-  const totalResumes = resumes.filter(r => r.uploadedBy === 'current-user').length;
+  // Stats (all resumes returned are user's own resumes)
+  const totalResumes = resumes.length;
   const appliedResumes = 0; // Would need job applications data
   const availableResumes = totalResumes - appliedResumes;
 
@@ -297,7 +430,7 @@ export default function MyResumesPage() {
             selectedResumes={selectedResumes}
             onSelectResume={handleSelectResume}
             onSelectAll={handleSelectAll}
-            onQuickView={(resume) => setViewingResume(resume)}
+            onQuickView={(resume) => setQuickViewResume(resume)}
             onApplyToJob={(resume) => console.log('Apply to job:', resume)}
             onDelete={(id) => handleDelete(id)}
             onMoveToFolder={handleMoveToFolder}
@@ -325,9 +458,17 @@ export default function MyResumesPage() {
       )}
 
       {viewingResume && (
-        <ResumeQuickViewModal
+        <ResumeDetailView
           resume={viewingResume}
           onClose={() => setViewingResume(null)}
+          onDelete={(id) => handleDelete(id)}
+        />
+      )}
+
+      {quickViewResume && (
+        <ResumeQuickViewModal
+          resume={quickViewResume}
+          onClose={() => setQuickViewResume(null)}
         />
       )}
     </main>
