@@ -11,13 +11,12 @@ import {
   Calendar,
   Loader2,
   UserCog,
-  Shield,
-  Check,
-  ChevronDown
+  Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 import rbacService from '@/lib/services/rbacService';
-import { RoleListItem } from '@/lib/types/rbac';
+import userService from '@/lib/services/userService';
+import { RoleListItem, Permission } from '@/lib/types/rbac';
 
 // Types
 interface UserPermissions {
@@ -32,28 +31,91 @@ interface UserPermissions {
   can_manage_users: boolean;
 }
 
-type UserRole = 'tenant_admin' | 'recruiter' | 'viewer';
+// RBAC Permission group for display
+interface PermissionGroup {
+  module: string;
+  moduleName: string;
+  permissions: Permission[];
+}
+
+// Module display names
+const MODULE_DISPLAY_NAMES: Record<string, string> = {
+  jd: 'Job Descriptions',
+  resumes: 'Resumes',
+  internal_db: 'Internal Database',
+  assessments: 'Assessments',
+  analytics: 'Analytics',
+  settings: 'Settings',
+  users: 'Users',
+  roles: 'Roles',
+};
+
+// Group permissions by module
+const groupPermissionsByModule = (permissions: Permission[]): PermissionGroup[] => {
+  const groups: Record<string, PermissionGroup> = {};
+
+  permissions.forEach(perm => {
+    if (!groups[perm.module]) {
+      groups[perm.module] = {
+        module: perm.module,
+        moduleName: MODULE_DISPLAY_NAMES[perm.module] || perm.module,
+        permissions: [],
+      };
+    }
+    groups[perm.module].permissions.push(perm);
+  });
+
+  // Sort permissions within each group by action order
+  const actionOrder = ['create', 'read', 'update', 'delete'];
+  Object.values(groups).forEach(group => {
+    group.permissions.sort((a, b) => {
+      return actionOrder.indexOf(a.action) - actionOrder.indexOf(b.action);
+    });
+  });
+
+  // Return groups in a specific order
+  const moduleOrder = ['jd', 'resumes', 'internal_db', 'assessments', 'analytics', 'settings', 'users', 'roles'];
+  return moduleOrder
+    .filter(mod => groups[mod])
+    .map(mod => groups[mod]);
+};
 
 interface ApiUser {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
+  role: string;  // Dynamic role from RBAC
   permissions: UserPermissions;
   is_active: boolean;
   last_login?: string;
 }
 
-const roleLabels: Record<UserRole, string> = {
+// Default role labels for known roles
+const defaultRoleLabels: Record<string, string> = {
   tenant_admin: 'Admin',
+  admin: 'Admin',
   recruiter: 'Recruiter',
   viewer: 'Viewer',
 };
 
-const roleBadgeColors: Record<UserRole, string> = {
+// Default badge colors for known roles
+const defaultRoleBadgeColors: Record<string, string> = {
   tenant_admin: 'bg-gray-200 text-gray-800',
+  admin: 'bg-gray-200 text-gray-800',
   recruiter: 'bg-gray-100 text-gray-700',
   viewer: 'bg-gray-50 text-gray-600',
+};
+
+// Get role label - use RBAC name or fallback to defaults
+const getRoleLabel = (role: string, availableRoles: RoleListItem[]): string => {
+  const rbacRole = availableRoles.find(r => r.code.toLowerCase() === role.toLowerCase());
+  if (rbacRole) return rbacRole.name;
+  return defaultRoleLabels[role.toLowerCase()] || role.charAt(0).toUpperCase() + role.slice(1);
+};
+
+// Get role badge color - use defaults for known roles, gray for custom
+const getRoleBadgeColor = (role: string): string => {
+  return defaultRoleBadgeColors[role.toLowerCase()] || 'bg-blue-100 text-blue-700';
 };
 
 const permissionLabels: Record<keyof UserPermissions, string> = {
@@ -170,28 +232,59 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<RoleListItem[]>([]);
-  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
-  const [isEditRoleDropdownOpen, setIsEditRoleDropdownOpen] = useState(false);
+  const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [editSelectedRoleId, setEditSelectedRoleId] = useState<number | null>(null);
+  const [selectedPermissionIds, setSelectedPermissionIds] = useState<Set<number>>(new Set());
+  const [editSelectedPermissionIds, setEditSelectedPermissionIds] = useState<Set<number>>(new Set());
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const [editRoleDropdownOpen, setEditRoleDropdownOpen] = useState(false);
+  const roleDropdownRef = useRef<HTMLDivElement>(null);
+  const editRoleDropdownRef = useRef<HTMLDivElement>(null);
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
     password: '',
-    role: 'viewer' as UserRole,
+    role: 'viewer',
     permissions: { ...defaultPermissions },
   });
 
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
 
-  // Load users and roles
+  // Load users, roles, and permissions
   useEffect(() => {
     if (hasFetched.current) return;
     hasFetched.current = true;
     loadUsers();
     loadRoles();
+    loadAllPermissions();
   }, []);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target as Node)) {
+        setRoleDropdownOpen(false);
+      }
+      if (editRoleDropdownRef.current && !editRoleDropdownRef.current.contains(event.target as Node)) {
+        setEditRoleDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const loadAllPermissions = async () => {
+    try {
+      const data = await rbacService.getPermissions();
+      setAllPermissions(data.permissions);
+    } catch (error) {
+      console.warn('Failed to load permissions:', error);
+    }
+  };
 
   const loadRoles = async () => {
     try {
@@ -208,75 +301,66 @@ export default function UserManagement() {
     }
   };
 
-  const selectRole = (roleId: number, isEdit: boolean = false) => {
-    const role = availableRoles.find(r => r.id === roleId);
-    const roleCode = role?.code.toLowerCase() || '';
+  const selectRole = async (roleId: number, isEdit: boolean = false) => {
+    setIsLoadingPermissions(true);
 
-    // Set default permissions based on role
-    let permissions = { ...defaultPermissions };
-    if (roleCode === 'admin' || roleCode === 'tenant_admin') {
-      permissions = {
-        can_create_jd: true,
-        can_manage_jd: true,
-        can_upload_resumes: true,
-        can_view_resumes: true,
-        can_access_internal_db: true,
-        can_create_assessments: true,
-        can_view_analytics: true,
-        can_manage_settings: true,
-        can_manage_users: true,
-      };
-    } else if (roleCode === 'recruiter') {
-      permissions = {
-        can_create_jd: true,
-        can_manage_jd: true,
-        can_upload_resumes: true,
-        can_view_resumes: true,
-        can_access_internal_db: true,
-        can_create_assessments: true,
-        can_view_analytics: true,
-        can_manage_settings: false,
-        can_manage_users: false,
-      };
-    }
+    try {
+      // Fetch full role details including permissions
+      const roleDetails = await rbacService.getRoleById(roleId);
 
-    if (isEdit) {
-      setEditSelectedRoleId(roleId);
-      setIsEditRoleDropdownOpen(false);
-      if (editingUser) {
-        setEditingUser({ ...editingUser, permissions });
+      // Get permission IDs from the role
+      const permissionIds = new Set<number>(
+        roleDetails.permissions?.map(p => p.id) || []
+      );
+
+      console.log(`[DEBUG] Loaded ${permissionIds.size} permissions for role ${roleId}`);
+
+      if (isEdit) {
+        setEditSelectedRoleId(roleId);
+        setEditSelectedPermissionIds(permissionIds);
+      } else {
+        setSelectedRoleId(roleId);
+        setSelectedPermissionIds(permissionIds);
       }
-    } else {
-      setSelectedRoleId(roleId);
-      setIsRoleDropdownOpen(false);
-      setNewUser({ ...newUser, permissions });
+    } catch (error) {
+      console.error('Error fetching role permissions:', error);
+      // Clear permissions on error
+      if (isEdit) {
+        setEditSelectedRoleId(roleId);
+        setEditSelectedPermissionIds(new Set());
+      } else {
+        setSelectedRoleId(roleId);
+        setSelectedPermissionIds(new Set());
+      }
+    } finally {
+      setIsLoadingPermissions(false);
     }
   };
 
-  const getSelectedRoleName = (roleId: number | null): string => {
-    if (!roleId) return 'Select a role...';
-    const role = availableRoles.find(r => r.id === roleId);
-    return role?.name || 'Select a role...';
+  // Toggle permission selection for create modal
+  const togglePermission = (permissionId: number) => {
+    setSelectedPermissionIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(permissionId)) {
+        newSet.delete(permissionId);
+      } else {
+        newSet.add(permissionId);
+      }
+      return newSet;
+    });
   };
 
-  const getSelectedRolePermissions = (roleId: number | null): string[] => {
-    if (!roleId) return [];
-    const role = availableRoles.find(r => r.id === roleId);
-    // Return role description as permission summary for now
-    // In a real implementation, you'd fetch actual permissions from the API
-    if (role) {
-      // Map role to default permissions based on role code
-      const roleCode = role.code.toLowerCase();
-      if (roleCode === 'admin' || roleCode === 'tenant_admin') {
-        return ['Full Access', 'Manage Users', 'Manage Settings', 'View Analytics', 'Create JDs', 'Upload Resumes', 'Create Assessments'];
-      } else if (roleCode === 'recruiter') {
-        return ['Create JDs', 'Manage JDs', 'Upload Resumes', 'View Resumes', 'Create Assessments', 'View Analytics'];
-      } else if (roleCode === 'viewer') {
-        return ['View Resumes', 'View Analytics'];
+  // Toggle permission selection for edit modal
+  const toggleEditPermission = (permissionId: number) => {
+    setEditSelectedPermissionIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(permissionId)) {
+        newSet.delete(permissionId);
+      } else {
+        newSet.add(permissionId);
       }
-      return [role.description || 'No permissions defined'];
-    }
-    return [];
+      return newSet;
+    });
   };
 
   const loadUsers = async () => {
@@ -314,7 +398,7 @@ export default function UserManagement() {
     user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleRoleChange = (role: UserRole) => {
+  const handleRoleChange = (role: string) => {
     let permissions = { ...defaultPermissions };
     if (role === 'tenant_admin') {
       permissions = {
@@ -377,7 +461,7 @@ export default function UserManagement() {
           password: newUser.password,
           role: roleCode,
           role_id: selectedRoleId,
-          ...newUser.permissions,
+          permission_ids: Array.from(selectedPermissionIds),
         }),
       });
 
@@ -388,18 +472,7 @@ export default function UserManagement() {
       loadUsers();
     } catch (error) {
       console.warn('API unavailable, simulating create:', error);
-      // Add to local state as mock
-      const newMockUser: ApiUser = {
-        id: String(Date.now()),
-        name: newUser.name,
-        email: newUser.email,
-        role: roleCode as UserRole,
-        permissions: newUser.permissions,
-        is_active: true,
-        last_login: undefined,
-      };
-      setUsers(prev => [...prev, newMockUser]);
-      toast.success('User created successfully (offline mode)');
+      toast.error('Failed to create user');
       resetCreateModal();
     } finally {
       setIsSaving(false);
@@ -415,20 +488,28 @@ export default function UserManagement() {
       permissions: { ...defaultPermissions },
     });
     setSelectedRoleId(null);
+    setSelectedPermissionIds(new Set());
+    setRoleDropdownOpen(false);
     setIsCreateModalOpen(false);
   };
 
-  const openEditModal = (user: ApiUser) => {
+  const openEditModal = async (user: ApiUser) => {
     setEditingUser(user);
-    // Find the role ID based on user's current role
+    // Find the role ID based on user's current role and load its permissions
     const matchingRole = availableRoles.find(r => r.code.toLowerCase() === user.role.toLowerCase());
-    setEditSelectedRoleId(matchingRole?.id || null);
+    if (matchingRole) {
+      await selectRole(matchingRole.id, true);
+    } else {
+      setEditSelectedRoleId(null);
+      setEditSelectedPermissionIds(new Set());
+    }
   };
 
   const resetEditModal = () => {
     setEditingUser(null);
     setEditSelectedRoleId(null);
-    setIsEditRoleDropdownOpen(false);
+    setEditSelectedPermissionIds(new Set());
+    setEditRoleDropdownOpen(false);
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -499,7 +580,7 @@ export default function UserManagement() {
           name: editingUser.name,
           role: roleCode,
           role_id: editSelectedRoleId,
-          ...editingUser.permissions,
+          permission_ids: Array.from(editSelectedPermissionIds),
         }),
       });
 
@@ -510,9 +591,7 @@ export default function UserManagement() {
       loadUsers();
     } catch (error) {
       console.warn('API unavailable, simulating update:', error);
-      const updatedUser = { ...editingUser, role: roleCode as UserRole };
-      setUsers(prev => prev.map(u => u.id === editingUser.id ? updatedUser : u));
-      toast.success('User updated (offline mode)');
+      toast.error('Failed to update user');
       resetEditModal();
     } finally {
       setIsSaving(false);
@@ -566,30 +645,23 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Dynamic based on available roles */}
       <div className="grid grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm text-gray-600">Total Users</p>
           <p className="text-3xl font-semibold text-gray-900 mt-1">{users.length}</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm text-gray-600">Admins</p>
-          <p className="text-3xl font-semibold text-gray-800 mt-1">
-            {users.filter(u => u.role === 'tenant_admin').length}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm text-gray-600">Recruiters</p>
-          <p className="text-3xl font-semibold text-gray-700 mt-1">
-            {users.filter(u => u.role === 'recruiter').length}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm text-gray-600">Viewers</p>
-          <p className="text-3xl font-semibold text-gray-600 mt-1">
-            {users.filter(u => u.role === 'viewer').length}
-          </p>
-        </div>
+        {availableRoles.slice(0, 3).map((role, index) => (
+          <div key={role.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <p className="text-sm text-gray-600">{role.name}s</p>
+            <p className={`text-3xl font-semibold mt-1 ${
+              index === 0 ? 'text-gray-800' : index === 1 ? 'text-gray-700' : 'text-gray-600'
+            }`}>
+              {users.filter(u => u.role.toLowerCase() === role.code.toLowerCase() ||
+                (role.code.toLowerCase() === 'admin' && u.role.toLowerCase() === 'tenant_admin')).length}
+            </p>
+          </div>
+        ))}
       </div>
 
       {/* Users Table */}
@@ -628,9 +700,9 @@ export default function UserManagement() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        user.role === 'tenant_admin'
+                        user.role.toLowerCase() === 'tenant_admin' || user.role.toLowerCase() === 'admin'
                           ? 'bg-gray-800'
-                          : user.role === 'recruiter'
+                          : user.role.toLowerCase() === 'recruiter'
                           ? 'bg-gray-700'
                           : 'bg-gray-600'
                       }`}>
@@ -648,8 +720,8 @@ export default function UserManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${roleBadgeColors[user.role]}`}>
-                      {roleLabels[user.role]}
+                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getRoleBadgeColor(user.role)}`}>
+                      {getRoleLabel(user.role, availableRoles)}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -775,50 +847,39 @@ export default function UserManagement() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Role <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
+                <div ref={roleDropdownRef} className="relative">
                   <button
                     type="button"
-                    onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+                    onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-left flex items-center justify-between"
                   >
-                    <span className={!selectedRoleId ? 'text-gray-400' : 'text-gray-900'}>
-                      {getSelectedRoleName(selectedRoleId)}
+                    <span className={selectedRoleId ? 'text-gray-900' : 'text-gray-500'}>
+                      {selectedRoleId
+                        ? availableRoles.find(r => r.id === selectedRoleId)?.name || 'Select a role...'
+                        : 'Select a role...'}
                     </span>
-                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isRoleDropdownOpen ? 'rotate-180' : ''}`} />
+                    <svg className={`w-5 h-5 text-gray-400 transition-transform ${roleDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                   </button>
-                  {isRoleDropdownOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {roleDropdownOpen && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                       {availableRoles.map(role => (
                         <button
                           key={role.id}
                           type="button"
-                          onClick={() => selectRole(role.id)}
-                          className={`w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-center gap-3 ${
-                            selectedRoleId === role.id ? 'bg-gray-100' : ''
+                          onClick={() => {
+                            selectRole(role.id);
+                            setRoleDropdownOpen(false);
+                          }}
+                          className={`w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
+                            selectedRoleId === role.id ? 'bg-gray-50' : ''
                           }`}
                         >
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                            selectedRoleId === role.id
-                              ? 'bg-gray-800 border-gray-800'
-                              : 'border-gray-300'
-                          }`}>
-                            {selectedRoleId === role.id && <Check className="w-3 h-3 text-white" />}
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <Shield className="w-4 h-4 text-gray-400" />
-                              <span className="text-sm font-medium text-gray-900">{role.name}</span>
-                              {role.is_system && (
-                                <span className="px-1.5 py-0.5 text-xs bg-gray-200 text-gray-700 rounded">System</span>
-                              )}
-                              {role.is_default && (
-                                <span className="px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded">Default</span>
-                              )}
-                            </div>
-                            {role.description && (
-                              <p className="text-xs text-gray-500 mt-0.5">{role.description}</p>
-                            )}
-                          </div>
+                          <div className="font-medium text-gray-900">{role.name}</div>
+                          {role.description && (
+                            <div className="text-sm text-gray-500 mt-0.5">{role.description}</div>
+                          )}
                         </button>
                       ))}
                     </div>
@@ -826,36 +887,50 @@ export default function UserManagement() {
                 </div>
               </div>
 
-              {/* Permissions - Editable based on selected role */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Permissions {selectedRoleId && <span className="text-xs text-gray-500">(Pre-filled based on role, customize as needed)</span>}
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(permissionLabels).map(([key, label]) => (
-                    <label
-                      key={key}
-                      className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={newUser.permissions[key as keyof UserPermissions]}
-                        onChange={(e) =>
-                          setNewUser({
-                            ...newUser,
-                            permissions: {
-                              ...newUser.permissions,
-                              [key]: e.target.checked,
-                            },
-                          })
-                        }
-                        className="w-4 h-4 text-gray-700 border-gray-300 rounded focus:ring-gray-500"
-                      />
-                      <span className="text-sm text-gray-700">{label}</span>
-                    </label>
-                  ))}
+              {/* Permissions - Only show after role is selected */}
+              {selectedRoleId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Permissions <span className="text-xs text-gray-500">(Pre-filled based on role, customize as needed)</span>
+                  </label>
+                  {isLoadingPermissions ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+                      <span className="ml-2 text-sm text-gray-500">Loading permissions...</span>
+                    </div>
+                  ) : allPermissions.length > 0 ? (
+                    <div className="space-y-4 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                      {groupPermissionsByModule(allPermissions).map(group => (
+                        <div key={group.module} className="space-y-2">
+                          <div className="text-sm font-medium text-gray-800 border-b border-gray-100 pb-1">
+                            {group.moduleName}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 pl-2">
+                            {group.permissions.map(perm => (
+                              <label
+                                key={perm.id}
+                                className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedPermissionIds.has(perm.id)}
+                                  onChange={() => togglePermission(perm.id)}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700">{perm.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <p className="text-sm text-gray-500">No permissions available</p>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
@@ -920,47 +995,39 @@ export default function UserManagement() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Role <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
+                <div ref={editRoleDropdownRef} className="relative">
                   <button
                     type="button"
-                    onClick={() => setIsEditRoleDropdownOpen(!isEditRoleDropdownOpen)}
+                    onClick={() => setEditRoleDropdownOpen(!editRoleDropdownOpen)}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-left flex items-center justify-between"
                   >
-                    <span className={!editSelectedRoleId ? 'text-gray-400' : 'text-gray-900'}>
-                      {getSelectedRoleName(editSelectedRoleId)}
+                    <span className={editSelectedRoleId ? 'text-gray-900' : 'text-gray-500'}>
+                      {editSelectedRoleId
+                        ? availableRoles.find(r => r.id === editSelectedRoleId)?.name || 'Select a role...'
+                        : 'Select a role...'}
                     </span>
-                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isEditRoleDropdownOpen ? 'rotate-180' : ''}`} />
+                    <svg className={`w-5 h-5 text-gray-400 transition-transform ${editRoleDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                   </button>
-                  {isEditRoleDropdownOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {editRoleDropdownOpen && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                       {availableRoles.map(role => (
                         <button
                           key={role.id}
                           type="button"
-                          onClick={() => selectRole(role.id, true)}
-                          className={`w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-center gap-3 ${
-                            editSelectedRoleId === role.id ? 'bg-gray-100' : ''
+                          onClick={() => {
+                            selectRole(role.id, true);
+                            setEditRoleDropdownOpen(false);
+                          }}
+                          className={`w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
+                            editSelectedRoleId === role.id ? 'bg-gray-50' : ''
                           }`}
                         >
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                            editSelectedRoleId === role.id
-                              ? 'bg-gray-800 border-gray-800'
-                              : 'border-gray-300'
-                          }`}>
-                            {editSelectedRoleId === role.id && <Check className="w-3 h-3 text-white" />}
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <Shield className="w-4 h-4 text-gray-400" />
-                              <span className="text-sm font-medium text-gray-900">{role.name}</span>
-                              {role.is_system && (
-                                <span className="px-1.5 py-0.5 text-xs bg-gray-200 text-gray-700 rounded">System</span>
-                              )}
-                            </div>
-                            {role.description && (
-                              <p className="text-xs text-gray-500 mt-0.5">{role.description}</p>
-                            )}
-                          </div>
+                          <div className="font-medium text-gray-900">{role.name}</div>
+                          {role.description && (
+                            <div className="text-sm text-gray-500 mt-0.5">{role.description}</div>
+                          )}
                         </button>
                       ))}
                     </div>
@@ -968,36 +1035,50 @@ export default function UserManagement() {
                 </div>
               </div>
 
-              {/* Permissions - Editable */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Permissions {editSelectedRoleId && <span className="text-xs text-gray-500">(Pre-filled based on role, customize as needed)</span>}
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(permissionLabels).map(([key, label]) => (
-                    <label
-                      key={key}
-                      className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={editingUser.permissions[key as keyof UserPermissions]}
-                        onChange={(e) =>
-                          setEditingUser({
-                            ...editingUser,
-                            permissions: {
-                              ...editingUser.permissions,
-                              [key]: e.target.checked,
-                            },
-                          })
-                        }
-                        className="w-4 h-4 text-gray-700 border-gray-300 rounded focus:ring-gray-500"
-                      />
-                      <span className="text-sm text-gray-700">{label}</span>
-                    </label>
-                  ))}
+              {/* Permissions - Only show after role is selected */}
+              {editSelectedRoleId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Permissions <span className="text-xs text-gray-500">(Pre-filled based on role, customize as needed)</span>
+                  </label>
+                  {isLoadingPermissions ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+                      <span className="ml-2 text-sm text-gray-500">Loading permissions...</span>
+                    </div>
+                  ) : allPermissions.length > 0 ? (
+                    <div className="space-y-4 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                      {groupPermissionsByModule(allPermissions).map(group => (
+                        <div key={group.module} className="space-y-2">
+                          <div className="text-sm font-medium text-gray-800 border-b border-gray-100 pb-1">
+                            {group.moduleName}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 pl-2">
+                            {group.permissions.map(perm => (
+                              <label
+                                key={perm.id}
+                                className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={editSelectedPermissionIds.has(perm.id)}
+                                  onChange={() => toggleEditPermission(perm.id)}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700">{perm.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <p className="text-sm text-gray-500">No permissions available</p>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
