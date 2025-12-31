@@ -1,13 +1,14 @@
-import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart } from 'lucide-react';
+import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { Job } from '@/lib/types/types';
-import { assessmentService } from '@/lib/services';
+import { assessmentService, jdService } from '@/lib/services';
 
 interface AssessmentCreationProps {
   onBack: () => void;
   jobs: Job[];
   onCreateAssessment: (assessment: any) => void;
   onCreateNewJD?: () => void;
+  onJobsRefresh?: () => void;
 }
 
 interface SectionConfig {
@@ -17,7 +18,16 @@ interface SectionConfig {
   enabled: boolean;
 }
 
-export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD }: AssessmentCreationProps) {
+interface CreateJDForm {
+  title: string;
+  description: string;
+  department: string;
+  location: string;
+  experience: string;
+  skills: string;
+}
+
+export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh }: AssessmentCreationProps) {
   const [step, setStep] = useState<'select-jd' | 'configure' | 'preview'>(('select-jd'));
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [duration, setDuration] = useState(30);
@@ -29,6 +39,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [newTopic, setNewTopic] = useState({ section: '' as 'HR' | 'Technical' | 'Coding', value: '' });
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedAssessment, setGeneratedAssessment] = useState<any>(null);
+
+  // Create JD Modal State
+  const [showCreateJDModal, setShowCreateJDModal] = useState(false);
+  const [isCreatingJD, setIsCreatingJD] = useState(false);
+  const [jdForm, setJdForm] = useState<CreateJDForm>({
+    title: '',
+    description: '',
+    department: '',
+    location: '',
+    experience: 'Mid-Level',
+    skills: ''
+  });
+  const [localJobs, setLocalJobs] = useState<Job[]>(jobs);
 
   // Check if JD requires coding based on skills/technologies
   const requiresCoding = (job: Job) => {
@@ -154,8 +177,79 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     onBack();
   };
 
+  // Handle Create JD
+  const handleCreateJD = async () => {
+    if (!jdForm.title.trim() || !jdForm.description.trim()) {
+      alert('Please fill in Title and Description');
+      return;
+    }
+
+    setIsCreatingJD(true);
+    try {
+      const skillsArray = jdForm.skills.split(',').map(s => s.trim()).filter(s => s);
+
+      // Create JD via API
+      const createdJD = await jdService.create({
+        title: jdForm.title,
+        description: jdForm.description,
+        department: jdForm.department || 'General',
+        location: jdForm.location || 'Remote',
+        must_have_skills: skillsArray,
+        job_level: jdForm.experience,
+      });
+
+      // Publish the JD immediately
+      await jdService.publish(createdJD.id);
+
+      // Create a local Job object from the response
+      const newJob: Job = {
+        id: createdJD.id,
+        title: createdJD.title,
+        description: createdJD.description,
+        department: createdJD.department || 'General',
+        location: createdJD.location || 'Remote',
+        experience: createdJD.job_level || 'Mid-Level',
+        skills: createdJD.must_have_skills || [],
+        status: 'Published',
+        created: new Date().toISOString().split('T')[0],
+        applicants: 0,
+      };
+
+      // Add to local jobs list
+      setLocalJobs([newJob, ...localJobs]);
+
+      // Reset form and close modal
+      setJdForm({
+        title: '',
+        description: '',
+        department: '',
+        location: '',
+        experience: 'Mid-Level',
+        skills: ''
+      });
+      setShowCreateJDModal(false);
+
+      // Optionally refresh parent jobs list
+      if (onJobsRefresh) {
+        onJobsRefresh();
+      }
+
+      // Auto-select the new JD
+      handleJobSelect(newJob);
+
+    } catch (error) {
+      console.error('Failed to create JD:', error);
+      alert(`Failed to create Job Description: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsCreatingJD(false);
+    }
+  };
+
   const totalPercentage = getTotalPercentage();
   const isPercentageValid = totalPercentage === 100;
+
+  // Use localJobs which includes newly created JDs
+  const availableJobs = localJobs.length > 0 ? localJobs : jobs;
 
   // Step 1: Select JD
   if (step === 'select-jd') {
@@ -196,21 +290,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     Choose the JD that this assessment will be based on
                   </p>
                 </div>
-                {onCreateNewJD && (
-                  <button
-                    onClick={onCreateNewJD}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create New JD
-                  </button>
-                )}
+                <button
+                  onClick={() => setShowCreateJDModal(true)}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Job Description
+                </button>
               </div>
             </div>
-            
+
             <div className="p-6">
               <div className="space-y-3">
-                {jobs.filter(j => j.status === 'Published').map(job => (
+                {availableJobs.filter(j => j.status === 'Published').map(job => (
                   <button
                     key={job.id}
                     onClick={() => handleJobSelect(job)}
@@ -256,25 +348,163 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   </button>
                 ))}
 
-                {jobs.filter(j => j.status === 'Published').length === 0 && (
+                {availableJobs.filter(j => j.status === 'Published').length === 0 && (
                   <div className="text-center py-12 text-gray-500">
                     <Briefcase className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p>No published jobs available</p>
                     <p className="text-sm mt-1">Create and publish a JD first to create assessments</p>
-                    {onCreateNewJD && (
-                      <button
-                        onClick={onCreateNewJD}
-                        className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
-                      >
-                        Create New Job Description
-                      </button>
-                    )}
+                    <button
+                      onClick={() => setShowCreateJDModal(true)}
+                      className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 mx-auto"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Create Job Description
+                    </button>
                   </div>
                 )}
               </div>
             </div>
           </div>
         </div>
+
+        {/* Create JD Modal */}
+        {showCreateJDModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+              {/* Modal Header */}
+              <div className="bg-gray-800 px-6 py-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-white font-medium">Create Job Description</h2>
+                    <p className="text-gray-300 text-sm">Quick JD creation for assessment</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCreateJDModal(false)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-white" />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="space-y-4">
+                  {/* Title */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Job Title <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={jdForm.title}
+                      onChange={(e) => setJdForm({ ...jdForm, title: e.target.value })}
+                      placeholder="e.g., Senior Software Engineer"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-gray-900"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Job Description <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={jdForm.description}
+                      onChange={(e) => setJdForm({ ...jdForm, description: e.target.value })}
+                      placeholder="Describe the role, responsibilities, and requirements..."
+                      rows={5}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 resize-none text-gray-900"
+                    />
+                  </div>
+
+                  {/* Department & Location */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                      <input
+                        type="text"
+                        value={jdForm.department}
+                        onChange={(e) => setJdForm({ ...jdForm, department: e.target.value })}
+                        placeholder="e.g., Engineering"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                      <input
+                        type="text"
+                        value={jdForm.location}
+                        onChange={(e) => setJdForm({ ...jdForm, location: e.target.value })}
+                        placeholder="e.g., Remote, New York"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-gray-900"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Experience Level */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Experience Level</label>
+                    <select
+                      value={jdForm.experience}
+                      onChange={(e) => setJdForm({ ...jdForm, experience: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-gray-900"
+                    >
+                      <option value="Entry">Entry Level</option>
+                      <option value="Mid-Level">Mid-Level</option>
+                      <option value="Senior">Senior</option>
+                      <option value="Lead">Lead / Principal</option>
+                    </select>
+                  </div>
+
+                  {/* Skills */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Required Skills</label>
+                    <input
+                      type="text"
+                      value={jdForm.skills}
+                      onChange={(e) => setJdForm({ ...jdForm, skills: e.target.value })}
+                      placeholder="e.g., React, TypeScript, Node.js (comma-separated)"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-gray-900"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Separate skills with commas</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowCreateJDModal(false)}
+                  disabled={isCreatingJD}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateJD}
+                  disabled={isCreatingJD || !jdForm.title.trim() || !jdForm.description.trim()}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isCreatingJD ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Create & Select
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
