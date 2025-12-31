@@ -18,12 +18,14 @@ interface BulkScoringProgressModalProps {
   onClose: () => void;
   progressData?: ScoringProgressItem[];
   filterByJobId?: string;  // Added: Optional filter to show only specific job
+  showJobTitleColumn?: boolean; // Added: Explicitly control job title column visibility
 }
 
-export default function BulkScoringProgressModal({ 
+export default function BulkScoringProgressModal({
   onClose,
   progressData = [],
-  filterByJobId
+  filterByJobId,
+  showJobTitleColumn = true
 }: BulkScoringProgressModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -363,8 +365,7 @@ export default function BulkScoringProgressModal({
               <thead>
                 <tr className="border-b-2 border-gray-200">
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Candidate Name</th>
-                  {!filterByJobId && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Job Title</th>}
-                  {/* DEBUG: filterByJobId = {String(filterByJobId)}, Hide column? {String(!!filterByJobId)} */}
+                  {(showJobTitleColumn && !filterByJobId) && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Job Title</th>}
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Source</th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Status</th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Scored Date & Time</th>
@@ -382,7 +383,7 @@ export default function BulkScoringProgressModal({
                     <td className="py-4 px-4">
                       <div className="font-medium text-gray-900">{item.candidateName}</div>
                     </td>
-                    {!filterByJobId && (
+                    {(showJobTitleColumn && !filterByJobId) && (
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-2">
                           <Target className="w-4 h-4 text-gray-800" />
