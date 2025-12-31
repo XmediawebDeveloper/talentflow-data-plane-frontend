@@ -218,25 +218,6 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
         </div>
       </div>
 
-      {/* User Info */}
-      {user && (
-        <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center shadow-sm">
-              <span className="text-sm font-medium">
-                {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-              <span className={`inline-flex px-2 py-0.5 rounded text-xs border ${roleBadgeColors[user.role]}`}>
-                {roleLabels[user.role]}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4">
         {visibleNavItems.map((item) => (

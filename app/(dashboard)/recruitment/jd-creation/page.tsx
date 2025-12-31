@@ -61,12 +61,10 @@ function JDCreationContent() {
         salary_min: editingJD.salary_min,
         salary_max: editingJD.salary_max,
         compensation_type: editingJD.compensation_type,
-        employment_type: editingJD.employment_type,
         assessment_guidance: editingJD.assessment_guidance,
         internal_comments: editingJD.internal_comments,
         must_have_comments: editingJD.must_have_comments,
         allow_overqualified: editingJD.allow_overqualified,
-        location: editingJD.location,
         locations: editingJD.locations?.map(loc => ({
           city: loc.city || '',
           radius_km: loc.radius_km,

@@ -321,7 +321,6 @@ export default function MyResumesPage() {
         return {
           success: false,
           error: detail?.message || 'All files are duplicates',
-          existingName: detail?.duplicates?.[0]?.existing_name
         };
       }
       return { success: false, error: 'Failed to start bulk upload' };

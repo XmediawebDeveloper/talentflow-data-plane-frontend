@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, DollarSign, List, LayoutGrid } from 'lucide-react';
+import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, DollarSign, List, LayoutGrid, Loader, Square, CheckSquare } from 'lucide-react';
 import { useState } from 'react';
 import ScoredResumesTable from './ScoredResumesTable';
 import ResumeSelectionModal from './ResumeSelectionModal';
@@ -461,6 +461,40 @@ export default function ResumeScoringPage({
                 </div>
               </div>
             </div>
+
+            {/* Progress Tables Button */}
+            {scoredHistory.length > 0 && (
+              <button
+                onClick={() => {
+                  // Convert scored history to progress data format for the modal
+                  const allProgressData = scoredHistory.flatMap(item =>
+                    item.scoredResumes.map(resume => ({
+                      id: resume.id,
+                      candidateName: resume.candidateName || resume.name || 'Unknown',
+                      jobTitle: item.jobTitle,
+                      jobId: item.jobId,
+                      source: item.source === 'my-resumes' ? 'My Resumes' : 'Internal DB' as 'My Resumes' | 'Internal DB',
+                      status: 'Scored successfully' as const,
+                      scoredDateTime: new Date(item.scoredAt),
+                      matchResult: resume.matchScore >= 85 ? 'Exact Match' :
+                                   resume.matchScore >= 70 ? 'Partial Match' : 'No Match' as 'Exact Match' | 'Partial Match' | 'No Match',
+                      score: resume.matchScore,
+                    }))
+                  );
+                  setProgressData(allProgressData);
+                  setShowJobTitleColumn(true);
+                  setFilterByJobId(undefined);
+                  setShowProgressModal(true);
+                }}
+                className="px-5 py-2.5 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 transition-all text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
+              >
+                <Clock className="w-4 h-4" />
+                Progress Tables
+                <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                  {scoredHistory.reduce((sum, item) => sum + item.totalScored, 0)}
+                </span>
+              </button>
+            )}
 
             <button
               onClick={() => {
