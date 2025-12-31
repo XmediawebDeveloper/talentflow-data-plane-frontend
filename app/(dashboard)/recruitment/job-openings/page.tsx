@@ -39,6 +39,7 @@ export default function JobOpeningsPage() {
         postedBy: jd.created_by,
         employmentType: jd.employment_type,
         created_at: jd.created_at, // For accurate sorting
+        creation_stage: jd.creation_stage, // For draft JDs
       }));
 
       setJobs(convertedJobs);
@@ -75,7 +76,13 @@ export default function JobOpeningsPage() {
   };
 
   const handleViewJob = (job: Job) => {
-    router.push(`/recruitment/job-details?id=${job.id}`);
+    // Draft JDs go directly to jd-creation with current stage
+    if (job.status === 'Draft') {
+      const stage = (job as any).creation_stage || 'create';
+      router.push(`/recruitment/jd-creation?id=${job.id}&stage=${stage}`);
+    } else {
+      router.push(`/recruitment/job-details?id=${job.id}`);
+    }
   };
 
   const handleAIMatch = (job: Job) => {
@@ -96,7 +103,8 @@ export default function JobOpeningsPage() {
   };
 
   const handleEditJob = (job: Job) => {
-    router.push(`/recruitment/jd-creation?id=${job.id}`);
+    // For Published JDs, go to first stage (create) for editing
+    router.push(`/recruitment/jd-creation?id=${job.id}&stage=create`);
   };
 
   const handlePublishJob = async (job: Job) => {

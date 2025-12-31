@@ -66,6 +66,12 @@ export interface JDListResponse {
   total_pages: number;
 }
 
+export interface ExtractedLocation {
+  city?: string;
+  state?: string;
+  country?: string;
+}
+
 export interface JDExtractedParams {
   must_have_skills: string[];
   nice_to_have_skills: string[];
@@ -76,11 +82,19 @@ export interface JDExtractedParams {
   certifications: string[];
   experience_min?: number;
   experience_max?: number;
+  experience_level?: 'entry' | 'junior' | 'mid' | 'senior' | 'architect' | 'management';
   domain_keywords: string[];
   job_level?: string;
   industry_type?: string;
   coding_required: boolean;
   suggested_languages: string[];
+  // New fields for extraction
+  locations?: ExtractedLocation[];
+  salary_min?: number;
+  salary_max?: number;
+  salary_currency?: string;
+  compensation_type?: 'yearly' | 'monthly' | 'hourly' | 'daily';
+  must_have_comments?: string[];
 }
 
 export interface JDGenerateResponse {

@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
 
 interface ResumeScoringProps {
-  resumes: Resume[];
-  jobs: Job[];
+  resumes: Resume[] | any[];
+  jobs?: Job[];
+  jobTitle?: string;
   onBack: () => void;
-  onComplete: () => void;
+  onComplete?: () => void;
+  onProceedToApplicants?: () => void;
 }
 
 interface ScoringResult {
@@ -29,13 +31,25 @@ interface DetailedScoreCategory {
   reasoning: string;
 }
 
-export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: ResumeScoringProps) {
+export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onComplete, onProceedToApplicants }: ResumeScoringProps) {
+  // Create a virtual job if only jobTitle is provided (single job context)
+  const effectiveJobs: Job[] = jobs && jobs.length > 0
+    ? jobs
+    : jobTitle
+      ? [{ id: 'single-job', title: jobTitle, location: '', status: 'Published', applicants: 0, daysActive: 0 } as Job]
+      : [];
+
   const [scoringResults, setScoringResults] = useState<ScoringResult[]>(() => {
     // Generate mock scoring results
     const results: ScoringResult[] = [];
+    if (!resumes || resumes.length === 0 || effectiveJobs.length === 0) {
+      return [];
+    }
     resumes.forEach(resume => {
-      jobs.forEach(job => {
-        const score = Math.floor(Math.random() * 40) + 60; // 60-100
+      effectiveJobs.forEach(job => {
+        // Use existing score from resume if available (from upload flow)
+        const existingScore = resume.score || resume.scorePercentage;
+        const score = existingScore || Math.floor(Math.random() * 40) + 60; // 60-100
         let matchType: 'excellent' | 'good' | 'fair' | 'poor';
         if (score >= 90) matchType = 'excellent';
         else if (score >= 75) matchType = 'good';
@@ -47,8 +61,8 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
           jobId: job.id,
           score,
           matchType,
-          keyMatches: ['React', 'TypeScript', 'Node.js'].slice(0, Math.floor(Math.random() * 2) + 2),
-          missingSkills: ['AWS', 'Docker'].slice(0, Math.floor(Math.random() * 2)),
+          keyMatches: resume.skills || ['React', 'TypeScript', 'Node.js'].slice(0, Math.floor(Math.random() * 2) + 2),
+          missingSkills: resume.gaps || ['AWS', 'Docker'].slice(0, Math.floor(Math.random() * 2)),
         });
       });
     });
@@ -190,14 +204,20 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
             <div>
               <h1 className="text-gray-900 mb-2">Resume Scoring Analysis</h1>
               <p className="text-sm text-gray-600">
-                AI-powered match scoring for {resumes.length} resume{resumes.length > 1 ? 's' : ''} across {jobs.length} job opening{jobs.length > 1 ? 's' : ''}
+                AI-powered match scoring for {resumes?.length || 0} resume{(resumes?.length || 0) !== 1 ? 's' : ''} {effectiveJobs.length > 1 ? `across ${effectiveJobs.length} job openings` : jobTitle ? `for ${jobTitle}` : ''}
               </p>
             </div>
             <button
-              onClick={onComplete}
+              onClick={() => {
+                if (onProceedToApplicants) {
+                  onProceedToApplicants();
+                } else if (onComplete) {
+                  onComplete();
+                }
+              }}
               className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
             >
-              Complete & Apply
+              {onProceedToApplicants ? 'Proceed to Applicants' : 'Complete & Apply'}
             </button>
           </div>
         </div>
@@ -278,10 +298,10 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {scoringResults.map((result, index) => {
-                  const resume = resumes.find(r => r.id === result.resumeId);
-                  const job = jobs.find(j => j.id === result.jobId);
+                  const resume = resumes?.find(r => r.id === result.resumeId);
+                  const job = effectiveJobs.find(j => j.id === result.jobId);
                   const resultKey = `${result.resumeId}-${result.jobId}`;
-                  
+
                   if (!resume || !job) return null;
 
                   return (
@@ -289,11 +309,11 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-sm">
-                            {resume.name.split(' ').map(n => n[0]).join('')}
+                            {(resume.name || resume.candidateName || 'U')?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                           </div>
                           <div>
-                            <div className="text-sm text-gray-900">{resume.name}</div>
-                            <div className="text-xs text-gray-500">{resume.title}</div>
+                            <div className="text-sm text-gray-900">{resume.name || resume.candidateName || 'Unknown'}</div>
+                            <div className="text-xs text-gray-500">{resume.title || resume.experience || ''}</div>
                           </div>
                         </div>
                       </td>
@@ -360,8 +380,8 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
         {/* Detailed Analysis Section */}
         {selectedResultForDetail && (() => {
           const result = scoringResults.find(r => `${r.resumeId}-${r.jobId}` === selectedResultForDetail);
-          const resume = resumes.find(r => r.id === result?.resumeId);
-          const job = jobs.find(j => j.id === result?.jobId);
+          const resume = resumes?.find(r => r.id === result?.resumeId);
+          const job = effectiveJobs.find(j => j.id === result?.jobId);
           const detailedScores = getDetailedScores(selectedResultForDetail);
 
           if (!result || !resume || !job) return null;
@@ -373,7 +393,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                   <div>
                     <h3 className="text-white mb-2">📊 Detailed Score Breakdown</h3>
                     <p className="text-gray-100 text-sm">
-                      <span className="bg-white bg-opacity-20 px-2 py-1 rounded">{resume.name}</span> → <span className="bg-white bg-opacity-20 px-2 py-1 rounded">{job.title}</span>
+                      <span className="bg-white bg-opacity-20 px-2 py-1 rounded">{resume.name || resume.candidateName || 'Unknown'}</span> → <span className="bg-white bg-opacity-20 px-2 py-1 rounded">{job.title}</span>
                     </p>
                     <p className="text-gray-200 text-xs mt-2">
                       💡 Click any row to expand and view detailed AI reasoning
@@ -540,7 +560,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                   // ✅ SCORING COMPLETED FEEDBACK
                   toast.success({
                     title: 'AI scoring completed!',
-                    description: `${resumes.length} resume${resumes.length > 1 ? 's' : ''} scored across ${jobs.length} job${jobs.length > 1 ? 's' : ''}. Applications ready to submit.`,
+                    description: `${resumes?.length || 0} resume${(resumes?.length || 0) !== 1 ? 's' : ''} scored${effectiveJobs.length > 1 ? ` across ${effectiveJobs.length} jobs` : ''}. Applications ready to submit.`,
                     action: {
                       label: 'View Results',
                       onClick: () => {
@@ -548,11 +568,15 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                       }
                     }
                   });
-                  onComplete();
+                  if (onProceedToApplicants) {
+                    onProceedToApplicants();
+                  } else if (onComplete) {
+                    onComplete();
+                  }
                 }}
                 className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
               >
-                Complete & Apply
+                {onProceedToApplicants ? 'Proceed to Applicants' : 'Complete & Apply'}
               </button>
             </div>
           </div>

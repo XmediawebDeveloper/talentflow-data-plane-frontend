@@ -750,76 +750,71 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         </span>
                       </div>
 
-                      {/* Actions */}
-                      <div className="flex flex-col gap-2">
-                        {/* View Button - Always visible */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onViewJob(job);
-                          }}
-                          className="w-full px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View
-                        </button>
-
-                        {/* Edit Button - Only for Draft */}
-                        {job.status === 'Draft' && onEditJob && (
+                      {/* Actions - Hide for Draft status */}
+                      {job.status !== 'Draft' && (
+                        <div className="flex flex-col gap-2">
+                          {/* View Button - For Published and other statuses */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onEditJob(job);
+                              onViewJob(job);
                             }}
-                            className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
+                            className="w-full px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
                           >
-                            <Edit className="w-4 h-4" />
-                            Edit
+                            <Eye className="w-4 h-4" />
+                            View
                           </button>
-                        )}
 
-                        {/* Publish Button - Only for Draft */}
-                        {job.status === 'Draft' && onPublishJob && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onPublishJob(job);
-                            }}
-                            className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
-                          >
-                            <Send className="w-4 h-4" />
-                            Publish
-                          </button>
-                        )}
+                          {/* Edit Button - For Published */}
+                          {job.status === 'Published' && onEditJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditJob(job);
+                              }}
+                              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
+                            >
+                              <Edit className="w-4 h-4" />
+                              Edit
+                            </button>
+                          )}
 
-                        {/* Disable Button - Only for Published */}
-                        {job.status === 'Published' && onDisableJob && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDisableJob(job);
-                            }}
-                            className="w-full px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
-                          >
-                            <Ban className="w-4 h-4" />
-                            Disable
-                          </button>
-                        )}
+                          {/* Disable Button - Only for Published */}
+                          {job.status === 'Published' && onDisableJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDisableJob(job);
+                              }}
+                              className="w-full px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
+                            >
+                              <Ban className="w-4 h-4" />
+                              Disable
+                            </button>
+                          )}
 
-                        {/* Republish Button - Only for Closed */}
-                        {job.status === 'Closed' && onRepublishJob && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRepublishJob(job);
-                            }}
-                            className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                            Republish
-                          </button>
-                        )}
-                      </div>
+                          {/* Republish Button - Only for Closed/Disabled */}
+                          {(job.status === 'Closed' || job.status === 'Disabled') && onRepublishJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRepublishJob(job);
+                              }}
+                              className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                              Republish
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Draft - Show "Continue" hint */}
+                      {job.status === 'Draft' && (
+                        <div className="text-center text-sm text-yellow-600 py-2">
+                          Click to continue editing
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -910,76 +905,71 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         </div>
                       </div>
 
-                      {/* Actions */}
-                      <div className="flex flex-col gap-2 flex-shrink-0">
-                        {/* View Button - Always visible */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onViewJob(job);
-                          }}
-                          className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium flex items-center justify-center gap-2"
-                        >
-                          <Eye className="w-5 h-5" />
-                          View
-                        </button>
-
-                        {/* Edit Button - Only for Draft */}
-                        {job.status === 'Draft' && onEditJob && (
+                      {/* Actions - Hide for Draft status */}
+                      {job.status !== 'Draft' && (
+                        <div className="flex flex-col gap-2 flex-shrink-0">
+                          {/* View Button - For Published and other statuses */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onEditJob(job);
+                              onViewJob(job);
                             }}
-                            className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium flex items-center justify-center gap-2"
+                            className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium flex items-center justify-center gap-2"
                           >
-                            <Edit className="w-5 h-5" />
-                            Edit
+                            <Eye className="w-5 h-5" />
+                            View
                           </button>
-                        )}
 
-                        {/* Publish Button - Only for Draft */}
-                        {job.status === 'Draft' && onPublishJob && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onPublishJob(job);
-                            }}
-                            className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-medium flex items-center justify-center gap-2"
-                          >
-                            <Send className="w-5 h-5" />
-                            Publish
-                          </button>
-                        )}
+                          {/* Edit Button - For Published */}
+                          {job.status === 'Published' && onEditJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditJob(job);
+                              }}
+                              className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium flex items-center justify-center gap-2"
+                            >
+                              <Edit className="w-5 h-5" />
+                              Edit
+                            </button>
+                          )}
 
-                        {/* Disable Button - Only for Published */}
-                        {job.status === 'Published' && onDisableJob && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDisableJob(job);
-                            }}
-                            className="px-5 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all font-medium flex items-center justify-center gap-2"
-                          >
-                            <Ban className="w-5 h-5" />
-                            Disable
-                          </button>
-                        )}
+                          {/* Disable Button - Only for Published */}
+                          {job.status === 'Published' && onDisableJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDisableJob(job);
+                              }}
+                              className="px-5 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all font-medium flex items-center justify-center gap-2"
+                            >
+                              <Ban className="w-5 h-5" />
+                              Disable
+                            </button>
+                          )}
 
-                        {/* Republish Button - Only for Closed */}
-                        {job.status === 'Closed' && onRepublishJob && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRepublishJob(job);
-                            }}
-                            className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-medium flex items-center justify-center gap-2"
-                          >
-                            <RefreshCw className="w-5 h-5" />
-                            Republish
-                          </button>
-                        )}
-                      </div>
+                          {/* Republish Button - Only for Closed/Disabled */}
+                          {(job.status === 'Closed' || job.status === 'Disabled') && onRepublishJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRepublishJob(job);
+                              }}
+                              className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-medium flex items-center justify-center gap-2"
+                            >
+                              <RefreshCw className="w-5 h-5" />
+                              Republish
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Draft - Show "Continue" hint */}
+                      {job.status === 'Draft' && (
+                        <div className="flex items-center text-sm text-yellow-600 px-4">
+                          <span>Click to continue editing →</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
