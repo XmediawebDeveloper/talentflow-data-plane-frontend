@@ -43,6 +43,14 @@ interface ScoringResume {
   experience?: string;
   education?: string;
   skills?: string[];
+  // Extended resume data
+  professionalSummary?: string;
+  technicalSkills?: string[];
+  softSkills?: string[];
+  educationDetails?: any[];
+  experienceDetails?: any[];
+  languages?: string[];
+  certifications?: string[];
 }
 
 interface ResumeScoringStatusPanelProps {
@@ -110,6 +118,11 @@ export default function ResumeScoringStatusPanel({
           console.log(`[Scoring] Scoring resume ${resume.id} against job ${jobId}`);
           const result = await scoringService.scoreResume(jobId, resume.id);
           console.log(`[Scoring] Result for ${resume.name}:`, result);
+          console.log(`[Scoring] Personal Info - professionalSummary:`, result.professional_summary);
+          console.log(`[Scoring] Personal Info - technicalSkills:`, result.technical_skills);
+          console.log(`[Scoring] Personal Info - educationDetails:`, result.education_details);
+          console.log(`[Scoring] Personal Info - experienceDetails:`, result.experience_details);
+          console.log(`[Scoring] Personal Info - languages:`, result.languages);
 
           // Success - create attempt history
           const newAttempt: AttemptHistory = {
@@ -142,6 +155,14 @@ export default function ResumeScoringStatusPanel({
               experience: result.experience_years ? `${result.experience_years} years` : undefined,
               education: result.education?.[0]?.degree || (typeof result.education === 'string' ? result.education : undefined),
               skills: result.skills,
+              // Extended resume data
+              professionalSummary: result.professional_summary,
+              technicalSkills: result.technical_skills,
+              softSkills: result.soft_skills,
+              educationDetails: result.education_details || result.education,
+              experienceDetails: result.experience_details || result.experience,
+              languages: result.languages,
+              certifications: result.certifications,
               attemptHistory: [...(r.attemptHistory || []), newAttempt],
             } : r
           ));
@@ -194,6 +215,7 @@ export default function ResumeScoringStatusPanel({
           console.log('[Scoring] Building final results, scoringResumes:', scoringResumes);
           const scoredResults = scoringResumes.map(resume => {
             console.log('[Scoring] Resume data:', resume.id, 'candidateName:', resume.candidateName, 'candidateEmail:', resume.candidateEmail);
+            console.log('[Scoring] Extended data:', 'professionalSummary:', resume.professionalSummary, 'technicalSkills:', resume.technicalSkills, 'languages:', resume.languages);
             return {
             ...resume,
             matchScore: resume.score || 0,
@@ -226,6 +248,14 @@ export default function ResumeScoringStatusPanel({
             // Ensure real scoring data is passed
             strengths: resume.strengths || [],
             gaps: resume.gaps || [],
+            // Personal info fields
+            professionalSummary: resume.professionalSummary,
+            technicalSkills: resume.technicalSkills || [],
+            softSkills: resume.softSkills || [],
+            educationDetails: resume.educationDetails || [],
+            experienceDetails: resume.experienceDetails || [],
+            languages: resume.languages || [],
+            certifications: resume.certifications || [],
           };
           });
 

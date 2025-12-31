@@ -6,6 +6,7 @@ import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import AITalentMatchPageJobsList from './AITalentMatchPageJobsList';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import { recordUsage } from '@/lib/services/usageTrackingService';
+import { MatchedCandidate } from '@/lib/services/aiMatchService';
 
 interface Job {
   id: string;
@@ -18,24 +19,8 @@ interface Job {
   experience?: string;
 }
 
-interface MatchedCandidate {
-  id: string;
-  name: string;
-  title: string;
-  email: string;
-  phone: string;
-  location: string;
-  experience: string;
-  skills: string[];
-  currentCompany: string;
-  noticePeriod: string;
-  matchScore: number;
-  matchReason: string;
-  skillMatches: string[];
-  uploadDate: string;
-  education?: string;
-  certifications?: string[];
-  attachmentCount?: number;
+// Extended interface for UI display (adds versions for modal)
+interface MatchedCandidateWithVersions extends MatchedCandidate {
   versions?: Array<{
     id: string;
     name: string;
@@ -50,7 +35,7 @@ interface MatchHistory {
   jobTitle: string;
   matchedAt: Date;
   totalMatches: number;
-  matchedCandidates: MatchedCandidate[];
+  matchedCandidates: MatchedCandidateWithVersions[];
 }
 
 interface AITalentMatchPageProps {
@@ -83,10 +68,11 @@ export default function AITalentMatchPage({
   
   // Matching progress
   const [showMatchingPanel, setShowMatchingPanel] = useState(false);
-  const [matchedCandidates, setMatchedCandidates] = useState<MatchedCandidate[]>([]);
+  const [matchedCandidates, setMatchedCandidates] = useState<MatchedCandidateWithVersions[]>([]);
+  const [matchError, setMatchError] = useState<string | null>(null);
   
   // Versions modal
-  const [selectedVersionsCandidate, setSelectedVersionsCandidate] = useState<MatchedCandidate | null>(null);
+  const [selectedVersionsCandidate, setSelectedVersionsCandidate] = useState<MatchedCandidateWithVersions | null>(null);
 
   // Check for preselected job
   useEffect(() => {
@@ -119,8 +105,20 @@ export default function AITalentMatchPage({
   };
 
   const handleMatchingComplete = (results: MatchedCandidate[]) => {
-    setMatchedCandidates(results);
+    // Transform results to include versions placeholder for UI compatibility
+    const candidatesWithVersions: MatchedCandidateWithVersions[] = results.map(candidate => ({
+      ...candidate,
+      versions: [{
+        id: 'v1',
+        name: `${candidate.name.replace(/\s+/g, '_')}_Resume.pdf`,
+        uploadDate: candidate.uploadDate,
+        size: '200 KB'
+      }]
+    }));
+
+    setMatchedCandidates(candidatesWithVersions);
     setShowMatchingPanel(false);
+    setMatchError(null);
     setViewMode('results');
 
     // Track usage - POST /api/v1/external/usage/record (RS - talent match uses resume scoring quota)
@@ -140,7 +138,7 @@ export default function AITalentMatchPage({
         jobTitle: selectedJobData.title,
         matchedAt: new Date(),
         totalMatches: results.length,
-        matchedCandidates: results
+        matchedCandidates: candidatesWithVersions
       };
       onSaveMatch(newMatchHistory);
     }
@@ -173,18 +171,18 @@ export default function AITalentMatchPage({
     }
   };
 
-  const getFilteredCandidates = () => {
-    const candidates = viewMode === 'results' ? matchedCandidates : 
+  const getFilteredCandidates = (): MatchedCandidateWithVersions[] => {
+    const candidates: MatchedCandidateWithVersions[] = viewMode === 'results' ? matchedCandidates :
                       selectedHistoryItem ? selectedHistoryItem.matchedCandidates : [];
-    
+
     return candidates.filter(candidate => {
       const matchesThreshold = candidate.matchScore >= filterThreshold;
-      const matchesSearch = searchQuery === '' || 
+      const matchesSearch = searchQuery === '' ||
         candidate.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         candidate.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        candidate.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (candidate.email && candidate.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
         candidate.skills.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()));
-      
+
       return matchesThreshold && matchesSearch;
     });
   };
@@ -235,158 +233,116 @@ export default function AITalentMatchPage({
 
     return (
       <>
-      <main className="flex-1 overflow-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-white relative">
-        {/* Fixed Header Section */}
-        <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-lg">
-          <div className="bg-gradient-to-br from-gray-50 via-blue-50 to-white p-8 pb-6">
-            {/* Header */}
-            <div className="mb-6">
-          <button
-            onClick={() => {
-              setViewMode('history');
-              setSelectedHistoryItem(null);
-              setSelectedCandidates([]);
-            }}
-            className="flex items-center gap-2 text-gray-800 hover:text-gray-900 mb-4 font-medium transition-colors hover:gap-3"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Matched Jobs
-          </button>
-
-          <div className="bg-white rounded-xl shadow-lg border-2 border-gray-300 p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-lg">
-                  <Sparkles className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl text-gray-900 mb-1">{selectedHistoryItem.jobTitle}</h1>
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      {new Date(selectedHistoryItem.matchedAt).toLocaleDateString('en-US', { 
-                        month: 'short', 
-                        day: 'numeric', 
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <User className="w-4 h-4" />
-                      {selectedHistoryItem.totalMatches} matches found
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  setViewMode('new');
-                  setSelectedJob('');
-                  setSelectedCandidates([]);
-                }}
-                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
-              >
-                <Sparkles className="w-4 h-4" />
-                New AI Match
-              </button>
-            </div>
-
-            {/* Match Distribution */}
-            <div className="grid grid-cols-3 gap-3 mt-5">
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-700 font-medium">Excellent</span>
-                  <Award className="w-4 h-4 text-green-600" />
-                </div>
-                <div className="text-2xl text-green-700 font-bold">{excellentCount}</div>
-                <div className="text-xs text-gray-600 mt-0.5">85%+ match</div>
-              </div>
-
-              <div className="bg-gradient-to-br from-gray-50 to-sky-50 border border-gray-200 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-700 font-medium">Good</span>
-                  <CheckCircle className="w-4 h-4 text-gray-800" />
-                </div>
-                <div className="text-2xl text-gray-900 font-bold">{goodCount}</div>
-                <div className="text-xs text-gray-600 mt-0.5">70-84% match</div>
-              </div>
-
-              <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-700 font-medium">Moderate</span>
-                  <TrendingUp className="w-4 h-4 text-yellow-600" />
-                </div>
-                <div className="text-2xl text-yellow-700 font-bold">{moderateCount}</div>
-                <div className="text-xs text-gray-600 mt-0.5">&lt;70% match</div>
-              </div>
-            </div>
+      <main className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-white">
+        {/* Header Section - Sticky */}
+        <div className="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm p-6">
+          {/* Back Button & Title */}
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => {
+                setViewMode('history');
+                setSelectedHistoryItem(null);
+                setSelectedCandidates([]);
+              }}
+              className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Matched Jobs
+            </button>
+            <button
+              onClick={() => {
+                setViewMode('new');
+                setSelectedJob('');
+                setSelectedCandidates([]);
+              }}
+              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2"
+            >
+              <Sparkles className="w-4 h-4" />
+              New AI Match
+            </button>
           </div>
-        </div>
 
-        {/* Filters & Search */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex-1 flex items-center gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by name, title, email, or skills..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
+          {/* Job Info Card */}
+          <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md">
+                <Sparkles className="w-6 h-6 text-white" />
               </div>
-
-              <select
-                value={filterThreshold}
-                onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-              >
-                <option value={0}>All Matches</option>
-                <option value={50}>50%+ Match</option>
-                <option value={70}>70%+ Match</option>
-                <option value={85}>85%+ Match</option>
-              </select>
-
-              <div className="text-sm text-gray-700 bg-gray-100 px-4 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
-                <span className="text-gray-800">{filteredCandidates.length}</span> candidates
+              <div className="flex-1">
+                <h1 className="text-xl text-gray-900 font-semibold">{selectedHistoryItem.jobTitle}</h1>
+                <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    {new Date(selectedHistoryItem.matchedAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <User className="w-4 h-4" />
+                    {selectedHistoryItem.totalMatches} matches
+                  </span>
+                </div>
+              </div>
+              {/* Match Distribution - Compact */}
+              <div className="flex gap-2">
+                <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-center">
+                  <div className="text-lg font-bold text-green-700">{excellentCount}</div>
+                  <div className="text-xs text-gray-600">85%+</div>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-center">
+                  <div className="text-lg font-bold text-gray-900">{goodCount}</div>
+                  <div className="text-xs text-gray-600">70-84%</div>
+                </div>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-center">
+                  <div className="text-lg font-bold text-yellow-700">{moderateCount}</div>
+                  <div className="text-xs text-gray-600">&lt;70%</div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Bulk Actions */}
-          {selectedCandidates.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleSelectAll}
-                  className="text-sm text-gray-800 hover:text-gray-900 font-medium"
-                >
-                  {selectedCandidates.length === filteredCandidates.length ? 'Deselect All' : 'Select All'}
-                </button>
-                <span className="text-sm text-gray-600">
-                  {selectedCandidates.length} selected
-                </span>
-              </div>
+          {/* Filters & Search */}
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search candidates..."
+                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+              />
+            </div>
+            <select
+              value={filterThreshold}
+              onChange={(e) => setFilterThreshold(Number(e.target.value))}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+            >
+              <option value={0}>All Matches</option>
+              <option value={50}>50%+ Match</option>
+              <option value={70}>70%+ Match</option>
+              <option value={85}>85%+ Match</option>
+            </select>
+            <div className="text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
+              {filteredCandidates.length} candidates
+            </div>
+            {selectedCandidates.length > 0 && (
               <button
                 onClick={handleSubmitToScoring}
-                className="px-5 py-2.5 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-blue-700 hover:to-gray-900 transition-all font-medium shadow-sm hover:shadow-md flex items-center gap-2"
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium text-sm flex items-center gap-2"
               >
                 <Target className="w-4 h-4" />
-                Submit to Scoring ({selectedCandidates.length})
+                Score ({selectedCandidates.length})
               </button>
-            </div>
-          )}
-        </div>
+            )}
           </div>
         </div>
 
         {/* Scrollable Candidates List */}
-        <div className="h-screen overflow-y-auto px-8 pb-8 pt-[500px]">
-          <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-3">
           {filteredCandidates.map((candidate, index) => (
             <div
               key={candidate.id}
@@ -499,7 +455,7 @@ export default function AITalentMatchPage({
           </div>
         </div>
       </main>
-      
+
       {/* Resume Versions Modal */}
       {selectedVersionsCandidate && (
         <ResumeVersionsModal
@@ -816,153 +772,113 @@ export default function AITalentMatchPage({
     const moderateCount = matchedCandidates.filter(c => c.matchScore < 70).length;
 
     return (
-      <main className="flex-1 overflow-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-white relative">
-        {/* Fixed Header Section */}
-        <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-lg">
-          <div className="bg-gradient-to-br from-gray-50 via-blue-50 to-white p-8 pb-6">
-            {/* Header */}
-            <div className="mb-6">
-          <button
-            onClick={() => {
-              setViewMode('history');
-              setSelectedCandidates([]);
-              setMatchedCandidates([]);
-            }}
-            className="flex items-center gap-2 text-gray-800 hover:text-gray-900 mb-4 font-medium transition-colors hover:gap-3"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Matched Jobs
-          </button>
-
-          <div className="bg-white rounded-xl shadow-lg border-2 border-gray-300 p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-lg">
-                  <Sparkles className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl text-gray-900 mb-1">{selectedJobData?.title}</h1>
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
-                    <span className="flex items-center gap-1">
-                      <User className="w-4 h-4" />
-                      {matchedCandidates.length} matches found
-                    </span>
-                    <span className="flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full border border-green-200 font-medium">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Matching Complete
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  setViewMode('new');
-                  setSelectedJob('');
-                  setSelectedCandidates([]);
-                  setMatchedCandidates([]);
-                }}
-                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
-              >
-                <Sparkles className="w-4 h-4" />
-                New AI Match
-              </button>
-            </div>
-
-            {/* Match Distribution */}
-            <div className="grid grid-cols-3 gap-3 mt-5">
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-700 font-medium">Excellent</span>
-                  <Award className="w-4 h-4 text-green-600" />
-                </div>
-                <div className="text-2xl text-green-700 font-bold">{excellentCount}</div>
-                <div className="text-xs text-gray-600 mt-0.5">85%+ match</div>
-              </div>
-
-              <div className="bg-gradient-to-br from-gray-50 to-sky-50 border border-gray-200 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-700 font-medium">Good</span>
-                  <CheckCircle className="w-4 h-4 text-gray-800" />
-                </div>
-                <div className="text-2xl text-gray-900 font-bold">{goodCount}</div>
-                <div className="text-xs text-gray-600 mt-0.5">70-84% match</div>
-              </div>
-
-              <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-700 font-medium">Moderate</span>
-                  <TrendingUp className="w-4 h-4 text-yellow-600" />
-                </div>
-                <div className="text-2xl text-yellow-700 font-bold">{moderateCount}</div>
-                <div className="text-xs text-gray-600 mt-0.5">&lt;70% match</div>
-              </div>
-            </div>
+      <main className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-white">
+        {/* Header Section - Sticky */}
+        <div className="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm p-6">
+          {/* Back Button & Title */}
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => {
+                setViewMode('history');
+                setSelectedCandidates([]);
+                setMatchedCandidates([]);
+              }}
+              className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Matched Jobs
+            </button>
+            <button
+              onClick={() => {
+                setViewMode('new');
+                setSelectedJob('');
+                setSelectedCandidates([]);
+                setMatchedCandidates([]);
+              }}
+              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2"
+            >
+              <Sparkles className="w-4 h-4" />
+              New AI Match
+            </button>
           </div>
-        </div>
 
-        {/* Filters & Search */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex-1 flex items-center gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by name, title, email, or skills..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
+          {/* Job Info Card */}
+          <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md">
+                <Sparkles className="w-6 h-6 text-white" />
               </div>
-
-              <select
-                value={filterThreshold}
-                onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-              >
-                <option value={0}>All Matches</option>
-                <option value={50}>50%+ Match</option>
-                <option value={70}>70%+ Match</option>
-                <option value={85}>85%+ Match</option>
-              </select>
-
-              <div className="text-sm text-gray-700 bg-gray-100 px-4 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
-                <span className="text-gray-800">{filteredCandidates.length}</span> candidates
+              <div className="flex-1">
+                <h1 className="text-xl text-gray-900 font-semibold">{selectedJobData?.title}</h1>
+                <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
+                  <span className="flex items-center gap-1">
+                    <User className="w-4 h-4" />
+                    {matchedCandidates.length} matches
+                  </span>
+                  <span className="flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Complete
+                  </span>
+                </div>
+              </div>
+              {/* Match Distribution - Compact */}
+              <div className="flex gap-2">
+                <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-center">
+                  <div className="text-lg font-bold text-green-700">{excellentCount}</div>
+                  <div className="text-xs text-gray-600">85%+</div>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-center">
+                  <div className="text-lg font-bold text-gray-900">{goodCount}</div>
+                  <div className="text-xs text-gray-600">70-84%</div>
+                </div>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-center">
+                  <div className="text-lg font-bold text-yellow-700">{moderateCount}</div>
+                  <div className="text-xs text-gray-600">&lt;70%</div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Bulk Actions */}
-          {selectedCandidates.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleSelectAll}
-                  className="text-sm text-gray-800 hover:text-gray-900 font-medium"
-                >
-                  {selectedCandidates.length === filteredCandidates.length ? 'Deselect All' : 'Select All'}
-                </button>
-                <span className="text-sm text-gray-600">
-                  {selectedCandidates.length} selected
-                </span>
-              </div>
+          {/* Filters & Search */}
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search candidates..."
+                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+              />
+            </div>
+            <select
+              value={filterThreshold}
+              onChange={(e) => setFilterThreshold(Number(e.target.value))}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+            >
+              <option value={0}>All Matches</option>
+              <option value={50}>50%+ Match</option>
+              <option value={70}>70%+ Match</option>
+              <option value={85}>85%+ Match</option>
+            </select>
+            <div className="text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
+              {filteredCandidates.length} candidates
+            </div>
+            {selectedCandidates.length > 0 && (
               <button
                 onClick={handleSubmitToScoring}
-                className="px-5 py-2.5 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-blue-700 hover:to-gray-900 transition-all font-medium shadow-sm hover:shadow-md flex items-center gap-2"
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium text-sm flex items-center gap-2"
               >
                 <Target className="w-4 h-4" />
-                Submit to Scoring ({selectedCandidates.length})
+                Score ({selectedCandidates.length})
               </button>
-            </div>
-          )}
-        </div>
+            )}
           </div>
         </div>
 
         {/* Scrollable Candidates List */}
-        <div className="h-screen overflow-y-auto px-8 pb-8 pt-[500px]">
-          <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-3">
             {filteredCandidates.map((candidate, index) => (
               <div
                 key={candidate.id}
@@ -1095,7 +1011,12 @@ export default function AITalentMatchPage({
       {showMatchingPanel && selectedJobData && (
         <AITalentMatchProgressPanel
           jobTitle={selectedJobData.title}
+          jobId={selectedJob}
           onComplete={handleMatchingComplete}
+          onError={(error) => {
+            setMatchError(error);
+            setShowMatchingPanel(false);
+          }}
         />
       )}
       

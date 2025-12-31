@@ -90,7 +90,7 @@ export default function ResumeTable({
   // Handle apply to job with version detection
   const handleApplyToJob = (resume: Resume) => {
     // Check if resume has multiple versions
-    if (resume.versions && resume.versions.length > 1) {
+    if ((resume.versionCount && resume.versionCount > 1) || (resume.versions && resume.versions.length > 1)) {
       // Show version selector modal
       setVersionSelectorResume(resume);
     } else {
@@ -261,7 +261,7 @@ export default function ResumeTable({
                 </div>
               </td>
               <td className="px-4 py-4">
-                {resume.versions && resume.versions.length > 1 ? (
+                {(resume.versionCount && resume.versionCount > 1) || (resume.versions && resume.versions.length > 1) ? (
                   <button
                     onClick={() => setVersionHistoryResume(resume)}
                     className="flex items-center gap-2 text-sm text-gray-700 hover:text-blue-600 transition-colors group"
@@ -271,7 +271,7 @@ export default function ResumeTable({
                       <span>{resume.attachments}</span>
                     </div>
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 border border-blue-200 group-hover:bg-blue-200 transition-colors">
-                      v{resume.versions.length}
+                      v{resume.versionCount || resume.versions?.length || 1}
                     </span>
                   </button>
                 ) : (

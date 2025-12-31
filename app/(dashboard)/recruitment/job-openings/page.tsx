@@ -38,6 +38,7 @@ export default function JobOpeningsPage() {
         postedDate: jd.created_at,
         postedBy: jd.created_by,
         employmentType: jd.employment_type,
+        created_at: jd.created_at, // For accurate sorting
       }));
 
       setJobs(convertedJobs);
