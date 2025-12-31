@@ -1,5 +1,6 @@
 import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2 } from 'lucide-react';
 import { useState } from 'react';
+import { assessmentService } from '@/lib/services';
 
 interface AssessmentDetailsViewProps {
   assessment: any;
@@ -279,15 +280,37 @@ export default function AssessmentDetailsView({
               
               <div className="grid grid-cols-3 gap-4">
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_APP_URL || 'https://talentflow.app'}/assessment/${assessment.id}`);
-                    alert('Assessment link copied!');
+                  onClick={async () => {
+                    if (assessment.status === 'Draft') {
+                      alert('Please publish the assessment before sharing');
+                      return;
+                    }
+                    try {
+                      // Create a generic invitation to get a shareable link
+                      const invitation = await assessmentService.invite(assessment.id, {
+                        candidate_name: 'Anonymous Candidate',
+                        candidate_email: `anonymous-${Date.now()}@placeholder.local`,
+                      });
+                      const shareableLink = `${window.location.origin}/assessment/take/${invitation.token}`;
+                      navigator.clipboard.writeText(shareableLink);
+                      alert('Shareable link copied! This link can be used by one candidate.');
+                    } catch (error) {
+                      console.error('Failed to generate link:', error);
+                      alert('Failed to generate shareable link. Please try Share via Email instead.');
+                    }
                   }}
-                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
+                  disabled={assessment.status === 'Draft'}
+                  className={`p-4 border-2 rounded-lg transition-all text-left ${
+                    assessment.status === 'Draft'
+                      ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-60'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
                 >
                   <Link2 className="w-6 h-6 text-gray-800 mb-2" />
                   <div className="text-sm font-medium text-gray-900">Copy Link</div>
-                  <div className="text-xs text-gray-600 mt-1">Share assessment URL</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    {assessment.status === 'Draft' ? 'Publish first' : 'Share assessment URL'}
+                  </div>
                 </button>
 
                 <button

@@ -548,10 +548,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <div className="flex items-center gap-2 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => {
+                          if (assessment.status === 'Draft') {
+                            alert('Please publish the assessment before sharing');
+                            return;
+                          }
                           setSelectedAssessmentForShare(assessment);
                           setShowShareModal(true);
                         }}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-xs"
+                        disabled={assessment.status === 'Draft'}
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs ${
+                          assessment.status === 'Draft'
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-gray-800 text-white hover:bg-gray-900'
+                        }`}
+                        title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
                       >
                         <Mail className="w-3.5 h-3.5" />
                         Share
@@ -608,14 +618,35 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             Preview
                           </button>
                           <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_APP_URL || 'https://talentflow.app'}/assessment/${assessment.id}`);
-                              alert('Link copied!');
+                            onClick={async () => {
+                              if (assessment.status === 'Draft') {
+                                alert('Please publish the assessment before sharing');
+                                setOpenMenuId(null);
+                                return;
+                              }
+                              try {
+                                // Create a generic invitation to get a shareable link
+                                const invitation = await assessmentService.invite(assessment.id, {
+                                  candidate_name: 'Anonymous Candidate',
+                                  candidate_email: `anonymous-${Date.now()}@placeholder.local`,
+                                });
+                                const shareableLink = `${window.location.origin}/assessment/take/${invitation.token}`;
+                                navigator.clipboard.writeText(shareableLink);
+                                alert('Shareable link copied! This link can be used by one candidate.');
+                              } catch (error) {
+                                console.error('Failed to generate link:', error);
+                                alert('Failed to generate shareable link. Please try Share via Email instead.');
+                              }
                               setOpenMenuId(null);
                             }}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                            disabled={assessment.status === 'Draft'}
+                            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                              assessment.status === 'Draft'
+                                ? 'text-gray-400 cursor-not-allowed'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`}
                           >
-                            <Link2 className="w-4 h-4 text-gray-600" />
+                            <Link2 className="w-4 h-4" />
                             Copy Link
                           </button>
                           <div className="border-t border-gray-100 my-1"></div>
@@ -683,10 +714,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         {/* Share via Email Button */}
                         <button
                           onClick={() => {
+                            if (assessment.status === 'Draft') {
+                              alert('Please publish the assessment before sharing');
+                              return;
+                            }
                             setSelectedAssessmentForShare(assessment);
                             setShowShareModal(true);
                           }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-xs"
+                          disabled={assessment.status === 'Draft'}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs ${
+                            assessment.status === 'Draft'
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              : 'bg-gray-800 text-white hover:bg-gray-900'
+                          }`}
+                          title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
                         >
                           <Mail className="w-3.5 h-3.5" />
                           Share via Email
@@ -760,14 +801,35 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Preview
                                 </button>
                                 <button
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_APP_URL || 'https://talentflow.app'}/assessment/${assessment.id}`);
-                                    alert('Assessment link copied to clipboard!');
+                                  onClick={async () => {
+                                    if (assessment.status === 'Draft') {
+                                      alert('Please publish the assessment before sharing');
+                                      setOpenMenuId(null);
+                                      return;
+                                    }
+                                    try {
+                                      // Create a generic invitation to get a shareable link
+                                      const invitation = await assessmentService.invite(assessment.id, {
+                                        candidate_name: 'Anonymous Candidate',
+                                        candidate_email: `anonymous-${Date.now()}@placeholder.local`,
+                                      });
+                                      const shareableLink = `${window.location.origin}/assessment/take/${invitation.token}`;
+                                      navigator.clipboard.writeText(shareableLink);
+                                      alert('Shareable link copied! This link can be used by one candidate.');
+                                    } catch (error) {
+                                      console.error('Failed to generate link:', error);
+                                      alert('Failed to generate shareable link. Please try Share via Email instead.');
+                                    }
                                     setOpenMenuId(null);
                                   }}
-                                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                  disabled={assessment.status === 'Draft'}
+                                  className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                                    assessment.status === 'Draft'
+                                      ? 'text-gray-400 cursor-not-allowed'
+                                      : 'text-gray-700 hover:bg-gray-50'
+                                  }`}
                                 >
-                                  <Link2 className="w-4 h-4 text-gray-600" />
+                                  <Link2 className="w-4 h-4" />
                                   Copy Link
                                 </button>
                                 <button

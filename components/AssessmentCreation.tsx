@@ -1,5 +1,5 @@
 import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import { assessmentService, jdService } from '@/lib/services';
 
@@ -52,6 +52,40 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     skills: ''
   });
   const [localJobs, setLocalJobs] = useState<Job[]>(jobs);
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+
+  // Fetch published JDs directly from API on mount
+  useEffect(() => {
+    const fetchPublishedJDs = async () => {
+      setIsLoadingJobs(true);
+      try {
+        const response = await jdService.list({ status: 'published', page_size: 100 });
+        if (response?.items?.length > 0) {
+          const mappedJobs: Job[] = response.items.map((jd: any) => ({
+            id: jd.id,
+            title: jd.title,
+            description: jd.description || '',
+            department: jd.department || 'General',
+            location: jd.location || 'Remote',
+            experience: jd.job_level || 'Mid-Level',
+            skills: jd.must_have_skills || [],
+            status: 'Published',
+            created: jd.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+            applicants: jd.applicants_count || 0,
+          }));
+          setLocalJobs(mappedJobs);
+        }
+      } catch (error) {
+        console.error('Failed to fetch JDs:', error);
+        // Fall back to props if API fails
+        setLocalJobs(jobs);
+      } finally {
+        setIsLoadingJobs(false);
+      }
+    };
+
+    fetchPublishedJDs();
+  }, []);
 
   // Check if JD requires coding based on skills/technologies
   const requiresCoding = (job: Job) => {
@@ -301,6 +335,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             </div>
 
             <div className="p-6">
+              {isLoadingJobs ? (
+                <div className="text-center py-12">
+                  <div className="w-10 h-10 border-4 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
+                  <p className="text-gray-500">Loading job descriptions...</p>
+                </div>
+              ) : (
               <div className="space-y-3">
                 {availableJobs.filter(j => j.status === 'Published').map(job => (
                   <button
@@ -363,6 +403,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   </div>
                 )}
               </div>
+              )}
             </div>
           </div>
         </div>
