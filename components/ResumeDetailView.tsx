@@ -1,5 +1,11 @@
+'use client'
+
 import { X, Download, Mail, Phone, MapPin, Briefcase, Calendar, Award, Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code, ChevronRight, ExternalLink, Linkedin, Globe } from 'lucide-react';
+import { useState } from 'react';
 import { Resume } from '@/lib/types/types';
+import { FileText, Clock, History, User, File, HardDrive } from 'lucide-react';
+import ResumeVersionSelector from './ResumeVersionSelector';
+import { toast } from 'sonner';
 
 interface ResumeDetailViewProps {
   resume: Resume;
@@ -10,6 +16,7 @@ interface ResumeDetailViewProps {
 }
 
 export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, onApplyToJob }: ResumeDetailViewProps) {
+  const [showVersionSelector, setShowVersionSelector] = useState(false);
   
   const handleDownload = () => {
     alert('Resume download functionality would trigger here');
@@ -26,97 +33,47 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
     }
   };
 
-  // Mock detailed data - in production, this would come from the resume object or API
+  // Handle apply to job with version detection
+  const handleApplyToJob = () => {
+    if (resume.versions && resume.versions.length > 1) {
+      setShowVersionSelector(true);
+    } else {
+      onApplyToJob?.(resume);
+    }
+  };
+
+  // Handle version selection
+  const handleVersionSelect = (versionId: string) => {
+    toast.success(`Applying with ${resume.name}'s resume (${versionId})`);
+    onApplyToJob?.(resume);
+    setShowVersionSelector(false);
+  };
+
+  // Use real data from resume object - no more mock data
   const detailedResume = {
     ...resume,
-    summary: `Experienced ${resume.title.toLowerCase()} with ${resume.experience} of expertise in ${resume.skills.slice(0, 3).join(', ')}, and more. Proven track record of delivering scalable solutions and driving technical excellence. Passionate about clean code, best practices, and continuous learning.`,
-    experience: [
-      {
-        title: resume.title,
-        company: 'Tech Corp Inc.',
-        location: resume.location || 'Remote',
-        startDate: 'Jan 2020',
-        endDate: 'Present',
-        duration: resume.experience.includes('-') ? resume.experience.split('-')[1].trim() + ' years' : resume.experience,
-        description: `Leading development of enterprise applications using ${resume.skills.slice(0, 3).join(', ')}.`,
-        achievements: [
-          `Architected and implemented solutions using ${resume.skills[0]} and ${resume.skills[1]}, improving system performance by 40%`,
-          'Led team of developers in agile environment, delivering features on schedule',
-          'Implemented CI/CD pipeline reducing deployment time significantly',
-          'Mentored junior developers and contributed to team growth'
-        ]
-      },
-      {
-        title: resume.title.replace('Senior ', '').replace('Lead ', ''),
-        company: 'StartupXYZ',
-        location: resume.location || 'Remote',
-        startDate: 'Mar 2018',
-        endDate: 'Dec 2019',
-        duration: '1 year 10 months',
-        description: 'Full-stack development of SaaS platform for project management.',
-        achievements: [
-          `Built features using ${resume.skills.slice(0, 2).join(' and ')}`,
-          'Optimized database queries reducing load time by 60%',
-          'Developed RESTful APIs consumed by web and mobile applications'
-        ]
-      }
-    ],
-    education: resume.education ? [
-      {
-        degree: resume.education,
-        school: resume.education.split(',')[1]?.trim() || 'University',
-        location: resume.location || 'United States',
-        year: '2016',
-        gpa: '3.8/4.0',
-        honors: 'Magna Cum Laude'
-      }
-    ] : [
-      {
-        degree: 'Bachelor of Science in Computer Science',
-        school: 'University',
-        location: resume.location || 'United States',
-        year: '2016',
-        gpa: '3.8/4.0',
-        honors: undefined
-      }
-    ],
+    summary: resume.professionalSummary || '',
+    experience: resume.experienceDetails && resume.experienceDetails.length > 0
+      ? resume.experienceDetails
+      : [],
+    education: resume.educationDetails && resume.educationDetails.length > 0
+      ? resume.educationDetails
+      : resume.education
+        ? [{ degree: resume.education, school: '', location: resume.location || '', year: '', gpa: '', honors: '' }]
+        : [],
     skills: {
-      technical: resume.skills.map((skill, index) => ({
+      technical: (resume.technicalSkills || resume.skills || []).map((skill, index) => ({
         name: skill,
-        level: 95 - (index * 3) // Decreasing proficiency
+        level: 90 - (index * 5) // Visual representation
       })),
-      soft: [
-        'Leadership & Team Management',
-        'Agile/Scrum Methodologies',
-        'Technical Documentation',
-        'Problem Solving',
-        'Communication',
-        'Mentorship'
-      ]
+      soft: resume.softSkills || []
     },
-    certifications: [
-      {
-        name: 'AWS Certified Solutions Architect - Professional',
-        issuer: 'Amazon Web Services',
-        date: 'Nov 2023',
-        credentialId: 'AWS-12345'
-      },
-      {
-        name: 'Certified Kubernetes Administrator (CKA)',
-        issuer: 'Cloud Native Computing Foundation',
-        date: 'Jun 2022',
-        credentialId: 'CKA-67890'
-      }
-    ],
-    languages: [
-      { name: 'English', proficiency: 'Native' },
-      { name: 'Spanish', proficiency: 'Professional Working' },
-      { name: 'French', proficiency: 'Elementary' }
-    ],
+    certifications: resume.certifications || [],
+    languages: resume.languages || [],
     links: {
-      linkedin: 'linkedin.com/in/johndoe',
-      portfolio: 'johndoe.dev',
-      github: 'github.com/johndoe'
+      linkedin: '',
+      portfolio: '',
+      github: ''
     }
   };
 
@@ -124,14 +81,14 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-4 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
               <Briefcase className="w-5 h-5 text-white" />
             </div>
             <div>
               <h2 className="text-white">Resume Details</h2>
-              <p className="text-gray-100 text-sm">{resume.name}</p>
+              <p className="text-blue-100 text-sm">{resume.name}</p>
             </div>
           </div>
           <button
@@ -180,8 +137,8 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
           </div>
           {onApplyToJob && (
             <button
-              onClick={() => onApplyToJob(resume)}
-              className="flex items-center gap-2 px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm shadow-md"
+              onClick={handleApplyToJob}
+              className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm shadow-md"
             >
               <Send className="w-4 h-4" />
               Apply to Job
@@ -194,9 +151,9 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
           <div className="max-w-5xl mx-auto space-y-6">
             
             {/* Personal Info Card */}
-            <div className="bg-white border-2 border-gray-200 rounded-xl p-6 shadow-lg">
+            <div className="bg-white border-2 border-blue-200 rounded-xl p-6 shadow-lg">
               <div className="flex items-start gap-6">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-3xl flex-shrink-0">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-3xl flex-shrink-0">
                   {resume.name.split(' ').map(n => n[0]).join('')}
                 </div>
                 <div className="flex-1">
@@ -230,25 +187,25 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                   {/* Contact Info */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <Mail className="w-4 h-4 text-gray-800" />
-                      <a href={`mailto:${resume.email}`} className="hover:text-gray-800">{resume.email}</a>
+                      <Mail className="w-4 h-4 text-blue-600" />
+                      <a href={`mailto:${resume.email}`} className="hover:text-blue-600">{resume.email}</a>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <Phone className="w-4 h-4 text-gray-800" />
-                      <a href={`tel:${resume.phone}`} className="hover:text-gray-800">{resume.phone}</a>
+                      <Phone className="w-4 h-4 text-blue-600" />
+                      <a href={`tel:${resume.phone}`} className="hover:text-blue-600">{resume.phone}</a>
                     </div>
                     {detailedResume.links.linkedin && (
                       <div className="flex items-center gap-2 text-sm text-gray-700">
-                        <Linkedin className="w-4 h-4 text-gray-800" />
-                        <a href={`https://${detailedResume.links.linkedin}`} target="_blank" rel="noopener noreferrer" className="hover:text-gray-800 flex items-center gap-1">
+                        <Linkedin className="w-4 h-4 text-blue-600" />
+                        <a href={`https://${detailedResume.links.linkedin}`} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 flex items-center gap-1">
                           LinkedIn <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>
                     )}
                     {detailedResume.links.portfolio && (
                       <div className="flex items-center gap-2 text-sm text-gray-700">
-                        <Globe className="w-4 h-4 text-gray-800" />
-                        <a href={`https://${detailedResume.links.portfolio}`} target="_blank" rel="noopener noreferrer" className="hover:text-gray-800 flex items-center gap-1">
+                        <Globe className="w-4 h-4 text-blue-600" />
+                        <a href={`https://${detailedResume.links.portfolio}`} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 flex items-center gap-1">
                           Portfolio <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>
@@ -258,7 +215,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                   {/* Tags */}
                   <div className="flex flex-wrap gap-2">
                     {resume.skills?.slice(0, 8).map((skill, index) => (
-                      <span key={index} className="px-3 py-1 bg-gray-50 text-gray-900 rounded-full text-xs border border-gray-200">
+                      <span key={index} className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs border border-blue-200">
                         {skill}
                       </span>
                     ))}
@@ -279,13 +236,13 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             {/* Work Experience */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Briefcase className="w-5 h-5 text-gray-800" />
+                <Briefcase className="w-5 h-5 text-blue-600" />
                 <h2 className="text-gray-900">Work Experience</h2>
               </div>
               <div className="space-y-6">
                 {detailedResume.experience.map((exp, index) => (
-                  <div key={index} className="relative pl-6 pb-6 border-l-2 border-gray-200 last:pb-0">
-                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gray-800 border-2 border-white"></div>
+                  <div key={index} className="relative pl-6 pb-6 border-l-2 border-blue-200 last:pb-0">
+                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-blue-600 border-2 border-white"></div>
                     <div className="mb-3">
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -303,7 +260,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                               <Calendar className="w-3 h-3" />
                               {exp.startDate} - {exp.endDate}
                             </span>
-                            <span className="text-gray-800">({exp.duration})</span>
+                            <span className="text-blue-600">({exp.duration})</span>
                           </div>
                         </div>
                       </div>
@@ -325,12 +282,12 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             {/* Education */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-6">
-                <GraduationCap className="w-5 h-5 text-gray-800" />
+                <GraduationCap className="w-5 h-5 text-purple-600" />
                 <h2 className="text-gray-900">Education</h2>
               </div>
               <div className="space-y-4">
                 {detailedResume.education.map((edu, index) => (
-                  <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div key={index} className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
                     <h3 className="text-gray-900 mb-2">{edu.degree}</h3>
                     <div className="text-gray-700 mb-1">{edu.school}</div>
                     <div className="flex items-center gap-4 text-sm text-gray-600">
@@ -343,10 +300,10 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                         {edu.year}
                       </span>
                       {edu.gpa && (
-                        <span className="text-gray-900">GPA: {edu.gpa}</span>
+                        <span className="text-purple-700">GPA: {edu.gpa}</span>
                       )}
                       {edu.honors && (
-                        <span className="px-2 py-0.5 bg-gray-800 text-white rounded text-xs">
+                        <span className="px-2 py-0.5 bg-purple-600 text-white rounded text-xs">
                           {edu.honors}
                         </span>
                       )}
@@ -377,7 +334,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                         <div
                           className={`h-2 rounded-full ${
                             skill.level >= 90 ? 'bg-green-600' :
-                            skill.level >= 75 ? 'bg-gray-800' :
+                            skill.level >= 75 ? 'bg-blue-600' :
                             skill.level >= 60 ? 'bg-yellow-600' :
                             'bg-orange-600'
                           }`}
@@ -436,37 +393,314 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             {detailedResume.languages.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-6">
-                  <Languages className="w-5 h-5 text-gray-800" />
+                  <Languages className="w-5 h-5 text-indigo-600" />
                   <h2 className="text-gray-900">Languages</h2>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   {detailedResume.languages.map((lang, index) => (
-                    <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
+                    <div key={index} className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-center">
                       <div className="text-gray-900 mb-1">{lang.name}</div>
-                      <div className="text-sm text-gray-700">{lang.proficiency}</div>
+                      <div className="text-sm text-indigo-700">{lang.proficiency}</div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Metadata */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <div className="grid grid-cols-3 gap-4 text-sm text-gray-600">
-                <div>
-                  <span className="text-gray-500">Uploaded:</span> {new Date(resume.uploadDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            {/* Version Chain */}
+            {resume.versions && resume.versions.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <History className="w-5 h-5 text-blue-600" />
+                  <h2 className="text-gray-900">Version History</h2>
+                  <span className="px-2.5 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">
+                    {resume.versions.length} version{resume.versions.length !== 1 ? 's' : ''}
+                  </span>
                 </div>
-                <div>
-                  <span className="text-gray-500">Attachments:</span> {resume.attachments} file{resume.attachments !== 1 ? 's' : ''}
+                <div className="space-y-3">
+                  {resume.versions.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()).map((version, index) => (
+                    <div key={version.id} className={`p-4 rounded-lg border-2 transition-all ${
+                      index === 0 
+                        ? 'bg-blue-50 border-blue-200' 
+                        : 'bg-gray-50 border-gray-200'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className={`p-2 rounded-lg ${
+                            index === 0 ? 'bg-blue-100' : 'bg-gray-100'
+                          }`}>
+                            <FileText className={`w-4 h-4 ${
+                              index === 0 ? 'text-blue-600' : 'text-gray-600'
+                            }`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm text-gray-900 truncate">{version.name}</span>
+                              {index === 0 && (
+                                <span className="px-2 py-0.5 bg-blue-600 text-white rounded text-xs flex-shrink-0">
+                                  Latest
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-gray-600">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {new Date(version.uploadDate).toLocaleDateString('en-US', { 
+                                  month: 'short', 
+                                  day: 'numeric', 
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                              <span>•</span>
+                              <span>{version.size}</span>
+                              <span>•</span>
+                              <span className="flex items-center gap-1">
+                                <User className="w-3 h-3" />
+                                {version.uploadedBy}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          className={`p-2 rounded-md transition-colors ${
+                            index === 0
+                              ? 'text-blue-600 hover:bg-blue-100'
+                              : 'text-gray-600 hover:bg-gray-200'
+                          }`}
+                          title="Download this version"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <span className="text-gray-500">Uploaded By:</span> {resume.uploadedBy === 'current-user' ? 'You' : resume.uploadedBy}
+              </div>
+            )}
+
+            {/* File Properties */}
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <File className="w-5 h-5 text-gray-600" />
+                <h2 className="text-gray-900">File Properties</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <FileText className="w-4 h-4 text-gray-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">File Name</div>
+                      <div className="text-sm text-gray-900">{resume.name.replace(' ', '_')}_Resume.pdf</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <HardDrive className="w-4 h-4 text-gray-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">File Size</div>
+                      <div className="text-sm text-gray-900">
+                        {resume.versions && resume.versions.length > 0 
+                          ? resume.versions[0].size 
+                          : '245 KB'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <File className="w-4 h-4 text-gray-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">File Type</div>
+                      <div className="text-sm text-gray-900">PDF Document</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <Calendar className="w-4 h-4 text-gray-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">Upload Date</div>
+                      <div className="text-sm text-gray-900">
+                        {new Date(resume.uploadDate).toLocaleDateString('en-US', { 
+                          month: 'long', 
+                          day: 'numeric', 
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <Clock className="w-4 h-4 text-gray-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">Last Modified</div>
+                      <div className="text-sm text-gray-900">
+                        {resume.lastUpdated 
+                          ? new Date(resume.lastUpdated).toLocaleDateString('en-US', { 
+                              month: 'long', 
+                              day: 'numeric', 
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })
+                          : 'Never'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <User className="w-4 h-4 text-gray-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">Uploaded By</div>
+                      <div className="text-sm text-gray-900">
+                        {resume.uploadedBy === 'current-user' ? 'You' : resume.uploadedBy}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <FileText className="w-4 h-4 text-gray-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">Total Attachments</div>
+                      <div className="text-sm text-gray-900">
+                        {resume.attachments} file{resume.attachments !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <History className="w-4 h-4 text-gray-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">Version Count</div>
+                      <div className="text-sm text-gray-900">
+                        {resume.versions ? resume.versions.length : 1} version{resume.versions && resume.versions.length !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Upload History */}
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Clock className="w-5 h-5 text-orange-600" />
+                <h2 className="text-gray-900">Upload History</h2>
+              </div>
+              <div className="space-y-3">
+                {resume.versions && resume.versions.length > 0 ? (
+                  resume.versions.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()).map((version, index) => {
+                    const uploadDate = new Date(version.uploadDate);
+                    const now = new Date();
+                    const diffTime = Math.abs(now.getTime() - uploadDate.getTime());
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    let timeAgo = '';
+                    if (diffDays === 0) timeAgo = 'Today';
+                    else if (diffDays === 1) timeAgo = 'Yesterday';
+                    else if (diffDays < 7) timeAgo = `${diffDays} days ago`;
+                    else if (diffDays < 30) timeAgo = `${Math.floor(diffDays / 7)} weeks ago`;
+                    else if (diffDays < 365) timeAgo = `${Math.floor(diffDays / 30)} months ago`;
+                    else timeAgo = `${Math.floor(diffDays / 365)} years ago`;
+
+                    return (
+                      <div key={version.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                          index === 0 ? 'bg-green-500' : 'bg-gray-400'
+                        }`} />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm text-gray-900">
+                              {index === 0 ? 'Current version uploaded' : `Version ${resume.versions!.length - index} uploaded`}
+                            </span>
+                            <span className="text-xs text-gray-500">{timeAgo}</span>
+                          </div>
+                          <div className="text-xs text-gray-600">
+                            Uploaded by <span className="text-gray-900">{version.uploadedBy}</span> • {version.size} • {version.name}
+                          </div>
+                        </div>
+                        {index === 0 && (
+                          <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0 bg-green-500" />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-gray-900">Resume uploaded</span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(resume.uploadDate).toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric', 
+                            year: 'numeric'
+                          })}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        Uploaded by <span className="text-gray-900">{resume.uploadedBy === 'current-user' ? 'You' : resume.uploadedBy}</span>
+                      </div>
+                    </div>
+                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
+                      Active
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Metadata Summary */}
+            <div className="bg-gradient-to-r from-gray-50 to-blue-50 border-2 border-gray-300 rounded-lg p-4">
+              <div className="grid grid-cols-4 gap-4 text-sm">
+                <div className="text-center">
+                  <div className="text-xs text-gray-500 mb-1">Document ID</div>
+                  <div className="text-gray-900">#{resume.id.substring(0, 8).toUpperCase()}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xs text-gray-500 mb-1">Source</div>
+                  <div className="text-gray-900">{resume.source}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xs text-gray-500 mb-1">Folder</div>
+                  <div className="text-gray-900">{resume.folderId || 'Uncategorized'}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xs text-gray-500 mb-1">Status</div>
+                  <div className="inline-flex items-center px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
+                    Active
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Version Selector Modal */}
+      {showVersionSelector && resume.versions && resume.versions.length > 1 && (
+        <ResumeVersionSelector
+          resume={resume}
+          onSelect={handleVersionSelect}
+          onClose={() => setShowVersionSelector(false)}
+        />
+      )}
     </div>
   );
 }

@@ -34,7 +34,15 @@ export interface ScoringResponse {
   location?: string;
   experience_years?: number;
   education?: any[];
+  education_details?: any[];
+  experience?: any[];
+  experience_details?: any[];
   skills?: string[];
+  technical_skills?: string[];
+  soft_skills?: string[];
+  professional_summary?: string;
+  certifications?: string[];
+  languages?: string[];
   scored_by: string;
   scored_by_name?: string;
   overall_score: number;
