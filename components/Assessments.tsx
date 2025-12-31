@@ -312,7 +312,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   return (
     <div className="flex-1 p-8 overflow-y-auto">
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>

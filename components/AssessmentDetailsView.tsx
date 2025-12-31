@@ -186,7 +186,7 @@ export default function AssessmentDetailsView({
       </div>
 
       {/* Content */}
-      <div className="px-8 py-6 max-w-7xl mx-auto">
+      <div className="px-8 py-6 w-full">
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6">

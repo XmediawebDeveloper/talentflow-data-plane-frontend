@@ -289,7 +289,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   if (step === 'select-jd') {
     return (
       <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
-        <div className="max-w-5xl mx-auto">
+        <div className="w-full">
           <button
             onClick={onBack}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
@@ -556,7 +556,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
     return (
       <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
-        <div className="max-w-7xl mx-auto">
+        <div className="w-full">
           <button
             onClick={() => setStep('select-jd')}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
@@ -965,7 +965,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
     return (
       <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
-        <div className="max-w-5xl mx-auto">
+        <div className="w-full">
           <button
             onClick={() => setStep('configure')}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
