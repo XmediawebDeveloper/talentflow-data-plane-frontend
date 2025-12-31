@@ -13,6 +13,26 @@ import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
 
+// Validation constants
+const VALIDATION = {
+  JOB_TITLE: { min: 2, max: 75 },
+  AI_PROMPT: { min: 30, max: 1500 },
+  MANUAL_JD: { min: 100, max: 10000 },
+  ASSESSMENT_GUIDANCE: { min: 10, max: 100 },
+};
+
+// Validation helper functions
+const getCharCountColor = (current: number, min: number, max: number): string => {
+  if (current < min) return 'text-orange-500';
+  if (current > max) return 'text-red-500';
+  return 'text-green-600';
+};
+
+const isValidLength = (value: string, min: number, max: number): boolean => {
+  const len = value.trim().length;
+  return len >= min && len <= max;
+};
+
 interface ExtractedData {
   mustHaveSkills: string[];
   mustHaveComments: string[];
@@ -33,10 +53,32 @@ interface ExtractedData {
   internalRecruiterComments: string[];
 }
 
+interface EditingJDData {
+  id: string;
+  title: string;
+  description: string;
+  creation_stage: 'create' | 'extract' | 'review';
+  must_have_skills?: string[];
+  nice_to_have_skills?: string[];
+  education_requirements?: { degree?: string };
+  experience_min?: number;
+  experience_max?: number;
+  industry_type?: string;
+  salary_min?: number;
+  salary_max?: number;
+  compensation_type?: string;
+  assessment_guidance?: string;
+  internal_comments?: string;
+  must_have_comments?: string[];
+  allow_overqualified?: boolean;
+  locations?: Array<{ city: string; radius_km?: number; is_required?: boolean }>;
+}
+
 interface JDCreationProps {
   onBack?: () => void;
   selectedJob?: Job | null;
   onPublish?: (job: Job) => void;
+  editingJD?: EditingJDData | null;  // JD data when editing a draft
 }
 
 interface DraggableSkillProps {
@@ -201,9 +243,10 @@ const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkill
   );
 };
 
-export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreationProps = {}) {
+export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }: JDCreationProps = {}) {
   const [mode, setMode] = useState<CreationMode>('ai');
-  const [step, setStep] = useState<Step>('create');
+  const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
+  const [editingId, setEditingId] = useState<string | null>(editingJD?.id || null);
 
   // Quota check for max_jobs
   const { checkQuota, status: quotaStatus, canProceed: hasQuota, isChecking: isCheckingQuota, quotaError } = useQuotaCheck();
@@ -243,6 +286,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
   const [newLocation, setNewLocation] = useState({ city: '', radius: '50' });
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [showLocationMenu, setShowLocationMenu] = useState(false);
+  const [locationStateFilter, setLocationStateFilter] = useState<string>('all');
   
   // Inline editing states
   const [editingSkillIndex, setEditingSkillIndex] = useState<{ category: 'mustHaveSkills' | 'niceToHaveSkills'; index: number } | null>(null);
@@ -255,6 +299,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
   const [showDragTips, setShowDragTips] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
+  const [extractedDataModified, setExtractedDataModified] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  // Save to draft state
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
 
   // Master data state
   const [experienceLevels, setExperienceLevels] = useState<ExperienceLevel[]>([]);
@@ -411,6 +460,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
       }));
       setNewSkill('');
       setEditingCategory(null);
+      setExtractedDataModified(true);
     }
   };
 
@@ -419,6 +469,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
       ...prev,
       [category]: prev[category].filter((_, i) => i !== index),
     }));
+    setExtractedDataModified(true);
   };
 
   const handleMoveSkill = (skill: string, from: 'mustHaveSkills' | 'niceToHaveSkills', to: 'mustHaveSkills' | 'niceToHaveSkills') => {
@@ -427,6 +478,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
       [from]: prev[from].filter(s => s !== skill),
       [to]: [...prev[to], skill],
     }));
+    setExtractedDataModified(true);
   };
 
   const handleAddComment = () => {
@@ -460,6 +512,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
         ...prev,
         [category]: prev[category].map((skill, i) => i === index ? editingSkillValue.trim() : skill),
       }));
+      setExtractedDataModified(true);
     }
     setEditingSkillIndex(null);
     setEditingSkillValue('');
@@ -566,6 +619,51 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
     setStep('review');
   };
 
+  // Handle regenerating JD based on modified extracted data
+  const handleRegenerateFromExtractedData = async () => {
+    setIsRegenerating(true);
+
+    try {
+      // Build a prompt from the extracted data to regenerate the JD
+      const skillsText = [
+        ...extractedData.mustHaveSkills.map(s => `Must have: ${s}`),
+        ...extractedData.niceToHaveSkills.map(s => `Nice to have: ${s}`),
+      ].join(', ');
+
+      const requirementsText = [
+        extractedData.experience ? `Experience: ${extractedData.experience}` : '',
+        extractedData.education ? `Education: ${extractedData.education}` : '',
+        extractedData.industryType ? `Industry: ${extractedData.industryType}` : '',
+      ].filter(Boolean).join('. ');
+
+      const locationsText = extractedData.locations.length > 0
+        ? `Location: ${extractedData.locations.map(l => l.city).join(', ')}`
+        : '';
+
+      const regeneratePrompt = `${jobTitle} - Skills: ${skillsText}. ${requirementsText}. ${locationsText}`;
+
+      const response = await jdService.generate(regeneratePrompt);
+
+      if (response?.description) {
+        setGeneratedJD(response.description);
+        setExtractedDataModified(false);
+
+        toast.success({
+          title: 'JD Regenerated',
+          description: 'Job description has been updated based on your changes.'
+        });
+      }
+    } catch (error) {
+      console.error('[TalentFlow] Regeneration failed:', error);
+      toast.error({
+        title: 'Regeneration Failed',
+        description: 'Could not regenerate JD. Please try again.'
+      });
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
   const handleConfirmPublish = async () => {
     console.log('[DEBUG] handleConfirmPublish called');
     setIsPublishing(true);
@@ -594,6 +692,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
         compensation_type: extractedData.compensationType,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
+        must_have_comments: extractedData.mustHaveComments,
         allow_overqualified: extractedData.allowOverqualified,
         locations: extractedData.locations.map(loc => ({
           city: loc.city,
@@ -669,6 +768,94 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
     }
   };
 
+  // Check if there's unsaved data worth saving
+  const hasUnsavedData = () => {
+    return (jobTitle.trim() !== '' && (generatedJD.trim() !== '' || manualJD.trim() !== ''));
+  };
+
+  // Handle back button click - auto save as draft if there's unsaved data
+  const handleBackClick = async () => {
+    if (hasUnsavedData() && !isPublished) {
+      // Auto save as draft
+      await handleSaveDraft();
+    } else if (onBack) {
+      onBack();
+    }
+  };
+
+  // Save JD as draft
+  const handleSaveDraft = async () => {
+    setIsSavingDraft(true);
+
+    try {
+      // Parse experience values
+      const experienceMatch = extractedData.experience.match(/(\d+)/);
+      const experienceMin = experienceMatch ? parseInt(experienceMatch[1]) : undefined;
+
+      // Build the JD data for backend
+      const jdData = {
+        title: jobTitle,
+        description: generatedJD || manualJD,
+        department: 'Engineering',
+        location: extractedData.locations.length > 0
+          ? extractedData.locations[0].city
+          : 'Remote',
+        employment_type: 'full_time',
+        must_have_skills: extractedData.mustHaveSkills,
+        nice_to_have_skills: extractedData.niceToHaveSkills,
+        education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
+        experience_min: experienceMin,
+        industry_type: extractedData.industryType || undefined,
+        salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9]/g, '')) : undefined,
+        salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9]/g, '')) : undefined,
+        compensation_type: extractedData.compensationType,
+        assessment_guidance: extractedData.assessmentGuidance || undefined,
+        internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
+        must_have_comments: extractedData.mustHaveComments,
+        allow_overqualified: extractedData.allowOverqualified,
+        creation_stage: step,  // Save the current step so user can continue from here
+        locations: extractedData.locations.map(loc => ({
+          city: loc.city,
+          is_required: extractedData.locationsRequired,
+        })),
+      };
+
+      // Update existing JD or create new one
+      let savedJd;
+      if (editingId) {
+        savedJd = await jdService.update(editingId, jdData);
+        console.log('[DEBUG] JD updated as draft:', savedJd.id);
+      } else {
+        savedJd = await jdService.create(jdData);
+        setEditingId(savedJd.id);  // Track the new ID in case we save again
+        console.log('[DEBUG] JD created as draft:', savedJd.id);
+      }
+
+      setIsSavingDraft(false);
+
+      toast.success({
+        title: 'Job description saved as draft!',
+        description: `"${jobTitle}" has been saved. You can continue editing it later.`,
+      });
+
+      // Navigate back
+      if (onBack) {
+        onBack();
+      }
+    } catch (error) {
+      console.error('[ERROR] Failed to save draft:', error);
+      setIsSavingDraft(false);
+      toast.error({
+        title: 'Failed to save draft',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+      });
+      // Still navigate back even on error
+      if (onBack) {
+        onBack();
+      }
+    }
+  };
+
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center mb-12">
       <div className="flex items-center gap-8">
@@ -720,6 +907,42 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
     }
   }, [selectedJob]);
 
+  // Load draft JD data when editing
+  useEffect(() => {
+    if (editingJD) {
+      setEditingId(editingJD.id);
+      setJobTitle(editingJD.title);
+      setGeneratedJD(editingJD.description);
+      setStep(editingJD.creation_stage);
+
+      // Load extracted data if we're past the create step
+      if (editingJD.creation_stage !== 'create') {
+        setExtractedData(prev => ({
+          ...prev,
+          mustHaveSkills: editingJD.must_have_skills || [],
+          niceToHaveSkills: editingJD.nice_to_have_skills || [],
+          education: editingJD.education_requirements?.degree || '',
+          experience: editingJD.experience_min
+            ? `${editingJD.experience_min}${editingJD.experience_max ? `-${editingJD.experience_max}` : '+'}`
+            : '',
+          industryType: editingJD.industry_type || '',
+          salaryFrom: editingJD.salary_min?.toString() || '',
+          salaryTo: editingJD.salary_max?.toString() || '',
+          compensationType: (editingJD.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
+          assessmentGuidance: editingJD.assessment_guidance || '',
+          internalRecruiterComments: editingJD.internal_comments ? editingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
+          mustHaveComments: editingJD.must_have_comments || [],
+          allowOverqualified: editingJD.allow_overqualified ?? false,
+          locations: editingJD.locations?.map(loc => ({
+            city: loc.city,
+            radius: loc.radius_km?.toString() || '50',
+          })) || [],
+          locationsRequired: editingJD.locations?.some(loc => loc.is_required) || false,
+        }));
+      }
+    }
+  }, [editingJD]);
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="flex-1 p-8 overflow-y-auto">
@@ -736,7 +959,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
             </div>
             {onBack && (
               <button
-                onClick={onBack}
+                onClick={handleBackClick}
                 className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -807,9 +1030,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         type="text"
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
+                        maxLength={VALIDATION.JOB_TITLE.max}
                         placeholder="e.g., Senior Software Engineer"
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                        className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
+                          jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
+                            ? 'border-red-300 bg-red-50'
+                            : 'border-gray-300'
+                        }`}
                       />
+                      <div className="flex justify-between mt-1">
+                        <p className={`text-xs ${getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                          {jobTitle.length < VALIDATION.JOB_TITLE.min && jobTitle.length > 0 && `Min ${VALIDATION.JOB_TITLE.min} characters required`}
+                        </p>
+                        <p className={`text-xs ${getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                          {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
+                        </p>
+                      </div>
                     </div>
 
                     <div>
@@ -819,11 +1055,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       <textarea
                         value={aiPrompt}
                         onChange={(e) => setAiPrompt(e.target.value)}
+                        maxLength={VALIDATION.AI_PROMPT.max}
                         placeholder="Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"
                         rows={12}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                        className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
+                          aiPrompt.length > 0 && !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max)
+                            ? 'border-red-300 bg-red-50'
+                            : 'border-gray-300'
+                        }`}
                       />
-                      <p className="text-xs text-gray-500 mt-2">
+                      <div className="flex justify-between mt-1">
+                        <p className={`text-xs ${getCharCountColor(aiPrompt.length, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max)}`}>
+                          {aiPrompt.length < VALIDATION.AI_PROMPT.min && aiPrompt.length > 0 && `Min ${VALIDATION.AI_PROMPT.min} characters required`}
+                        </p>
+                        <p className={`text-xs ${getCharCountColor(aiPrompt.length, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max)}`}>
+                          {aiPrompt.length}/{VALIDATION.AI_PROMPT.max}
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
                         💡 Tip: Include details like experience level, key skills, responsibilities, location, team size, or any specific requirements
                       </p>
                     </div>
@@ -844,8 +1093,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
 
                     <button
                       onClick={handleGenerateJD}
-                      disabled={!jobTitle || !aiPrompt || isGenerating || !hasQuota || isCheckingQuota}
-                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white px-6 py-3 rounded-md hover:from-blue-700 hover:to-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={
+                        !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
+                        !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max) ||
+                        isGenerating ||
+                        !hasQuota ||
+                        isCheckingQuota
+                      }
+                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white px-6 py-3 rounded-md hover:from-gray-700 hover:to-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Wand2 className="w-5 h-5" />
                       {isCheckingQuota ? (
@@ -854,6 +1109,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         <span className="animate-pulse">Generating with AI...</span>
                       ) : !hasQuota ? (
                         'Quota Exceeded - Upgrade Plan'
+                      ) : generatedJD ? (
+                        'Regenerate Job Description'
                       ) : (
                         'Generate Job Description'
                       )}
@@ -866,7 +1123,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
               {mode === 'manual' && (
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                   <h2 className="text-gray-900 mb-6">Job Details</h2>
-                  
+
                   <div className="space-y-5">
                     <div>
                       <label className="block text-sm text-gray-700 mb-2">
@@ -876,9 +1133,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                         type="text"
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
+                        maxLength={VALIDATION.JOB_TITLE.max}
                         placeholder="e.g., Senior Software Engineer"
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                        className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
+                          jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
+                            ? 'border-red-300 bg-red-50'
+                            : 'border-gray-300'
+                        }`}
                       />
+                      <div className="flex justify-between mt-1">
+                        <p className={`text-xs ${getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                          {jobTitle.length < VALIDATION.JOB_TITLE.min && jobTitle.length > 0 && `Min ${VALIDATION.JOB_TITLE.min} characters required`}
+                        </p>
+                        <p className={`text-xs ${getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                          {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
+                        </p>
+                      </div>
                     </div>
 
                     <div>
@@ -888,10 +1158,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       <textarea
                         value={manualJD}
                         onChange={(e) => setManualJD(e.target.value)}
+                        maxLength={VALIDATION.MANUAL_JD.max}
                         placeholder="Paste or write your job description here..."
                         rows={20}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                        className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
+                          manualJD.length > 0 && !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)
+                            ? 'border-red-300 bg-red-50'
+                            : 'border-gray-300'
+                        }`}
                       />
+                      <div className="flex justify-between mt-1">
+                        <p className={`text-xs ${getCharCountColor(manualJD.length, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)}`}>
+                          {manualJD.length < VALIDATION.MANUAL_JD.min && manualJD.length > 0 && `Min ${VALIDATION.MANUAL_JD.min} characters required`}
+                        </p>
+                        <p className={`text-xs ${getCharCountColor(manualJD.length, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)}`}>
+                          {manualJD.length}/{VALIDATION.MANUAL_JD.max}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1011,7 +1294,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
             <div className="flex justify-end mt-6">
               <button
                 onClick={handleNext}
-                disabled={isExtracting || !jobTitle || (mode === 'ai' ? !generatedJD : !manualJD)}
+                disabled={
+                  isExtracting ||
+                  !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
+                  (mode === 'ai' ? !generatedJD : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max))
+                }
                 className="flex items-center gap-2 bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isExtracting ? 'Extracting...' : 'Next: Extract Skills'}
@@ -1065,6 +1352,33 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Regeneration Notice */}
+            {extractedDataModified && mode === 'ai' && (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
+                      <Wand2 className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="text-blue-800 font-medium">Skills Modified</h4>
+                      <p className="text-sm text-blue-600">
+                        You&apos;ve made changes. Regenerate the JD to update the description with your modifications.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleRegenerateFromExtractedData}
+                    disabled={isRegenerating}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Wand2 className="w-4 h-4" />
+                    {isRegenerating ? 'Regenerating...' : 'Regenerate JD'}
+                  </button>
                 </div>
               </div>
             )}
@@ -1185,10 +1499,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   </DroppableSkillsContainer>
                 </div>
 
-                {/* Must-Have Comments */}
+                {/* Must-Have Comments - Mandatory */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-gray-900">Must-Have Comments</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-gray-900">Must-Have Comments</h3>
+                      <span className="text-red-500">*</span>
+                      {extractedData.mustHaveComments.length === 0 && (
+                        <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded">Required</span>
+                      )}
+                    </div>
                     <button
                       onClick={() => setEditingCategory('comments')}
                       className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
@@ -1299,10 +1619,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   <textarea
                     value={extractedData.assessmentGuidance}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, assessmentGuidance: e.target.value }))}
+                    maxLength={VALIDATION.ASSESSMENT_GUIDANCE.max}
                     placeholder="e.g., Focus on system design, coding best practices, problem-solving approach..."
                     rows={8}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none"
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none ${
+                      extractedData.assessmentGuidance.length > 0 &&
+                      !isValidLength(extractedData.assessmentGuidance, VALIDATION.ASSESSMENT_GUIDANCE.min, VALIDATION.ASSESSMENT_GUIDANCE.max)
+                        ? 'border-red-300 bg-red-50'
+                        : 'border-gray-300'
+                    }`}
                   />
+                  <div className="flex justify-between mt-1">
+                    <p className={`text-xs ${getCharCountColor(extractedData.assessmentGuidance.length, VALIDATION.ASSESSMENT_GUIDANCE.min, VALIDATION.ASSESSMENT_GUIDANCE.max)}`}>
+                      {extractedData.assessmentGuidance.length > 0 && extractedData.assessmentGuidance.length < VALIDATION.ASSESSMENT_GUIDANCE.min &&
+                        `Min ${VALIDATION.ASSESSMENT_GUIDANCE.min} characters required`}
+                    </p>
+                    <p className={`text-xs ${getCharCountColor(extractedData.assessmentGuidance.length, VALIDATION.ASSESSMENT_GUIDANCE.min, VALIDATION.ASSESSMENT_GUIDANCE.max)}`}>
+                      {extractedData.assessmentGuidance.length}/{VALIDATION.ASSESSMENT_GUIDANCE.max}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Internal Recruiter Comments */}
@@ -1492,40 +1827,40 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
 
                 {/* Salary */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Salary Range</h3>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
-                        <input
-                          type="text"
-                          value={extractedData.salaryFrom || ''}
-                          onChange={(e) => setExtractedData(prev => ({ ...prev, salaryFrom: e.target.value }))}
-                          placeholder="From"
-                          className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
-                        />
-                      </div>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
-                        <input
-                          type="text"
-                          value={extractedData.salaryTo || ''}
-                          onChange={(e) => setExtractedData(prev => ({ ...prev, salaryTo: e.target.value }))}
-                          placeholder="To"
-                          className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
-                        />
-                      </div>
-                    </div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-900">Salary Range</h3>
                     <select
                       value={extractedData.compensationType}
                       onChange={(e) => setExtractedData(prev => ({ ...prev, compensationType: e.target.value as 'hourly' | 'daily' | 'monthly' | 'yearly' }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+                      className="px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
                     >
                       <option value="hourly">Hourly</option>
                       <option value="daily">Daily</option>
                       <option value="monthly">Monthly</option>
                       <option value="yearly">Yearly</option>
                     </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
+                      <input
+                        type="text"
+                        value={extractedData.salaryFrom || ''}
+                        onChange={(e) => setExtractedData(prev => ({ ...prev, salaryFrom: e.target.value }))}
+                        placeholder="From"
+                        className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                      />
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
+                      <input
+                        type="text"
+                        value={extractedData.salaryTo || ''}
+                        onChange={(e) => setExtractedData(prev => ({ ...prev, salaryTo: e.target.value }))}
+                        placeholder="To"
+                        className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1549,19 +1884,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                 </div>
               </div>
 
-              {/* Locations Section */}
+              {/* Locations Section - Mandatory */}
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <h3 className="text-gray-900">Locations</h3>
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <span className="text-red-500">*</span>
+                    {extractedData.locations.length === 0 && (
+                      <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded">At least one required</span>
+                    )}
+                    <label className="flex items-center gap-2 cursor-pointer ml-4">
                       <input
                         type="checkbox"
                         checked={Boolean(extractedData.locationsRequired)}
                         onChange={(e) => setExtractedData(prev => ({ ...prev, locationsRequired: e.target.checked }))}
                         className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
                       />
-                      <span className="text-sm text-gray-700">Required</span>
+                      <span className="text-sm text-gray-700">Strictly Required</span>
                     </label>
                   </div>
                   <div className="relative">
@@ -1592,6 +1931,36 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                           </div>
 
                           <div className="space-y-3">
+                            {/* State Filter Dropdown */}
+                            <div>
+                              <label className="block text-sm text-gray-700 mb-1">Filter by State</label>
+                              <select
+                                value={locationStateFilter}
+                                onChange={(e) => {
+                                  setLocationStateFilter(e.target.value);
+                                  setNewLocation(prev => ({ ...prev, city: '' }));
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+                              >
+                                <option value="all">All States</option>
+                                <option value="Andhra Pradesh">Andhra Pradesh</option>
+                                <option value="Delhi NCR">Delhi NCR</option>
+                                <option value="Gujarat">Gujarat</option>
+                                <option value="Haryana">Haryana</option>
+                                <option value="Karnataka">Karnataka</option>
+                                <option value="Kerala">Kerala</option>
+                                <option value="Madhya Pradesh">Madhya Pradesh</option>
+                                <option value="Maharashtra">Maharashtra</option>
+                                <option value="Odisha">Odisha</option>
+                                <option value="Rajasthan">Rajasthan</option>
+                                <option value="Tamil Nadu">Tamil Nadu</option>
+                                <option value="Telangana">Telangana</option>
+                                <option value="Uttar Pradesh">Uttar Pradesh</option>
+                                <option value="West Bengal">West Bengal</option>
+                                <option value="Remote">Remote/Hybrid</option>
+                              </select>
+                            </div>
+
                             {/* Location Dropdown */}
                             <div>
                               <label className="block text-sm text-gray-700 mb-1">Location</label>
@@ -1599,47 +1968,100 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                                 value={newLocation.city}
                                 onChange={(e) => setNewLocation(prev => ({ ...prev, city: e.target.value }))}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
-                                autoFocus
                               >
                                 <option value="">Select a location</option>
-                                <optgroup label="Metro Cities">
-                                  <option value="Mumbai, Maharashtra">Mumbai, Maharashtra</option>
-                                  <option value="Delhi NCR">Delhi NCR</option>
-                                  <option value="Bangalore, Karnataka">Bangalore, Karnataka</option>
-                                  <option value="Hyderabad, Telangana">Hyderabad, Telangana</option>
-                                  <option value="Chennai, Tamil Nadu">Chennai, Tamil Nadu</option>
-                                  <option value="Kolkata, West Bengal">Kolkata, West Bengal</option>
-                                  <option value="Pune, Maharashtra">Pune, Maharashtra</option>
-                                  <option value="Ahmedabad, Gujarat">Ahmedabad, Gujarat</option>
-                                </optgroup>
-                                <optgroup label="IT/Tech Hubs">
-                                  <option value="Gurgaon, Haryana">Gurgaon, Haryana</option>
-                                  <option value="Noida, Uttar Pradesh">Noida, Uttar Pradesh</option>
-                                  <option value="Navi Mumbai, Maharashtra">Navi Mumbai, Maharashtra</option>
-                                  <option value="Thane, Maharashtra">Thane, Maharashtra</option>
-                                  <option value="Chandigarh">Chandigarh</option>
-                                  <option value="Jaipur, Rajasthan">Jaipur, Rajasthan</option>
-                                  <option value="Coimbatore, Tamil Nadu">Coimbatore, Tamil Nadu</option>
-                                  <option value="Kochi, Kerala">Kochi, Kerala</option>
-                                  <option value="Thiruvananthapuram, Kerala">Thiruvananthapuram, Kerala</option>
-                                </optgroup>
-                                <optgroup label="Other Cities">
-                                  <option value="Lucknow, Uttar Pradesh">Lucknow, Uttar Pradesh</option>
-                                  <option value="Indore, Madhya Pradesh">Indore, Madhya Pradesh</option>
-                                  <option value="Bhopal, Madhya Pradesh">Bhopal, Madhya Pradesh</option>
-                                  <option value="Nagpur, Maharashtra">Nagpur, Maharashtra</option>
-                                  <option value="Visakhapatnam, Andhra Pradesh">Visakhapatnam, Andhra Pradesh</option>
-                                  <option value="Surat, Gujarat">Surat, Gujarat</option>
-                                  <option value="Vadodara, Gujarat">Vadodara, Gujarat</option>
-                                  <option value="Mysore, Karnataka">Mysore, Karnataka</option>
-                                  <option value="Mangalore, Karnataka">Mangalore, Karnataka</option>
-                                  <option value="Bhubaneswar, Odisha">Bhubaneswar, Odisha</option>
-                                </optgroup>
-                                <optgroup label="Remote">
-                                  <option value="Remote - India">Remote - India</option>
-                                  <option value="Remote - Anywhere">Remote - Anywhere</option>
-                                  <option value="Hybrid - Flexible">Hybrid - Flexible</option>
-                                </optgroup>
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Maharashtra') && (
+                                  <optgroup label="Maharashtra">
+                                    <option value="Mumbai, Maharashtra">Mumbai, Maharashtra</option>
+                                    <option value="Pune, Maharashtra">Pune, Maharashtra</option>
+                                    <option value="Navi Mumbai, Maharashtra">Navi Mumbai, Maharashtra</option>
+                                    <option value="Thane, Maharashtra">Thane, Maharashtra</option>
+                                    <option value="Nagpur, Maharashtra">Nagpur, Maharashtra</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Karnataka') && (
+                                  <optgroup label="Karnataka">
+                                    <option value="Bangalore, Karnataka">Bangalore, Karnataka</option>
+                                    <option value="Mysore, Karnataka">Mysore, Karnataka</option>
+                                    <option value="Mangalore, Karnataka">Mangalore, Karnataka</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Tamil Nadu') && (
+                                  <optgroup label="Tamil Nadu">
+                                    <option value="Chennai, Tamil Nadu">Chennai, Tamil Nadu</option>
+                                    <option value="Coimbatore, Tamil Nadu">Coimbatore, Tamil Nadu</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Delhi NCR') && (
+                                  <optgroup label="Delhi NCR">
+                                    <option value="Delhi NCR">Delhi NCR</option>
+                                    <option value="Gurgaon, Haryana">Gurgaon, Haryana</option>
+                                    <option value="Noida, Uttar Pradesh">Noida, Uttar Pradesh</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Telangana') && (
+                                  <optgroup label="Telangana">
+                                    <option value="Hyderabad, Telangana">Hyderabad, Telangana</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'West Bengal') && (
+                                  <optgroup label="West Bengal">
+                                    <option value="Kolkata, West Bengal">Kolkata, West Bengal</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Gujarat') && (
+                                  <optgroup label="Gujarat">
+                                    <option value="Ahmedabad, Gujarat">Ahmedabad, Gujarat</option>
+                                    <option value="Surat, Gujarat">Surat, Gujarat</option>
+                                    <option value="Vadodara, Gujarat">Vadodara, Gujarat</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Haryana') && locationStateFilter !== 'Delhi NCR' && (
+                                  <optgroup label="Haryana">
+                                    <option value="Gurgaon, Haryana">Gurgaon, Haryana</option>
+                                    <option value="Chandigarh">Chandigarh</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Uttar Pradesh') && locationStateFilter !== 'Delhi NCR' && (
+                                  <optgroup label="Uttar Pradesh">
+                                    <option value="Noida, Uttar Pradesh">Noida, Uttar Pradesh</option>
+                                    <option value="Lucknow, Uttar Pradesh">Lucknow, Uttar Pradesh</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Rajasthan') && (
+                                  <optgroup label="Rajasthan">
+                                    <option value="Jaipur, Rajasthan">Jaipur, Rajasthan</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Kerala') && (
+                                  <optgroup label="Kerala">
+                                    <option value="Kochi, Kerala">Kochi, Kerala</option>
+                                    <option value="Thiruvananthapuram, Kerala">Thiruvananthapuram, Kerala</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Madhya Pradesh') && (
+                                  <optgroup label="Madhya Pradesh">
+                                    <option value="Indore, Madhya Pradesh">Indore, Madhya Pradesh</option>
+                                    <option value="Bhopal, Madhya Pradesh">Bhopal, Madhya Pradesh</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Andhra Pradesh') && (
+                                  <optgroup label="Andhra Pradesh">
+                                    <option value="Visakhapatnam, Andhra Pradesh">Visakhapatnam, Andhra Pradesh</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Odisha') && (
+                                  <optgroup label="Odisha">
+                                    <option value="Bhubaneswar, Odisha">Bhubaneswar, Odisha</option>
+                                  </optgroup>
+                                )}
+                                {(locationStateFilter === 'all' || locationStateFilter === 'Remote') && (
+                                  <optgroup label="Remote/Hybrid">
+                                    <option value="Remote - India">Remote - India</option>
+                                    <option value="Remote - Anywhere">Remote - Anywhere</option>
+                                    <option value="Hybrid - Flexible">Hybrid - Flexible</option>
+                                  </optgroup>
+                                )}
                               </select>
                             </div>
 
@@ -1695,20 +2117,39 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
               </div>
             </div>
 
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <button
                 onClick={() => setStep('create')}
                 className="px-8 py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >
                 Back
               </button>
-              <button
-                onClick={handlePublish}
-                className="flex items-center gap-2 bg-green-600 text-white px-8 py-3 rounded-md hover:bg-green-700 transition-colors"
-              >
-                Review & Publish
-                <ChevronRight className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-4">
+                {(extractedData.mustHaveComments.length === 0 || extractedData.locations.length === 0) && (
+                  <div className="flex flex-col items-end gap-1">
+                    {extractedData.mustHaveComments.length === 0 && (
+                      <span className="text-sm text-orange-600 flex items-center gap-1">
+                        <AlertTriangle className="w-4 h-4" />
+                        At least one Must-Have Comment is required
+                      </span>
+                    )}
+                    {extractedData.locations.length === 0 && (
+                      <span className="text-sm text-orange-600 flex items-center gap-1">
+                        <AlertTriangle className="w-4 h-4" />
+                        At least one Location is required
+                      </span>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={handlePublish}
+                  disabled={extractedData.mustHaveComments.length === 0 || extractedData.locations.length === 0}
+                  className="flex items-center gap-2 bg-green-600 text-white px-8 py-3 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Review & Publish
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1798,15 +2239,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
                   {(extractedData.mustHaveSkills.length > 0 || extractedData.niceToHaveSkills.length > 0) && (
                     <div className="mt-8 pt-6 border-t border-gray-200">
                       <h3 className="text-xl text-gray-900 mb-4">Key Requirements</h3>
-                      
+
                       {extractedData.mustHaveSkills.length > 0 && (
                         <div className="mb-6">
-                          <h4 className="text-sm uppercase tracking-wide text-red-600 mb-3">Must-Have Skills</h4>
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
+                              <CheckCircle className="w-4 h-4 text-red-600" />
+                            </div>
+                            <h4 className="text-sm uppercase tracking-wide text-red-600 font-semibold">Must-Have Skills</h4>
+                          </div>
                           <div className="grid grid-cols-2 gap-2">
                             {extractedData.mustHaveSkills.map((skill, index) => (
-                              <div key={index} className="flex items-center gap-2 text-sm text-gray-700">
-                                <CheckCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                                {skill}
+                              <div key={index} className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-100 rounded-lg">
+                                <div className="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center flex-shrink-0">
+                                  <CheckCircle className="w-3 h-3 text-white" />
+                                </div>
+                                <span className="text-sm text-gray-700">{skill}</span>
                               </div>
                             ))}
                           </div>
@@ -1815,12 +2263,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
 
                       {extractedData.niceToHaveSkills.length > 0 && (
                         <div>
-                          <h4 className="text-sm uppercase tracking-wide text-gray-800 mb-3">Nice-to-Have Skills</h4>
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                              <CheckCircle className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <h4 className="text-sm uppercase tracking-wide text-blue-600 font-semibold">Nice-to-Have Skills</h4>
+                          </div>
                           <div className="grid grid-cols-2 gap-2">
                             {extractedData.niceToHaveSkills.map((skill, index) => (
-                              <div key={index} className="flex items-center gap-2 text-sm text-gray-600">
-                                <CheckCircle className="w-4 h-4 text-gray-800 flex-shrink-0" />
-                                {skill}
+                              <div key={index} className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg">
+                                <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+                                  <CheckCircle className="w-3 h-3 text-white" />
+                                </div>
+                                <span className="text-sm text-gray-600">{skill}</span>
                               </div>
                             ))}
                           </div>
@@ -2126,6 +2581,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish }: JDCreatio
         )}
         </div>
       </div>
+
     </DndProvider>
   );
 }

@@ -18,16 +18,22 @@ export interface Resume {
   current_company?: string;
   previous_company?: string;
   skills: string[];
+  technical_skills?: string[];
+  soft_skills?: string[];
   education: any[];
+  experience: any[];
   experience_years?: number;
-  certifications: string[];
+  certifications: any[];
+  languages?: any[];
   location?: string;
   notice_period?: string;
+  professional_summary?: string;
   file_name: string;
   file_size_kb?: number;
   file_type?: string;
   source: 'manual_upload' | 'bulk_upload' | 'api_import' | 'ai_match';
   version: number;
+  version_count: number;  // Total versions for this candidate
   is_duplicate: boolean;
   created_at: string;
   updated_at: string;

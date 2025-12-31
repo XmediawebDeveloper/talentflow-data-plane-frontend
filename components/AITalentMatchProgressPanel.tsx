@@ -1,48 +1,31 @@
-import { Sparkles, CheckCircle2, Loader2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
-
-interface MatchedCandidate {
-  id: string;
-  name: string;
-  title: string;
-  email: string;
-  phone: string;
-  location: string;
-  experience: string;
-  skills: string[];
-  currentCompany: string;
-  noticePeriod: string;
-  matchScore: number;
-  matchReason: string;
-  skillMatches: string[];
-  uploadDate: string;
-  education?: string;
-  certifications?: string[];
-  attachmentCount?: number;
-  versions?: Array<{
-    id: string;
-    name: string;
-    uploadDate: string;
-    size: string;
-  }>;
-}
+import { Sparkles, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService';
 
 interface AITalentMatchProgressPanelProps {
   jobTitle: string;
+  jobId: string;
   onComplete: (results: MatchedCandidate[]) => void;
+  onError?: (error: string) => void;
 }
 
-export default function AITalentMatchProgressPanel({ 
+export default function AITalentMatchProgressPanel({
   jobTitle,
-  onComplete 
+  jobId,
+  onComplete,
+  onError,
 }: AITalentMatchProgressPanelProps) {
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(1);
   const [completedCandidates, setCompletedCandidates] = useState(0);
-  
-  const totalCandidates = 8;
+  const [totalCandidates, setTotalCandidates] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const hasStarted = useRef(false);
+
   const steps = [
     'Analyzing job requirements',
+    'Generating embeddings',
     'Scanning candidate database',
     'Computing AI match scores',
     'Ranking candidates',
@@ -50,242 +33,91 @@ export default function AITalentMatchProgressPanel({
   ];
 
   useEffect(() => {
-    // Simulate AI matching progress
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          return 100;
-        }
-        return prev + 2;
-      });
-    }, 80);
+    // Prevent double execution in React Strict Mode
+    if (hasStarted.current) return;
+    hasStarted.current = true;
 
-    // Update steps
-    const stepInterval = setInterval(() => {
-      setCurrentStep(prev => {
-        if (prev >= steps.length) return prev;
-        return prev + 1;
-      });
-    }, 1000);
+    let progressInterval: NodeJS.Timeout;
+    let stepInterval: NodeJS.Timeout;
 
-    // Update completed candidates
-    const candidateInterval = setInterval(() => {
-      setCompletedCandidates(prev => {
-        if (prev >= totalCandidates) return prev;
-        return prev + 1;
-      });
-    }, 500);
+    const runAIMatch = async () => {
+      try {
+        // Start progress animation
+        progressInterval = setInterval(() => {
+          setProgress(prev => {
+            if (prev >= 90) return 90; // Cap at 90% until API returns
+            return prev + 2;
+          });
+        }, 100);
 
-    // Complete after 4 seconds
-    const completeTimeout = setTimeout(() => {
-      clearInterval(interval);
-      clearInterval(stepInterval);
-      clearInterval(candidateInterval);
-      
-      // Generate mock results
-      const results = generateMockResults();
-      onComplete(results);
-    }, 4000);
+        // Update steps animation
+        stepInterval = setInterval(() => {
+          setCurrentStep(prev => {
+            if (prev >= steps.length - 1) return prev;
+            return prev + 1;
+          });
+        }, 1500);
+
+        // Call the real RAG API
+        const { session, candidates } = await aiMatchService.run(jobId, {
+          limit: 50,
+          minSimilarity: 0.2,  // Lower threshold to include more candidates
+        });
+
+        // Update progress to 100%
+        clearInterval(progressInterval);
+        clearInterval(stepInterval);
+        setProgress(100);
+        setCurrentStep(steps.length);
+        setTotalCandidates(candidates.length);
+        setCompletedCandidates(candidates.length);
+        setIsLoading(false);
+
+        // Small delay to show completion
+        setTimeout(() => {
+          onComplete(candidates);
+        }, 500);
+
+      } catch (err) {
+        clearInterval(progressInterval);
+        clearInterval(stepInterval);
+        const errorMessage = err instanceof Error ? err.message : 'Failed to run AI match';
+        setError(errorMessage);
+        setIsLoading(false);
+        onError?.(errorMessage);
+      }
+    };
+
+    runAIMatch();
 
     return () => {
-      clearInterval(interval);
+      clearInterval(progressInterval);
       clearInterval(stepInterval);
-      clearInterval(candidateInterval);
-      clearTimeout(completeTimeout);
     };
-  }, [onComplete]);
+  }, [jobId, onComplete, onError]);
 
-  const generateMockResults = (): MatchedCandidate[] => {
-    return [
-      {
-        id: '1',
-        name: 'Sarah Johnson',
-        title: 'Senior Full Stack Developer',
-        email: 'sarah.johnson@email.com',
-        phone: '+1 (555) 123-4567',
-        location: 'San Francisco, CA',
-        experience: '7 years',
-        skills: ['React', 'TypeScript', 'Node.js', 'AWS', 'Docker', 'PostgreSQL', 'GraphQL'],
-        currentCompany: 'Google',
-        noticePeriod: '30 Days',
-        matchScore: 95.5,
-        matchReason: 'Exceptional match with extensive full-stack experience. Strong expertise in React, TypeScript, and cloud technologies. Leadership experience aligns perfectly with senior role requirements.',
-        skillMatches: ['React', 'TypeScript', 'Node.js', 'AWS', 'Docker'],
-        uploadDate: '2025-11-28',
-        education: "Master's in Computer Science - Stanford University",
-        certifications: ['AWS Solutions Architect', 'Google Cloud Professional'],
-        attachmentCount: 3,
-        versions: [
-          { id: 'v1', name: 'Sarah_Johnson_Resume_2025.pdf', uploadDate: '2025-11-28', size: '245 KB' },
-          { id: 'v2', name: 'Sarah_Johnson_Resume_Oct2025.pdf', uploadDate: '2025-10-15', size: '238 KB' },
-          { id: 'v3', name: 'Sarah_Johnson_Resume_2024.pdf', uploadDate: '2024-12-10', size: '220 KB' }
-        ]
-      },
-      {
-        id: '2',
-        name: 'Michael Chen',
-        title: 'Senior Java Developer',
-        email: 'michael.chen@email.com',
-        phone: '+1 (555) 234-5678',
-        location: 'New York, NY',
-        experience: '6 years',
-        skills: ['Java', 'Spring Boot', 'Microservices', 'AWS', 'Docker', 'Kubernetes', 'MongoDB'],
-        currentCompany: 'Microsoft',
-        noticePeriod: '60 Days',
-        matchScore: 92.3,
-        matchReason: 'Excellent Java expertise with strong cloud and containerization skills. Proven track record in building scalable microservices architectures.',
-        skillMatches: ['Java', 'Spring Boot', 'AWS', 'Docker', 'Kubernetes'],
-        uploadDate: '2025-11-27',
-        education: "Bachelor's in Software Engineering - MIT",
-        certifications: ['Oracle Certified Professional', 'Kubernetes Administrator'],
-        attachmentCount: 2,
-        versions: [
-          { id: 'v1', name: 'Michael_Chen_Resume.pdf', uploadDate: '2025-11-27', size: '198 KB' },
-          { id: 'v2', name: 'Michael_Chen_CV_2024.pdf', uploadDate: '2024-10-20', size: '185 KB' }
-        ]
-      },
-      {
-        id: '3',
-        name: 'Emily Rodriguez',
-        title: 'DevOps Engineer',
-        email: 'emily.rodriguez@email.com',
-        phone: '+1 (555) 345-6789',
-        location: 'Austin, TX',
-        experience: '5 years',
-        skills: ['AWS', 'Terraform', 'Kubernetes', 'CI/CD', 'Python', 'Jenkins', 'Ansible'],
-        currentCompany: 'Netflix',
-        noticePeriod: '45 Days',
-        matchScore: 88.7,
-        matchReason: 'Strong DevOps background with comprehensive AWS and infrastructure automation experience. Excellent fit for cloud-native development practices.',
-        skillMatches: ['AWS', 'Kubernetes', 'Python'],
-        uploadDate: '2025-11-26',
-        education: "Bachelor's in Information Technology",
-        certifications: ['AWS DevOps Professional', 'Certified Kubernetes Administrator'],
-        attachmentCount: 4,
-        versions: [
-          { id: 'v1', name: 'Emily_Rodriguez_Resume_Nov2025.pdf', uploadDate: '2025-11-26', size: '215 KB' },
-          { id: 'v2', name: 'Emily_Rodriguez_Resume_Aug2025.pdf', uploadDate: '2025-08-15', size: '210 KB' },
-          { id: 'v3', name: 'Emily_Rodriguez_Resume_2024.pdf', uploadDate: '2024-11-10', size: '205 KB' },
-          { id: 'v4', name: 'Emily_Rodriguez_CV_2023.pdf', uploadDate: '2023-12-01', size: '195 KB' }
-        ]
-      },
-      {
-        id: '4',
-        name: 'David Kim',
-        title: 'Full Stack Developer',
-        email: 'david.kim@email.com',
-        phone: '+1 (555) 456-7890',
-        location: 'Seattle, WA',
-        experience: '4 years',
-        skills: ['React', 'Node.js', 'TypeScript', 'MongoDB', 'GraphQL', 'AWS', 'Redis'],
-        currentCompany: 'Amazon',
-        noticePeriod: 'Immediate',
-        matchScore: 86.2,
-        matchReason: 'Solid full-stack capabilities with modern JavaScript stack. Cloud experience and immediate availability are strong advantages.',
-        skillMatches: ['React', 'Node.js', 'TypeScript', 'AWS'],
-        uploadDate: '2025-11-25',
-        education: "Bachelor's in Computer Science",
-        certifications: ['AWS Developer Associate'],
-        attachmentCount: 1,
-        versions: [
-          { id: 'v1', name: 'David_Kim_Resume.pdf', uploadDate: '2025-11-25', size: '178 KB' }
-        ]
-      },
-      {
-        id: '5',
-        name: 'Jessica Martinez',
-        title: 'Frontend Developer',
-        email: 'jessica.martinez@email.com',
-        phone: '+1 (555) 567-8901',
-        location: 'Remote',
-        experience: '5 years',
-        skills: ['React', 'Vue.js', 'TypeScript', 'CSS', 'Webpack', 'Jest', 'Storybook'],
-        currentCompany: 'Meta',
-        noticePeriod: '30 Days',
-        matchScore: 82.4,
-        matchReason: 'Excellent frontend expertise with React and modern tooling. Strong UI/UX focus and remote work experience.',
-        skillMatches: ['React', 'TypeScript'],
-        uploadDate: '2025-11-24',
-        education: "Bachelor's in Web Design & Development",
-        certifications: ['React Developer Certification'],
-        attachmentCount: 2,
-        versions: [
-          { id: 'v1', name: 'Jessica_Martinez_Resume_2025.pdf', uploadDate: '2025-11-24', size: '195 KB' },
-          { id: 'v2', name: 'Jessica_Martinez_Portfolio_CV.pdf', uploadDate: '2025-09-10', size: '220 KB' }
-        ]
-      },
-      {
-        id: '6',
-        name: 'Robert Taylor',
-        title: 'Backend Developer',
-        email: 'robert.taylor@email.com',
-        phone: '+1 (555) 678-9012',
-        location: 'Boston, MA',
-        experience: '6 years',
-        skills: ['Python', 'Django', 'PostgreSQL', 'Redis', 'Celery', 'Docker', 'AWS'],
-        currentCompany: 'Stripe',
-        noticePeriod: '45 Days',
-        matchScore: 79.8,
-        matchReason: 'Strong backend development skills with Python expertise. Solid database and caching knowledge.',
-        skillMatches: ['Python', 'Docker', 'AWS'],
-        uploadDate: '2025-11-23',
-        education: "Master's in Software Engineering",
-        certifications: [],
-        attachmentCount: 3,
-        versions: [
-          { id: 'v1', name: 'Robert_Taylor_Resume_Latest.pdf', uploadDate: '2025-11-23', size: '210 KB' },
-          { id: 'v2', name: 'Robert_Taylor_Resume_2025.pdf', uploadDate: '2025-07-05', size: '205 KB' },
-          { id: 'v3', name: 'Robert_Taylor_CV_2024.pdf', uploadDate: '2024-11-01', size: '198 KB' }
-        ]
-      },
-      {
-        id: '7',
-        name: 'Amanda White',
-        title: 'Software Engineer',
-        email: 'amanda.white@email.com',
-        phone: '+1 (555) 789-0123',
-        location: 'Chicago, IL',
-        experience: '3 years',
-        skills: ['JavaScript', 'React', 'Node.js', 'Express', 'MySQL', 'Git'],
-        currentCompany: 'Airbnb',
-        noticePeriod: '30 Days',
-        matchScore: 75.6,
-        matchReason: 'Good foundation in full-stack JavaScript development. Growth potential with mentorship.',
-        skillMatches: ['React', 'Node.js'],
-        uploadDate: '2025-11-22',
-        education: "Bachelor's in Computer Science",
-        certifications: [],
-        attachmentCount: 1,
-        versions: [
-          { id: 'v1', name: 'Amanda_White_Resume.pdf', uploadDate: '2025-11-22', size: '165 KB' }
-        ]
-      },
-      {
-        id: '8',
-        name: 'Christopher Lee',
-        title: 'Data Engineer',
-        email: 'chris.lee@email.com',
-        phone: '+1 (555) 890-1234',
-        location: 'Denver, CO',
-        experience: '5 years',
-        skills: ['Python', 'Spark', 'Kafka', 'AWS', 'SQL', 'Airflow', 'Snowflake'],
-        currentCompany: 'Uber',
-        noticePeriod: '60 Days',
-        matchScore: 71.2,
-        matchReason: 'Strong data engineering background. Cloud and Python skills align with some requirements.',
-        skillMatches: ['Python', 'AWS'],
-        uploadDate: '2025-11-21',
-        education: "Master's in Data Science",
-        certifications: ['AWS Big Data Specialty'],
-        attachmentCount: 2,
-        versions: [
-          { id: 'v1', name: 'Christopher_Lee_Resume_2025.pdf', uploadDate: '2025-11-21', size: '188 KB' },
-          { id: 'v2', name: 'Christopher_Lee_CV.pdf', uploadDate: '2025-06-12', size: '182 KB' }
-        ]
-      }
-    ];
-  };
+  // Show error state
+  if (error) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-red-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Matching Failed</h2>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -360,19 +192,31 @@ export default function AITalentMatchProgressPanel({
         <div className="bg-gradient-to-br from-gray-50 to-gray-50 border border-gray-200 rounded-xl p-6">
           <div className="grid grid-cols-2 gap-6">
             <div className="text-center">
-              <div className="text-sm text-gray-600 mb-1">Candidates Analyzed</div>
-              <div className="text-3xl font-bold text-gray-800">{completedCandidates}</div>
-              <div className="text-xs text-gray-500 mt-1">of {totalCandidates} total</div>
+              <div className="text-sm text-gray-600 mb-1">Candidates Found</div>
+              <div className="text-3xl font-bold text-gray-800">
+                {isLoading ? (
+                  <span className="animate-pulse">...</span>
+                ) : (
+                  completedCandidates
+                )}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {isLoading ? 'Searching...' : `${totalCandidates} matches`}
+              </div>
             </div>
             <div className="text-center">
-              <div className="text-sm text-gray-600 mb-1">AI Match Engine</div>
+              <div className="text-sm text-gray-600 mb-1">RAG Pipeline</div>
               <div className="flex items-center justify-center gap-2">
                 <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm font-medium text-green-600">Active</span>
+                  <div className={`w-2 h-2 rounded-full ${isLoading ? 'bg-green-500 animate-pulse' : 'bg-green-500'}`}></div>
+                  <span className="text-sm font-medium text-green-600">
+                    {isLoading ? 'Processing' : 'Complete'}
+                  </span>
                 </div>
               </div>
-              <div className="text-xs text-gray-500 mt-1">Computing scores...</div>
+              <div className="text-xs text-gray-500 mt-1">
+                {isLoading ? 'Vector search + AI filtering' : 'Done'}
+              </div>
             </div>
           </div>
         </div>
@@ -380,9 +224,9 @@ export default function AITalentMatchProgressPanel({
         {/* Info Text */}
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
-            This process analyzes each candidate's profile, skills, and experience against the job requirements.
+            Using RAG pipeline: Vector similarity search + AI-powered candidate filtering.
             <br />
-            Results will be ranked by match score for easy review.
+            Candidates are ranked by combined similarity and AI match scores.
           </p>
         </div>
       </div>

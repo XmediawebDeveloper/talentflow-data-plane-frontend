@@ -54,23 +54,26 @@ interface NavItem {
   href?: string;
   permission?: string;
   adminOnly?: boolean;
-  children?: NavItem[];
+}
+
+interface NavSection {
+  id: string;
+  label: string;
+  items: NavItem[];
+  adminOnly?: boolean;
 }
 
 export default function Sidebar({ user, tenant }: SidebarProps) {
   const pathname = usePathname();
-  const [expandedSections, setExpandedSections] = useState<string[]>(['recruitment-tools', 'organization', 'masters', 'subscription', 'settings', 'reports', 'audits']);
+  const [expandedSections, setExpandedSections] = useState<string[]>([
+    'administration', 'recruitment', 'resume-management', 'evaluation',
+    'organization', 'masters', 'subscription', 'settings', 'reports', 'audits'
+  ]);
 
   const roleLabels = {
     tenant_admin: 'Admin',
     recruiter: 'Recruiter',
     viewer: 'Viewer',
-  };
-
-  const roleBadgeColors = {
-    tenant_admin: 'bg-gray-100 text-gray-900 border-gray-200',
-    recruiter: 'bg-gray-100 text-gray-900 border-gray-200',
-    viewer: 'bg-gray-100 text-gray-700 border-gray-200',
   };
 
   const isTenantAdmin = user?.role === 'tenant_admin';
@@ -83,39 +86,54 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
     return user.permissions[permission as keyof typeof user.permissions] === true;
   };
 
-  // Define all menu items
-  const allNavItems: NavItem[] = [
-    // Dashboard - Everyone sees
+  // Define menu sections with grouped items
+  const allSections: NavSection[] = [
+    // ADMINISTRATION
     {
-      id: 'dashboard',
-      label: 'Dashboard',
-      icon: LayoutDashboard,
-      href: '/dashboard'
-    },
-
-    // Recruitment Tools - Admin sees ALL, Users see based on permissions
-    {
-      id: 'recruitment-tools',
-      label: 'Recruitment Tools',
-      icon: FileText,
-      children: [
-        { id: 'job-openings', label: 'Job Descriptions', icon: Briefcase, href: '/recruitment/job-openings', permission: 'canCreateJD' },
-        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permission: 'canViewResumes' },
-        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permission: 'canViewResumes' },
-        { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permission: 'canCreateAssessments' },
-        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permission: 'canViewResumes' },
-        { id: 'my-resumes', label: 'My Resumes', icon: Users, href: '/recruitment/my-resumes', permission: 'canUploadResumes' },
-        { id: 'resume-database', label: 'Internal Resume Database', icon: Database, href: '/recruitment/resume-database', permission: 'canAccessInternalDB' },
+      id: 'administration',
+      label: 'ADMINISTRATION',
+      items: [
+        { id: 'dashboard', label: 'Admin Dashboard', icon: LayoutDashboard, href: '/dashboard' },
       ]
     },
 
-    // Organization - Admin only
+    // RECRUITMENT
+    {
+      id: 'recruitment',
+      label: 'RECRUITMENT',
+      items: [
+        { id: 'job-openings', label: 'Job Descriptions', icon: Briefcase, href: '/recruitment/job-openings', permission: 'canCreateJD' },
+        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permission: 'canViewResumes' },
+        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permission: 'canViewResumes' },
+      ]
+    },
+
+    // RESUME MANAGEMENT
+    {
+      id: 'resume-management',
+      label: 'RESUME MANAGEMENT',
+      items: [
+        { id: 'my-resumes', label: 'My Resumes', icon: Users, href: '/recruitment/my-resumes', permission: 'canUploadResumes' },
+        { id: 'resume-database', label: 'Internal Database', icon: Database, href: '/recruitment/resume-database', permission: 'canAccessInternalDB' },
+      ]
+    },
+
+    // EVALUATION
+    {
+      id: 'evaluation',
+      label: 'EVALUATION',
+      items: [
+        { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permission: 'canCreateAssessments' },
+        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permission: 'canViewResumes' },
+      ]
+    },
+
+    // ORGANIZATION - Admin only
     {
       id: 'organization',
-      label: 'Organization',
-      icon: Building2,
+      label: 'ORGANIZATION',
       adminOnly: true,
-      children: [
+      items: [
         { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', adminOnly: true },
         { id: 'team-management', label: 'Team Management', icon: Users, href: '/organization/team-management', adminOnly: true },
         { id: 'user-management', label: 'User Management', icon: UserCog, href: '/organization/user-management', adminOnly: true },
@@ -123,26 +141,24 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       ]
     },
 
-    // Masters - Admin only (Experience, Education, Industry)
+    // MASTERS - Admin only
     {
       id: 'masters',
-      label: 'Masters',
-      icon: Layers,
+      label: 'MASTERS',
       adminOnly: true,
-      children: [
+      items: [
         { id: 'experience-levels', label: 'Experience Levels', icon: Clock, href: '/masters/experience-levels', adminOnly: true },
         { id: 'education-levels', label: 'Education Levels', icon: GraduationCap, href: '/masters/education-levels', adminOnly: true },
         { id: 'industry-types', label: 'Industry Types', icon: Factory, href: '/masters/industry-types', adminOnly: true },
       ]
     },
 
-    // Subscription & Billing - Admin only
+    // SUBSCRIPTION & BILLING - Admin only
     {
       id: 'subscription',
-      label: 'Subscription & Billing',
-      icon: CreditCard,
+      label: 'SUBSCRIPTION & BILLING',
       adminOnly: true,
-      children: [
+      items: [
         { id: 'current-plan', label: 'Current Plan', icon: CreditCard, href: '/subscription/current-plan', adminOnly: true },
         { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', adminOnly: true },
         { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', adminOnly: true },
@@ -152,13 +168,12 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       ]
     },
 
-    // Settings - Admin only
+    // SETTINGS - Admin only
     {
       id: 'settings',
-      label: 'Settings',
-      icon: Settings,
+      label: 'SETTINGS',
       adminOnly: true,
-      children: [
+      items: [
         { id: 'general-settings', label: 'General Settings', icon: Settings, href: '/settings/general-settings', adminOnly: true },
         { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', adminOnly: true },
         { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', adminOnly: true },
@@ -168,85 +183,68 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       ]
     },
 
-    // Reports & Analytics
+    // REPORTS & ANALYTICS
     {
       id: 'reports',
-      label: 'Reports & Analytics',
-      icon: BarChart3,
-      children: [
+      label: 'REPORTS & ANALYTICS',
+      items: [
         { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, href: '/reports/team-usage', adminOnly: true },
         { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, href: '/reports/performance-reports', permission: 'canViewAnalytics' },
       ]
     },
 
-    // Audits & Trail - Admin only
+    // AUDITS & TRAIL - Admin only
     {
       id: 'audits',
-      label: 'Audits & Trail',
-      icon: History,
+      label: 'AUDITS & TRAIL',
       adminOnly: true,
-      children: [
+      items: [
         { id: 'audit-trail', label: 'Audit Trail', icon: ScrollText, href: '/audits/trail', adminOnly: true },
         { id: 'activity-logs', label: 'Activity Logs', icon: Activity, href: '/audits/activity', adminOnly: true },
       ]
     },
 
-    // Support Tickets - Everyone
+    // SUPPORT
     {
-      id: 'support-tickets',
-      label: 'Support Tickets',
-      icon: HelpCircle,
-      href: '/support-tickets'
+      id: 'support',
+      label: 'SUPPORT',
+      items: [
+        { id: 'support-tickets', label: 'Support Tickets', icon: HelpCircle, href: '/support-tickets' },
+      ]
     },
   ];
 
-  // Filter nav items based on permissions
-  const filterNavItems = (items: NavItem[]): NavItem[] => {
-    return items.filter(item => {
-      // Admin only check
-      if (item.adminOnly && !isTenantAdmin) return false;
+  // Filter sections and items based on permissions
+  const filterSections = (sections: NavSection[]): NavSection[] => {
+    return sections.map(section => {
+      // Filter items within section
+      const filteredItems = section.items.filter(item => {
+        if (item.adminOnly && !isTenantAdmin) return false;
+        if (item.permission && !hasPermission(item.permission)) return false;
+        return true;
+      });
 
-      // Permission check
-      if (item.permission && !hasPermission(item.permission)) return false;
-
+      return { ...section, items: filteredItems };
+    }).filter(section => {
+      // Remove empty sections
+      if (section.items.length === 0) return false;
+      // Check section-level admin requirement
+      if (section.adminOnly && !isTenantAdmin) return false;
       return true;
-    }).map(item => {
-      if (item.children) {
-        const filteredChildren = filterNavItems(item.children);
-        if (filteredChildren.length === 0) return null;
-        return { ...item, children: filteredChildren };
-      }
-      return item;
-    }).filter(Boolean) as NavItem[];
+    });
   };
 
-  const visibleNavItems = filterNavItems(allNavItems);
-
-  const toggleSection = (sectionId: string) => {
-    setExpandedSections(prev =>
-      prev.includes(sectionId)
-        ? prev.filter(id => id !== sectionId)
-        : [...prev, sectionId]
-    );
-  };
+  const visibleSections = filterSections(allSections);
 
   const isActive = (href?: string): boolean => {
     if (!href) return false;
     return pathname === href || pathname.startsWith(href + '/');
   };
 
-  const isParentActive = (item: NavItem): boolean => {
-    if (item.href && isActive(item.href)) return true;
-    if (item.children) {
-      return item.children.some(child => isActive(child.href));
-    }
-    return false;
-  };
-
   return (
-    <aside className="w-64 bg-gray-900 border-r border-gray-700 flex flex-col shadow-lg h-screen">
+    <aside className="w-64 bg-gray-200 border-r border-gray-300 flex flex-col shadow-sm h-screen">
       {/* Logo */}
-      <div className="p-4 border-b border-gray-700 bg-white">
+      <div className="p-4 border-b border-gray-200 bg-white">
         <Link href="/dashboard" className="flex items-center justify-center">
          <img
               src="/logos/talent_flow_logo.png"
@@ -258,16 +256,16 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
 
       {/* User Info */}
       {user && (
-        <div className="px-4 py-3 border-b border-gray-700 bg-gray-800">
+        <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-600 to-gray-700 text-white flex items-center justify-center shadow-sm">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-500 to-gray-600 text-white flex items-center justify-center shadow-sm">
               <span className="text-sm font-medium">
                 {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-100 truncate">{user.name}</p>
-              <span className="inline-flex px-2 py-0.5 rounded text-xs border border-gray-600 bg-gray-700 text-gray-300">
+              <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
+              <span className="inline-flex px-2 py-0.5 rounded text-xs border border-gray-300 bg-white text-gray-600">
                 {roleLabels[user.role]}
               </span>
             </div>
@@ -276,66 +274,40 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4">
-        {visibleNavItems.map((item) => (
-          <div key={item.id} className="mb-1">
-            {item.children ? (
-              <>
-                <button
-                  onClick={() => toggleSection(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                    isParentActive(item)
-                      ? 'text-white bg-gray-700'
-                      : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                  }`}
-                >
-                  <item.icon className="w-5 h-5 flex-shrink-0" />
-                  <span className="flex-1 text-sm font-medium">{item.label}</span>
-                  {expandedSections.includes(item.id) ? (
-                    <ChevronDown className="w-4 h-4 text-gray-500" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-gray-500" />
-                  )}
-                </button>
+      <nav className="flex-1 overflow-y-auto py-2">
+        {visibleSections.map((section) => (
+          <div key={section.id} className="mb-2">
+            {/* Section Header */}
+            <div className="px-4 py-2">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                {section.label}
+              </span>
+            </div>
 
-                {expandedSections.includes(item.id) && (
-                  <div className="mt-1 ml-4 border-l border-gray-700">
-                    {item.children.map((child) => (
-                      <Link
-                        key={child.id}
-                        href={child.href || '#'}
-                        className={`w-full flex items-center gap-3 px-4 py-2 pl-6 text-sm transition-colors ${
-                          isActive(child.href)
-                            ? 'text-white bg-gray-700 font-medium border-l-2 border-gray-400 -ml-px'
-                            : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-                        }`}
-                      >
-                        <child.icon className="w-4 h-4 flex-shrink-0" />
-                        <span>{child.label}</span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <Link
-                href={item.href || '#'}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${
-                  isActive(item.href)
-                    ? 'text-white bg-gray-700 font-medium'
-                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
-              >
-                <item.icon className="w-5 h-5 flex-shrink-0" />
-                <span className="text-sm font-medium">{item.label}</span>
-              </Link>
-            )}
+            {/* Section Items */}
+            <div className="space-y-0.5">
+              {section.items.map((item) => (
+                <Link
+                  key={item.id}
+                  href={item.href || '#'}
+                  className={`w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm transition-colors ${
+                    isActive(item.href)
+                      ? 'bg-gray-800 text-white font-medium shadow-sm'
+                      : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
+                  }`}
+                  style={{ width: 'calc(100% - 16px)' }}
+                >
+                  <item.icon className={`w-4 h-4 flex-shrink-0 ${isActive(item.href) ? 'text-white' : 'text-gray-500'}`} />
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </div>
           </div>
         ))}
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-gray-700">
+      <div className="p-4 border-t border-gray-200 bg-gray-50">
         <p className="text-xs text-gray-500 text-center">
           {tenant?.name || 'TalentFlow'} v1.0
         </p>

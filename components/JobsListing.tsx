@@ -77,15 +77,16 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
   // Apply sorting to filtered jobs
   const sortedJobs = [...filteredJobs].sort((a, b) => {
     let comparison = 0;
-    
+
     switch (sortBy) {
       case 'date':
-        const dateA = a.postedDate ? new Date(a.postedDate).getTime() : 0;
-        const dateB = b.postedDate ? new Date(b.postedDate).getTime() : 0;
-        comparison = dateB - dateA; // Default newest first
+        // Use created_at if available, fallback to postedDate
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : (a.postedDate ? new Date(a.postedDate).getTime() : 0);
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : (b.postedDate ? new Date(b.postedDate).getTime() : 0);
+        comparison = dateA - dateB; // Natural ascending (oldest first), desc will flip to newest first
         break;
       case 'applicants':
-        comparison = (b.applicants || 0) - (a.applicants || 0);
+        comparison = (a.applicants || 0) - (b.applicants || 0); // Natural ascending
         break;
       case 'title':
         comparison = a.title.localeCompare(b.title);
@@ -99,8 +100,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
       default:
         comparison = 0;
     }
-    
-    return sortOrder === 'asc' ? comparison : -comparison;
+
+    // 'desc' inverts the comparison (largest/newest first), 'asc' keeps natural order
+    return sortOrder === 'desc' ? -comparison : comparison;
   });
 
   // Bulk action handlers
@@ -232,10 +234,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
         };
       default:
         return {
-          bg: 'bg-blue-50',
-          text: 'text-blue-700',
-          border: 'border-blue-200',
-          dot: 'bg-blue-500'
+          bg: 'bg-gray-50',
+          text: 'text-gray-700',
+          border: 'border-gray-200',
+          dot: 'bg-gray-500'
         };
     }
   };
@@ -341,7 +343,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
             </div>
             <button
               onClick={onCreateNew}
-              className="px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2"
+              className="px-5 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2"
             >
               <Plus className="w-5 h-5" />
               <span>Create New Job</span>
@@ -352,8 +354,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
           <div className="grid grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-lg p-5 border border-gray-200">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Briefcase className="w-5 h-5 text-blue-600" />
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <Briefcase className="w-5 h-5 text-gray-700" />
                 </div>
                 <span className="text-sm text-gray-600">Total Jobs</span>
               </div>
@@ -382,8 +384,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
             <div className="bg-white rounded-lg p-5 border border-gray-200">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <Users className="w-5 h-5 text-purple-600" />
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <Users className="w-5 h-5 text-gray-700" />
                 </div>
                 <span className="text-sm text-gray-600">Applicants</span>
               </div>
@@ -402,7 +404,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search jobs..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                 />
               </div>
 
@@ -412,7 +414,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   onClick={() => setViewMode('grid')}
                   className={`p-2 rounded ${
                     viewMode === 'grid'
-                      ? 'bg-white text-blue-600 shadow-sm'
+                      ? 'bg-white text-gray-800 shadow-sm'
                       : 'text-gray-600'
                   }`}
                 >
@@ -422,7 +424,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   onClick={() => setViewMode('list')}
                   className={`p-2 rounded ${
                     viewMode === 'list'
-                      ? 'bg-white text-blue-600 shadow-sm'
+                      ? 'bg-white text-gray-800 shadow-sm'
                       : 'text-gray-600'
                   }`}
                 >
@@ -435,14 +437,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                 className={`px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 ${
                   activeFiltersCount > 0 || showAdvancedFilters
-                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    ? 'bg-gray-100 text-gray-800 border border-gray-300'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
                 <SlidersHorizontal className="w-4 h-4" />
                 <span>More Filters</span>
                 {activeFiltersCount > 0 && (
-                  <span className="px-1.5 py-0.5 bg-blue-600 text-white rounded text-xs">
+                  <span className="px-1.5 py-0.5 bg-gray-800 text-white rounded text-xs">
                     {activeFiltersCount}
                   </span>
                 )}
@@ -458,7 +460,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   onClick={() => setStatusFilter(status)}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
                     statusFilter === status
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-gray-800 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -499,7 +501,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                       <select
                         value={locationFilter}
                         onChange={(e) => setLocationFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
                       >
                         <option value="all">All Locations</option>
                         {uniqueLocations.map(loc => (
@@ -516,7 +518,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                       <select
                         value={departmentFilter}
                         onChange={(e) => setDepartmentFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
                       >
                         <option value="all">All Departments</option>
                         {uniqueDepartments.map(dept => (
@@ -533,7 +535,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                       <select
                         value={employmentTypeFilter}
                         onChange={(e) => setEmploymentTypeFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
                       >
                         <option value="all">All Types</option>
                         {uniqueEmploymentTypes.map(type => (
@@ -567,7 +569,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900"
                 >
                   {selectedJobs.size === sortedJobs.length && sortedJobs.length > 0 ? (
-                    <CheckSquare className="w-5 h-5 text-blue-600" />
+                    <CheckSquare className="w-5 h-5 text-gray-800" />
                   ) : (
                     <Square className="w-5 h-5 text-gray-400" />
                   )}
@@ -583,7 +585,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   <div className="relative">
                     <button
                       onClick={() => setShowBulkActions(!showBulkActions)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2 text-sm"
+                      className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-sm"
                     >
                       <span>Bulk Actions</span>
                       <ChevronDown className="w-4 h-4" />
@@ -617,7 +619,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           onClick={handleBulkExport}
                           className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
                         >
-                          <Download className="w-4 h-4 text-blue-600" />
+                          <Download className="w-4 h-4 text-gray-700" />
                           Export Selected to CSV
                         </button>
                         <button
@@ -639,7 +641,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
                 >
                   <option value="date">Date Posted</option>
                   <option value="applicants">Applicants</option>
@@ -670,14 +672,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 return (
                   <div
                     key={job.id}
-                    className="bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer overflow-hidden"
+                    className="bg-white rounded-lg border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer overflow-hidden"
                     onClick={() => onViewJob(job)}
                   >
                     {/* Card Header */}
                     <div className="p-5 border-b border-gray-100">
                       <div className="flex items-start justify-between mb-3">
-                        <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <Briefcase className="w-5 h-5 text-blue-600" />
+                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Briefcase className="w-5 h-5 text-gray-700" />
                         </div>
                         <span className={`px-3 py-1 rounded-full text-xs ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-1.5`}>
                           <div className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`}></div>
@@ -731,9 +733,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           </div>
                         )}
                         {((job as any).mustHaveSkills?.length > 0 || (job as any).niceToHaveSkills?.length > 0) && (
-                          <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
-                            <Target className="w-4 h-4 text-blue-600" />
-                            <span className="text-sm text-blue-700">
+                          <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
+                            <Target className="w-4 h-4 text-gray-700" />
+                            <span className="text-sm text-gray-700">
                               {(job as any).mustHaveSkills?.length || 0} required + {(job as any).niceToHaveSkills?.length || 0} preferred skills
                             </span>
                           </div>
@@ -756,7 +758,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                             e.stopPropagation();
                             onViewJob(job);
                           }}
-                          className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
+                          className="w-full px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
                         >
                           <Eye className="w-4 h-4" />
                           View
@@ -832,13 +834,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 return (
                   <div
                     key={job.id}
-                    className="bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer p-5"
+                    className="bg-white rounded-lg border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer p-5"
                     onClick={() => onViewJob(job)}
                   >
                     <div className="flex items-center gap-4">
                       {/* Job Icon */}
-                      <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Briefcase className="w-6 h-6 text-blue-600" />
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Briefcase className="w-6 h-6 text-gray-700" />
                       </div>
 
                       {/* Job Info */}
@@ -898,9 +900,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                             </div>
                           )}
                           {((job as any).mustHaveSkills?.length > 0 || (job as any).niceToHaveSkills?.length > 0) && (
-                            <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 rounded-lg text-sm">
-                              <Target className="w-4 h-4 text-blue-600" />
-                              <span className="text-blue-700">
+                            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 rounded-lg text-sm">
+                              <Target className="w-4 h-4 text-gray-700" />
+                              <span className="text-gray-700">
                                 {(job as any).mustHaveSkills?.length || 0} required + {(job as any).niceToHaveSkills?.length || 0} preferred
                               </span>
                             </div>
@@ -916,7 +918,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                             e.stopPropagation();
                             onViewJob(job);
                           }}
-                          className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium flex items-center justify-center gap-2"
+                          className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium flex items-center justify-center gap-2"
                         >
                           <Eye className="w-5 h-5" />
                           View
@@ -1025,7 +1027,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
               ) : (
                 <button
                   onClick={onCreateNew}
-                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all inline-flex items-center gap-2"
+                  className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all inline-flex items-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
                   Create Job
@@ -1089,7 +1091,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                       disabled={page === '...'}
                       className={`min-w-[36px] h-9 px-3 rounded-lg text-sm transition-all ${
                         page === currentPage
-                          ? 'bg-blue-600 text-white shadow-sm'
+                          ? 'bg-gray-800 text-white shadow-sm'
                           : page === '...'
                           ? 'text-gray-400 cursor-default'
                           : 'border border-gray-300 text-gray-700 hover:bg-gray-50'

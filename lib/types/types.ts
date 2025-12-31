@@ -18,7 +18,53 @@ export interface Resume {
   noticePeriod?: string;
   lastUpdated?: string;
   versions?: ResumeVersion[];
+  versionCount?: number; // Total number of versions
   assignedTo?: string; // Team member ID
+
+  // Extended fields for detailed view
+  professionalSummary?: string;
+  technicalSkills?: string[];
+  softSkills?: string[];
+  educationDetails?: EducationDetail[];
+  experienceDetails?: ExperienceDetail[];
+  certifications?: CertificationDetail[];
+  languages?: LanguageDetail[];
+  projects?: string[];
+  awards?: string[];
+  publications?: string[];
+  references?: string[];
+}
+
+export interface EducationDetail {
+  degree: string;
+  school: string;
+  location?: string;
+  year?: string;
+  gpa?: string;
+  honors?: string;
+}
+
+export interface ExperienceDetail {
+  title: string;
+  company: string;
+  location?: string;
+  startDate?: string;
+  endDate?: string;
+  duration?: string;
+  description?: string;
+  achievements?: string[];
+}
+
+export interface CertificationDetail {
+  name: string;
+  issuer?: string;
+  date?: string;
+  credentialId?: string;
+}
+
+export interface LanguageDetail {
+  name: string;
+  proficiency: string;
 }
 
 export interface ResumeVersion {
@@ -74,4 +120,5 @@ export interface Job {
   currentVersion?: number;
   versionHistory?: JobSnapshot[];
   assignedTo?: string; // Team member ID
+  created_at?: string; // ISO timestamp for sorting
 }

@@ -8,6 +8,17 @@ interface DetailedScores {
   locationMatch: number;
 }
 
+interface ScoreBreakdownItem {
+  category: string;
+  score: number;
+  rating?: number;
+  max_rating?: number;
+  reasoning: string;
+  match_status?: string;
+  requirement?: string;
+  eligible?: boolean;
+}
+
 interface ScoredResumeDetail {
   scorePercentage: number;
   scoredDate: string;
@@ -17,6 +28,8 @@ interface ScoredResumeDetail {
   education?: string;
   location?: string;
   title?: string;
+  scoreBreakdown?: ScoreBreakdownItem[];
+  criteriaScores?: Record<string, { score: number; eligible: boolean; reasoning: string }>;
 }
 
 interface DetailedScorecardTabProps {
@@ -33,92 +46,146 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
     return Math.round((percentage / 100) * 10);
   };
 
-  // Mock data for the new criteria (in a real app, this would come from resume data)
-  const criteriaScores = [
-    {
-      name: 'Title',
-      rating: convertToRating(resume.detailedScores.titleMatch),
-      icon: Briefcase,
-      criteriaType: 'Required',
-      aiReasoning: resume.detailedScores.titleMatch >= 85 
-        ? 'Candidate\'s title perfectly aligns with the position requirements. The role progression shows excellent match with expected seniority level.'
-        : resume.detailedScores.titleMatch >= 60
-        ? 'Good title alignment with minor differences in specialization. The candidate has relevant role experience with some variance.'
-        : 'Title shows significant differences. Candidate may be transitioning from a different specialization or seniority level.'
-    },
-    {
-      name: 'Experience Level',
-      rating: convertToRating(resume.detailedScores.experienceMatch),
-      icon: Award,
-      criteriaType: 'Required',
-      aiReasoning: resume.detailedScores.experienceMatch >= 85 
-        ? 'Outstanding career progression with the right amount of experience. Candidate demonstrates consistent growth in relevant domains with strong track record.'
-        : resume.detailedScores.experienceMatch >= 60
-        ? 'Appropriate experience level with good progression. Some gaps in specific technical areas but overall solid background in the domain.'
-        : 'Experience level below requirements. Candidate shows potential but needs further development in key areas before fully matching the role.'
-    },
-    {
-      name: 'Education Level',
-      rating: convertToRating(resume.detailedScores.educationMatch),
-      icon: GraduationCap,
-      criteriaType: 'Preferred',
-      aiReasoning: resume.detailedScores.educationMatch >= 85 
-        ? 'Exceptional educational background with advanced degrees from reputed institutions. Academic credentials exceed the position requirements significantly.'
-        : resume.detailedScores.educationMatch >= 60
-        ? 'Meets educational baseline with standard qualifications. Additional certifications would strengthen the overall profile for this position.'
-        : 'Educational qualifications fall below preferred standards. However, practical experience and skills may compensate for academic gaps.'
-    },
-    {
-      name: 'Industry Type',
-      rating: 8,
-      icon: Building2,
-      criteriaType: 'Preferred',
-      aiReasoning: 'Strong industry alignment with comprehensive domain knowledge. Candidate has worked in similar sectors and understands the business context well. Industry-specific expertise is evident.'
-    },
-    {
-      name: 'Must Have Skills',
-      rating: convertToRating(resume.detailedScores.skillsMatch),
-      icon: Target,
-      criteriaType: 'Required',
-      aiReasoning: resume.detailedScores.skillsMatch >= 85 
-        ? 'All critical must-have skills are present with strong proficiency levels. Technical stack matches perfectly with role requirements.'
-        : resume.detailedScores.skillsMatch >= 60
-        ? 'Core must-have skills are present with good proficiency. Some gaps in advanced areas but the foundation is strong and trainable.'
-        : 'Significant skills gap identified in critical areas. Candidate would require substantial training and development to meet role requirements.'
-    },
-    {
-      name: 'Nice to Have Skills',
-      rating: 7,
-      icon: Target,
-      criteriaType: 'Preferred',
-      aiReasoning: 'Good coverage of supplementary skills that would enhance role performance. Candidate demonstrates versatility with several nice-to-have competencies that add value beyond core requirements.'
-    },
-    {
-      name: 'Must Have Comments',
-      rating: 9,
-      icon: MessageSquare,
-      criteriaType: 'Required',
-      aiReasoning: 'Excellent comprehension of role requirements demonstrated through detailed responses. Candidate shows deep understanding of critical aspects and articulates relevant experience clearly.'
-    },
-    {
-      name: 'Location',
-      rating: convertToRating(resume.detailedScores.locationMatch),
-      icon: MapPin,
-      criteriaType: 'Preferred',
-      aiReasoning: resume.detailedScores.locationMatch >= 85 
-        ? 'Perfect location match with no relocation required. Candidate is already based in the target geography and ready to start immediately.'
-        : resume.detailedScores.locationMatch >= 60
-        ? 'Location is workable with remote/hybrid options. Some travel may be required but candidate has indicated flexibility for the arrangement.'
-        : 'Location mismatch requires consideration. Significant relocation needed or full remote arrangement would be necessary for this candidate.'
-    },
-    {
-      name: 'Job Hopping',
-      rating: 8,
-      icon: TrendingUp,
-      criteriaType: 'Preferred',
-      aiReasoning: 'Reasonable employment tenure showing stability and commitment. Career moves appear strategic with logical progression. No concerning patterns of frequent job changes.'
-    }
-  ];
+  // Map icon names to components (handle both display names and API keys)
+  const iconMap: Record<string, any> = {
+    'Title': Briefcase,
+    'Job Title': Briefcase,
+    'Job_title': Briefcase,
+    'Experience Level': Award,
+    'Experience': Award,
+    'Education Level': GraduationCap,
+    'Education': GraduationCap,
+    'Industry Type': Building2,
+    'Industry': Building2,
+    'Must Have Skills': Target,
+    'Must_have_skills': Target,
+    'Skills': Target,
+    'Nice To Have Skills': Target,
+    'Nice_to_have_skills': Target,
+    'Must Have Comments': MessageSquare,
+    'Must_have_comments': MessageSquare,
+    'Comments': MessageSquare,
+    'Nice To Have Comments': MessageSquare,
+    'Nice_to_have_comments': MessageSquare,
+    'Location': MapPin,
+    'Job Hopping': TrendingUp,
+    'Job_hobbing': TrendingUp,
+    'Stability': TrendingUp,
+  };
+
+  // Generate reasoning based on score
+  const generateReasoning = (category: string, score: number): string => {
+    const reasoningMap: Record<string, { high: string; medium: string; low: string }> = {
+      'Title': {
+        high: 'Candidate\'s title perfectly aligns with the position requirements. The role progression shows excellent match with expected seniority level.',
+        medium: 'Good title alignment with minor differences in specialization. The candidate has relevant role experience with some variance.',
+        low: 'Title shows significant differences. Candidate may be transitioning from a different specialization or seniority level.'
+      },
+      'Experience Level': {
+        high: 'Outstanding career progression with the right amount of experience. Candidate demonstrates consistent growth in relevant domains.',
+        medium: 'Appropriate experience level with good progression. Some gaps in specific technical areas but overall solid background.',
+        low: 'Experience level below requirements. Candidate shows potential but needs further development in key areas.'
+      },
+      'Education Level': {
+        high: 'Exceptional educational background. Academic credentials exceed the position requirements.',
+        medium: 'Meets educational baseline with standard qualifications.',
+        low: 'Educational qualifications fall below preferred standards. Practical experience may compensate.'
+      },
+      'Skills': {
+        high: 'All critical skills are present with strong proficiency levels. Technical stack matches well with role requirements.',
+        medium: 'Core skills are present with good proficiency. Some gaps in advanced areas but foundation is strong.',
+        low: 'Significant skills gap identified in critical areas. Would require training and development.'
+      },
+      'Location': {
+        high: 'Perfect location match with no relocation required.',
+        medium: 'Location is workable with remote/hybrid options.',
+        low: 'Location mismatch requires consideration. Relocation or remote arrangement needed.'
+      }
+    };
+
+    const reasoning = reasoningMap[category] || reasoningMap['Skills'];
+    if (score >= 85) return reasoning?.high || 'Excellent match for this criterion.';
+    if (score >= 60) return reasoning?.medium || 'Good match with some minor gaps.';
+    return reasoning?.low || 'Below requirements for this criterion.';
+  };
+
+  // Build criteria scores from real data or fallback to detailedScores
+  let criteriaScores: Array<{
+    name: string;
+    rating: number;
+    icon: any;
+    criteriaType: string;
+    aiReasoning: string;
+  }> = [];
+
+  // Try to use scoreBreakdown from API first
+  if (resume.scoreBreakdown && resume.scoreBreakdown.length > 0) {
+    criteriaScores = resume.scoreBreakdown.map((item: ScoreBreakdownItem) => ({
+      name: item.category,
+      rating: item.rating || convertToRating(item.score),
+      icon: iconMap[item.category] || Target,
+      criteriaType: item.requirement || (item.eligible === false ? 'Required' : 'Preferred'),
+      aiReasoning: item.reasoning || generateReasoning(item.category, item.score)
+    }));
+  }
+  // Try to use criteriaScores object from API
+  else if (resume.criteriaScores && Object.keys(resume.criteriaScores).length > 0) {
+    criteriaScores = Object.entries(resume.criteriaScores).map(([key, value]: [string, any]) => {
+      // API returns scores 0-10, convert to rating directly
+      const rawScore = value.score || 0;
+      const rating = rawScore <= 10 ? Math.round(rawScore) : convertToRating(rawScore);
+      const displayName = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
+      // Determine if essential based on key or is_essential flag
+      const isEssential = value.is_essential === true || ['job_title', 'experience', 'must_have_skills', 'education'].includes(key);
+      return {
+        name: displayName,
+        rating: rating,
+        icon: iconMap[displayName] || iconMap[key] || Target,
+        criteriaType: isEssential ? 'Required' : 'Preferred',
+        aiReasoning: value.reasoning || generateReasoning(key, rawScore <= 10 ? rawScore * 10 : rawScore)
+      };
+    });
+  }
+  // Fallback to detailedScores
+  else {
+    criteriaScores = [
+      {
+        name: 'Title',
+        rating: convertToRating(resume.detailedScores?.titleMatch || 75),
+        icon: Briefcase,
+        criteriaType: 'Required',
+        aiReasoning: generateReasoning('Title', resume.detailedScores?.titleMatch || 75)
+      },
+      {
+        name: 'Experience Level',
+        rating: convertToRating(resume.detailedScores?.experienceMatch || 80),
+        icon: Award,
+        criteriaType: 'Required',
+        aiReasoning: generateReasoning('Experience Level', resume.detailedScores?.experienceMatch || 80)
+      },
+      {
+        name: 'Education Level',
+        rating: convertToRating(resume.detailedScores?.educationMatch || 70),
+        icon: GraduationCap,
+        criteriaType: 'Preferred',
+        aiReasoning: generateReasoning('Education Level', resume.detailedScores?.educationMatch || 70)
+      },
+      {
+        name: 'Skills',
+        rating: convertToRating(resume.detailedScores?.skillsMatch || 85),
+        icon: Target,
+        criteriaType: 'Required',
+        aiReasoning: generateReasoning('Skills', resume.detailedScores?.skillsMatch || 85)
+      },
+      {
+        name: 'Location',
+        rating: convertToRating(resume.detailedScores?.locationMatch || 90),
+        icon: MapPin,
+        criteriaType: 'Preferred',
+        aiReasoning: generateReasoning('Location', resume.detailedScores?.locationMatch || 90)
+      }
+    ];
+  }
 
   const getRatingRange = (rating: number): string => {
     if (rating === 10) return 'Excellent';

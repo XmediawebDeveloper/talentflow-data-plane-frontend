@@ -684,8 +684,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
       const result = await response.json();
       const totalCredits = (selectedAddon.credit_amount || 0) * addonQuantity;
+      const cleanName = (selectedAddon.name || 'quota').replace(/\s*-?\s*Pro$/i, '').trim();
       console.log('[UsageDashboard] Addon purchase result:', result);
-      setAddonPurchaseSuccess(`Successfully added ${totalCredits} credits to your ${selectedAddon.name || 'quota'}!`);
+      setAddonPurchaseSuccess(`Successfully added ${totalCredits} credits to your ${cleanName}!`);
 
       // Refresh quota data to show updated credits after a short delay
       setTimeout(async () => {
@@ -833,26 +834,63 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
           <div className="mb-8">
             {/* Low Quota Warning */}
             {quotaSummary.has_low_quotas && (
-              <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-4 mb-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
-                      <AlertTriangle className="w-5 h-5 text-yellow-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-yellow-900">Quota Running Low!</h3>
-                      <p className="text-sm text-yellow-700">
-                        {quotaSummary.upgrade_message || `You are running low on ${quotaSummary.low_quota_types?.join(', ')}.`}
-                      </p>
-                    </div>
+              <div className="bg-gray-100 border-2 border-gray-300 rounded-xl p-4 mb-6 shadow-sm">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                    <AlertTriangle className="w-5 h-5 text-gray-600" />
                   </div>
-                  <button
-                    onClick={handleUpgradeClick}
-                    className="px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-lg hover:bg-yellow-700 transition-colors flex items-center gap-2"
-                  >
-                    <ArrowUpRight className="w-4 h-4" />
-                    Upgrade Now
-                  </button>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Quota Running Low!</h3>
+                    <p className="text-sm text-gray-600">Purchase add-on credits to continue using these features.</p>
+                  </div>
+                </div>
+                {/* Show each low quota with its own Add Credits button */}
+                <div className="flex flex-wrap gap-2 ml-[52px]">
+                  {quotaSummary.quotas
+                    ?.filter((q: QuotaInfo) => q.is_low || q.is_exhausted)
+                    .map((quota: QuotaInfo) => {
+                      // Map quota_type to addon name pattern for matching
+                      const quotaToAddonMap: Record<string, string> = {
+                        'RU': 'resume upload',
+                        'RS': 'resume scoring',
+                        'AS': 'assessment',
+                        'AIU': 'ai interview',
+                        'max_jobs': 'max jobs',
+                        'max_seats': 'max seats',
+                      };
+                      const addonPattern = quotaToAddonMap[quota.quota_type] || '';
+
+                      // Find matching addon
+                      const matchingAddon = addons.find(addon =>
+                        (addon.name || addon.addon_name || '').toLowerCase().includes(addonPattern)
+                      );
+
+                      return (
+                        <button
+                          key={quota.quota_type}
+                          onClick={() => {
+                            if (matchingAddon) {
+                              handleBuyAddon(matchingAddon);
+                            } else {
+                              // Scroll to addons section if no matching addon found
+                              const addonsSection = document.querySelector('[data-section="addons"]');
+                              if (addonsSection) {
+                                addonsSection.scrollIntoView({ behavior: 'smooth' });
+                              }
+                            }
+                          }}
+                          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                            quota.is_exhausted
+                              ? 'bg-gray-900 text-white hover:bg-gray-800'
+                              : 'bg-gray-700 text-white hover:bg-gray-600'
+                          }`}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          {quota.name}
+                          {quota.is_exhausted && <span className="text-xs opacity-80">(Exhausted)</span>}
+                        </button>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -860,40 +898,31 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             {/* Quota Cards Grid - Dynamic */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-6">
               {quotaSummary.quotas?.filter((quota: QuotaInfo) => quota.quota_type !== 'storage_gb').map((quota: QuotaInfo) => {
-                const colors: Record<string, { bg: string; text: string; border: string }> = {
-                  'RU': { bg: 'bg-gray-50', text: 'text-gray-900', border: 'border-gray-200' },
-                  'RS': { bg: 'bg-gray-50', text: 'text-gray-900', border: 'border-gray-200' },
-                  'AS': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-                  'AIU': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
-                  'storage_gb': { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
-                  'max_jobs': { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' },
-                  'max_seats': { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200' },
-                };
-                const defaultColor = { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' };
-                const c = colors[quota.quota_type] || defaultColor;
+                // Grey theme for all quota types
+                const c = { bg: 'bg-gray-50', text: 'text-gray-900', border: 'border-gray-200' };
                 const isUnlimited = quota.limit === -1 || quota.remaining === -1;
 
                 return (
                   <div
                     key={quota.quota_type}
                     className={`${c.bg} ${c.border} border-2 rounded-xl p-4 transition-all hover:shadow-md ${
-                      quota.is_exhausted ? 'ring-2 ring-red-400' : quota.is_low ? 'ring-2 ring-yellow-400' : ''
+                      quota.is_exhausted ? 'ring-2 ring-gray-400' : quota.is_low ? 'ring-2 ring-gray-400' : ''
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-gray-600">{quota.name}</span>
                       {isUnlimited && (
-                        <span className="text-xs font-bold text-cyan-600 bg-cyan-100 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-bold text-gray-600 bg-gray-200 px-2 py-0.5 rounded-full">
                           UNLIMITED
                         </span>
                       )}
                       {!isUnlimited && quota.is_exhausted && (
-                        <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-bold text-gray-100 bg-gray-800 px-2 py-0.5 rounded-full">
                           EXHAUSTED
                         </span>
                       )}
                       {!isUnlimited && quota.is_low && !quota.is_exhausted && (
-                        <span className="text-xs font-bold text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-bold text-gray-700 bg-gray-300 px-2 py-0.5 rounded-full">
                           LOW
                         </span>
                       )}
@@ -907,7 +936,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-2">
                       <div
                         className={`h-full rounded-full transition-all ${
-                          isUnlimited ? 'bg-cyan-500' : quota.is_exhausted ? 'bg-red-500' : quota.is_low ? 'bg-yellow-500' : 'bg-green-500'
+                          isUnlimited ? 'bg-gray-500' : quota.is_exhausted ? 'bg-gray-800' : quota.is_low ? 'bg-gray-600' : 'bg-gray-500'
                         }`}
                         style={{ width: isUnlimited ? '100%' : `${Math.min(quota.percentage_used, 100)}%` }}
                       />
@@ -1080,12 +1109,12 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       </div>
 
       {/* Add-ons Section */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8" data-section="addons">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-purple-600" />
+              <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-gray-600" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Add-on Credits</h2>
@@ -1113,18 +1142,33 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
             {!addonsLoading && addons.length > 0 && (
               <div className="space-y-3">
-                {addons.map((addon) => (
+                {/* Reorder addons: Extra Max Jobs before Extra Max Seats */}
+                {[...addons]
+                  .sort((a, b) => {
+                    const nameA = (a.name || a.addon_name || '').toLowerCase();
+                    const nameB = (b.name || b.addon_name || '').toLowerCase();
+                    // Extra Max Jobs should come before Extra Max Seats
+                    if (nameA.includes('max jobs') && nameB.includes('max seats')) return -1;
+                    if (nameA.includes('max seats') && nameB.includes('max jobs')) return 1;
+                    return 0;
+                  })
+                  .map((addon) => {
+                  // Clean addon name: remove "Pro" suffix
+                  const displayName = (addon.name || addon.addon_name || 'Credit Pack')
+                    .replace(/\s*-?\s*Pro$/i, '')
+                    .trim();
+                  return (
                   <div
                     key={addon.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-purple-300 transition-colors"
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-gray-400 transition-colors"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <Zap className="w-5 h-5 text-purple-600" />
+                      <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
+                        <Zap className="w-5 h-5 text-gray-600" />
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900">
-                          {addon.name || addon.addon_name || 'Credit Pack'}
+                          {displayName}
                         </h3>
                       </div>
                     </div>
@@ -1137,20 +1181,21 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         <div className="text-xs text-gray-500">credits</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-xl font-bold text-purple-600">
+                        <div className="text-xl font-bold text-gray-700">
                           ₹{addon.price || addon.unit_price || 0}
                         </div>
                       </div>
                       <button
                         onClick={() => handleBuyAddon(addon)}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors flex items-center gap-2"
+                        className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors flex items-center gap-2"
                       >
                         <ShoppingCart className="w-4 h-4" />
                         Buy
                       </button>
                     </div>
                   </div>
-                ))}
+                );
+                })}
               </div>
             )}
           </div>
@@ -1313,8 +1358,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <ShoppingCart className="w-5 h-5 text-purple-600" />
+                  <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
+                    <ShoppingCart className="w-5 h-5 text-gray-600" />
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900">Purchase Add-on</h2>
@@ -1352,9 +1397,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               )}
 
               {/* Addon Details */}
-              <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+              <div className="bg-gray-100 border border-gray-300 rounded-xl p-4">
                 <h3 className="font-semibold text-gray-900">
-                  {selectedAddon.name || selectedAddon.addon_name || 'Credit Pack'}
+                  {(selectedAddon.name || selectedAddon.addon_name || 'Credit Pack').replace(/\s*-?\s*Pro$/i, '').trim()}
                 </h3>
               </div>
 
@@ -1379,7 +1424,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     max={100}
                     value={addonQuantity}
                     onChange={(e) => setAddonQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-20 text-center px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 font-semibold"
+                    className="w-20 text-center px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 font-semibold"
                   />
                   <button
                     onClick={() => setAddonQuantity(Math.min(100, addonQuantity + 1))}
@@ -1401,16 +1446,16 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   <span className="font-medium">x{addonQuantity}</span>
                 </div>
                 <hr className="border-gray-200" />
-                <div className="flex justify-between items-center bg-purple-100 p-2 rounded-lg -mx-2">
-                  <span className="text-purple-800 font-medium">Credits to be added</span>
-                  <span className="text-2xl font-bold text-purple-600">
+                <div className="flex justify-between items-center bg-gray-200 p-2 rounded-lg -mx-2">
+                  <span className="text-gray-800 font-medium">Credits to be added</span>
+                  <span className="text-2xl font-bold text-gray-900">
                     +{(selectedAddon.credit_amount || 0) * addonQuantity}
                   </span>
                 </div>
                 <hr className="border-gray-200" />
                 <div className="flex justify-between">
                   <span className="font-medium text-gray-900">Total Price</span>
-                  <span className="text-xl font-bold text-purple-600">
+                  <span className="text-xl font-bold text-gray-900">
                     ₹{((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity).toLocaleString()}
                   </span>
                 </div>
@@ -1432,7 +1477,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 <button
                   onClick={handlePurchaseAddon}
                   disabled={purchasingAddon || !!addonPurchaseSuccess}
-                  className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {purchasingAddon ? (
                     <>

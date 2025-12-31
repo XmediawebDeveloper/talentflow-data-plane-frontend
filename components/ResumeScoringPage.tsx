@@ -253,6 +253,14 @@ export default function ResumeScoringPage({
         title: resume.title,
         currentCompany: resume.currentCompany,
         location: resume.location,
+        // Additional fields for personal info
+        professionalSummary: resume.professionalSummary,
+        skills: resume.skills,
+        technicalSkills: resume.technicalSkills,
+        softSkills: resume.softSkills,
+        educationDetails: resume.educationDetails,
+        experienceDetails: resume.experienceDetails,
+        languages: resume.languages,
       };
     });
   };
@@ -1027,7 +1035,7 @@ export default function ResumeScoringPage({
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
                 selectedJob
                   ? 'bg-green-600 text-white ring-4 ring-green-100'
-                  : 'bg-gray-800 text-white ring-4 ring-blue-100'
+                  : 'bg-gray-800 text-white ring-4 ring-gray-200'
               }`}>
                 {selectedJob ? <CheckCircle2 className="w-5 h-5" /> : '1'}
               </div>
@@ -1039,7 +1047,7 @@ export default function ResumeScoringPage({
             <div className="flex items-center gap-3">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
                 selectedJob
-                  ? 'bg-gray-800 text-white ring-4 ring-blue-100'
+                  ? 'bg-gray-800 text-white ring-4 ring-gray-200'
                   : 'bg-gray-200 text-gray-500'
               }`}>
                 2

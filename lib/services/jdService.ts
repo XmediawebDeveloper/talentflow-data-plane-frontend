@@ -34,9 +34,11 @@ export interface JDCreate {
   compensation_type?: string;
   assessment_guidance?: string;
   internal_comments?: string;
+  must_have_comments?: string[];
   coding_required?: boolean;
   supported_languages?: string[];
   allow_overqualified?: boolean;
+  creation_stage?: 'create' | 'extract' | 'review';  // Where user left off in draft
   locations?: JDLocation[];
 }
 
@@ -47,6 +49,7 @@ export interface JDResponse extends JDCreate {
   created_by_name?: string;
   creation_method: 'manual' | 'ai_generated';
   status: 'draft' | 'published' | 'archived' | 'disabled';
+  creation_stage: 'create' | 'extract' | 'review';  // Where user left off in draft
   published_at?: string;
   applicants_count: number;
   scored_resumes_count: number;
@@ -114,6 +117,7 @@ export interface JDVersion {
   compensation_type?: string;
   assessment_guidance?: string;
   internal_comments?: string;
+  must_have_comments?: string[];
   coding_required: boolean;
   supported_languages: string[];
   allow_overqualified: boolean;
