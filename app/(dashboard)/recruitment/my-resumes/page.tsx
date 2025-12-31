@@ -9,6 +9,7 @@ import FolderTree from '@/components/FolderTree';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadHistoryPanel from '@/components/UploadHistoryPanel';
 import UploadModal from '@/components/UploadModal';
+import DuplicateResumeModal, { DuplicateFile, ExistingResume } from '@/components/DuplicateResumeModal';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import { Resume, Folder } from '@/lib/types/types';
@@ -33,6 +34,11 @@ export default function MyResumesPage() {
   const [uploadHistory, setUploadHistory] = useState<any[]>([]);
   const [viewingResume, setViewingResume] = useState<Resume | null>(null);
   const [quickViewResume, setQuickViewResume] = useState<Resume | null>(null);
+
+  // Duplicate detection state
+  const [duplicateFiles, setDuplicateFiles] = useState<DuplicateFile[]>([]);
+  const [pendingUploadFolderId, setPendingUploadFolderId] = useState<string | undefined>();
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -200,9 +206,11 @@ export default function MyResumesPage() {
     }
   };
 
-  const handleUploadResumes = async (files: File[], folderId?: string) => {
-    setIsUploadModalOpen(false);
-
+  const handleUploadResumes = async (files: File[], folderId?: string): Promise<{
+    success: boolean;
+    error?: string;
+    existingResume?: { id: string; candidateName: string; uploadedAt?: string };
+  }> => {
     // For single file, use single upload endpoint
     if (files.length === 1) {
       try {
@@ -210,10 +218,50 @@ export default function MyResumesPage() {
         const converted = convertApiResume(r);
         setResumes(prev => [converted, ...prev]);
         toast.success('Resume uploaded successfully');
-      } catch (error) {
-        toast.error(`Failed to upload ${files[0].name}`);
+        return { success: true };
+      } catch (error: any) {
+        // Check for duplicate error (409 Conflict)
+        if (error?.response?.status === 409) {
+          const detail = error?.response?.data?.detail;
+          const existingResume = detail?.existing_resume;
+          const isExactDuplicate = detail?.is_exact_duplicate ?? true;
+          const contentDifferences = detail?.content_differences || [];
+
+          if (existingResume) {
+            // Show duplicate modal instead of simple error
+            const duplicateFile: DuplicateFile = {
+              file: files[0],
+              existingResume: {
+                id: existingResume.id,
+                candidate_name: existingResume.candidate_name || existingResume.file_name || 'Unknown',
+                email: existingResume.email || '',
+                folder_name: existingResume.folder_name,
+                folder_path: existingResume.folder_path || 'My Resumes',
+                upload_date: existingResume.upload_date || '',
+                file_size: existingResume.file_size || 0,
+                file_name: existingResume.file_name || '',
+                version: existingResume.version || 1,
+              },
+              contentDifferences: contentDifferences,
+              isDuplicate: isExactDuplicate,
+            };
+
+            setDuplicateFiles([duplicateFile]);
+            setPendingUploadFolderId(folderId);
+            setIsUploadModalOpen(false);
+            setIsDuplicateModalOpen(true);
+
+            return { success: true }; // Return success to close upload modal
+          }
+
+          return {
+            success: false,
+            error: 'This resume already exists in the system.',
+          };
+        } else {
+          return { success: false, error: `Failed to upload ${files[0].name}` };
+        }
       }
-      return;
     }
 
     // For multiple files, use bulk upload with async processing
@@ -265,9 +313,18 @@ export default function MyResumesPage() {
         clearInterval(pollInterval);
       }, 600000);
 
-    } catch (error) {
-      toast.error('Failed to start bulk upload');
-      console.error('Bulk upload error:', error);
+      return { success: true };
+    } catch (error: any) {
+      // Check for duplicate error (409 Conflict)
+      if (error?.response?.status === 409) {
+        const detail = error?.response?.data?.detail;
+        return {
+          success: false,
+          error: detail?.message || 'All files are duplicates',
+          existingName: detail?.duplicates?.[0]?.existing_name
+        };
+      }
+      return { success: false, error: 'Failed to start bulk upload' };
     }
   };
 
@@ -338,6 +395,49 @@ export default function MyResumesPage() {
   const totalResumes = resumes.length;
   const appliedResumes = 0; // Would need job applications data
   const availableResumes = totalResumes - appliedResumes;
+
+  // Handle duplicate resolution
+  const handleResolveDuplicates = async (resolutions: { fileIndex: number; action: 'discard' | 'overwrite' | 'version' }[]) => {
+    const toastId = toast.loading('Processing duplicate resolution...');
+
+    try {
+      for (const resolution of resolutions) {
+        const duplicateFile = duplicateFiles[resolution.fileIndex];
+        if (!duplicateFile) continue;
+
+        if (resolution.action === 'discard') {
+          // Just skip this file
+          toast.success('New resume discarded, keeping existing', { id: toastId });
+        } else {
+          // Use the resolve duplicate and upload endpoint
+          const result = await resumeService.resolveDuplicateAndUpload(
+            duplicateFile.file,
+            duplicateFile.existingResume.id,
+            resolution.action,
+            pendingUploadFolderId
+          );
+
+          const converted = convertApiResume(result);
+          setResumes(prev => [converted, ...prev]);
+
+          if (resolution.action === 'overwrite') {
+            // Remove the old resume from the list
+            setResumes(prev => prev.filter(r => r.id !== duplicateFile.existingResume.id));
+            toast.success('Resume overwritten successfully', { id: toastId });
+          } else {
+            toast.success(`Resume saved as version ${(duplicateFile.existingResume.version || 1) + 1}`, { id: toastId });
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Error resolving duplicates:', error);
+      toast.error('Failed to resolve duplicate', { id: toastId });
+    } finally {
+      setDuplicateFiles([]);
+      setPendingUploadFolderId(undefined);
+      setIsDuplicateModalOpen(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -443,9 +543,18 @@ export default function MyResumesPage() {
       {isUploadModalOpen && (
         <UploadModal
           folders={folders}
+          tenant={null}
           onClose={() => setIsUploadModalOpen(false)}
           onUpload={handleUploadResumes}
           onCreateFolder={handleCreateFolder}
+          onViewResume={(resumeId) => {
+            // Find the resume and open it
+            const resume = resumes.find(r => r.id === resumeId);
+            if (resume) {
+              setViewingResume(resume);
+            }
+            setIsUploadModalOpen(false);
+          }}
         />
       )}
 
@@ -469,6 +578,19 @@ export default function MyResumesPage() {
         <ResumeQuickViewModal
           resume={quickViewResume}
           onClose={() => setQuickViewResume(null)}
+        />
+      )}
+
+      {/* Duplicate Resume Modal */}
+      {isDuplicateModalOpen && duplicateFiles.length > 0 && (
+        <DuplicateResumeModal
+          duplicates={duplicateFiles}
+          onClose={() => {
+            setIsDuplicateModalOpen(false);
+            setDuplicateFiles([]);
+            setPendingUploadFolderId(undefined);
+          }}
+          onResolve={handleResolveDuplicates}
         />
       )}
     </main>

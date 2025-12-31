@@ -17,7 +17,12 @@ const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx'];
 interface FileValidationError {
   fileName: string;
   error: string;
-  type: 'format' | 'size' | 'storage' | 'virus' | 'limit';
+  type: 'format' | 'size' | 'storage' | 'virus' | 'limit' | 'duplicate';
+  existingResume?: {
+    id: string;
+    candidateName: string;
+    uploadedAt?: string;
+  };
 }
 
 interface UploadModalProps {
@@ -25,13 +30,22 @@ interface UploadModalProps {
   tenant: Tenant | null; // Pass tenant for validation
   uploadSection?: 'my-resumes' | 'internal-db'; // Which section is uploading
   onClose: () => void;
-  onUpload: (files: File[], folderId?: string) => void;
+  onUpload: (files: File[], folderId?: string) => Promise<{
+    success: boolean;
+    error?: string;
+    existingResume?: {
+      id: string;
+      candidateName: string;
+      uploadedAt?: string;
+    };
+  }>;
   onUploadComplete?: (statuses: any[]) => void;
   onCreateFolder?: (name: string, parentId?: string) => void;
+  onViewResume?: (resumeId: string) => void;
   targetFolder?: string;
 }
 
-export default function UploadModal({ folders, tenant, uploadSection, onClose, onUpload, onUploadComplete, onCreateFolder, targetFolder }: UploadModalProps) {
+export default function UploadModal({ folders, tenant, uploadSection, onClose, onUpload, onUploadComplete, onCreateFolder, onViewResume, targetFolder }: UploadModalProps) {
   const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string>(targetFolder || '');
@@ -40,6 +54,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const [newFolderName, setNewFolderName] = useState('');
   const [validationErrors, setValidationErrors] = useState<FileValidationError[]>([]);
   const [isValidating, setIsValidating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get tenant-specific limits or use defaults
@@ -226,9 +241,9 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     return validFiles;
   };
 
-  const handleValidateAndUpload = () => {
+  const handleValidateAndUpload = async () => {
     if (selectedFiles.length === 0) return;
-    
+
     // Final validation before upload
     const errors: FileValidationError[] = [];
     const totalSizeMB = selectedFiles.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024);
@@ -248,8 +263,38 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     }
 
     // All validations passed, proceed with upload
-    handleUpload();
-    onClose();
+    setIsUploading(true);
+    setValidationErrors([]);
+
+    try {
+      const result = await onUpload(selectedFiles, selectedFolder || undefined);
+      console.log('[UPLOAD-MODAL-DEBUG] Result from onUpload:', result);
+      console.log('[UPLOAD-MODAL-DEBUG] result.existingResume:', result.existingResume);
+
+      if (!result.success && result.error) {
+        // Show duplicate error in the modal with existing resume details
+        const errorObj = {
+          fileName: selectedFiles[0]?.name || '',
+          error: result.error,
+          type: 'duplicate' as const,
+          existingResume: result.existingResume
+        };
+        console.log('[UPLOAD-MODAL-DEBUG] Setting validationErrors:', errorObj);
+        setValidationErrors([errorObj]);
+        setIsUploading(false);
+        return;
+      }
+
+      // Success - close modal
+      onClose();
+    } catch (error) {
+      setValidationErrors([{
+        fileName: '',
+        error: 'Upload failed. Please try again.',
+        type: 'format'
+      }]);
+      setIsUploading(false);
+    }
   };
 
   const storagePercentage = (storageUsedMB / storageLimitMB) * 100;
@@ -445,9 +490,10 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 {validationErrors.map((error, index) => (
                   <div
                     key={index}
-                    className={`flex items-start gap-3 p-3 rounded-lg border ${
+                    className={`flex items-start gap-3 p-4 rounded-lg border ${
                       error.type === 'virus' ? 'bg-red-100 border-red-300' :
                       error.type === 'storage' ? 'bg-orange-50 border-orange-200' :
+                      error.type === 'duplicate' ? 'bg-amber-50 border-amber-300' :
                       'bg-red-50 border-red-200'
                     }`}
                   >
@@ -455,20 +501,52 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                       <Shield className="w-5 h-5 text-red-700 flex-shrink-0 mt-0.5" />
                     ) : error.type === 'storage' ? (
                       <HardDrive className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                    ) : error.type === 'duplicate' ? (
+                      <XCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                     ) : (
                       <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                     )}
                     <div className="flex-1 min-w-0">
                       {error.fileName && (
-                        <div className="text-sm text-gray-900 truncate mb-0.5">{error.fileName}</div>
+                        <div className="text-sm text-gray-900 truncate mb-1">{error.fileName}</div>
                       )}
-                      <div className={`text-xs ${
+                      <div className={`text-sm ${
                         error.type === 'virus' ? 'text-red-800' :
                         error.type === 'storage' ? 'text-orange-700' :
+                        error.type === 'duplicate' ? 'text-amber-800 font-medium' :
                         'text-red-700'
                       }`}>
                         {error.error}
                       </div>
+                      {/* Show existing resume details for duplicates */}
+                      {error.type === 'duplicate' && error.existingResume && (
+                        <div className="mt-3 p-3 bg-white rounded-lg border border-amber-200">
+                          <div className="text-xs text-gray-500 mb-1">Existing Resume</div>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {error.existingResume.candidateName}
+                              </div>
+                              {error.existingResume.uploadedAt && (
+                                <div className="text-xs text-gray-500">
+                                  Uploaded: {new Date(error.existingResume.uploadedAt).toLocaleDateString()}
+                                </div>
+                              )}
+                            </div>
+                            {onViewResume && (
+                              <button
+                                onClick={() => {
+                                  onViewResume(error.existingResume!.id);
+                                  onClose();
+                                }}
+                                className="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors"
+                              >
+                                View Resume
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -568,11 +646,19 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           </button>
           <button
             onClick={handleValidateAndUpload}
-            disabled={selectedFiles.length === 0}
-            className="px-8 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={selectedFiles.length === 0 || isUploading}
+            className="px-8 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {selectedFiles.length === 0 
-              ? 'Upload' 
+            {isUploading ? (
+              <>
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Uploading...
+              </>
+            ) : selectedFiles.length === 0
+              ? 'Upload'
               : `Upload ${selectedFiles.length} Resume${selectedFiles.length !== 1 ? 's' : ''}`
             }
           </button>

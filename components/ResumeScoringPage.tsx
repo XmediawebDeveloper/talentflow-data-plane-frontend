@@ -119,7 +119,7 @@ export default function ResumeScoringPage({
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
 
   // History view mode and selection
-  const [historyViewMode, setHistoryViewMode] = useState<'grid' | 'list'>('grid');
+  const [historyViewMode, setHistoryViewMode] = useState<'grid' | 'list'>('list');
   const [selectedHistoryItems, setSelectedHistoryItems] = useState<Set<string>>(new Set());
 
   // Split resumes - myResumes are all user-uploaded resumes, databaseResumes are all resumes

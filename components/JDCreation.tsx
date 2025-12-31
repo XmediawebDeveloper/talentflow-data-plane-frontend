@@ -47,8 +47,8 @@ interface ExtractedData {
   salaryFrom: string;
   salaryTo: string;
   compensationType: 'hourly' | 'daily' | 'monthly' | 'yearly';
-  locations: Array<{ city: string; radius: string }>;
-  locationsRequired: boolean;
+  employmentType: 'full_time' | 'part_time' | 'contract' | 'internship' | 'freelance';
+  location: string;
   assessmentGuidance: string;
   internalRecruiterComments: string[];
 }
@@ -67,10 +67,12 @@ interface EditingJDData {
   salary_min?: number;
   salary_max?: number;
   compensation_type?: string;
+  employment_type?: string;
   assessment_guidance?: string;
   internal_comments?: string;
   must_have_comments?: string[];
   allow_overqualified?: boolean;
+  location?: string;
   locations?: Array<{ city: string; radius_km?: number; is_required?: boolean }>;
 }
 
@@ -275,18 +277,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     salaryFrom: '',
     salaryTo: '',
     compensationType: 'yearly',
-    locations: [],
-    locationsRequired: false,
+    employmentType: 'full_time',
+    location: '',
     assessmentGuidance: '',
     internalRecruiterComments: [],
   });
   const [isExtracting, setIsExtracting] = useState(false);
   const [newSkill, setNewSkill] = useState('');
   const [newComment, setNewComment] = useState('');
-  const [newLocation, setNewLocation] = useState({ city: '', radius: '50' });
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
-  const [showLocationMenu, setShowLocationMenu] = useState(false);
-  const [locationStateFilter, setLocationStateFilter] = useState<string>('all');
   
   // Inline editing states
   const [editingSkillIndex, setEditingSkillIndex] = useState<{ category: 'mustHaveSkills' | 'niceToHaveSkills'; index: number } | null>(null);
@@ -371,15 +370,38 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         // If extracted_params are returned, pre-populate the extracted data
         if (response.extracted_params) {
           const params = response.extracted_params;
+
+          // Build experience string
+          let experienceStr = '';
+          if (params.experience_min !== undefined && params.experience_min !== null) {
+            if (params.experience_max !== undefined && params.experience_max !== null) {
+              experienceStr = `${params.experience_min}-${params.experience_max}`;
+            } else {
+              experienceStr = `${params.experience_min}+`;
+            }
+          }
+
+          // Map extracted location - join all cities into a single string
+          const extractedLocation = (params.locations || []).map(loc => loc.city).filter(Boolean).join(', ');
+
+          // Map compensation type
+          const compType = (params.compensation_type || 'yearly').toLowerCase() as 'yearly' | 'monthly' | 'hourly' | 'daily';
+
           setExtractedData(prev => ({
             ...prev,
             mustHaveSkills: params.must_have_skills || [],
+            mustHaveComments: params.must_have_comments || [],
             niceToHaveSkills: params.nice_to_have_skills || [],
-            education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
-            experience: params.experience_min && params.experience_max
-              ? `${params.experience_min}-${params.experience_max}`
-              : prev.experience,
+            education: params.education_requirements?.degree || prev.education,
+            educationRequired: !!params.education_requirements?.degree,
+            experience: params.experience_level || prev.experience,
+            experienceRequired: !!params.experience_level,
             industryType: params.industry_type?.toLowerCase() || '',
+            industryTypeRequired: !!params.industry_type,
+            salaryFrom: params.salary_min ? params.salary_min.toString() : '',
+            salaryTo: params.salary_max ? params.salary_max.toString() : '',
+            compensationType: compType,
+            location: extractedLocation || prev.location,
             allowOverqualified: false,
           }));
         }
@@ -412,29 +434,80 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       const params = await jdService.extractParamsFromText(jdText);
 
       // Map API response to component's ExtractedData format
+      // Build experience string
+      let experienceStr = '';
+      if (params.experience_min !== undefined && params.experience_min !== null) {
+        if (params.experience_max !== undefined && params.experience_max !== null) {
+          experienceStr = `${params.experience_min}-${params.experience_max}`;
+        } else {
+          experienceStr = `${params.experience_min}+`;
+        }
+      }
+
+      // Map extracted location - join all cities into a single string
+      const extractedLocation = (params.locations || []).map(loc => loc.city).filter(Boolean).join(', ');
+
+      // Map compensation type
+      const compType = (params.compensation_type || 'yearly').toLowerCase() as 'yearly' | 'monthly' | 'hourly' | 'daily';
+
       const extraction: ExtractedData = {
         mustHaveSkills: params.must_have_skills || [],
-        mustHaveComments: [],
+        mustHaveComments: params.must_have_comments || [],
         niceToHaveSkills: params.nice_to_have_skills || [],
-        education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
-        educationRequired: true,
-        experience: params.experience_min && params.experience_max
-          ? `${params.experience_min}-${params.experience_max}`
-          : '',
-        experienceRequired: true,
+        education: params.education_requirements?.degree || '',
+        educationRequired: !!params.education_requirements?.degree,
+        experience: params.experience_level || '',
+        experienceRequired: !!params.experience_level,
         industryType: params.industry_type?.toLowerCase() || '',
-        industryTypeRequired: false,
+        industryTypeRequired: !!params.industry_type,
         allowOverqualified: false,
-        salaryFrom: '',
-        salaryTo: '',
-        compensationType: 'yearly',
-        locations: [],
-        locationsRequired: false,
+        salaryFrom: params.salary_min ? params.salary_min.toString() : '',
+        salaryTo: params.salary_max ? params.salary_max.toString() : '',
+        compensationType: compType,
+        location: extractedLocation,
         assessmentGuidance: '',
         internalRecruiterComments: [],
       };
 
       setExtractedData(extraction);
+
+      // Auto-save as draft when moving to extract step
+      try {
+        const jdData = {
+          title: jobTitle,
+          description: jdText,
+          department: 'Engineering',
+          location: extractedLocation || 'Remote',
+          employment_type: extraction.employmentType || 'full_time',
+          must_have_skills: extraction.mustHaveSkills,
+          nice_to_have_skills: extraction.niceToHaveSkills,
+          education_requirements: extraction.education ? { degree: extraction.education } : undefined,
+          experience_min: params.experience_min,
+          experience_max: params.experience_max,
+          industry_type: extraction.industryType || undefined,
+          salary_min: extraction.salaryFrom ? parseInt(extraction.salaryFrom.replace(/[^0-9]/g, '')) : undefined,
+          salary_max: extraction.salaryTo ? parseInt(extraction.salaryTo.replace(/[^0-9]/g, '')) : undefined,
+          compensation_type: extraction.compensationType,
+          must_have_comments: extraction.mustHaveComments,
+          allow_overqualified: extraction.allowOverqualified,
+          creation_stage: 'extract' as const,  // Save at extract stage
+          locations: extractedLocation ? [{ city: extractedLocation, is_required: true }] : [],
+        };
+
+        let savedJd;
+        if (editingId) {
+          savedJd = await jdService.update(editingId, jdData);
+          console.log('[DEBUG] JD updated as draft at extract stage:', savedJd.id);
+        } else {
+          savedJd = await jdService.create(jdData);
+          setEditingId(savedJd.id);  // Track the new ID for future updates
+          console.log('[DEBUG] JD created as draft at extract stage:', savedJd.id);
+        }
+      } catch (saveError) {
+        console.error('[DEBUG] Failed to auto-save draft:', saveError);
+        // Don't block extraction flow if save fails
+      }
+
       setStep('extract');
 
       toast.success({
@@ -593,27 +666,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     }
   };
 
-  const handleAddLocation = () => {
-    if (newLocation.city.trim()) {
-      setExtractedData(prev => ({
-        ...prev,
-        locations: [...prev.locations, { 
-          city: newLocation.city.trim(), 
-          radius: newLocation.radius || '50'
-        }],
-      }));
-      setNewLocation({ city: '', radius: '50' });
-      setShowLocationMenu(false);
-    }
-  };
-
-  const handleRemoveLocation = (index: number) => {
-    setExtractedData(prev => ({
-      ...prev,
-      locations: prev.locations.filter((_, i) => i !== index),
-    }));
-  };
-
   const handlePublish = () => {
     // Go to review step to show summary
     setStep('review');
@@ -636,8 +688,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         extractedData.industryType ? `Industry: ${extractedData.industryType}` : '',
       ].filter(Boolean).join('. ');
 
-      const locationsText = extractedData.locations.length > 0
-        ? `Location: ${extractedData.locations.map(l => l.city).join(', ')}`
+      const locationsText = extractedData.location
+        ? `Location: ${extractedData.location}`
         : '';
 
       const regeneratePrompt = `${jobTitle} - Skills: ${skillsText}. ${requirementsText}. ${locationsText}`;
@@ -678,10 +730,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         title: jobTitle,
         description: generatedJD || manualJD,
         department: 'Engineering',
-        location: extractedData.locations.length > 0
-          ? extractedData.locations[0].city
-          : 'Remote',
-        employment_type: 'full_time',
+        location: extractedData.location || 'Remote',
+        employment_type: extractedData.employmentType || 'full_time',
         must_have_skills: extractedData.mustHaveSkills,
         nice_to_have_skills: extractedData.niceToHaveSkills,
         education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
@@ -694,10 +744,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
         allow_overqualified: extractedData.allowOverqualified,
-        locations: extractedData.locations.map(loc => ({
-          city: loc.city,
-          is_required: extractedData.locationsRequired,
-        })),
+        locations: extractedData.location ? [{ city: extractedData.location, is_required: true }] : [],
       };
 
       console.log('[DEBUG] Calling jdService.create with data:', jdData);
@@ -724,9 +771,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           id: publishedJd.id,
           title: jobTitle,
           department: 'Engineering',
-          location: extractedData.locations.length > 0
-            ? extractedData.locations[0].city
-            : 'Remote',
+          location: extractedData.location || 'Remote',
           type: 'Full-time',
           postedDate: new Date().toISOString(),
           applicants: 0,
@@ -797,10 +842,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         title: jobTitle,
         description: generatedJD || manualJD,
         department: 'Engineering',
-        location: extractedData.locations.length > 0
-          ? extractedData.locations[0].city
-          : 'Remote',
-        employment_type: 'full_time',
+        location: extractedData.location || 'Remote',
+        employment_type: extractedData.employmentType || 'full_time',
         must_have_skills: extractedData.mustHaveSkills,
         nice_to_have_skills: extractedData.niceToHaveSkills,
         education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
@@ -814,10 +857,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         must_have_comments: extractedData.mustHaveComments,
         allow_overqualified: extractedData.allowOverqualified,
         creation_stage: step,  // Save the current step so user can continue from here
-        locations: extractedData.locations.map(loc => ({
-          city: loc.city,
-          is_required: extractedData.locationsRequired,
-        })),
+        locations: extractedData.location ? [{ city: extractedData.location, is_required: true }] : [],
       };
 
       // Update existing JD or create new one
@@ -929,15 +969,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           salaryFrom: editingJD.salary_min?.toString() || '',
           salaryTo: editingJD.salary_max?.toString() || '',
           compensationType: (editingJD.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
+          employmentType: (editingJD.employment_type as ExtractedData['employmentType']) || 'full_time',
           assessmentGuidance: editingJD.assessment_guidance || '',
           internalRecruiterComments: editingJD.internal_comments ? editingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
           mustHaveComments: editingJD.must_have_comments || [],
           allowOverqualified: editingJD.allow_overqualified ?? false,
-          locations: editingJD.locations?.map(loc => ({
-            city: loc.city,
-            radius: loc.radius_km?.toString() || '50',
-          })) || [],
-          locationsRequired: editingJD.locations?.some(loc => loc.is_required) || false,
+          location: editingJD.locations?.map(loc => loc.city).join(', ') || editingJD.location || '',
         }));
       }
     }
@@ -1757,12 +1794,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                     value={extractedData.experience}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, experience: e.target.value }))}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3"
-                    disabled={masterDataLoading}
                   >
-                    <option value="">{masterDataLoading ? 'Loading...' : 'Select experience level'}</option>
-                    {experienceLevels.map((level) => (
-                      <option key={level.id} value={level.code}>{level.label}</option>
-                    ))}
+                    <option value="">Select experience level</option>
+                    <option value="entry">Entry Level (0–2 years)</option>
+                    <option value="junior">Junior Level (2–4 years)</option>
+                    <option value="mid">Mid Level (5–7 years)</option>
+                    <option value="senior">Senior Level (7–10 years)</option>
+                    <option value="architect">Architect Level (10+ years)</option>
+                    <option value="management">Management Level (10+ years)</option>
                   </select>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -1782,12 +1821,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                     value={extractedData.education}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, education: e.target.value }))}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3"
-                    disabled={masterDataLoading}
                   >
-                    <option value="">{masterDataLoading ? 'Loading...' : 'Select education level'}</option>
-                    {educationLevels.map((level) => (
-                      <option key={level.id} value={level.code}>{level.label}</option>
-                    ))}
+                    <option value="">Select education level</option>
+                    <option value="diploma">Diploma</option>
+                    <option value="bachelors">Bachelor's Degree</option>
+                    <option value="masters">Master's Degree</option>
+                    <option value="associate">Associate Degree</option>
+                    <option value="doctorate">Doctorate</option>
+                    <option value="none">No Formal Education</option>
+                    <option value="others">Others</option>
                   </select>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -1884,235 +1926,42 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 </div>
               </div>
 
-              {/* Locations Section - Mandatory */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-gray-900">Locations</h3>
+              {/* Location and Employment Type Row */}
+              <div className="grid grid-cols-2 gap-6">
+                {/* Location Section - Simple Text Input */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <h3 className="text-gray-900">Location</h3>
                     <span className="text-red-500">*</span>
-                    {extractedData.locations.length === 0 && (
-                      <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded">At least one required</span>
-                    )}
-                    <label className="flex items-center gap-2 cursor-pointer ml-4">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(extractedData.locationsRequired)}
-                        onChange={(e) => setExtractedData(prev => ({ ...prev, locationsRequired: e.target.checked }))}
-                        className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
-                      />
-                      <span className="text-sm text-gray-700">Strictly Required</span>
-                    </label>
-                  </div>
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowLocationMenu(!showLocationMenu)}
-                      className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm flex items-center gap-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Location
-                    </button>
-
-                    {/* Location Add Menu */}
-                    {showLocationMenu && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-10"
-                          onClick={() => setShowLocationMenu(false)}
-                        />
-                        <div className="absolute right-0 top-12 z-20 w-80 bg-white rounded-lg shadow-lg border border-gray-200 p-4">
-                          <div className="flex items-center justify-between mb-4">
-                            <h4 className="text-gray-900">Add New Location</h4>
-                            <button
-                              onClick={() => setShowLocationMenu(false)}
-                              className="text-gray-400 hover:text-gray-600"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-
-                          <div className="space-y-3">
-                            {/* State Filter Dropdown */}
-                            <div>
-                              <label className="block text-sm text-gray-700 mb-1">Filter by State</label>
-                              <select
-                                value={locationStateFilter}
-                                onChange={(e) => {
-                                  setLocationStateFilter(e.target.value);
-                                  setNewLocation(prev => ({ ...prev, city: '' }));
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
-                              >
-                                <option value="all">All States</option>
-                                <option value="Andhra Pradesh">Andhra Pradesh</option>
-                                <option value="Delhi NCR">Delhi NCR</option>
-                                <option value="Gujarat">Gujarat</option>
-                                <option value="Haryana">Haryana</option>
-                                <option value="Karnataka">Karnataka</option>
-                                <option value="Kerala">Kerala</option>
-                                <option value="Madhya Pradesh">Madhya Pradesh</option>
-                                <option value="Maharashtra">Maharashtra</option>
-                                <option value="Odisha">Odisha</option>
-                                <option value="Rajasthan">Rajasthan</option>
-                                <option value="Tamil Nadu">Tamil Nadu</option>
-                                <option value="Telangana">Telangana</option>
-                                <option value="Uttar Pradesh">Uttar Pradesh</option>
-                                <option value="West Bengal">West Bengal</option>
-                                <option value="Remote">Remote/Hybrid</option>
-                              </select>
-                            </div>
-
-                            {/* Location Dropdown */}
-                            <div>
-                              <label className="block text-sm text-gray-700 mb-1">Location</label>
-                              <select
-                                value={newLocation.city}
-                                onChange={(e) => setNewLocation(prev => ({ ...prev, city: e.target.value }))}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
-                              >
-                                <option value="">Select a location</option>
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Maharashtra') && (
-                                  <optgroup label="Maharashtra">
-                                    <option value="Mumbai, Maharashtra">Mumbai, Maharashtra</option>
-                                    <option value="Pune, Maharashtra">Pune, Maharashtra</option>
-                                    <option value="Navi Mumbai, Maharashtra">Navi Mumbai, Maharashtra</option>
-                                    <option value="Thane, Maharashtra">Thane, Maharashtra</option>
-                                    <option value="Nagpur, Maharashtra">Nagpur, Maharashtra</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Karnataka') && (
-                                  <optgroup label="Karnataka">
-                                    <option value="Bangalore, Karnataka">Bangalore, Karnataka</option>
-                                    <option value="Mysore, Karnataka">Mysore, Karnataka</option>
-                                    <option value="Mangalore, Karnataka">Mangalore, Karnataka</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Tamil Nadu') && (
-                                  <optgroup label="Tamil Nadu">
-                                    <option value="Chennai, Tamil Nadu">Chennai, Tamil Nadu</option>
-                                    <option value="Coimbatore, Tamil Nadu">Coimbatore, Tamil Nadu</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Delhi NCR') && (
-                                  <optgroup label="Delhi NCR">
-                                    <option value="Delhi NCR">Delhi NCR</option>
-                                    <option value="Gurgaon, Haryana">Gurgaon, Haryana</option>
-                                    <option value="Noida, Uttar Pradesh">Noida, Uttar Pradesh</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Telangana') && (
-                                  <optgroup label="Telangana">
-                                    <option value="Hyderabad, Telangana">Hyderabad, Telangana</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'West Bengal') && (
-                                  <optgroup label="West Bengal">
-                                    <option value="Kolkata, West Bengal">Kolkata, West Bengal</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Gujarat') && (
-                                  <optgroup label="Gujarat">
-                                    <option value="Ahmedabad, Gujarat">Ahmedabad, Gujarat</option>
-                                    <option value="Surat, Gujarat">Surat, Gujarat</option>
-                                    <option value="Vadodara, Gujarat">Vadodara, Gujarat</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Haryana') && locationStateFilter !== 'Delhi NCR' && (
-                                  <optgroup label="Haryana">
-                                    <option value="Gurgaon, Haryana">Gurgaon, Haryana</option>
-                                    <option value="Chandigarh">Chandigarh</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Uttar Pradesh') && locationStateFilter !== 'Delhi NCR' && (
-                                  <optgroup label="Uttar Pradesh">
-                                    <option value="Noida, Uttar Pradesh">Noida, Uttar Pradesh</option>
-                                    <option value="Lucknow, Uttar Pradesh">Lucknow, Uttar Pradesh</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Rajasthan') && (
-                                  <optgroup label="Rajasthan">
-                                    <option value="Jaipur, Rajasthan">Jaipur, Rajasthan</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Kerala') && (
-                                  <optgroup label="Kerala">
-                                    <option value="Kochi, Kerala">Kochi, Kerala</option>
-                                    <option value="Thiruvananthapuram, Kerala">Thiruvananthapuram, Kerala</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Madhya Pradesh') && (
-                                  <optgroup label="Madhya Pradesh">
-                                    <option value="Indore, Madhya Pradesh">Indore, Madhya Pradesh</option>
-                                    <option value="Bhopal, Madhya Pradesh">Bhopal, Madhya Pradesh</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Andhra Pradesh') && (
-                                  <optgroup label="Andhra Pradesh">
-                                    <option value="Visakhapatnam, Andhra Pradesh">Visakhapatnam, Andhra Pradesh</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Odisha') && (
-                                  <optgroup label="Odisha">
-                                    <option value="Bhubaneswar, Odisha">Bhubaneswar, Odisha</option>
-                                  </optgroup>
-                                )}
-                                {(locationStateFilter === 'all' || locationStateFilter === 'Remote') && (
-                                  <optgroup label="Remote/Hybrid">
-                                    <option value="Remote - India">Remote - India</option>
-                                    <option value="Remote - Anywhere">Remote - Anywhere</option>
-                                    <option value="Hybrid - Flexible">Hybrid - Flexible</option>
-                                  </optgroup>
-                                )}
-                              </select>
-                            </div>
-
-                            {/* Radius Dropdown */}
-                            <div>
-                              <label className="block text-sm text-gray-700 mb-1">Search Radius</label>
-                              <select
-                                value={newLocation.radius}
-                                onChange={(e) => setNewLocation(prev => ({ ...prev, radius: e.target.value }))}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
-                              >
-                                <option value="10">10 km</option>
-                                <option value="25">25 km</option>
-                                <option value="50">50 km</option>
-                                <option value="75">75 km</option>
-                                <option value="100">100 km</option>
-                                <option value="150">150 km</option>
-                                <option value="200">200 km</option>
-                              </select>
-                            </div>
-
-                            {/* Add Button */}
-                            <button
-                              onClick={handleAddLocation}
-                              className="w-full px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm mt-2"
-                            >
-                              Add Location
-                            </button>
-                          </div>
-                        </div>
-                      </>
+                    {!extractedData.location && (
+                      <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded">Required</span>
                     )}
                   </div>
+                  <input
+                    type="text"
+                    value={extractedData.location}
+                    onChange={(e) => setExtractedData(prev => ({ ...prev, location: e.target.value }))}
+                    placeholder="Enter location (e.g., Chennai, Bangalore, Remote)"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+                  />
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  {extractedData.locations.map((location, index) => (
-                    <div key={index} className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="text-sm text-gray-900">{location.city}</div>
-                          <div className="text-xs text-gray-600">{location.radius} km radius</div>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveLocation(index)}
-                          className="text-red-600 hover:text-red-700 ml-2"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+
+                {/* Employment Type */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <h3 className="text-gray-900">Employment Type</h3>
+                  </div>
+                  <select
+                    value={extractedData.employmentType}
+                    onChange={(e) => setExtractedData(prev => ({ ...prev, employmentType: e.target.value as ExtractedData['employmentType'] }))}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                  >
+                    <option value="full_time">Full Time</option>
+                    <option value="part_time">Part Time</option>
+                    <option value="contract">Contract</option>
+                    <option value="internship">Internship</option>
+                    <option value="freelance">Freelance</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -2125,7 +1974,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 Back
               </button>
               <div className="flex items-center gap-4">
-                {(extractedData.mustHaveComments.length === 0 || extractedData.locations.length === 0) && (
+                {(extractedData.mustHaveComments.length === 0 || !extractedData.location) && (
                   <div className="flex flex-col items-end gap-1">
                     {extractedData.mustHaveComments.length === 0 && (
                       <span className="text-sm text-orange-600 flex items-center gap-1">
@@ -2133,17 +1982,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                         At least one Must-Have Comment is required
                       </span>
                     )}
-                    {extractedData.locations.length === 0 && (
+                    {!extractedData.location && (
                       <span className="text-sm text-orange-600 flex items-center gap-1">
                         <AlertTriangle className="w-4 h-4" />
-                        At least one Location is required
+                        Location is required
                       </span>
                     )}
                   </div>
                 )}
                 <button
                   onClick={handlePublish}
-                  disabled={extractedData.mustHaveComments.length === 0 || extractedData.locations.length === 0}
+                  disabled={extractedData.mustHaveComments.length === 0 || !extractedData.location}
                   className="flex items-center gap-2 bg-green-600 text-white px-8 py-3 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Review & Publish
@@ -2216,8 +2065,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                   <div className="mb-6 pb-6 border-b border-gray-200">
                     <h1 className="text-3xl text-gray-900 mb-2">{jobTitle}</h1>
                     <div className="flex items-center gap-4 text-sm text-gray-600">
-                      {extractedData.locations.length > 0 && (
-                        <span>📍 {extractedData.locations[0].city}</span>
+                      {extractedData.location && (
+                        <span>📍 {extractedData.location}</span>
                       )}
                       {extractedData.compensationType && (
                         <span>💰 {extractedData.compensationType}</span>
@@ -2298,16 +2147,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                     </div>
                   )}
 
-                  {/* Locations */}
-                  {extractedData.locations.length > 0 && (
+                  {/* Location */}
+                  {extractedData.location && (
                     <div className="mt-6 pt-6 border-t border-gray-200">
-                      <h3 className="text-xl text-gray-900 mb-3">Location{extractedData.locations.length > 1 ? 's' : ''}</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {extractedData.locations.map((loc, index) => (
-                          <div key={index} className="bg-gray-50 border border-gray-200 text-gray-800 px-4 py-2 rounded-lg">
-                            📍 {loc.city} <span className="text-gray-800 text-sm">(within {loc.radius} km)</span>
-                          </div>
-                        ))}
+                      <h3 className="text-xl text-gray-900 mb-3">Location</h3>
+                      <div className="bg-gray-50 border border-gray-200 text-gray-800 px-4 py-2 rounded-lg inline-block">
+                        📍 {extractedData.location}
                       </div>
                     </div>
                   )}
@@ -2339,7 +2184,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                     <div className="space-y-2">
                       {extractedData.mustHaveSkills.map((skill, index) => (
                         <div key={index} className="flex items-center gap-2 text-sm text-gray-700">
-                          <CheckCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                          <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
                           {skill}
                         </div>
                       ))}
@@ -2352,7 +2197,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                     <div className="space-y-2">
                       {extractedData.niceToHaveSkills.map((skill, index) => (
                         <div key={index} className="flex items-center gap-2 text-sm text-gray-600">
-                          <CheckCircle className="w-4 h-4 text-gray-800 flex-shrink-0" />
+                          <CheckCircle className="w-4 h-4 text-blue-400 flex-shrink-0" />
                           {skill}
                         </div>
                       ))}
@@ -2364,7 +2209,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                     <h4 className="text-sm text-gray-700 mb-3">Must-Have Comments ({extractedData.mustHaveComments.length})</h4>
                     <div className="space-y-2">
                       {extractedData.mustHaveComments.map((comment, index) => (
-                        <div key={index} className="text-sm text-gray-700 bg-red-50 p-2 rounded border border-red-200">
+                        <div key={index} className="flex items-center gap-2 text-sm text-gray-700 bg-orange-50 p-2 rounded border border-orange-200">
+                          <CheckCircle className="w-4 h-4 text-orange-400 flex-shrink-0" />
                           {comment}
                         </div>
                       ))}
@@ -2418,21 +2264,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 </div>
               </div>
 
-              {/* Locations - Hidden for now */}
-              {false && extractedData.locations.length > 0 && (
+              {/* Location */}
+              {extractedData.location && (
                 <div className="p-6 border-b border-gray-200">
-                  <h3 className="text-gray-900 mb-4">
-                    Locations ({extractedData.locations.length})
-                    {extractedData.locationsRequired && (
-                      <span className="text-xs text-gray-500 ml-2">✓ Required</span>
-                    )}
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {extractedData.locations.map((loc, index) => (
-                      <div key={index} className="bg-gray-50 text-gray-800 px-3 py-2 rounded-lg text-sm">
-                        {loc.city} <span className="text-gray-800">(+{loc.radius}km)</span>
-                      </div>
-                    ))}
+                  <h3 className="text-gray-900 mb-4">Location</h3>
+                  <div className="bg-gray-50 text-gray-800 px-3 py-2 rounded-lg text-sm inline-block">
+                    📍 {extractedData.location}
                   </div>
                 </div>
               )}
@@ -2560,8 +2397,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                     salaryFrom: '',
                     salaryTo: '',
                     compensationType: 'yearly',
-                    locations: [],
-                    locationsRequired: false,
+                    location: '',
                     assessmentGuidance: '',
                     internalRecruiterComments: [],
                   });
