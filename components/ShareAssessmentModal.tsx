@@ -1,5 +1,7 @@
 import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, FileText, Users, Upload, Database } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { assessmentService } from '@/lib/services';
+import api from '@/lib/services/api';
 
 interface ShareAssessmentModalProps {
   isOpen: boolean;
@@ -38,17 +40,43 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
   ]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Mock resume database
-  const [resumeDatabase] = useState<Resume[]>([
-    { id: 'r1', name: 'Sarah Johnson', email: 'sarah.j@email.com', phone: '+1-555-0123', position: 'Senior Developer', experience: '5 years', skills: ['React', 'TypeScript', 'Node.js'] },
-    { id: 'r2', name: 'Michael Chen', email: 'mchen@email.com', phone: '+1-555-0124', position: 'Full Stack Engineer', experience: '3 years', skills: ['Python', 'Django', 'React'] },
-    { id: 'r3', name: 'Emily Rodriguez', email: 'emily.r@email.com', phone: '+1-555-0125', position: 'Frontend Developer', experience: '4 years', skills: ['Vue.js', 'JavaScript', 'CSS'] },
-    { id: 'r4', name: 'David Kim', email: 'dkim@email.com', phone: '+1-555-0126', position: 'Backend Developer', experience: '6 years', skills: ['Java', 'Spring Boot', 'MySQL'] },
-    { id: 'r5', name: 'Jessica Martinez', email: 'jmartinez@email.com', phone: '+1-555-0127', position: 'DevOps Engineer', experience: '5 years', skills: ['Docker', 'Kubernetes', 'AWS'] },
-    { id: 'r6', name: 'Robert Taylor', email: 'rtaylor@email.com', phone: '+1-555-0128', position: 'Data Scientist', experience: '4 years', skills: ['Python', 'Machine Learning', 'TensorFlow'] },
-  ]);
-  
+
+  // Resume database from API
+  const [resumeDatabase, setResumeDatabase] = useState<Resume[]>([]);
+  const [isLoadingResumes, setIsLoadingResumes] = useState(false);
+
+  // Load resumes from API when database mode is selected
+  useEffect(() => {
+    if (inputMode === 'database' && resumeDatabase.length === 0) {
+      loadResumes();
+    }
+  }, [inputMode]);
+
+  const loadResumes = async () => {
+    setIsLoadingResumes(true);
+    try {
+      const response = await api.get('/resumes', {
+        params: { source: 'internal-db', page_size: 100 }
+      });
+      if (response.data?.items) {
+        const mapped = response.data.items.map((r: any) => ({
+          id: r.id,
+          name: r.candidate_name || 'Unknown',
+          email: r.email || '',
+          phone: r.phone || '',
+          position: r.current_title || 'Not specified',
+          experience: r.experience_years ? `${r.experience_years} years` : 'Not specified',
+          skills: r.skills || []
+        }));
+        setResumeDatabase(mapped);
+      }
+    } catch (error) {
+      console.error('Failed to load resumes:', error);
+    } finally {
+      setIsLoadingResumes(false);
+    }
+  };
+
   const [customMessage, setCustomMessage] = useState(
     `Hi [Candidate Name],\n\nYou have been invited to complete an assessment as part of our recruitment process.\n\nPlease click the link below to access the assessment. The assessment will take approximately ${assessment.duration} and consists of ${assessment.questions} questions.\n\nBest regards,\nTalentFlow Recruitment Team`
   );
@@ -56,6 +84,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
   const [sendCopy, setSendCopy] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [sentCount, setSentCount] = useState(0);
 
   if (!isOpen) return null;
 
@@ -112,17 +141,47 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
     resume.position.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSend = () => {
+  const handleSend = async () => {
     setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Filter valid candidates
+      const validCandidates = candidates.filter(c => c.name.trim() && c.email.trim());
+
+      if (validCandidates.length === 0) {
+        alert('Please add at least one candidate');
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (validCandidates.length === 1) {
+        // Single invite
+        await assessmentService.invite(assessment.id, {
+          candidate_name: validCandidates[0].name,
+          candidate_email: validCandidates[0].email,
+          resume_id: validCandidates[0].resumeId,
+        });
+      } else {
+        // Bulk invite
+        const candidateData = validCandidates.map(c => ({
+          candidate_name: c.name,
+          candidate_email: c.email,
+          resume_id: c.resumeId,
+        }));
+        await assessmentService.bulkInvite(assessment.id, candidateData);
+      }
+
+      setSentCount(validCandidates.length);
       setIsSubmitting(false);
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
         onClose();
       }, 2000);
-    }, 1500);
+    } catch (error) {
+      console.error('Failed to send invitations:', error);
+      setIsSubmitting(false);
+      alert(`Failed to send invitations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const isValid = candidates.every(c => c.name.trim() && c.email.trim() && c.email.includes('@'));
@@ -138,7 +197,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
           </div>
           <h3 className="text-gray-900 mb-2">Assessment Shared Successfully!</h3>
           <p className="text-gray-600 text-sm">
-            Email invitations have been sent to {candidates.length} candidate{candidates.length > 1 ? 's' : ''}
+            Email invitations have been sent to {sentCount} candidate{sentCount > 1 ? 's' : ''}
           </p>
         </div>
       </div>

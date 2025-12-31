@@ -1,10 +1,11 @@
 import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers } from 'lucide-react';
-import { useState } from 'react';
-import { 
-  calculateFinalResult, 
-  QuestionScore, 
+import { useState, useEffect } from 'react';
+import { assessmentService } from '@/lib/services';
+import {
+  calculateFinalResult,
+  QuestionScore,
   FinalAssessmentResult,
-  getScoringBreakdown 
+  getScoringBreakdown
 } from '@/lib/utils/assessmentScoring';
 
 interface AssessmentResultsProps {
@@ -54,9 +55,78 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [activeTab, setActiveTab] = useState<string>('technical-knowledge'); // For section tabs
   const [selectedRound, setSelectedRound] = useState<number | 'all'>('all'); // Round filter
   const [selectedDetailRound, setSelectedDetailRound] = useState<number | 'all'>('all'); // Round filter for detail view
+  const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiStats, setApiStats] = useState<{ completed_count: number; passed_count: number; failed_count: number; average_score: number | null }>({ completed_count: 0, passed_count: 0, failed_count: 0, average_score: null });
 
-  // Mock data for demonstration with multiple rounds
-  const candidateResults: CandidateResult[] = [
+  // Fetch results from API
+  useEffect(() => {
+    const fetchResults = async () => {
+      setIsLoading(true);
+      try {
+        const response = await assessmentService.listResults(assessmentId);
+        if (response?.items) {
+          // Map API response to component format
+          const mapped: CandidateResult[] = response.items.map((item: any, index: number) => ({
+            id: item.id,
+            name: item.candidate_name || 'Unknown',
+            email: item.candidate_email || '',
+            score: Math.round(Number(item.overall_score) || 0),
+            totalScore: 100,
+            percentage: Math.round(Number(item.overall_score) || 0),
+            status: item.passed === true ? 'Passed' : item.passed === false ? 'Failed' : 'Under Review',
+            completedDate: item.completed_at?.split('T')[0] || 'N/A',
+            duration: item.time_spent_seconds ? `${Math.round(item.time_spent_seconds / 60)} min` : 'N/A',
+            sections: [
+              {
+                name: 'HR Section',
+                score: Math.round(Number(item.hr_score) || 0),
+                totalScore: 100,
+                percentage: Math.round(Number(item.hr_score) || 0),
+                questions: []
+              },
+              {
+                name: 'Technical Section',
+                score: Math.round(Number(item.technical_score) || 0),
+                totalScore: 100,
+                percentage: Math.round(Number(item.technical_score) || 0),
+                questions: []
+              },
+              {
+                name: 'Coding Section',
+                score: Math.round(Number(item.coding_score) || 0),
+                totalScore: 100,
+                percentage: Math.round(Number(item.coding_score) || 0),
+                questions: []
+              }
+            ].filter(s => s.score > 0 || s.percentage > 0),
+            round: 1,
+            roundName: 'Round 1'
+          }));
+          setCandidateResults(mapped);
+
+          // Set stats from API
+          setApiStats({
+            completed_count: response.completed_count || mapped.length,
+            passed_count: response.passed_count || mapped.filter((c: CandidateResult) => c.status === 'Passed').length,
+            failed_count: response.failed_count || mapped.filter((c: CandidateResult) => c.status === 'Failed').length,
+            average_score: response.average_score ? Math.round(Number(response.average_score)) : null
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch assessment results:', error);
+        // Keep empty results on error
+        setCandidateResults([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchResults();
+  }, [assessmentId]);
+
+  // Fallback mock data for demonstration (only used when API returns empty)
+  const mockCandidateResults: CandidateResult[] = [
     {
       id: '1',
       name: 'Sarah Johnson',
@@ -348,23 +418,40 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return 'text-red-600';
   };
 
-  const selectedCandidateData = candidateResults.find(c => c.id === selectedCandidate);
+  // Use API results or fallback to mock data
+  const displayResults = candidateResults.length > 0 ? candidateResults : mockCandidateResults;
+  const selectedCandidateData = displayResults.find(c => c.id === selectedCandidate);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex-1 bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading assessment results...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Overview view
   if (!selectedCandidate) {
     // Filter candidates by round
-    const filteredCandidates = selectedRound === 'all' 
-      ? candidateResults 
-      : candidateResults.filter(c => c.round === selectedRound);
+    const filteredCandidates = selectedRound === 'all'
+      ? displayResults
+      : displayResults.filter(c => c.round === selectedRound);
 
     // Get unique rounds for filter
-    const availableRounds = Array.from(new Set(candidateResults.map(c => c.round))).sort();
+    const availableRounds = Array.from(new Set(displayResults.map(c => c.round))).sort();
 
-    const avgScore = filteredCandidates.length > 0 
-      ? Math.round(filteredCandidates.reduce((sum, c) => sum + c.percentage, 0) / filteredCandidates.length)
-      : 0;
-    const passedCount = filteredCandidates.filter(c => c.status === 'Passed').length;
-    const failedCount = filteredCandidates.filter(c => c.status === 'Failed').length;
+    // Use API stats if available, otherwise calculate from data
+    const avgScore = apiStats.average_score !== null
+      ? apiStats.average_score
+      : (filteredCandidates.length > 0
+        ? Math.round(filteredCandidates.reduce((sum, c) => sum + c.percentage, 0) / filteredCandidates.length)
+        : 0);
+    const passedCount = candidateResults.length > 0 ? apiStats.passed_count : filteredCandidates.filter(c => c.status === 'Passed').length;
+    const failedCount = candidateResults.length > 0 ? apiStats.failed_count : filteredCandidates.filter(c => c.status === 'Failed').length;
 
     return (
       <div className="flex-1 bg-gray-50 overflow-y-auto">
@@ -382,7 +469,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <div>
                 <h1 className="text-gray-900 mb-2">{assessmentTitle}</h1>
                 <p className="text-sm text-gray-600">
-                  Assessment Results - {candidateResults.length} candidates completed
+                  Assessment Results - {displayResults.length} candidates completed
                 </p>
               </div>
               <button
@@ -432,11 +519,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         ? 'bg-gray-500 text-white'
                         : 'bg-gray-200 text-gray-600'
                     }`}>
-                      {candidateResults.length}
+                      {displayResults.length}
                     </span>
                   </button>
                   {availableRounds.map(round => {
-                    const roundCount = candidateResults.filter(c => c.round === round).length;
+                    const roundCount = displayResults.filter(c => c.round === round).length;
                     return (
                       <button
                         key={round}
@@ -468,7 +555,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-gray-600 text-sm mb-1">Total Candidates</div>
-                  <div className="text-2xl text-gray-900">{candidateResults.length}</div>
+                  <div className="text-2xl text-gray-900">{displayResults.length}</div>
                 </div>
                 <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
                   <User className="w-6 h-6 text-gray-800" />

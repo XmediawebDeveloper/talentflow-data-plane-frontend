@@ -1,6 +1,7 @@
 import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart } from 'lucide-react';
 import { useState } from 'react';
 import { Job } from '@/lib/types/types';
+import { assessmentService } from '@/lib/services';
 
 interface AssessmentCreationProps {
   onBack: () => void;
@@ -86,34 +87,66 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     return sections.filter(s => s.enabled).reduce((sum, s) => sum + s.percentage, 0);
   };
 
-  const handleGenerateAssessment = () => {
+  const handleGenerateAssessment = async (saveAsDraft: boolean = false) => {
     setIsGenerating(true);
-    
-    // Simulate saving assessment definition (NO actual questions generated)
-    setTimeout(() => {
-      const assessmentDefinition = {
-        id: Date.now().toString(),
+
+    try {
+      // Call the real API to create assessment
+      const hrSection = sections.find(s => s.name === 'HR');
+      const technicalSection = sections.find(s => s.name === 'Technical');
+      const codingSection = sections.find(s => s.name === 'Coding');
+
+      const createData = {
+        jd_id: selectedJob?.id || '',
         title: `${selectedJob?.title} Assessment`,
+        description: `AI-generated assessment for ${selectedJob?.title}`,
+        hr_enabled: hrSection?.enabled || false,
+        hr_percentage: hrSection?.enabled ? hrSection.percentage : 0,
+        hr_topics: hrSection?.topics || [],
+        technical_enabled: technicalSection?.enabled || false,
+        technical_percentage: technicalSection?.enabled ? technicalSection.percentage : 0,
+        technical_topics: technicalSection?.topics || [],
+        coding_enabled: codingSection?.enabled || false,
+        coding_percentage: codingSection?.enabled ? codingSection.percentage : 0,
+        coding_topics: codingSection?.topics || [],
+        coding_languages: [],
+      };
+
+      // Create the assessment via API
+      const createdAssessment = await assessmentService.create(createData);
+
+      // If not saving as draft, publish immediately
+      if (!saveAsDraft) {
+        await assessmentService.publish(createdAssessment.id);
+      }
+
+      // Map API response to local format
+      const assessmentDefinition = {
+        id: createdAssessment.id,
+        title: createdAssessment.title,
         job: selectedJob,
-        duration,
+        duration: createdAssessment.duration_minutes,
         sections: sections.filter(s => s.enabled).map(section => ({
           name: section.name,
           percentage: section.percentage,
           topics: section.topics,
-          questions: Math.ceil((duration * section.percentage) / 100 / 2), // ~2 min per question
+          questions: Math.ceil((createdAssessment.duration_minutes * section.percentage) / 100 / 2),
           difficulty: selectedJob?.experience === 'Senior' || selectedJob?.experience === 'Lead' ? 'Advanced' :
                      selectedJob?.experience === 'Mid-Level' ? 'Intermediate' : 'Basic',
-          estimatedTime: Math.ceil((duration * section.percentage) / 100),
-          // NO generatedQuestions - questions are NOT generated at this stage
+          estimatedTime: Math.ceil((createdAssessment.duration_minutes * section.percentage) / 100),
         })),
-        status: 'Draft',
-        createdAt: new Date().toISOString(),
+        status: saveAsDraft ? 'Draft' : 'Active',
+        createdAt: createdAssessment.created_at,
       };
-      
+
       setGeneratedAssessment(assessmentDefinition);
       setIsGenerating(false);
       setStep('preview');
-    }, 2000);
+    } catch (error) {
+      console.error('Failed to create assessment:', error);
+      setIsGenerating(false);
+      alert(`Failed to create assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const handlePublish = () => {
@@ -248,9 +281,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Step 2: Configure Assessment
   if (step === 'configure') {
+    const enabledSectionsCount = sections.filter(s => s.enabled).length;
+
     return (
       <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <button
             onClick={() => setStep('select-jd')}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
@@ -259,288 +294,231 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             Back to Job Selection
           </button>
 
-          <div className="mb-8">
-            <h1 className="text-gray-900 mb-2">Configure Assessment</h1>
+          <div className="mb-6">
+            <h1 className="text-2xl font-semibold text-gray-900 mb-1">Configure Assessment</h1>
             <p className="text-gray-600">
-              Set duration, section distribution, and topics for {selectedJob?.title}
+              Set duration, section distribution, and topics for <span className="text-gray-900 font-medium">{selectedJob?.title}</span>
             </p>
           </div>
 
-          {/* Selected Job Info */}
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-sm text-gray-500 mb-1">Selected Job Description</div>
-                <h3 className="text-gray-900 mb-2">{selectedJob?.title}</h3>
-                <div className="flex items-center gap-3 text-sm text-gray-600">
-                  <span>{selectedJob?.department}</span>
-                  <span>•</span>
-                  <span>{selectedJob?.experience}</span>
-                  <span>•</span>
-                  <span>{selectedJob?.employmentType}</span>
-                </div>
-              </div>
-              {requiresCoding(selectedJob!) && (
-                <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-xs flex items-center gap-1">
-                  <Code className="w-3 h-3" />
-                  Coding Enabled
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Duration */}
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
-            <div className="flex items-center gap-3 mb-4">
-              <Clock className="w-5 h-5 text-gray-800" />
-              <h3 className="text-gray-900">Assessment Duration</h3>
-            </div>
-            <div className="flex items-center gap-4">
-              <input
-                type="range"
-                min="15"
-                max="120"
-                step="15"
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="flex-1"
-              />
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={duration}
-                  onChange={(e) => setDuration(Math.max(15, Math.min(120, Number(e.target.value))))}
-                  className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center"
-                />
-                <span className="text-gray-600">minutes</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Scoring Rules */}
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-lg p-6 mb-6">
-            <div className="flex items-start gap-3 mb-4">
-              <BarChart className="w-6 h-6 text-amber-600 flex-shrink-0" />
-              <div>
-                <h3 className="text-amber-900 mb-2">📊 Assessment Scoring Rules</h3>
-                <p className="text-sm text-amber-800 mb-4">
-                  Understanding how candidates are evaluated for PASS/FAIL determination
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              {/* HR Section */}
-              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
+          {/* Two Column Layout */}
+          <div className="flex gap-6">
+            {/* Left Column - Main Content */}
+            <div className="flex-1 space-y-6">
+              {/* Configure Assessment Rounds */}
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                 <div className="flex items-center gap-2 mb-2">
-                  <Users className="w-5 h-5 text-gray-800" />
-                  <h4 className="text-gray-900">HR Section</h4>
+                  <Sliders className="w-5 h-5 text-gray-700" />
+                  <h3 className="font-medium text-gray-900">Configure Assessment Rounds</h3>
                 </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-gray-800 flex-shrink-0 mt-0.5" />
-                    <span className="text-gray-700">Responses recorded</span>
+                <p className="text-sm text-gray-500 mb-4">
+                  Choose which rounds to include in this assessment. Disabled rounds will not appear in the section distribution.
+                </p>
+
+                <div className="space-y-3">
+                  {/* HR Round Toggle */}
+                  <div className={`p-4 border rounded-lg transition-all ${sections.find(s => s.name === 'HR')?.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Users className="w-5 h-5 text-gray-600" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900">HR Round</span>
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Informational</span>
+                          </div>
+                          <p className="text-sm text-gray-500">Cultural fit, communication skills, and behavioral questions</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setSections(sections.map(s => s.name === 'HR' ? { ...s, enabled: !s.enabled } : s))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${sections.find(s => s.name === 'HR')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'HR')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-gray-800 flex-shrink-0 mt-0.5" />
-                    <span className="text-gray-700">Displayed in reports</span>
+
+                  {/* Technical Round Toggle */}
+                  <div className={`p-4 border rounded-lg transition-all ${sections.find(s => s.name === 'Technical')?.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Brain className="w-5 h-5 text-gray-600" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900">Technical Round</span>
+                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
+                          </div>
+                          <p className="text-sm text-gray-500">Domain knowledge, technical concepts, and job-specific skills</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setSections(sections.map(s => s.name === 'Technical' ? { ...s, enabled: !s.enabled } : s))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${sections.find(s => s.name === 'Technical')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'Technical')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="px-3 py-2 bg-gray-50 rounded-lg mt-2">
-                    <span className="text-xs text-gray-700">
-                      ℹ️ <strong>NOT part of PASS/FAIL</strong>
+
+                  {/* Coding Round Toggle */}
+                  <div className={`p-4 border rounded-lg transition-all ${sections.find(s => s.name === 'Coding')?.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Code className="w-5 h-5 text-gray-600" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900">Coding Round</span>
+                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
+                            {requiresCoding(selectedJob!) && (
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Auto-Enabled</span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-500">Programming challenges, algorithm design, and code implementation</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setSections(sections.map(s => s.name === 'Coding' ? { ...s, enabled: !s.enabled } : s))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${sections.find(s => s.name === 'Coding')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'Coding')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Smart Configuration Info */}
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-gray-600">
+                      <strong>Smart Configuration:</strong> Coding round is auto-enabled based on JD analysis. You can manually override this setting. Disabled rounds will be hidden from the section distribution below.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Assessment Duration */}
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Clock className="w-5 h-5 text-gray-700" />
+                  <h3 className="font-medium text-gray-900">Assessment Duration</h3>
+                </div>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    min="15"
+                    max="120"
+                    step="5"
+                    value={duration}
+                    onChange={(e) => setDuration(Number(e.target.value))}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
+                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={duration}
+                      onChange={(e) => setDuration(Math.max(15, Math.min(120, Number(e.target.value))))}
+                      className="w-16 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm text-gray-900"
+                    />
+                    <span className="text-sm text-gray-600">minutes</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section Distribution */}
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-5 h-5 text-gray-700" />
+                    <h3 className="font-medium text-gray-900">Section Distribution</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500">Total:</span>
+                    <span className={`text-sm font-medium ${isPercentageValid ? 'text-green-600' : 'text-red-600'}`}>
+                      {totalPercentage}%
                     </span>
                   </div>
                 </div>
-              </div>
 
-              {/* Technical Section */}
-              <div className="bg-white rounded-lg p-4 border-2 border-gray-300">
-                <div className="flex items-center gap-2 mb-2">
-                  <Brain className="w-5 h-5 text-gray-800" />
-                  <h4 className="text-gray-900">Technical Section</h4>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-gray-800 flex-shrink-0 mt-0.5" />
-                    <span className="text-gray-700">0-10 rating per question</span>
+                {!isPercentageValid && (
+                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-yellow-800">Section percentages must total exactly 100%</p>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-gray-800 flex-shrink-0 mt-0.5" />
-                    <span className="text-gray-700">Min passing score: 7/10</span>
-                  </div>
-                  <div className="px-3 py-2 bg-gray-100 rounded-lg mt-2">
-                    <span className="text-xs text-gray-800">
-                      ✅ <strong>Counts toward PASS/FAIL</strong>
-                    </span>
-                  </div>
-                </div>
-              </div>
+                )}
 
-              {/* Coding Section */}
-              <div className="bg-white rounded-lg p-4 border-2 border-green-300">
-                <div className="flex items-center gap-2 mb-2">
-                  <Code className="w-5 h-5 text-green-600" />
-                  <h4 className="text-gray-900">Coding Section</h4>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                    <span className="text-gray-700">0-10 rating per question</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                    <span className="text-gray-700">Min passing score: 7/10</span>
-                  </div>
-                  <div className="px-3 py-2 bg-green-100 rounded-lg mt-2">
-                    <span className="text-xs text-green-900">
-                      ✅ <strong>Counts toward PASS/FAIL</strong>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Pass Logic */}
-            <div className="bg-white rounded-lg p-4 border-2 border-amber-400">
-              <h4 className="text-gray-900 mb-3 flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
-                Pass/Fail Logic (Technical & Coding Only)
-              </h4>
-              <div className="space-y-2 text-sm text-gray-700">
-                <p>
-                  <strong>For each section (Technical/Coding):</strong>
-                </p>
-                <div className="ml-4 space-y-1">
-                  <p>• At least <strong>70% of questions</strong> must score ≥7, <strong>OR</strong></p>
-                  <p>• Overall section average must be ≥7</p>
-                </div>
-                <p className="mt-3 pt-3 border-t border-amber-200">
-                  <strong>Example:</strong> If 10 Technical questions exist:
-                </p>
-                <div className="ml-4 space-y-1 text-gray-600">
-                  <p>✅ Pass: 7+ questions score ≥7</p>
-                  <p>✅ Pass: Average score ≥7.0</p>
-                  <p>❌ Fail: Only 6 questions score ≥7 AND average &lt;7</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Section Configuration */}
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <Sliders className="w-5 h-5 text-gray-800" />
-                <h3 className="text-gray-900">Section Distribution</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Total:</span>
-                <span className={`text-lg ${isPercentageValid ? 'text-green-600' : 'text-red-600'}`}>
-                  {totalPercentage}%
-                </span>
-              </div>
-            </div>
-
-            {!isPercentageValid && (
-              <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-yellow-800">
-                  Section percentages must total exactly 100%
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-6">
-              {sections.map((section) => (
-                <div
-                  key={section.name}
-                  className={`p-6 border rounded-lg ${
-                    section.enabled ? 'border-gray-200 bg-white' : 'border-gray-200 bg-gray-50 opacity-60'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      {section.name === 'HR' && <Users className="w-5 h-5 text-gray-800" />}
-                      {section.name === 'Technical' && <Brain className="w-5 h-5 text-gray-800" />}
-                      {section.name === 'Coding' && <Code className="w-5 h-5 text-green-600" />}
-                      <div>
+                <div className="space-y-4">
+                  {sections.filter(s => s.enabled).map((section) => (
+                    <div key={section.name} className="p-4 border border-gray-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <h4 className="text-gray-900">{section.name} Section</h4>
+                          {section.name === 'HR' && <Users className="w-4 h-4 text-gray-600" />}
+                          {section.name === 'Technical' && <Brain className="w-4 h-4 text-gray-600" />}
+                          {section.name === 'Coding' && <Code className="w-4 h-4 text-gray-600" />}
+                          <span className="font-medium text-gray-900">{section.name} Section</span>
                           {section.name === 'HR' ? (
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
-                              Informational Only
-                            </span>
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Informational</span>
                           ) : (
-                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
-                              Scored (0-10)
-                            </span>
+                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
                           )}
                         </div>
-                        {section.enabled && (
-                          <p className="text-sm text-gray-500 mt-0.5">
-                            ~{Math.ceil((duration * section.percentage) / 100)} minutes • 
-                            ~{Math.ceil((duration * section.percentage) / 100 / 2)} questions
-                            {section.name !== 'HR' && <span className="text-gray-800"> • Pass: ≥7/10</span>}
-                          </p>
+                        {section.name === 'Coding' && requiresCoding(selectedJob!) && (
+                          <span className="text-xs text-gray-500">Auto-enabled (coding required)</span>
                         )}
                       </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      {section.name === 'Coding' && (
-                        <div className="text-xs text-gray-500">
-                          {section.enabled ? 'Auto-enabled (coding required)' : 'Auto-disabled (no coding)'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
 
-                  {section.enabled && (
-                    <>
+                      <p className="text-xs text-gray-500 mb-3">
+                        ~{Math.ceil((duration * section.percentage) / 100)} minutes • ~{Math.ceil((duration * section.percentage) / 100 / 2)} questions
+                        {section.name !== 'HR' && <span> • Pass: &gt;7/10</span>}
+                      </p>
+
+                      {/* Percentage Allocation */}
                       <div className="mb-4">
-                        <label className="text-sm text-gray-700 mb-2 block">
-                          Percentage Allocation
-                        </label>
-                        <div className="flex items-center gap-4">
+                        <label className="text-xs text-gray-600 mb-2 block">Percentage Allocation</label>
+                        <div className="flex items-center gap-3">
                           <input
                             type="range"
                             min="0"
                             max="100"
                             value={section.percentage}
                             onChange={(e) => updatePercentage(section.name, Number(e.target.value))}
-                            className="flex-1"
+                            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
                           />
-                          <input
-                            type="number"
-                            value={section.percentage}
-                            onChange={(e) => updatePercentage(section.name, Number(e.target.value))}
-                            className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center"
-                          />
-                          <span className="text-gray-600">%</span>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              value={section.percentage}
+                              onChange={(e) => updatePercentage(section.name, Number(e.target.value))}
+                              className="w-14 px-2 py-1.5 border border-gray-300 rounded-lg text-center text-sm text-gray-900"
+                            />
+                            <span className="text-sm text-gray-600">%</span>
+                          </div>
                         </div>
                       </div>
 
+                      {/* Topics */}
                       <div>
-                        <label className="text-sm text-gray-700 mb-2 block">
+                        <label className="text-xs text-gray-600 mb-2 block">
                           Topics (LLM will generate questions based on these)
                         </label>
-                        <div className="flex gap-2 mb-3">
+                        <div className="flex gap-2 mb-2">
                           <input
                             type="text"
                             value={newTopic.section === section.name ? newTopic.value : ''}
                             onChange={(e) => setNewTopic({ section: section.name, value: e.target.value })}
                             onKeyPress={(e) => e.key === 'Enter' && addTopic(section.name)}
                             placeholder={`e.g., ${
-                              section.name === 'HR' 
-                                ? 'conflict handling, salary discussion, teamwork' 
-                                : section.name === 'Technical' 
-                                ? 'domain tools, regulations, workflows' 
+                              section.name === 'HR'
+                                ? 'conflict handling, salary discussion, teamwork'
+                                : section.name === 'Technical'
+                                ? 'domain tools, regulations, workflows'
                                 : 'algorithm type, framework, logic pattern'
                             }`}
-                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
                           />
                           <button
                             onClick={() => addTopic(section.name)}
-                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
+                            className="px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-1 text-sm"
                           >
                             <Plus className="w-4 h-4" />
                             Add Topic
@@ -550,64 +528,150 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           {section.topics.map((topic, idx) => (
                             <span
                               key={idx}
-                              className="px-3 py-1.5 bg-gray-50 text-gray-900 rounded-lg text-sm flex items-center gap-2 border border-gray-200"
+                              className="px-2.5 py-1 bg-gray-100 text-gray-800 rounded text-xs flex items-center gap-1.5 border border-gray-200"
                             >
                               {topic}
-                              <button
-                                onClick={() => removeTopic(section.name, idx)}
-                                className="hover:text-gray-900"
-                              >
-                                <X className="w-4 h-4" />
+                              <button onClick={() => removeTopic(section.name, idx)} className="hover:text-gray-900">
+                                <X className="w-3 h-3" />
                               </button>
                             </span>
                           ))}
                           {section.topics.length === 0 && (
-                            <span className="text-sm text-gray-500 italic">
+                            <span className="text-xs text-gray-400 italic">
                               No topics added yet. Add topics for AI to generate relevant questions.
                             </span>
                           )}
                         </div>
                       </div>
-                    </>
-                  )}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
 
-          {/* LLM Configuration Info */}
-          <div className="bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-6 mb-6">
-            <div className="flex items-start gap-3">
-              <Sparkles className="w-6 h-6 text-gray-800 flex-shrink-0" />
-              <div>
-                <h4 className="text-gray-900 mb-2">AI Assessment Generation</h4>
-                <div className="text-sm text-gray-700 space-y-2">
+            {/* Right Column - Sidebar */}
+            <div className="w-80 flex-shrink-0 space-y-4">
+              {/* AI Assessment Generation Info */}
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles className="w-5 h-5 text-gray-700" />
+                  <h4 className="font-medium text-gray-900 text-sm">AI Assessment Generation</h4>
+                </div>
+                <div className="text-xs text-gray-600 space-y-2">
                   <p>• <strong>Unique Question Sets:</strong> Each candidate receives freshly generated questions for fairness</p>
                   <p>• LLM will analyze the JD and generate questions dynamically per candidate</p>
-                  <p>• Question difficulty adjusted based on experience level: <strong>{selectedJob?.experienceLevel}</strong></p>
+                  <p>• Question difficulty adjusted based on experience level</p>
                   <p>• Number of questions and time allocation calculated automatically</p>
                   <p>• Topics you provide will guide the question generation process</p>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Actions */}
-          <div className="flex justify-between items-center">
-            <button
-              onClick={() => setStep('select-jd')}
-              className="px-6 py-2.5 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Back
-            </button>
-            <button
-              onClick={handleGenerateAssessment}
-              disabled={!isPercentageValid}
-              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              <Sparkles className="w-5 h-5" />
-              Generate Assessment with AI
-            </button>
+              {/* Assessment Scoring Rules */}
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <BarChart className="w-5 h-5 text-gray-700" />
+                  <h4 className="font-medium text-gray-900 text-sm">Assessment Scoring Rules</h4>
+                </div>
+                <p className="text-xs text-gray-500 mb-3">Understanding how candidates are evaluated for PASS/FAIL determination</p>
+
+                {/* HR Section */}
+                <div className="mb-3 pb-3 border-b border-gray-100">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Users className="w-4 h-4 text-gray-600" />
+                    <span className="text-xs font-medium text-gray-900">HR Section</span>
+                  </div>
+                  <div className="text-xs text-gray-600 ml-6 space-y-0.5">
+                    <p>• Responses recorded</p>
+                    <p>• Displayed in reports</p>
+                  </div>
+                  <div className="ml-6 mt-1 px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">
+                    <strong>NOT part of PASS/FAIL</strong>
+                  </div>
+                </div>
+
+                {/* Technical Section */}
+                <div className="mb-3 pb-3 border-b border-gray-100">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Brain className="w-4 h-4 text-gray-600" />
+                    <span className="text-xs font-medium text-gray-900">Technical Section</span>
+                  </div>
+                  <div className="text-xs text-gray-600 ml-6 space-y-0.5">
+                    <p>• 0-10 rating per question</p>
+                    <p>• Min passing score: 7/10</p>
+                  </div>
+                  <div className="ml-6 mt-1 px-2 py-1 bg-green-100 rounded text-xs text-green-700">
+                    <strong>Counts toward PASS/FAIL</strong>
+                  </div>
+                </div>
+
+                {/* Coding Section */}
+                <div className="mb-3 pb-3 border-b border-gray-100">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Code className="w-4 h-4 text-gray-600" />
+                    <span className="text-xs font-medium text-gray-900">Coding Section</span>
+                  </div>
+                  <div className="text-xs text-gray-600 ml-6 space-y-0.5">
+                    <p>• 0-10 rating per question</p>
+                    <p>• Min passing score: 7/10</p>
+                  </div>
+                  <div className="ml-6 mt-1 px-2 py-1 bg-green-100 rounded text-xs text-green-700">
+                    <strong>Counts toward PASS/FAIL</strong>
+                  </div>
+                </div>
+
+                {/* Pass/Fail Logic */}
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle2 className="w-4 h-4 text-gray-600" />
+                    <span className="text-xs font-medium text-gray-900">Pass/Fail Logic (Technical & Coding Only)</span>
+                  </div>
+                  <div className="text-xs text-gray-600 ml-6 space-y-1">
+                    <p><strong>For each section (Technical/Coding):</strong></p>
+                    <p>• At least 70% of questions must score ≥7, <strong>OR</strong></p>
+                    <p>• Overall section average must be ≥7</p>
+                  </div>
+                  <div className="mt-2 ml-6 text-xs text-gray-500">
+                    <p><strong>Example:</strong> If 10 Technical questions exist:</p>
+                    <p>✅ Pass: 7+ questions score ≥7</p>
+                    <p>✅ Pass: Average score ≥7.0</p>
+                    <p>❌ Fail: Only 6 questions score ≥7 AND average &lt;7</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Total Duration</div>
+                    <div className="text-xl font-semibold text-gray-900">{duration} min</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Sections</div>
+                    <div className="text-xl font-semibold text-gray-900">{enabledSectionsCount}</div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleGenerateAssessment(true)}
+                    disabled={!isPercentageValid || isGenerating}
+                    className="flex-1 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    {isGenerating ? 'Saving...' : 'Save as Draft'}
+                  </button>
+                  <button
+                    onClick={() => handleGenerateAssessment(false)}
+                    disabled={!isPercentageValid || isGenerating}
+                    className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    {isGenerating ? 'Publishing...' : 'Publish Assessment'}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
