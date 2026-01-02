@@ -111,6 +111,117 @@ export interface AssessmentResultsListResponse {
   average_score?: number;
 }
 
+// ==================== NEW API INTERFACES ====================
+
+// 1. Stats Summary
+export interface AssessmentStatsResponse {
+  total_assessments: number;
+  active_assessments: number;
+  draft_assessments: number;
+  closed_assessments: number;
+  archived_assessments: number;
+  total_invitations: number;
+  total_candidates_tested: number;
+  total_passed: number;
+  total_failed: number;
+  average_pass_rate: number | null;
+  average_score: number | null;
+  units_consumed: number;
+  units_refunded: number;
+}
+
+// 2. Clone Assessment
+export interface AssessmentCloneRequest {
+  new_title?: string;
+}
+
+export interface AssessmentCloneResponse {
+  original_id: string;
+  cloned_id: string;
+  cloned_title: string;
+  message: string;
+}
+
+// 3. Export Results
+export type ExportFormat = 'csv' | 'excel' | 'json';
+
+// 4. Audit Trail
+export interface AuditLogResponse {
+  id: string;
+  tenant_id: string;
+  tenant_name?: string;
+  assessment_id: string;
+  assessment_title: string;
+  jd_id: string;
+  jd_title: string;
+  candidate_name: string;
+  candidate_email: string;
+  invited_by: string;
+  invited_by_name?: string;
+  invited_by_email?: string;
+  invited_date: string;
+  expires_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  completion_status: string;
+  unit_consumed: boolean;
+  consent_accepted: boolean;
+  consent_accepted_at?: string;
+  consent_ip?: string;
+  errors: string[];
+  refund_status: 'none' | 'requested' | 'approved' | 'rejected';
+  refund_reason?: string;
+  refund_requested_by?: string;
+  refund_requested_by_name?: string;
+  refund_requested_at?: string;
+  refund_processed_by?: string;
+  refund_processed_at?: string;
+  refund_rejection_reason?: string;
+}
+
+export interface AuditTrailListResponse {
+  items: AuditLogResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_completed: number;
+  total_failed: number;
+  total_in_progress: number;
+  total_not_started: number;
+  total_expired: number;
+  units_consumed: number;
+  refunds_pending: number;
+  refunds_approved: number;
+}
+
+// 5. Refund Request
+export interface RefundRequestCreate {
+  reason: string;
+}
+
+export interface RefundRequestResponse {
+  invitation_id: string;
+  refund_status: string;
+  refund_reason: string;
+  refund_requested_at: string;
+  message: string;
+}
+
+// 6. Refund Process
+export type RefundAction = 'approve' | 'reject';
+
+export interface RefundProcessRequest {
+  action: RefundAction;
+  rejection_reason?: string;
+}
+
+export interface RefundProcessResponse {
+  invitation_id: string;
+  refund_status: string;
+  units_restored: number;
+  message: string;
+}
+
 export const assessmentService = {
   /**
    * List assessments
@@ -260,6 +371,110 @@ export const assessmentService = {
       const response = await api.get<AssessmentResultsListResponse>(
         `/assessments/${assessmentId}/results`,
         { params }
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  // ==================== NEW API METHODS ====================
+
+  /**
+   * 1. Get assessment stats for dashboard
+   */
+  async getStats(): Promise<AssessmentStatsResponse> {
+    try {
+      const response = await api.get<AssessmentStatsResponse>('/assessments/stats');
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * 2. Clone/duplicate an assessment
+   */
+  async clone(assessmentId: string, newTitle?: string): Promise<AssessmentCloneResponse> {
+    try {
+      const response = await api.post<AssessmentCloneResponse>(
+        `/assessments/${assessmentId}/clone`,
+        newTitle ? { new_title: newTitle } : {}
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * 3. Export assessment results
+   * Returns blob for file download
+   */
+  async exportResults(
+    assessmentId: string,
+    format: ExportFormat = 'csv',
+    includeDetails: boolean = false
+  ): Promise<Blob> {
+    try {
+      const response = await api.get(`/assessments/${assessmentId}/results/export`, {
+        params: { format, include_details: includeDetails },
+        responseType: 'blob',
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * 4. Get audit trail
+   */
+  async getAuditTrail(params?: {
+    assessment_id?: string;
+    status?: string;
+    refund_status?: string;
+    date_from?: string;
+    date_to?: string;
+    search?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<AuditTrailListResponse> {
+    try {
+      const response = await api.get<AuditTrailListResponse>('/assessments/audit-trail', { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * 5. Request refund for a failed assessment
+   */
+  async requestRefund(invitationId: string, reason: string): Promise<RefundRequestResponse> {
+    try {
+      const response = await api.post<RefundRequestResponse>(
+        `/assessments/audit-trail/${invitationId}/refund`,
+        { reason }
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * 6. Process (approve/reject) refund request
+   */
+  async processRefund(
+    invitationId: string,
+    action: RefundAction,
+    rejectionReason?: string
+  ): Promise<RefundProcessResponse> {
+    try {
+      const response = await api.put<RefundProcessResponse>(
+        `/assessments/audit-trail/${invitationId}/refund`,
+        { action, rejection_reason: rejectionReason }
       );
       return response.data;
     } catch (error) {

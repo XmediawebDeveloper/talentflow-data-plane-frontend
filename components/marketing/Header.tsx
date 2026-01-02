@@ -1,7 +1,7 @@
 "use client";
 
 import { Menu, X, Moon, Sun } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -19,8 +19,14 @@ const navItems = [
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
+
+  // Prevent hydration mismatch by only rendering theme-dependent UI after mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const toggleDarkMode = () => {
     setTheme(theme === "dark" ? "light" : "dark");
@@ -63,10 +69,14 @@ export function Header() {
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               aria-label="Toggle dark mode"
             >
-              {theme === "dark" ? (
-                <Sun className="w-5 h-5 text-yellow-500" />
+              {mounted ? (
+                theme === "dark" ? (
+                  <Sun className="w-5 h-5 text-yellow-500" />
+                ) : (
+                  <Moon className="w-5 h-5 text-gray-500" />
+                )
               ) : (
-                <Moon className="w-5 h-5 text-gray-500" />
+                <div className="w-5 h-5" />
               )}
             </button>
 
@@ -84,10 +94,14 @@ export function Header() {
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               aria-label="Toggle dark mode"
             >
-              {theme === "dark" ? (
-                <Sun className="w-5 h-5 text-yellow-500" />
+              {mounted ? (
+                theme === "dark" ? (
+                  <Sun className="w-5 h-5 text-yellow-500" />
+                ) : (
+                  <Moon className="w-5 h-5 text-gray-500" />
+                )
               ) : (
-                <Moon className="w-5 h-5 text-gray-500" />
+                <div className="w-5 h-5" />
               )}
             </button>
 
