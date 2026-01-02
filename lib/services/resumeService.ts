@@ -251,6 +251,20 @@ export const resumeService = {
       throw new Error(handleApiError(error));
     }
   },
+
+  /**
+   * Preview resume (converts DOCX to PDF for viewing)
+   */
+  async preview(resumeId: string): Promise<Blob> {
+    try {
+      const response = await api.get(`/resumes/${resumeId}/preview`, {
+        responseType: 'blob',
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
 };
 
 export const folderService = {
