@@ -3,6 +3,7 @@
 import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Job } from '@/lib/types/types';
@@ -249,6 +250,7 @@ const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkill
 };
 
 export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }: JDCreationProps = {}) {
+  const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
 
@@ -334,6 +336,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const [showDragTips, setShowDragTips] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
+  const [publishedJdId, setPublishedJdId] = useState<string | null>(null);
   const [extractedDataModified, setExtractedDataModified] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showExtractedSummary, setShowExtractedSummary] = useState(false);
@@ -772,6 +775,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
       setIsPublishing(false);
       setIsPublished(true);
+      setPublishedJdId(publishedJd.id);
 
       // Create the job object for UI
       if (onPublish) {
@@ -1056,17 +1060,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 onClick={() => setMode('ai')}
                 className={`flex-1 p-6 rounded-lg border-2 transition-all ${
                   mode === 'ai'
-                    ? 'border-gray-800 bg-gray-800 shadow-lg'
+                    ? 'border-gray-400 bg-gray-200 shadow-md'
                     : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <Wand2 className={`w-6 h-6 ${mode === 'ai' ? 'text-white' : 'text-gray-400'}`} />
-                  <h3 className={`font-medium ${mode === 'ai' ? 'text-white' : 'text-gray-900'}`}>
+                  <Wand2 className={`w-6 h-6 ${mode === 'ai' ? 'text-gray-700' : 'text-gray-400'}`} />
+                  <h3 className={`font-medium ${mode === 'ai' ? 'text-gray-900' : 'text-gray-900'}`}>
                     AI-Generated JD
                   </h3>
                 </div>
-                <p className={`text-sm text-left ${mode === 'ai' ? 'text-gray-300' : 'text-gray-600'}`}>
+                <p className={`text-sm text-left ${mode === 'ai' ? 'text-gray-600' : 'text-gray-600'}`}>
                   Let AI create a professional job description based on your inputs
                 </p>
               </button>
@@ -1075,17 +1079,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 onClick={() => setMode('manual')}
                 className={`flex-1 p-6 rounded-lg border-2 transition-all ${
                   mode === 'manual'
-                    ? 'border-gray-800 bg-gray-800 shadow-lg'
+                    ? 'border-gray-400 bg-gray-200 shadow-md'
                     : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <Edit2 className={`w-6 h-6 ${mode === 'manual' ? 'text-white' : 'text-gray-400'}`} />
-                  <h3 className={`font-medium ${mode === 'manual' ? 'text-white' : 'text-gray-900'}`}>
+                  <Edit2 className={`w-6 h-6 ${mode === 'manual' ? 'text-gray-700' : 'text-gray-400'}`} />
+                  <h3 className={`font-medium ${mode === 'manual' ? 'text-gray-900' : 'text-gray-900'}`}>
                     Manual Input
                   </h3>
                 </div>
-                <p className={`text-sm text-left ${mode === 'manual' ? 'text-gray-300' : 'text-gray-600'}`}>
+                <p className={`text-sm text-left ${mode === 'manual' ? 'text-gray-600' : 'text-gray-600'}`}>
                   Write or paste your own job description
                 </p>
               </button>
@@ -1979,25 +1983,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 </div>
               </div>
 
-              {/* Allow Overqualified Candidates */}
-              <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-gray-900 mb-1">Allow Overqualified Candidates</h3>
-                    <p className="text-sm text-gray-600">Accept candidates who exceed the required qualifications</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(extractedData.allowOverqualified)}
-                      onChange={(e) => setExtractedData(prev => ({ ...prev, allowOverqualified: e.target.checked }))}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                  </label>
-                </div>
-              </div>
-
               {/* Employment Type & Work Model - Side by Side */}
               <div className="mt-6 grid grid-cols-2 gap-6">
                 {/* Employment Type */}
@@ -2035,6 +2020,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                     <option value="hybrid">Hybrid</option>
                     <option value="field_based">Field-based / Travel</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Allow Overqualified Candidates */}
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-gray-900 mb-1">Allow Overqualified Candidates</h3>
+                    <p className="text-sm text-gray-600">Accept candidates who exceed the required qualifications</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(extractedData.allowOverqualified)}
+                      onChange={(e) => setExtractedData(prev => ({ ...prev, allowOverqualified: e.target.checked }))}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                  </label>
                 </div>
               </div>
 
@@ -2248,7 +2252,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                       <h4 className="text-sm text-gray-700 mb-3">Must-Have Comments ({extractedData.mustHaveComments.length})</h4>
                       <div className="space-y-2">
                         {extractedData.mustHaveComments.map((comment, index) => (
-                          <div key={index} className="flex items-start gap-2 text-sm text-gray-700 bg-white p-2 rounded border border-gray-200">
+                          <div key={index} className="flex items-start gap-2 text-sm text-gray-700">
                             <CheckCircle2 className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
                             <span>{comment}</span>
                           </div>
@@ -2460,6 +2464,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                   setManualJD('');
                   setJobTitle('');
                   setIsPublished(false);
+                  setPublishedJdId(null);
                   setExtractedData({
                     mustHaveSkills: [],
                     mustHaveComments: [],
@@ -2486,7 +2491,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               >
                 Create Another JD
               </button>
-              <button 
+              {publishedJdId && (
+                <button
+                  onClick={() => router.push(`/recruitment/jd-details?id=${publishedJdId}`)}
+                  className="px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  View JD
+                </button>
+              )}
+              <button
                 onClick={onBack}
                 className="px-6 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
               >
