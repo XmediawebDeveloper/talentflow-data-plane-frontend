@@ -109,7 +109,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
   };
 
   const getMatchStatusColor = (status: string) => {
-    if (status === 'Excellent Match') return 'bg-green-100 text-green-700 border-green-300';
+    if (status === 'Exact Match' || status === 'Excellent Match') return 'bg-green-100 text-green-700 border-green-300';
     if (status === 'Partial Match') return 'bg-yellow-100 text-yellow-700 border-yellow-300';
     return 'bg-red-100 text-red-700 border-red-300';
   };

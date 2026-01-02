@@ -16,9 +16,10 @@ interface JobsListingProps {
   onDisableJob?: (job: Job) => void;
   onRepublishJob?: (job: Job) => void;
   onArchiveJob?: (job: Job) => void;
+  onDeleteJob?: (job: Job) => void;
 }
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onDeleteJob }: JobsListingProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [locationFilter, setLocationFilter] = useState<string>('all');

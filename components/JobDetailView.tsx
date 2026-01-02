@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User, Ban, Archive, History, FileText, Edit, XCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User, Ban, Archive, History, FileText, Edit, XCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import ReactMarkdown from 'react-markdown';
@@ -15,7 +15,7 @@ import AssessmentResultsTable from './AssessmentResultsTable';
 import VersionHistoryModal from './VersionHistoryModal';
 import JDVersionHistoryModal from './JDVersionHistoryModal';
 import ResumeDetailView from './ResumeDetailView';
-import ScoringResultDetailModal from './ScoringResultDetailModal';
+import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import { Resume } from '@/lib/types/types';
 import { scoringService } from '@/lib/services/scoringService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -43,10 +43,11 @@ interface JobDetailViewProps {
   onNavigateToAITalentMatch?: (jobId: string) => void; // Navigate to AI Talent Match page
   onDisable?: (job: Job) => void; // Disable job
   onArchive?: (job: Job) => void; // Archive job
+  onDelete?: (job: Job) => void; // Delete job
   onViewAssessmentResult?: (assessmentResult: any, jobTitle: string) => void; // Navigate to assessment result detail
 }
 
-export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onArchive, onViewAssessmentResult }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onArchive, onDelete, onViewAssessmentResult }: JobDetailViewProps) {
   const handleEdit = () => {
     if (onEdit) {
       onEdit(job);
@@ -153,17 +154,18 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
       // Convert API response to ScoredResume format
       const convertedResumes = (response.items || []).map((item: any) => {
-        // Map match_status from API to display format
+        // Map match_status from API to display format - use "Exact Match" for consistency
         let matchStatus = 'No Match';
         if (item.match_status === 'exact_match' || item.match_status === 'excellent') {
-          matchStatus = 'Excellent Match';
+          matchStatus = 'Exact Match';
         } else if (item.match_status === 'partial_match' || item.match_status === 'partial') {
           matchStatus = 'Partial Match';
         }
 
-        // Extract skills from score_breakdown or criteria_scores
-        const matchedSkills: string[] = item.skills || [];
-        const missingSkills: string[] = item.gaps || [];
+        // Extract matched and missing skills from API response
+        // Check multiple possible field names from the scoring API
+        const matchedSkills: string[] = item.matched_skills || item.matchedSkills || item.skills || [];
+        const missingSkills: string[] = item.missing_skills || item.missingSkills || item.gaps || [];
 
         return {
           id: item.id,
@@ -267,6 +269,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const handleArchive = () => {
     if (onArchive) {
       onArchive(job);
+    }
+  };
+
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete(job);
     }
   };
 
@@ -557,6 +565,17 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     );
   }
 
+  // Show CandidateScoringDetailPage when viewing a scored resume (same as ResumeScoringPage)
+  if (viewingScoredResume) {
+    return (
+      <CandidateScoringDetailPage
+        resume={viewingScoredResume}
+        jobTitle={job.title}
+        onBack={() => setViewingScoredResume(null)}
+      />
+    );
+  }
+
   return (
     <main className="flex-1 p-8 overflow-y-auto">
       {/* Header */}
@@ -728,6 +747,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   >
                     <Ban className="w-4 h-4" />
                     <span className="font-medium">Disable</span>
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    onClick={handleDelete}
+                    className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
+                    title="Delete Job"
+                  >
+                    <Trash2 className="w-5 h-5" />
                   </button>
                 )}
               </div>
@@ -1180,33 +1208,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               jobTitle={job.title}
               jobId={job.id}
               availableUnits={15}
-              onViewCandidate={async (resume) => {
-                // Extract scores from criteriaScores (keys: job_title, experience, must_have_skills, education, location, nice_to_have_skills, industry)
-                const cs = resume.criteriaScores || {};
-                // Convert 0-10 scores to percentages (0-100)
-                const getScore = (key: string, fallback: number = 70) => {
-                  const criteria = cs[key];
-                  if (criteria && typeof criteria.score === 'number') {
-                    return criteria.score <= 10 ? criteria.score * 10 : criteria.score;
-                  }
-                  return fallback;
-                };
-
-                // Extract matched skills from must_have_skills breakdown or use resume skills
-                const mustHaveBreakdown = cs.must_have_skills?.skill_breakdown || {};
-                const niceToHaveBreakdown = cs.nice_to_have_skills?.skill_breakdown || {};
-                const matchedSkillsFromScoring = [
-                  ...Object.keys(mustHaveBreakdown).filter(skill => mustHaveBreakdown[skill]?.score >= 6),
-                  ...Object.keys(niceToHaveBreakdown).filter(skill => niceToHaveBreakdown[skill]?.score >= 6),
-                ];
-                const missingSkillsFromScoring = [
-                  ...Object.keys(mustHaveBreakdown).filter(skill => mustHaveBreakdown[skill]?.score < 6),
-                  ...Object.keys(niceToHaveBreakdown).filter(skill => niceToHaveBreakdown[skill]?.score < 6),
-                ];
-
-                // Prepare scored resume data for the modal
-                const scoredResumeForModal = {
-                  id: resume.id,
+              onViewCandidate={(resume) => {
+                // Pass resume directly - data already formatted by fetchScoredResumes
+                // CandidateScoringDetailPage handles the same format as ResumeScoringPage
+                setViewingScoredResume({
+                  ...resume,
+                  // Ensure required fields have fallbacks
                   candidateName: resume.candidateName || 'Unknown',
                   email: resume.email || '',
                   phone: resume.phone || '',
@@ -1214,42 +1221,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   scorePercentage: resume.scorePercentage || 0,
                   scoredDate: resume.scoredDate || new Date().toISOString(),
                   scoredBy: resume.scoredBy || 'System',
-                  experience: resume.experience,
-                  education: resume.education,
-                  certifications: resume.certifications || [],
-                  currentCompany: resume.currentCompany,
-                  location: resume.location,
-                  title: resume.title,
-                  // Scoring details - map from API keys to frontend expected keys
-                  detailedScores: {
-                    titleMatch: getScore('job_title', resume.scorePercentage || 75),
-                    experienceMatch: getScore('experience', resume.essentialScore || 80),
-                    skillsMatch: getScore('must_have_skills', resume.scorePercentage || 85),
-                    educationMatch: getScore('education', 70),
-                    locationMatch: getScore('location', 90),
-                  },
-                  // Use matched/missing from scoring breakdown or fallback to resume data
-                  matchedSkills: matchedSkillsFromScoring.length > 0
-                    ? matchedSkillsFromScoring
-                    : (resume.matchedSkills || resume.skills || resume.technicalSkills || []),
-                  missingSkills: missingSkillsFromScoring.length > 0
-                    ? missingSkillsFromScoring
-                    : (resume.missingSkills || resume.gaps || []),
-                  keyStrengths: resume.strengths || [],
-                  improvementAreas: resume.gaps || [],
-                  aiReasoning: resume.aiSummary || resume.professionalSummary || 'AI analysis based on resume scoring against job requirements.',
-                  recommendations: resume.strengths?.slice(0, 3) || [],
-                  // Extended data for all tabs
-                  scoreBreakdown: resume.scoreBreakdown || [],
-                  criteriaScores: resume.criteriaScores || {},
-                  experienceDetails: resume.experienceDetails || [],
-                  educationDetails: resume.educationDetails || [],
-                  technicalSkills: resume.technicalSkills || resume.skills || [],
-                  softSkills: resume.softSkills || [],
-                  languages: resume.languages || [],
-                  professionalSummary: resume.professionalSummary || resume.aiSummary || '',
-                };
-                setViewingScoredResume(scoredResumeForModal);
+                  // Use existing matchedSkills/missingSkills or fall back to skills/gaps
+                  matchedSkills: resume.matchedSkills || resume.technicalSkills || resume.skills || [],
+                  missingSkills: resume.missingSkills || [],
+                });
               }}
             />
           )}
@@ -1499,14 +1474,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         />
       )}
 
-      {/* Scored Resume Detail Modal */}
-      {viewingScoredResume && (
-        <ScoringResultDetailModal
-          resume={viewingScoredResume}
-          jobTitle={job.title}
-          onClose={() => setViewingScoredResume(null)}
-        />
-      )}
+      {/* Scored Resume Detail - now handled by CandidateScoringDetailPage above */}
 
       {/* AI Talent Match Progress Panel */}
       {showAIMatchPanel && (
