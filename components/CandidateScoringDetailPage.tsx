@@ -1,6 +1,7 @@
 'use client';
 
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronRight, Code, Languages, ArrowLeft } from 'lucide-react';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronRight, Code, Languages, ArrowLeft, BarChart3, CheckSquare, MessageSquare } from 'lucide-react';
+import DetailedScorecardTab from './DetailedScorecardTab';
 import { useState } from 'react';
 
 interface ScoredResume {
@@ -428,33 +429,22 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
           )}
 
           {activeTab === 'scoretable' && (
-            <div className="space-y-6">
-              <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-6">Detailed Score Breakdown</h3>
-                <div className="space-y-6">
-                  {[
-                    { label: 'Skills Match', score: detailedScores.skillsMatch },
-                    { label: 'Experience Match', score: detailedScores.experienceMatch },
-                    { label: 'Education Match', score: detailedScores.educationMatch },
-                    { label: 'Title Match', score: detailedScores.titleMatch },
-                    { label: 'Location Match', score: detailedScores.locationMatch },
-                  ].map((item, idx) => (
-                    <div key={idx}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-gray-700">{item.label}</span>
-                        <span className={`text-lg font-bold ${getScoreColor(item.score)}`}>{item.score}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div
-                          className={`h-3 rounded-full ${getProgressBarColor(item.score)} transition-all duration-500`}
-                          style={{ width: `${item.score}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <DetailedScorecardTab
+              resume={{
+                scorePercentage: resume.scorePercentage,
+                scoredDate: resume.scoredDate,
+                scoredBy: resume.scoredBy,
+                detailedScores: detailedScores,
+                certifications: resume.certifications,
+                education: resume.education,
+                location: resume.location,
+                title: resume.title,
+              }}
+              jobTitle={jobTitle}
+              getScoreColor={getScoreColor}
+              getScoreBgColor={getScoreBgColor}
+              getProgressBarColor={getProgressBarColor}
+            />
           )}
 
           {activeTab === 'personalinfo' && (

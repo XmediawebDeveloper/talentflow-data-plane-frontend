@@ -301,6 +301,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const [isPublished, setIsPublished] = useState(false);
   const [extractedDataModified, setExtractedDataModified] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [showExtractedSummary, setShowExtractedSummary] = useState(false);
 
   // Save to draft state
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -374,12 +375,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           setExtractedData(prev => ({
             ...prev,
             mustHaveSkills: params.must_have_skills || [],
+            mustHaveComments: params.must_have_comments || [],
             niceToHaveSkills: params.nice_to_have_skills || [],
             education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
             experience: params.experience_min && params.experience_max
               ? `${params.experience_min}-${params.experience_max}`
-              : prev.experience,
+              : params.experience_min
+                ? `${params.experience_min}+`
+                : prev.experience,
             industryType: params.industry_type?.toLowerCase() || '',
+            salaryFrom: params.salary_min ? params.salary_min.toString() : '',
+            salaryTo: params.salary_max ? params.salary_max.toString() : '',
+            compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || 'yearly',
+            locations: [],  // User will add locations manually
             allowOverqualified: false,
           }));
         }
@@ -414,21 +422,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       // Map API response to component's ExtractedData format
       const extraction: ExtractedData = {
         mustHaveSkills: params.must_have_skills || [],
-        mustHaveComments: [],
+        mustHaveComments: params.must_have_comments || [],
         niceToHaveSkills: params.nice_to_have_skills || [],
         education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
         educationRequired: true,
         experience: params.experience_min && params.experience_max
           ? `${params.experience_min}-${params.experience_max}`
-          : '',
+          : params.experience_min
+            ? `${params.experience_min}+`
+            : '',
         experienceRequired: true,
         industryType: params.industry_type?.toLowerCase() || '',
         industryTypeRequired: false,
         allowOverqualified: false,
-        salaryFrom: '',
-        salaryTo: '',
-        compensationType: 'yearly',
-        locations: [],
+        salaryFrom: params.salary_min ? params.salary_min.toString() : '',
+        salaryTo: params.salary_max ? params.salary_max.toString() : '',
+        compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || 'yearly',
+        locations: [],  // User will add locations manually
         locationsRequired: false,
         assessmentGuidance: '',
         internalRecruiterComments: [],
@@ -858,43 +868,43 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center mb-12">
-      <div className="flex items-center gap-8">
+      <div className="flex items-center gap-4">
         {/* Step 1 */}
-        <div className="flex flex-col items-center">
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full mb-2 ${
+        <div className="flex flex-col items-center min-w-[120px]">
+          <div className={`flex items-center justify-center w-12 h-12 rounded-full mb-2 text-lg font-medium ${
             step === 'create' ? 'bg-gray-800 text-white' : 'bg-green-600 text-white'
           }`}>
-            {step !== 'create' ? <CheckCircle className="w-6 h-6" /> : '1'}
+            {step !== 'create' ? <CheckCircle className="w-7 h-7" /> : '1'}
           </div>
-          <div className="text-xs text-gray-600 text-center whitespace-nowrap">Create JD</div>
+          <div className="text-sm text-gray-700 text-center whitespace-nowrap font-medium">Create JD</div>
         </div>
-        
+
         {/* Connector 1 */}
-        <div className={`w-24 h-1 -mt-6 ${step !== 'create' ? 'bg-green-600' : 'bg-gray-300'}`} />
-        
+        <div className={`w-32 lg:w-48 h-1 -mt-6 ${step !== 'create' ? 'bg-green-600' : 'bg-gray-300'}`} />
+
         {/* Step 2 */}
-        <div className="flex flex-col items-center">
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full mb-2 ${
-            step === 'extract' ? 'bg-gray-800 text-white' : 
-            step === 'review' ? 'bg-green-600 text-white' : 
+        <div className="flex flex-col items-center min-w-[120px]">
+          <div className={`flex items-center justify-center w-12 h-12 rounded-full mb-2 text-lg font-medium ${
+            step === 'extract' ? 'bg-gray-800 text-white' :
+            step === 'review' ? 'bg-green-600 text-white' :
             'bg-gray-300 text-gray-600'
           }`}>
-            {step === 'review' ? <CheckCircle className="w-6 h-6" /> : '2'}
+            {step === 'review' ? <CheckCircle className="w-7 h-7" /> : '2'}
           </div>
-          <div className="text-xs text-gray-600 text-center whitespace-nowrap">Extract Data</div>
+          <div className="text-sm text-gray-700 text-center whitespace-nowrap font-medium">Extract Data</div>
         </div>
-        
+
         {/* Connector 2 */}
-        <div className={`w-24 h-1 -mt-6 ${step === 'review' ? 'bg-green-600' : 'bg-gray-300'}`} />
-        
+        <div className={`w-32 lg:w-48 h-1 -mt-6 ${step === 'review' ? 'bg-green-600' : 'bg-gray-300'}`} />
+
         {/* Step 3 */}
-        <div className="flex flex-col items-center">
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full mb-2 ${
+        <div className="flex flex-col items-center min-w-[120px]">
+          <div className={`flex items-center justify-center w-12 h-12 rounded-full mb-2 text-lg font-medium ${
             step === 'review' ? 'bg-gray-800 text-white' : 'bg-gray-300 text-gray-600'
           }`}>
             3
           </div>
-          <div className="text-xs text-gray-600 text-center whitespace-nowrap">Review & Publish</div>
+          <div className="text-sm text-gray-700 text-center whitespace-nowrap font-medium">Review & Publish</div>
         </div>
       </div>
     </div>
@@ -946,7 +956,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="flex-1 p-8 overflow-y-auto">
-        <div className="max-w-7xl mx-auto">
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>
@@ -1499,15 +1508,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                   </DroppableSkillsContainer>
                 </div>
 
-                {/* Must-Have Comments - Mandatory */}
+                {/* Must-Have Comments */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <h3 className="text-gray-900">Must-Have Comments</h3>
-                      <span className="text-red-500">*</span>
-                      {extractedData.mustHaveComments.length === 0 && (
-                        <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded">Required</span>
-                      )}
                     </div>
                     <button
                       onClick={() => setEditingCategory('comments')}
@@ -1884,24 +1889,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 </div>
               </div>
 
-              {/* Locations Section - Mandatory */}
+              {/* Locations Section */}
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <h3 className="text-gray-900">Locations</h3>
-                    <span className="text-red-500">*</span>
-                    {extractedData.locations.length === 0 && (
-                      <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded">At least one required</span>
-                    )}
-                    <label className="flex items-center gap-2 cursor-pointer ml-4">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(extractedData.locationsRequired)}
-                        onChange={(e) => setExtractedData(prev => ({ ...prev, locationsRequired: e.target.checked }))}
-                        className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
-                      />
-                      <span className="text-sm text-gray-700">Strictly Required</span>
-                    </label>
                   </div>
                   <div className="relative">
                     <button
@@ -1919,7 +1911,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                           className="fixed inset-0 z-10"
                           onClick={() => setShowLocationMenu(false)}
                         />
-                        <div className="absolute right-0 top-12 z-20 w-80 bg-white rounded-lg shadow-lg border border-gray-200 p-4">
+                        <div className="absolute right-0 bottom-12 z-20 w-80 bg-white rounded-lg shadow-lg border border-gray-200 p-4 max-h-[400px] overflow-y-auto">
                           <div className="flex items-center justify-between mb-4">
                             <h4 className="text-gray-900">Add New Location</h4>
                             <button
@@ -2124,32 +2116,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               >
                 Back
               </button>
-              <div className="flex items-center gap-4">
-                {(extractedData.mustHaveComments.length === 0 || extractedData.locations.length === 0) && (
-                  <div className="flex flex-col items-end gap-1">
-                    {extractedData.mustHaveComments.length === 0 && (
-                      <span className="text-sm text-orange-600 flex items-center gap-1">
-                        <AlertTriangle className="w-4 h-4" />
-                        At least one Must-Have Comment is required
-                      </span>
-                    )}
-                    {extractedData.locations.length === 0 && (
-                      <span className="text-sm text-orange-600 flex items-center gap-1">
-                        <AlertTriangle className="w-4 h-4" />
-                        At least one Location is required
-                      </span>
-                    )}
-                  </div>
-                )}
-                <button
-                  onClick={handlePublish}
-                  disabled={extractedData.mustHaveComments.length === 0 || extractedData.locations.length === 0}
-                  className="flex items-center gap-2 bg-green-600 text-white px-8 py-3 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Review & Publish
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
+              <button
+                onClick={handlePublish}
+                className="flex items-center gap-2 bg-green-600 text-white px-8 py-3 rounded-md hover:bg-green-700 transition-colors"
+              >
+                Review & Publish
+                <ChevronRight className="w-5 h-5" />
+              </button>
             </div>
           </div>
         )}
@@ -2210,7 +2183,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                   </div>
                 </div>
               </div>
-              <div className="p-8 bg-white max-h-[600px] overflow-y-auto">
+              <div className="p-8 bg-white">
                 <div className="prose prose-sm max-w-none">
                   {/* Job Title */}
                   <div className="mb-6 pb-6 border-b border-gray-200">
@@ -2243,17 +2216,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                       {extractedData.mustHaveSkills.length > 0 && (
                         <div className="mb-6">
                           <div className="flex items-center gap-2 mb-3">
-                            <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
-                              <CheckCircle className="w-4 h-4 text-red-600" />
-                            </div>
-                            <h4 className="text-sm uppercase tracking-wide text-red-600 font-semibold">Must-Have Skills</h4>
+                            <CheckCircle className="w-5 h-5 text-green-600" />
+                            <h4 className="text-sm uppercase tracking-wide text-green-600 font-semibold">Must-Have Skills</h4>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             {extractedData.mustHaveSkills.map((skill, index) => (
-                              <div key={index} className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-100 rounded-lg">
-                                <div className="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center flex-shrink-0">
-                                  <CheckCircle className="w-3 h-3 text-white" />
-                                </div>
+                              <div key={index} className="flex items-center gap-2 px-3 py-2">
+                                <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
                                 <span className="text-sm text-gray-700">{skill}</span>
                               </div>
                             ))}
@@ -2264,17 +2233,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                       {extractedData.niceToHaveSkills.length > 0 && (
                         <div>
                           <div className="flex items-center gap-2 mb-3">
-                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-                              <CheckCircle className="w-4 h-4 text-blue-600" />
-                            </div>
-                            <h4 className="text-sm uppercase tracking-wide text-blue-600 font-semibold">Nice-to-Have Skills</h4>
+                            <CheckCircle className="w-5 h-5 text-sky-500" />
+                            <h4 className="text-sm uppercase tracking-wide text-sky-500 font-semibold">Nice-to-Have Skills</h4>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             {extractedData.niceToHaveSkills.map((skill, index) => (
-                              <div key={index} className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg">
-                                <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                                  <CheckCircle className="w-3 h-3 text-white" />
-                                </div>
+                              <div key={index} className="flex items-center gap-2 px-3 py-2">
+                                <CheckCircle className="w-4 h-4 text-sky-500 flex-shrink-0" />
                                 <span className="text-sm text-gray-600">{skill}</span>
                               </div>
                             ))}
@@ -2315,14 +2280,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               </div>
             </div>
 
-            {/* Extracted Data Summary Preview */}
+            {/* Extracted Data Summary Preview - Collapsible */}
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-              {/* Section Header */}
-              <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg text-gray-900">📊 Extracted Data Summary</h3>
-                <p className="text-sm text-gray-600 mt-1">Structured requirements extracted from the job description</p>
-              </div>
+              {/* Section Header with Toggle */}
+              <button
+                onClick={() => setShowExtractedSummary(!showExtractedSummary)}
+                className="w-full bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center justify-between hover:bg-gray-100 transition-colors"
+              >
+                <div className="text-left">
+                  <h3 className="text-lg text-gray-900 flex items-center gap-2">
+                    📊 Extracted Data Summary
+                    <Eye className="w-5 h-5 text-gray-500" />
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">Click to {showExtractedSummary ? 'hide' : 'view'} structured requirements</p>
+                </div>
+                <div className={`transform transition-transform ${showExtractedSummary ? 'rotate-180' : ''}`}>
+                  <ChevronRight className="w-5 h-5 text-gray-500 rotate-90" />
+                </div>
+              </button>
 
+              {/* Collapsible Content */}
+              {showExtractedSummary && (
+                <>
               {/* Job Title */}
               <div className="p-6 border-b border-gray-200">
                 <h3 className="text-sm text-gray-500 mb-2">Job Title</h3>
@@ -2494,6 +2473,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                   </div>
                 </div>
               </div>
+                </>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -2579,7 +2560,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
             </div>
           </div>
         )}
-        </div>
       </div>
 
     </DndProvider>

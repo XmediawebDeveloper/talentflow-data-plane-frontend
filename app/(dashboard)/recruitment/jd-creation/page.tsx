@@ -63,6 +63,7 @@ function JDCreationContent() {
         compensation_type: editingJD.compensation_type,
         assessment_guidance: editingJD.assessment_guidance,
         internal_comments: editingJD.internal_comments,
+        must_have_comments: editingJD.must_have_comments,
         allow_overqualified: editingJD.allow_overqualified,
         locations: editingJD.locations?.map(loc => ({
           city: loc.city || '',

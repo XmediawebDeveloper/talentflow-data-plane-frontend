@@ -45,9 +45,9 @@ function JobDetailsContent() {
       setRawJdData(data);
 
       // For Draft JDs, redirect to JD creation with the current stage
-      if (data.status === 'draft') {
+      if (data.status === 'draft' || data.status === 'Draft') {
         const stage = data.creation_stage || 'create';
-        router.push(`/recruitment/jd-creation?id=${jobId}&stage=${stage}`);
+        router.replace(`/recruitment/jd-creation?id=${jobId}&stage=${stage}`);
         return;
       }
 
@@ -135,7 +135,8 @@ function JobDetailsContent() {
   };
 
   const handleEdit = (job: Job) => {
-    router.push(`/recruitment/jd-creation?id=${job.id}`);
+    // Navigate to first stage (create) for editing
+    router.push(`/recruitment/jd-creation?id=${job.id}&stage=create`);
   };
 
   const handleDisable = async (job: Job) => {

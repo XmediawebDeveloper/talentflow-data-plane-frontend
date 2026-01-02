@@ -120,20 +120,16 @@ export const resumeService = {
    * Upload single resume
    */
   async upload(file: File, folderId?: string): Promise<Resume> {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (folderId) {
-        formData.append('folder_id', folderId);
-      }
-
-      const response = await api.post<Resume>('/resumes/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      return response.data;
-    } catch (error) {
-      throw new Error(handleApiError(error));
+    const formData = new FormData();
+    formData.append('file', file);
+    if (folderId) {
+      formData.append('folder_id', folderId);
     }
+
+    const response = await api.post<Resume>('/resumes/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
   },
 
   /**
@@ -171,7 +167,7 @@ export const resumeService = {
   },
 
   /**
-   * Resolve duplicate
+   * Resolve duplicate (for batch uploads)
    */
   async resolveDuplicate(batchItemId: string, action: 'discard' | 'overwrite' | 'version') {
     try {
@@ -183,6 +179,29 @@ export const resumeService = {
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  /**
+   * Resolve duplicate and upload (for single file uploads)
+   */
+  async resolveDuplicateAndUpload(
+    file: File,
+    existingResumeId: string,
+    action: 'discard' | 'overwrite' | 'version',
+    folderId?: string
+  ): Promise<Resume> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('existing_resume_id', existingResumeId);
+    formData.append('action', action);
+    if (folderId) {
+      formData.append('folder_id', folderId);
+    }
+
+    const response = await api.post<Resume>('/resumes/upload/resolve-duplicate-upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
   },
 
   /**
