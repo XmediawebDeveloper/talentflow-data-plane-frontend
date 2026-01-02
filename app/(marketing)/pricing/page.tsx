@@ -433,6 +433,18 @@ export default function PricingPage() {
                   {trialFeatures && (
                     <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        {(trialFeatures.MAX_SEATS || trialFeatures.max_seats) && (
+                          <div className="flex items-center gap-2">
+                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.MAX_SEATS || trialFeatures.max_seats} Team Members</span>
+                          </div>
+                        )}
+                        {(trialFeatures.MAX_JOBS || trialFeatures.max_jobs) && (
+                          <div className="flex items-center gap-2">
+                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.MAX_JOBS || trialFeatures.max_jobs} Job Postings</span>
+                          </div>
+                        )}
                         {(trialFeatures.RESUME_UPLOAD || trialFeatures.RU) && (
                           <div className="flex items-center gap-2">
                             <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
