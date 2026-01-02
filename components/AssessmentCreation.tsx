@@ -1156,30 +1156,21 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
           {/* Actions */}
           <div className="flex justify-between items-center">
-            <button
-              onClick={() => setStep('configure')}
-              className="px-6 py-2.5 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Regenerate
-            </button>
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  onCreateAssessment({ ...generatedAssessment, status: 'Draft' });
-                  onBack();
-                }}
-                className="px-6 py-2.5 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Save as Draft
-              </button>
-              <button
-                onClick={handlePublish}
-                className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-              >
-                <CheckCircle2 className="w-5 h-5" />
-                Publish Assessment
-              </button>
+            <div className="text-sm text-gray-600">
+              Status: <span className={`font-medium ${generatedAssessment?.status === 'Active' ? 'text-green-600' : 'text-yellow-600'}`}>
+                {generatedAssessment?.status === 'Active' ? 'Published' : 'Draft'}
+              </span>
             </div>
+            <button
+              onClick={() => {
+                // Just notify parent and go back - assessment is already saved
+                onCreateAssessment(generatedAssessment);
+              }}
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              Done - Go to Assessments
+            </button>
           </div>
         </div>
       </div>

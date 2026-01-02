@@ -125,282 +125,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     fetchResults();
   }, [assessmentId]);
 
-  // Fallback mock data for demonstration (only used when API returns empty)
-  const mockCandidateResults: CandidateResult[] = [
-    {
-      id: '1',
-      name: 'Sarah Johnson',
-      email: 'sarah.johnson@email.com',
-      score: 85,
-      totalScore: 100,
-      percentage: 85,
-      status: 'Passed',
-      completedDate: '2025-11-28',
-      duration: '58 min',
-      sections: [
-        {
-          name: 'Technical Knowledge',
-          score: 42,
-          totalScore: 50,
-          percentage: 84,
-          questions: [
-            {
-              question: 'Explain the differences between REST and GraphQL APIs.',
-              candidateAnswer: 'REST uses multiple endpoints with standard HTTP methods while GraphQL uses a single endpoint with flexible queries. GraphQL allows clients to request exactly the data they need, reducing over-fetching.',
-              score: 9,
-              maxScore: 10,
-              feedback: 'Excellent understanding. Could have mentioned schema definition and type safety.',
-              type: 'text',
-            },
-            {
-              question: 'What is the purpose of dependency injection?',
-              candidateAnswer: 'Dependency injection is a design pattern that allows objects to receive their dependencies from external sources rather than creating them internally. This promotes loose coupling and makes testing easier.',
-              score: 10,
-              maxScore: 10,
-              feedback: 'Perfect answer with clear understanding of benefits.',
-              type: 'text',
-            },
-            {
-              question: 'Which design pattern would you use for creating objects?',
-              candidateAnswer: 'Factory Pattern',
-              correctAnswer: 'Factory Pattern',
-              score: 5,
-              maxScore: 5,
-              feedback: 'Correct!',
-              type: 'multiple-choice',
-            },
-          ],
-        },
-        {
-          name: 'Coding Challenge',
-          score: 28,
-          totalScore: 30,
-          percentage: 93,
-          questions: [
-            {
-              question: 'Implement a function to reverse a linked list.',
-              candidateAnswer: 'function reverseList(head) {\n  let prev = null;\n  let curr = head;\n  while (curr) {\n    let next = curr.next;\n    curr.next = prev;\n    prev = curr;\n    curr = next;\n  }\n  return prev;\n}',
-              score: 15,
-              maxScore: 15,
-              feedback: 'Clean implementation with good variable naming. Time complexity: O(n), Space complexity: O(1).',
-              type: 'coding',
-            },
-            {
-              question: 'Write a function to find the first non-repeating character in a string.',
-              candidateAnswer: 'function firstNonRepeating(str) {\n  const counts = {};\n  for (let char of str) {\n    counts[char] = (counts[char] || 0) + 1;\n  }\n  for (let char of str) {\n    if (counts[char] === 1) return char;\n  }\n  return null;\n}',
-              score: 13,
-              maxScore: 15,
-              feedback: 'Good solution. Could be optimized using a Map for better performance.',
-              type: 'coding',
-            },
-          ],
-        },
-        {
-          name: 'Problem Solving',
-          score: 15,
-          totalScore: 20,
-          percentage: 75,
-          questions: [
-            {
-              question: 'How would you optimize a slow database query?',
-              candidateAnswer: 'Add proper indexes, use query optimization, implement caching, consider denormalization if needed, and use database profiling tools to identify bottlenecks.',
-              score: 8,
-              maxScore: 10,
-              feedback: 'Good approach. Could have mentioned specific indexing strategies and query plan analysis.',
-              type: 'text',
-            },
-            {
-              question: 'Describe your approach to debugging a production issue.',
-              candidateAnswer: 'Check logs, reproduce the issue, use monitoring tools, analyze error traces, and implement fixes with proper testing before deployment.',
-              score: 7,
-              maxScore: 10,
-              feedback: 'Solid methodology. Consider mentioning rollback strategies and post-mortem analysis.',
-              type: 'text',
-            },
-          ],
-        },
-      ],
-      round: 1,
-      roundName: 'Round 1',
-    },
-    {
-      id: '2',
-      name: 'Michael Chen',
-      email: 'michael.chen@email.com',
-      score: 72,
-      totalScore: 100,
-      percentage: 72,
-      status: 'Passed',
-      completedDate: '2025-11-27',
-      duration: '62 min',
-      sections: [
-        {
-          name: 'Technical Knowledge',
-          score: 35,
-          totalScore: 50,
-          percentage: 70,
-          questions: [
-            {
-              question: 'Explain the differences between REST and GraphQL APIs.',
-              candidateAnswer: 'REST is an architectural style using HTTP methods, GraphQL is a query language that lets you request specific data.',
-              score: 7,
-              maxScore: 10,
-              feedback: 'Basic understanding shown. Could elaborate on advantages and use cases.',
-              type: 'text',
-            },
-          ],
-        },
-        {
-          name: 'Coding Challenge',
-          score: 22,
-          totalScore: 30,
-          percentage: 73,
-          questions: [],
-        },
-        {
-          name: 'Problem Solving',
-          score: 15,
-          totalScore: 20,
-          percentage: 75,
-          questions: [],
-        },
-      ],
-      round: 1,
-      roundName: 'Round 1',
-    },
-    {
-      id: '3',
-      name: 'Emily Rodriguez',
-      email: 'emily.rodriguez@email.com',
-      score: 58,
-      totalScore: 100,
-      percentage: 58,
-      status: 'Failed',
-      completedDate: '2025-11-26',
-      duration: '45 min',
-      sections: [
-        {
-          name: 'Technical Knowledge',
-          score: 28,
-          totalScore: 50,
-          percentage: 56,
-          questions: [],
-        },
-        {
-          name: 'Coding Challenge',
-          score: 18,
-          totalScore: 30,
-          percentage: 60,
-          questions: [],
-        },
-        {
-          name: 'Problem Solving',
-          score: 12,
-          totalScore: 20,
-          percentage: 60,
-          questions: [],
-        },
-      ],
-      round: 1,
-      roundName: 'Round 1',
-    },
-    {
-      id: '4',
-      name: 'John Doe',
-      email: 'john.doe@email.com',
-      score: 90,
-      totalScore: 100,
-      percentage: 90,
-      status: 'Passed',
-      completedDate: '2025-11-25',
-      duration: '55 min',
-      sections: [
-        {
-          name: 'Technical Knowledge',
-          score: 45,
-          totalScore: 50,
-          percentage: 90,
-          questions: [
-            {
-              question: 'Explain the differences between REST and GraphQL APIs.',
-              candidateAnswer: 'REST uses multiple endpoints with standard HTTP methods while GraphQL uses a single endpoint with flexible queries. GraphQL allows clients to request exactly the data they need, reducing over-fetching.',
-              score: 9,
-              maxScore: 10,
-              feedback: 'Excellent understanding. Could have mentioned schema definition and type safety.',
-              type: 'text',
-            },
-            {
-              question: 'What is the purpose of dependency injection?',
-              candidateAnswer: 'Dependency injection is a design pattern that allows objects to receive their dependencies from external sources rather than creating them internally. This promotes loose coupling and makes testing easier.',
-              score: 10,
-              maxScore: 10,
-              feedback: 'Perfect answer with clear understanding of benefits.',
-              type: 'text',
-            },
-            {
-              question: 'Which design pattern would you use for creating objects?',
-              candidateAnswer: 'Factory Pattern',
-              correctAnswer: 'Factory Pattern',
-              score: 5,
-              maxScore: 5,
-              feedback: 'Correct!',
-              type: 'multiple-choice',
-            },
-          ],
-        },
-        {
-          name: 'Coding Challenge',
-          score: 28,
-          totalScore: 30,
-          percentage: 93,
-          questions: [
-            {
-              question: 'Implement a function to reverse a linked list.',
-              candidateAnswer: 'function reverseList(head) {\n  let prev = null;\n  let curr = head;\n  while (curr) {\n    let next = curr.next;\n    curr.next = prev;\n    prev = curr;\n    curr = next;\n  }\n  return prev;\n}',
-              score: 15,
-              maxScore: 15,
-              feedback: 'Clean implementation with good variable naming. Time complexity: O(n), Space complexity: O(1).',
-              type: 'coding',
-            },
-            {
-              question: 'Write a function to find the first non-repeating character in a string.',
-              candidateAnswer: 'function firstNonRepeating(str) {\n  const counts = {};\n  for (let char of str) {\n    counts[char] = (counts[char] || 0) + 1;\n  }\n  for (let char of str) {\n    if (counts[char] === 1) return char;\n  }\n  return null;\n}',
-              score: 13,
-              maxScore: 15,
-              feedback: 'Good solution. Could be optimized using a Map for better performance.',
-              type: 'coding',
-            },
-          ],
-        },
-        {
-          name: 'Problem Solving',
-          score: 15,
-          totalScore: 20,
-          percentage: 75,
-          questions: [
-            {
-              question: 'How would you optimize a slow database query?',
-              candidateAnswer: 'Add proper indexes, use query optimization, implement caching, consider denormalization if needed, and use database profiling tools to identify bottlenecks.',
-              score: 8,
-              maxScore: 10,
-              feedback: 'Good approach. Could have mentioned specific indexing strategies and query plan analysis.',
-              type: 'text',
-            },
-            {
-              question: 'Describe your approach to debugging a production issue.',
-              candidateAnswer: 'Check logs, reproduce the issue, use monitoring tools, analyze error traces, and implement fixes with proper testing before deployment.',
-              score: 7,
-              maxScore: 10,
-              feedback: 'Solid methodology. Consider mentioning rollback strategies and post-mortem analysis.',
-              type: 'text',
-            },
-          ],
-        },
-      ],
-      round: 2,
-      roundName: 'Round 2',
-    },
-  ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -418,8 +142,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return 'text-red-600';
   };
 
-  // Use API results or fallback to mock data
-  const displayResults = candidateResults.length > 0 ? candidateResults : mockCandidateResults;
+  // Use API results only (no mock data)
+  const displayResults = candidateResults;
   const selectedCandidateData = displayResults.find(c => c.id === selectedCandidate);
 
   // Loading state
@@ -473,7 +197,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </p>
               </div>
               <button
-                onClick={() => alert('Export functionality coming soon!')}
+                onClick={async () => {
+                  try {
+                    const blob = await assessmentService.exportResults(assessmentId, 'csv');
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${assessmentTitle.replace(/\s+/g, '_')}_results.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                  } catch (error) {
+                    console.error('Failed to export results:', error);
+                    alert('Failed to export results. Please try again.');
+                  }
+                }}
                 className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
               >
                 <FileText className="w-5 h-5" />
@@ -618,57 +357,69 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredCandidates.map((candidate) => (
-                    <tr key={candidate.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-sm">
-                            {candidate.name.split(' ').map(n => n[0]).join('')}
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-900">{candidate.name}</div>
-                            <div className="text-xs text-gray-500">{candidate.email}</div>
-                          </div>
+                  {filteredCandidates.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center">
+                        <div className="flex flex-col items-center">
+                          <User className="w-12 h-12 text-gray-300 mb-3" />
+                          <p className="text-gray-600 mb-1">No candidates have completed this assessment yet</p>
+                          <p className="text-sm text-gray-500">Share the assessment link to invite candidates</p>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <span className={`text-lg ${getScoreColor(candidate.percentage)}`}>
-                            {candidate.percentage}%
-                          </span>
-                          <span className="text-sm text-gray-500">
-                            ({candidate.score}/{candidate.totalScore})
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border ${getStatusColor(candidate.status)}`}>
-                          {candidate.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Calendar className="w-4 h-4" />
-                          {candidate.completedDate}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-                          <Clock className="w-4 h-4" />
-                          {candidate.duration}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <button
-                          onClick={() => setSelectedCandidate(candidate.id)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
-                        >
-                          <Award className="w-3 h-3" />
-                          View Details
-                        </button>
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredCandidates.map((candidate) => (
+                      <tr key={candidate.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-sm">
+                              {candidate.name.split(' ').map(n => n[0]).join('')}
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-900">{candidate.name}</div>
+                              <div className="text-xs text-gray-500">{candidate.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <span className={`text-lg ${getScoreColor(candidate.percentage)}`}>
+                              {candidate.percentage}%
+                            </span>
+                            <span className="text-sm text-gray-500">
+                              ({candidate.score}/{candidate.totalScore})
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border ${getStatusColor(candidate.status)}`}>
+                            {candidate.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Calendar className="w-4 h-4" />
+                            {candidate.completedDate}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                            <Clock className="w-4 h-4" />
+                            {candidate.duration}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <button
+                            onClick={() => setSelectedCandidate(candidate.id)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                          >
+                            <Award className="w-3 h-3" />
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -701,7 +452,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </div>
             </div>
             <button
-              onClick={() => alert('Export functionality coming soon!')}
+              onClick={async () => {
+                try {
+                  const blob = await assessmentService.exportResults(assessmentId, 'csv', true);
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${assessmentTitle.replace(/\s+/g, '_')}_results_detailed.csv`;
+                  document.body.appendChild(a);
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                  document.body.removeChild(a);
+                } catch (error) {
+                  console.error('Failed to export results:', error);
+                  alert('Failed to export results. Please try again.');
+                }
+              }}
               className="px-6 py-2.5 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg transition-colors flex items-center gap-2 border border-white/30"
             >
               <FileText className="w-5 h-5" />

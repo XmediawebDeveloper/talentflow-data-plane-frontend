@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Clock, Users, CheckCircle, FileText, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap } from 'lucide-react';
+import { Plus, Clock, Users, CheckCircle, FileText, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import AssessmentCreation from './AssessmentCreation';
 import AssessmentResults from './AssessmentResults';
@@ -21,7 +21,7 @@ interface AssessmentsProps {
 }
 
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation }: AssessmentsProps) {
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'completed' | 'audit-trail'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'archived' | 'audit-trail'>('all');
   const [showCreation, setShowCreation] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [selectedAssessmentForResults, setSelectedAssessmentForResults] = useState<any>(null);
@@ -34,122 +34,123 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailsView, setShowDetailsView] = useState(false);
   const [selectedAssessmentForDetails, setSelectedAssessmentForDetails] = useState<any>(null);
-  const [assessmentsList, setAssessmentsList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
 
-  // Load assessments from API on mount
+  // Proctoring settings per tab
+  const [proctoringSettings, setProctoringSettings] = useState<{
+    all: boolean;
+    active: boolean;
+    draft: boolean;
+    completed: boolean;
+    archived: boolean;
+  }>({
+    all: true,
+    active: true,
+    draft: false,
+    completed: false,
+    archived: false,
+  });
+
+  // Stats from API
+  const [stats, setStats] = useState({
+    total_assessments: 0,
+    active_assessments: 0,
+    total_candidates_tested: 0,
+    average_pass_rate: null as number | null,
+  });
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+
+  // Load all data in parallel on mount (faster than 3 separate useEffects)
   useEffect(() => {
-    const loadAssessments = async () => {
+    const loadAllData = async () => {
       setIsLoading(true);
-      try {
-        const response = await assessmentService.list({ page_size: 100 });
-        if (response?.items?.length > 0) {
-          const mapped = response.items.map((a: any) => ({
-            id: a.id,
-            title: a.title,
-            type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
-            duration: `${a.duration_minutes} min`,
-            questions: (a.hr_enabled ? 10 : 0) + (a.technical_enabled ? 10 : 0) + (a.coding_enabled ? 5 : 0),
-            candidates: a.invitations_count || 0,
-            status: a.status === 'published' ? 'Active' : a.status === 'closed' ? 'Completed' : 'Draft',
-            passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
-            created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-            job: { title: a.jd_title || 'General Assessment', department: 'Engineering' }
-          }));
-          setApiAssessments(mapped);
-          console.log('[TalentFlow] Loaded', mapped.length, 'assessments from API');
-        }
-      } catch (error) {
-        console.log('[TalentFlow] Failed to load assessments from API, using mock data:', error);
-      } finally {
-        setIsLoading(false);
+      setIsLoadingStats(true);
+
+      // Run all API calls in parallel for faster loading
+      const [assessmentsResult, statsResult, quotaResult] = await Promise.allSettled([
+        assessmentService.list({ page_size: 100 }),
+        assessmentService.getStats(),
+        api.get('/usage/quota-status'),
+      ]);
+
+      // Process assessments
+      if (assessmentsResult.status === 'fulfilled' && assessmentsResult.value?.items?.length > 0) {
+        const mapped = assessmentsResult.value.items.map((a: any) => ({
+          id: a.id,
+          title: a.title,
+          type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
+          duration: `${a.duration_minutes} min`,
+          questions: (a.hr_enabled ? 10 : 0) + (a.technical_enabled ? 10 : 0) + (a.coding_enabled ? 5 : 0),
+          candidates: a.invitations_count || 0,
+          status: a.status === 'published' ? 'Active' : a.status === 'closed' ? 'Completed' : a.status === 'archived' ? 'Archived' : 'Draft',
+          passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
+          created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+          job: { title: a.jd_title || 'General Assessment', department: 'Engineering' }
+        }));
+        setApiAssessments(mapped);
+        console.log('[TalentFlow] Loaded', mapped.length, 'assessments from API');
+      } else if (assessmentsResult.status === 'rejected') {
+        console.log('[TalentFlow] Failed to load assessments:', assessmentsResult.reason);
       }
-    };
 
-    loadAssessments();
-  }, []);
+      // Process stats
+      if (statsResult.status === 'fulfilled') {
+        const response = statsResult.value;
+        setStats({
+          total_assessments: response.total_assessments,
+          active_assessments: response.active_assessments,
+          total_candidates_tested: response.total_candidates_tested,
+          average_pass_rate: response.average_pass_rate,
+        });
+        console.log('[TalentFlow] Loaded assessment stats from API');
+      } else {
+        console.log('[TalentFlow] Failed to load stats:', statsResult.reason);
+      }
 
-  // Load available units (quota) from API
-  useEffect(() => {
-    const loadQuota = async () => {
-      try {
-        const response = await api.get('/usage/quota-status');
-        const quotas = response.data?.data?.quotas;
+      // Process quota
+      if (quotaResult.status === 'fulfilled') {
+        const quotas = quotaResult.value.data?.data?.quotas;
         if (quotas?.AS) {
           setAvailableUnits(quotas.AS.total_remaining || 0);
         }
-      } catch (error) {
-        console.log('[TalentFlow] Failed to load quota:', error);
+      } else {
+        console.log('[TalentFlow] Failed to load quota:', quotaResult.reason);
       }
+
+      setIsLoading(false);
+      setIsLoadingStats(false);
     };
-    loadQuota();
+
+    loadAllData();
   }, []);
 
-  const mockAssessments = [
-    {
-      id: '1',
-      title: 'Java Developer Technical Assessment',
-      type: 'Technical',
-      duration: '60 min',
-      questions: 25,
-      candidates: 45,
-      status: 'Active',
-      passRate: '68%',
-      created: '2025-11-20',
-      job: { title: 'Senior Java Developer', department: 'Engineering' }
-    },
-    {
-      id: '2',
-      title: 'Marketing Manager Skills Test',
-      type: 'Behavioral',
-      duration: '45 min',
-      questions: 20,
-      candidates: 32,
-      status: 'Active',
-      passRate: '75%',
-      created: '2025-11-18',
-      job: { title: 'Marketing Manager', department: 'Marketing' }
-    },
-    {
-      id: '3',
-      title: 'Python Developer Coding Challenge',
-      type: 'Coding',
-      duration: '90 min',
-      questions: 15,
-      candidates: 28,
-      status: 'Completed',
-      passRate: '62%',
-      created: '2025-11-15',
-      job: { title: 'Python Developer', department: 'Engineering' }
-    },
-    {
-      id: '4',
-      title: 'Sales Representative Assessment',
-      type: 'Aptitude',
-      duration: '30 min',
-      questions: 30,
-      candidates: 56,
-      status: 'Active',
-      passRate: '71%',
-      created: '2025-11-12',
-      job: { title: 'Sales Representative', department: 'Sales' }
-    },
-  ];
+  // Use API assessments only (no local state needed - all assessments are saved to DB)
+  const assessments = apiAssessments;
 
-  // Combine API assessments (priority), mock assessments (fallback), and locally created
-  const assessments = apiAssessments.length > 0
-    ? [...apiAssessments, ...assessmentsList]
-    : [...mockAssessments, ...assessmentsList];
+  // Reload stats from API
+  const reloadStats = async () => {
+    try {
+      const statsResponse = await assessmentService.getStats();
+      setStats({
+        total_assessments: statsResponse.total_assessments,
+        active_assessments: statsResponse.active_assessments,
+        total_candidates_tested: statsResponse.total_candidates_tested,
+        average_pass_rate: statsResponse.average_pass_rate,
+      });
+    } catch (error) {
+      console.log('[TalentFlow] Failed to reload stats:', error);
+    }
+  };
 
   // Reload assessments from API
   const reloadAssessments = async () => {
     setIsLoading(true);
     try {
       const response = await assessmentService.list({ page_size: 100 });
-      if (response?.items?.length > 0) {
+      if (response?.items?.length >= 0) {
         const mapped = response.items.map((a: any) => ({
           id: a.id,
           title: a.title,
@@ -163,7 +164,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           job: { title: a.jd_title || 'General Assessment', department: 'Engineering' }
         }));
         setApiAssessments(mapped);
+      } else {
+        setApiAssessments([]);
       }
+      // Also reload stats
+      await reloadStats();
     } catch (error) {
       console.log('[TalentFlow] Failed to reload assessments:', error);
     } finally {
@@ -172,17 +177,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   const handleCreateAssessment = async (assessment: any) => {
-    setAssessmentsList([...assessmentsList, assessment]);
+    // Don't add to local list - assessment is already saved to DB
+    // Just close the creation view and reload from API
     setShowCreation(false);
 
     // Reload assessments from API to get the newly created one
     await reloadAssessments();
 
-    // Track usage - POST /api/v1/external/usage/record
-    recordAssessment(assessment.id, {
-      assessment_title: assessment.title,
-      type: assessment.type
-    });
+    // Track usage via external API
+    if (assessment?.id) {
+      recordAssessment(assessment.id, {
+        assessment_title: assessment.title,
+        type: assessment.type
+      });
+    }
   };
 
   // Delete assessment via API
@@ -191,8 +199,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
     try {
       await assessmentService.delete(assessmentId);
-      // Remove from local state
-      setAssessmentsList(assessmentsList.filter(a => a.id !== assessmentId));
       // Reload from API
       await reloadAssessments();
       setOpenMenuId(null);
@@ -306,7 +312,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const filteredAssessments = assessments.filter((assessment) => {
     if (activeTab === 'all') return true;
     if (activeTab === 'active') return assessment.status === 'Active';
+    if (activeTab === 'draft') return assessment.status === 'Draft';
     if (activeTab === 'completed') return assessment.status === 'Completed';
+    if (activeTab === 'archived') return assessment.status === 'Archived';
     return true;
   });
 
@@ -363,6 +371,125 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </div>
         </div>
 
+        {/* Proctoring Mode Settings - Only show for assessment tabs (not audit-trail) */}
+        {activeTab !== 'audit-trail' && (
+          <>
+            {/* Settings Header */}
+            <div className="bg-gradient-to-r from-violet-600 to-purple-500 rounded-t-lg p-4 mb-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-white">
+                    {activeTab === 'all' ? 'All Assessments' : activeTab === 'active' ? 'Active Assessments' : activeTab === 'draft' ? 'Draft Assessments' : activeTab === 'completed' ? 'Completed Assessments' : 'Archived Assessments'} - Settings
+                  </h3>
+                  <p className="text-xs text-white/80">
+                    Configure proctoring and security features for {activeTab === 'all' ? 'all' : activeTab} assessments
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Proctoring Mode Card */}
+            <div className="bg-white border border-gray-200 border-t-0 rounded-b-lg p-5 mb-6">
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                    <Video className="w-5 h-5 text-gray-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className="text-sm font-medium text-gray-900">Proctoring Mode</h4>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        proctoringSettings[activeTab as keyof typeof proctoringSettings]
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-200 text-gray-600'
+                      }`}>
+                        {proctoringSettings[activeTab as keyof typeof proctoringSettings] ? 'Enabled' : 'Disabled'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                        {activeTab === 'all' ? 'All Assessments Only' : `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Only`}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      {proctoringSettings[activeTab as keyof typeof proctoringSettings]
+                        ? `Advanced monitoring is active for ${activeTab === 'all' ? 'all' : activeTab} assessments. They will include webcam monitoring, screen recording, tab-switching detection, and AI-powered cheating prevention to ensure test integrity.`
+                        : `Standard mode active for ${activeTab === 'all' ? 'all' : activeTab} assessments. They will run without advanced monitoring features. Enable proctoring for high-stakes assessments requiring enhanced security.`
+                      }
+                    </p>
+
+                    {/* Feature List */}
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-2 mb-4">
+                      {[
+                        { label: 'Webcam Monitoring', enabled: proctoringSettings[activeTab as keyof typeof proctoringSettings] },
+                        { label: 'Screen Recording', enabled: proctoringSettings[activeTab as keyof typeof proctoringSettings] },
+                        { label: 'Tab Switch Detection', enabled: proctoringSettings[activeTab as keyof typeof proctoringSettings] },
+                        { label: 'AI Cheating Prevention', enabled: proctoringSettings[activeTab as keyof typeof proctoringSettings] },
+                        { label: 'Copy-Paste Blocking', enabled: proctoringSettings[activeTab as keyof typeof proctoringSettings] },
+                        { label: 'Browser Lockdown', enabled: proctoringSettings[activeTab as keyof typeof proctoringSettings] },
+                      ].map((feature, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          {feature.enabled ? (
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <X className="w-4 h-4 text-gray-400" />
+                          )}
+                          <span className={`text-sm ${feature.enabled ? 'text-green-600' : 'text-gray-400'}`}>
+                            {feature.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Privacy Notice - Only show when enabled */}
+                    {proctoringSettings[activeTab as keyof typeof proctoringSettings] && (
+                      <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                        <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-blue-700">
+                          <span className="font-medium">Privacy Notice:</span> Candidates will be informed about monitoring before starting the assessment. Recordings are encrypted and stored securely for 90 days. This setting applies to {activeTab === 'all' ? 'all' : activeTab} assessments only.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Toggle Switch */}
+                <div className="flex flex-col items-center gap-1">
+                  <button
+                    onClick={() => {
+                      setProctoringSettings(prev => ({
+                        ...prev,
+                        [activeTab]: !prev[activeTab as keyof typeof prev]
+                      }));
+                    }}
+                    className={`relative w-14 h-7 rounded-full transition-colors ${
+                      proctoringSettings[activeTab as keyof typeof proctoringSettings]
+                        ? 'bg-blue-500'
+                        : 'bg-gray-300'
+                    }`}
+                  >
+                    <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                      proctoringSettings[activeTab as keyof typeof proctoringSettings]
+                        ? 'translate-x-8'
+                        : 'translate-x-1'
+                    }`}>
+                      {proctoringSettings[activeTab as keyof typeof proctoringSettings] ? (
+                        <CheckCircle2 className="w-5 h-5 text-blue-500" />
+                      ) : (
+                        <X className="w-5 h-5 text-gray-400" />
+                      )}
+                    </div>
+                  </button>
+                  <span className="text-xs text-gray-500 font-medium">
+                    {proctoringSettings[activeTab as keyof typeof proctoringSettings] ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-4 gap-6 mb-6">
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
@@ -372,7 +499,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
               <span className="text-sm text-gray-500">Total Assessments</span>
             </div>
-            <div className="text-3xl text-gray-900">24</div>
+            <div className="text-3xl text-gray-900">
+              {isLoadingStats ? '...' : stats.total_assessments.toLocaleString()}
+            </div>
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
@@ -382,7 +511,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
               <span className="text-sm text-gray-500">Active</span>
             </div>
-            <div className="text-3xl text-gray-900">18</div>
+            <div className="text-3xl text-gray-900">
+              {isLoadingStats ? '...' : stats.active_assessments.toLocaleString()}
+            </div>
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
@@ -392,7 +523,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
               <span className="text-sm text-gray-500">Candidates Tested</span>
             </div>
-            <div className="text-3xl text-gray-900">1,247</div>
+            <div className="text-3xl text-gray-900">
+              {isLoadingStats ? '...' : stats.total_candidates_tested.toLocaleString()}
+            </div>
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
@@ -402,7 +535,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
               <span className="text-sm text-gray-500">Avg. Pass Rate</span>
             </div>
-            <div className="text-3xl text-gray-900">69%</div>
+            <div className="text-3xl text-gray-900">
+              {isLoadingStats ? '...' : (stats.average_pass_rate !== null ? `${stats.average_pass_rate}%` : 'N/A')}
+            </div>
           </div>
         </div>
 
@@ -432,6 +567,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   Active
                 </button>
                 <button
+                  onClick={() => setActiveTab('draft')}
+                  className={`py-4 text-sm border-b-2 transition-colors ${
+                    activeTab === 'draft'
+                      ? 'border-gray-800 text-gray-800'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Draft
+                </button>
+                <button
                   onClick={() => setActiveTab('completed')}
                   className={`py-4 text-sm border-b-2 transition-colors ${
                     activeTab === 'completed'
@@ -440,6 +585,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   }`}
                 >
                   Completed
+                </button>
+                <button
+                  onClick={() => setActiveTab('archived')}
+                  className={`py-4 text-sm border-b-2 transition-colors ${
+                    activeTab === 'archived'
+                      ? 'border-gray-800 text-gray-800'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Archived
                 </button>
                 <button
                   onClick={() => setActiveTab('audit-trail')}
@@ -484,6 +639,28 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           <div className="p-6">
             {activeTab === 'audit-trail' ? (
               <AssessmentAuditTrail />
+            ) : isLoading ? (
+              /* Loading State */
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="w-10 h-10 border-4 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
+                  <p className="text-gray-600">Loading assessments...</p>
+                </div>
+              </div>
+            ) : filteredAssessments.length === 0 ? (
+              /* Empty State */
+              <div className="text-center py-12">
+                <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No assessments yet</h3>
+                <p className="text-gray-600 mb-4">Create your first AI-powered assessment to start evaluating candidates</p>
+                <button
+                  onClick={() => setShowCreation(true)}
+                  className="inline-flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-lg hover:bg-gray-900 transition-colors"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  Create AI Assessment
+                </button>
+              </div>
             ) : viewMode === 'grid' ? (
               /* Grid View */
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -507,6 +684,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             ? 'bg-green-100 text-green-700'
                             : assessment.status === 'Draft'
                             ? 'bg-yellow-100 text-yellow-700'
+                            : assessment.status === 'Archived'
+                            ? 'bg-purple-100 text-purple-700'
+                            : assessment.status === 'Completed'
+                            ? 'bg-blue-100 text-blue-700'
                             : 'bg-gray-100 text-gray-700'
                         }`}
                       >
@@ -752,6 +933,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               ? 'bg-green-100 text-green-700'
                               : assessment.status === 'Draft'
                               ? 'bg-yellow-100 text-yellow-700'
+                              : assessment.status === 'Archived'
+                              ? 'bg-purple-100 text-purple-700'
+                              : assessment.status === 'Completed'
+                              ? 'bg-blue-100 text-blue-700'
                               : 'bg-gray-100 text-gray-700'
                           }`}
                         >
@@ -833,10 +1018,31 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Copy Link
                                 </button>
                                 <button
-                                  onClick={() => {
-                                    const newAssessment = { ...assessment, id: Date.now().toString(), title: `${assessment.title} (Copy)`, status: 'Draft' };
-                                    setAssessmentsList([...assessmentsList, newAssessment]);
-                                    alert('Assessment duplicated successfully!');
+                                  onClick={async () => {
+                                    try {
+                                      const response = await assessmentService.clone(assessment.id);
+                                      // Reload assessments to show the new clone
+                                      const listResponse = await assessmentService.list({ page_size: 100 });
+                                      if (listResponse?.items?.length > 0) {
+                                        const mapped = listResponse.items.map((a: any) => ({
+                                          id: a.id,
+                                          title: a.title,
+                                          type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
+                                          duration: `${a.duration_minutes} min`,
+                                          questions: (a.hr_enabled ? 10 : 0) + (a.technical_enabled ? 10 : 0) + (a.coding_enabled ? 5 : 0),
+                                          candidates: a.invitations_count || 0,
+                                          status: a.status === 'published' ? 'Active' : a.status === 'closed' ? 'Completed' : a.status === 'archived' ? 'Archived' : 'Draft',
+                                          passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
+                                          created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+                                          job: { title: a.jd_title || 'General Assessment', department: 'Engineering' }
+                                        }));
+                                        setApiAssessments(mapped);
+                                      }
+                                      alert(`Assessment duplicated: "${response.cloned_title}"`);
+                                    } catch (error) {
+                                      console.error('Failed to duplicate assessment:', error);
+                                      alert('Failed to duplicate assessment. Please try again.');
+                                    }
                                     setOpenMenuId(null);
                                   }}
                                   className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
@@ -953,12 +1159,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             setSelectedAssessmentForEdit(null);
           }}
           assessment={selectedAssessmentForEdit}
-          onSave={(updatedAssessment) => {
-            // Update in assessmentsList if it's a created assessment
-            const updatedList = assessmentsList.map(a => 
-              a.id === updatedAssessment.id ? updatedAssessment : a
-            );
-            setAssessmentsList(updatedList);
+          onSave={async (updatedAssessment) => {
+            // Reload from API to get the updated assessment
+            await reloadAssessments();
             console.log('Assessment updated:', updatedAssessment);
           }}
         />

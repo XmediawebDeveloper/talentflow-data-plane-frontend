@@ -11,35 +11,26 @@ interface AssessmentDetailsViewProps {
   onViewResults: () => void;
 }
 
-export default function AssessmentDetailsView({ 
-  assessment, 
-  onBack, 
-  onEdit, 
-  onPreview, 
+export default function AssessmentDetailsView({
+  assessment,
+  onBack,
+  onEdit,
+  onPreview,
   onShare,
-  onViewResults 
+  onViewResults
 }: AssessmentDetailsViewProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity'>('overview');
 
-  // Mock analytics data
+  // Analytics data derived from assessment - shows actual values or N/A
   const analyticsData = {
     totalInvites: assessment.candidates || 0,
-    completed: Math.floor((assessment.candidates || 0) * 0.85),
-    inProgress: Math.floor((assessment.candidates || 0) * 0.10),
-    notStarted: Math.floor((assessment.candidates || 0) * 0.05),
-    averageScore: 72,
-    averageTime: '48 min',
-    passRate: assessment.passRate || '0%'
+    completed: 0, // Will be fetched when results are loaded
+    inProgress: 0,
+    notStarted: 0,
+    averageScore: null as number | null,
+    averageTime: 'N/A',
+    passRate: assessment.passRate || 'N/A'
   };
-
-  // Mock activity data
-  const recentActivity = [
-    { id: 1, action: 'Assessment shared', user: 'Sarah Johnson', timestamp: '2 hours ago', icon: Mail, color: 'blue' },
-    { id: 2, action: 'Candidate completed', user: 'John Doe', timestamp: '5 hours ago', icon: CheckCircle, color: 'green' },
-    { id: 3, action: 'Assessment edited', user: 'You', timestamp: '1 day ago', icon: Edit2, color: 'gray' },
-    { id: 4, action: 'Candidate invited', user: 'Sarah Johnson', timestamp: '2 days ago', icon: Users, color: 'blue' },
-    { id: 5, action: 'Assessment created', user: 'You', timestamp: '5 days ago', icon: Sparkles, color: 'yellow' },
-  ];
 
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto">
@@ -211,8 +202,11 @@ export default function AssessmentDetailsView({
                   <span className="text-sm text-gray-600">Completed</span>
                 </div>
                 <div className="text-3xl text-gray-900 mb-1">{analyticsData.completed}</div>
-                <div className="text-xs text-green-600">
-                  {Math.round((analyticsData.completed / analyticsData.totalInvites) * 100)}% completion rate
+                <div className="text-xs text-gray-500">
+                  {analyticsData.totalInvites > 0
+                    ? `${Math.round((analyticsData.completed / analyticsData.totalInvites) * 100)}% completion rate`
+                    : 'No invites yet'
+                  }
                 </div>
               </div>
 
@@ -223,7 +217,9 @@ export default function AssessmentDetailsView({
                   </div>
                   <span className="text-sm text-gray-600">Avg. Score</span>
                 </div>
-                <div className="text-3xl text-gray-900 mb-1">{analyticsData.averageScore}%</div>
+                <div className="text-3xl text-gray-900 mb-1">
+                  {analyticsData.averageScore !== null ? `${analyticsData.averageScore}%` : 'N/A'}
+                </div>
                 <div className="text-xs text-gray-500">Mean performance</div>
               </div>
 
@@ -480,71 +476,62 @@ export default function AssessmentDetailsView({
             {/* Performance Breakdown */}
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
               <h3 className="text-lg text-gray-900 mb-4">Performance Breakdown</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-700">Passed (≥70%)</span>
-                    <span className="text-sm font-medium text-green-600">68%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div className="bg-green-500 h-3 rounded-full" style={{ width: '68%' }}></div>
-                  </div>
-                </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-700">Average (50-69%)</span>
-                    <span className="text-sm font-medium text-yellow-600">22%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div className="bg-yellow-500 h-3 rounded-full" style={{ width: '22%' }}></div>
+              {analyticsData.totalInvites === 0 ? (
+                <div className="text-center py-8">
+                  <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-600 mb-1">No performance data available yet</p>
+                  <p className="text-sm text-gray-500">Data will appear after candidates complete the assessment</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-700">Passed (≥70%)</span>
+                      <span className="text-sm font-medium text-gray-500">View Results for details</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div className="bg-gray-300 h-3 rounded-full" style={{ width: '0%' }}></div>
+                    </div>
                   </div>
                 </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
-                    <span className="text-sm font-medium text-red-600">10%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div className="bg-red-500 h-3 rounded-full" style={{ width: '10%' }}></div>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Section Performance */}
             {assessment.sections && assessment.sections.length > 0 && (
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                 <h3 className="text-lg text-gray-900 mb-4">Section Performance</h3>
-                
-                <div className="space-y-3">
-                  {assessment.sections.map((section: any, index: number) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center text-white text-sm font-medium">
-                          {index + 1}
-                        </div>
-                        <span className="text-sm text-gray-900">{section.name}</span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <div className="text-sm font-medium text-gray-900">
-                            {Math.floor(Math.random() * 20) + 70}%
+
+                {analyticsData.totalInvites === 0 ? (
+                  <div className="text-center py-8">
+                    <BarChart className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-600 mb-1">No section data available yet</p>
+                    <p className="text-sm text-gray-500">Data will appear after candidates complete the assessment</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {assessment.sections.map((section: any, index: number) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center text-white text-sm font-medium">
+                            {index + 1}
                           </div>
-                          <div className="text-xs text-gray-500">Avg. Score</div>
+                          <span className="text-sm text-gray-900">{section.name}</span>
                         </div>
-                        <div className="w-24 bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-gray-800 h-2 rounded-full" 
-                            style={{ width: `${Math.floor(Math.random() * 20) + 70}%` }}
-                          ></div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="text-sm font-medium text-gray-500">N/A</div>
+                            <div className="text-xs text-gray-500">Avg. Score</div>
+                          </div>
+                          <div className="w-24 bg-gray-200 rounded-full h-2">
+                            <div className="bg-gray-300 h-2 rounded-full" style={{ width: '0%' }}></div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -556,33 +543,11 @@ export default function AssessmentDetailsView({
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg text-gray-900">Recent Activity</h3>
             </div>
-            
-            <div className="divide-y divide-gray-200">
-              {recentActivity.map((activity) => {
-                const Icon = activity.icon;
-                const colorClasses = {
-                  blue: { bg: 'bg-gray-100', text: 'text-gray-800' },
-                  green: { bg: 'bg-green-100', text: 'text-green-600' },
-                  gray: { bg: 'bg-gray-100', text: 'text-gray-800' },
-                  yellow: { bg: 'bg-yellow-100', text: 'text-yellow-600' },
-                };
-                const colors = colorClasses[activity.color as keyof typeof colorClasses] || colorClasses.blue;
-                
-                return (
-                  <div key={activity.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-start gap-4">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colors.bg}`}>
-                        <Icon className={`w-5 h-5 ${colors.text}`} />
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm text-gray-900 mb-1">{activity.action}</div>
-                        <div className="text-sm text-gray-600">by {activity.user}</div>
-                      </div>
-                      <div className="text-sm text-gray-500">{activity.timestamp}</div>
-                    </div>
-                  </div>
-                );
-              })}
+
+            <div className="px-6 py-12 text-center">
+              <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-600 mb-1">No activity recorded yet</p>
+              <p className="text-sm text-gray-500">Activity will appear here as candidates take the assessment</p>
             </div>
           </div>
         )}
