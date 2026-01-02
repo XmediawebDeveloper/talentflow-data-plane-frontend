@@ -20,12 +20,8 @@ interface ScoredResume {
   strengths?: string[];
   gaps?: string[];
   matchReason?: string;
-  scoreBreakdown?: {
-    skillsMatch: number;
-    experienceMatch: number;
-    educationMatch: number;
-    overallFit: number;
-  };
+  scoreBreakdown?: any[]; // Array of score breakdown items from API
+  criteriaScores?: Record<string, any>; // Criteria scores object from API
   title?: string;
   currentCompany?: string;
   location?: string;
@@ -36,6 +32,9 @@ interface ScoredResume {
   educationDetails?: any[];
   experienceDetails?: any[];
   languages?: string[];
+  // Explicit matched and missing skills (from scoring)
+  matchedSkills?: string[];
+  missingSkills?: string[];
 }
 
 interface CandidateScoringDetailPageProps {
@@ -63,8 +62,11 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
     locationMatch: generateVariedScore(resume.scorePercentage, 12),
   };
 
-  const matchedSkills = resume.strengths && resume.strengths.length > 0 ? resume.strengths : [];
-  const missingSkills = resume.gaps && resume.gaps.length > 0 ? resume.gaps : [];
+  // matchedSkills should be from the explicit matchedSkills field, or fall back to skills arrays
+  // strengths are AI-generated descriptions, not skills
+  const matchedSkills = resume.matchedSkills || resume.technicalSkills || resume.skills || [];
+  // missingSkills should be from the explicit missingSkills field
+  const missingSkills = resume.missingSkills || [];
 
   // Use strengths directly from API without template prefixes
   const keyStrengths = resume.strengths && resume.strengths.length > 0
@@ -81,7 +83,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
     : [];
 
   const aiReasoning = resume.aiSummary || resume.matchReason || (
-    resume.matchStatus === 'Exact Match'
+    (resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Excellent Match')
       ? 'Outstanding candidate with exceptional alignment to job requirements. Strong technical skills, relevant experience, and proven track record in similar roles.'
       : resume.matchStatus === 'Partial Match'
         ? 'Solid candidate with good alignment to most job requirements. Possesses core technical skills and relevant experience with minor gaps in specialized areas.'
@@ -112,7 +114,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
   };
 
   const getMatchStatusColor = (status: string) => {
-    if (status === 'Exact Match') return 'bg-green-100 text-green-700 border-green-300';
+    if (status === 'Exact Match' || status === 'Excellent Match') return 'bg-green-100 text-green-700 border-green-300';
     if (status === 'Partial Match') return 'bg-yellow-100 text-yellow-700 border-yellow-300';
     return 'bg-red-100 text-red-700 border-red-300';
   };
@@ -445,6 +447,9 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
                 education: resume.education,
                 location: resume.location,
                 title: resume.title,
+                // Pass API data for accurate scoring display
+                scoreBreakdown: resume.scoreBreakdown,
+                criteriaScores: resume.criteriaScores,
               }}
               jobTitle={jobTitle}
               getScoreColor={getScoreColor}

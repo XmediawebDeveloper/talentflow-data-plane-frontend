@@ -41,60 +41,109 @@ export default function ResumeScoringRoute() {
     loadScoredHistory();
   }, []);
 
-  const loadScoredHistory = () => {
-    // Load scored history from localStorage
+  const loadScoredHistory = async () => {
+    // Load scored history from the API - fetch scored resumes for all published JDs
     try {
-      const saved = localStorage.getItem('scoredHistory');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Convert date strings back to Date objects
-        const rawHistory = parsed.map((item: any) => ({
-          ...item,
-          scoredAt: new Date(item.scoredAt),
-        }));
+      // Get list of JDs
+      const jdResponse = await jdService.list({ status: 'published', page_size: 100 });
 
-        // Consolidate duplicates by jobId - merge entries with same JD
-        const consolidatedMap = new Map<string, ScoredResumeData>();
+      const historyPromises = jdResponse.items.map(async (jd: JDResponse) => {
+        try {
+          const scoredResponse = await jdService.getScoredResumes(jd.id, { page_size: 100 });
+          if (scoredResponse.items && scoredResponse.items.length > 0) {
+            // Convert API response to ScoredResumeData format - same as JobDetailView
+            const convertedResumes = scoredResponse.items.map((item: any) => {
+              // Map match_status from API to display format - use "Exact Match" for consistency
+              let matchStatus = 'No Match';
+              if (item.match_status === 'exact_match' || item.match_status === 'excellent') {
+                matchStatus = 'Exact Match';
+              } else if (item.match_status === 'partial_match' || item.match_status === 'partial') {
+                matchStatus = 'Partial Match';
+              }
 
-        rawHistory.forEach((item: ScoredResumeData) => {
-          if (consolidatedMap.has(item.jobId)) {
-            const existing = consolidatedMap.get(item.jobId)!;
-            // Get existing resume IDs to avoid duplicates
-            const existingResumeIds = new Set(existing.scoredResumes.map((r: any) => r.id));
-            // Filter out duplicates from current item
-            const newResumes = item.scoredResumes.filter((r: any) => !existingResumeIds.has(r.id));
+              // Calculate matchScore from overall_score
+              const matchScore = Math.round(item.overall_score || 0);
 
-            // Keep the most recent timestamp
-            const latestDate = new Date(existing.scoredAt) > new Date(item.scoredAt)
-              ? existing.scoredAt
-              : item.scoredAt;
-
-            // Merge
-            consolidatedMap.set(item.jobId, {
-              ...existing,
-              scoredAt: latestDate,
-              totalScored: existing.scoredResumes.length + newResumes.length,
-              scoredResumes: [...existing.scoredResumes, ...newResumes],
+              return {
+                id: item.id,
+                candidateName: item.candidate_name || 'Unknown',
+                candidateEmail: item.candidate_email || '',
+                email: item.candidate_email || '',
+                phone: item.phone || '',
+                matchScore: matchScore,
+                matchStatus: matchStatus,
+                scorePercentage: matchScore, // Also include scorePercentage for CandidateScoringDetailPage
+                scoredDate: item.created_at || new Date().toISOString(),
+                scoredBy: item.scored_by_name || 'System',
+                experience: item.experience_years ? `${item.experience_years} years` : undefined,
+                education: item.education,
+                certifications: item.certifications || [],
+                aiSummary: item.ai_summary,
+                strengths: item.strengths || [],
+                gaps: item.gaps || [],
+                title: item.current_title,
+                currentCompany: item.current_company,
+                location: item.location,
+                skills: item.skills || [],
+                matchedSkills: item.matched_skills || item.matchedSkills || item.skills || [],
+                missingSkills: item.missing_skills || item.missingSkills || item.gaps || [],
+                scoreBreakdown: item.score_breakdown || [],
+                criteriaScores: item.criteria_scores || {},
+                technicalSkills: item.technical_skills || item.skills || [],
+                softSkills: item.soft_skills || [],
+                experienceDetails: item.experience_details || [],
+                educationDetails: item.education_details || [],
+                languages: item.languages || [],
+                professionalSummary: item.professional_summary || item.ai_summary || '',
+              };
             });
-          } else {
-            consolidatedMap.set(item.jobId, item);
+
+            return {
+              id: jd.id,
+              jobId: jd.id,
+              jobTitle: jd.title,
+              scoredAt: new Date(scoredResponse.items[0]?.created_at || new Date()),
+              source: 'database' as const,
+              totalScored: scoredResponse.total || convertedResumes.length,
+              scoredResumes: convertedResumes,
+            };
           }
-        });
-
-        // Convert back to array and sort by date (most recent first)
-        const consolidatedHistory = Array.from(consolidatedMap.values())
-          .sort((a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime());
-
-        // Save consolidated history back if there were duplicates
-        if (consolidatedHistory.length < rawHistory.length) {
-          console.log('[ResumeScoringPage] Consolidated duplicates:', rawHistory.length, '->', consolidatedHistory.length);
-          localStorage.setItem('scoredHistory', JSON.stringify(consolidatedHistory));
+          return null;
+        } catch {
+          return null;
         }
+      });
 
-        setScoredHistory(consolidatedHistory);
+      const results = await Promise.all(historyPromises);
+      const validHistory = results.filter((item): item is NonNullable<typeof item> => item !== null) as ScoredResumeData[];
+
+      // Sort by scored date (most recent first)
+      validHistory.sort((a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime());
+
+      setScoredHistory(validHistory);
+
+      // Clear old localStorage data to ensure consistency with API data
+      try {
+        localStorage.removeItem('scoredHistory');
+      } catch (e) {
+        // Ignore localStorage errors
       }
     } catch (error) {
-      console.error('Failed to load scored history:', error);
+      console.error('Failed to load scored history from API:', error);
+      // Fallback to localStorage if API fails
+      try {
+        const saved = localStorage.getItem('scoredHistory');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const rawHistory = parsed.map((item: any) => ({
+            ...item,
+            scoredAt: new Date(item.scoredAt),
+          }));
+          setScoredHistory(rawHistory);
+        }
+      } catch (e) {
+        console.error('Failed to load from localStorage:', e);
+      }
     }
   };
 

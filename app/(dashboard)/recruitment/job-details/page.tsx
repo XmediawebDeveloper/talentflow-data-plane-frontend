@@ -159,6 +159,16 @@ function JobDetailsContent() {
     }
   };
 
+  const handleDelete = async (job: Job) => {
+    try {
+      await jdService.delete(job.id);
+      toast.success(`"${job.title}" has been deleted`);
+      router.push('/recruitment/job-openings');
+    } catch (error) {
+      toast.error('Failed to delete job');
+    }
+  };
+
   const handleNavigateToAITalentMatch = (jobId: string) => {
     sessionStorage.setItem('preselectedJobId', jobId);
     router.push('/recruitment/ai-talent-match');
@@ -196,6 +206,7 @@ function JobDetailsContent() {
       onEdit={handleEdit}
       onDisable={handleDisable}
       onArchive={handleArchive}
+      onDelete={handleDelete}
       onNavigateToAITalentMatch={handleNavigateToAITalentMatch}
     />
   );

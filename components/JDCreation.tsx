@@ -663,6 +663,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   };
 
   const handlePublish = () => {
+    // Validate mandatory fields
+    const missingFields: string[] = [];
+
+    if (!extractedData.experience) {
+      missingFields.push('Experience');
+    }
+    if (!extractedData.education) {
+      missingFields.push('Education');
+    }
+    if (!extractedData.industryType) {
+      missingFields.push('Industry Type');
+    }
+
+    if (missingFields.length > 0) {
+      toast({
+        title: 'Missing Required Fields',
+        description: `Please select: ${missingFields.join(', ')}`,
+        variant: 'error',
+      });
+      return;
+    }
+
     // Go to review step to show summary
     setStep('review');
   };
@@ -1682,11 +1704,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               <div className="grid grid-cols-3 gap-6 mb-8">
                 {/* Experience */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Experience</h3>
+                  <h3 className="text-gray-900 mb-4">Experience <span className="text-red-500">*</span></h3>
                   <select
                     value={extractedData.experience}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, experience: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3"
+                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${!extractedData.experience ? 'border-gray-300' : 'border-gray-300'}`}
                     disabled={masterDataLoading}
                   >
                     <option value="">{masterDataLoading ? 'Loading...' : 'Select experience level'}</option>
@@ -1707,11 +1729,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
                 {/* Education */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Education</h3>
+                  <h3 className="text-gray-900 mb-4">Education <span className="text-red-500">*</span></h3>
                   <select
                     value={extractedData.education}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, education: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3"
+                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${!extractedData.education ? 'border-gray-300' : 'border-gray-300'}`}
                     disabled={masterDataLoading}
                   >
                     <option value="">{masterDataLoading ? 'Loading...' : 'Select education level'}</option>
@@ -1732,11 +1754,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
                 {/* Industry Type */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Industry Type</h3>
+                  <h3 className="text-gray-900 mb-4">Industry Type <span className="text-red-500">*</span></h3>
                   <select
                     value={extractedData.industryType}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, industryType: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3"
+                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${!extractedData.industryType ? 'border-gray-300' : 'border-gray-300'}`}
                     disabled={masterDataLoading}
                   >
                     <option value="">{masterDataLoading ? 'Loading...' : 'Select industry type'}</option>

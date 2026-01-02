@@ -155,6 +155,17 @@ export default function JobOpeningsPage() {
     }
   };
 
+  const handleDeleteJob = async (job: Job) => {
+    if (!confirm(`Are you sure you want to delete "${job.title}"?`)) return;
+    try {
+      await jdService.delete(job.id);
+      setJobs(prev => prev.filter(j => j.id !== job.id));
+      toast.success(`"${job.title}" has been deleted`);
+    } catch (error) {
+      toast.error('Failed to delete job');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -176,6 +187,7 @@ export default function JobOpeningsPage() {
       onDisableJob={handleDisableJob}
       onRepublishJob={handleRepublishJob}
       onArchiveJob={handleArchiveJob}
+      onDeleteJob={handleDeleteJob}
     />
   );
 }
