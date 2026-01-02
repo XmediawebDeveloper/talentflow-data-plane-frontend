@@ -111,14 +111,27 @@ export default function ResumeDetailPage() {
   const fetchPdfPreview = async () => {
     setLoadingPdf(true);
     try {
-      const blob = await resumeService.download(resumeId);
-      // Create a new blob with explicit PDF MIME type
-      const pdfBlob = new Blob([blob], { type: 'application/pdf' });
-      const url = URL.createObjectURL(pdfBlob);
-      setPdfUrl(url);
+      // Use preview endpoint which converts DOCX to PDF
+      const blob = await resumeService.preview(resumeId);
+      console.log('Preview blob received - type:', blob.type, 'size:', blob.size);
+
+      // Verify it's a PDF
+      const firstBytes = await blob.slice(0, 10).text();
+      console.log('First bytes:', firstBytes);
+
+      if (firstBytes.startsWith('%PDF')) {
+        const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+        const url = URL.createObjectURL(pdfBlob);
+        setPdfUrl(url);
+      } else {
+        console.error('Preview did not return PDF');
+        toast.error('Failed to generate preview');
+        setPdfUrl(null);
+      }
     } catch (error) {
-      console.error('Failed to fetch PDF:', error);
-      toast.error('Failed to load PDF preview');
+      console.error('Failed to fetch preview:', error);
+      toast.error('Failed to load preview');
+      setPdfUrl(null);
     } finally {
       setLoadingPdf(false);
     }
@@ -269,8 +282,9 @@ export default function ResumeDetailPage() {
               ) : pdfUrl ? (
                 <iframe
                   src={pdfUrl}
-                  className="w-full h-full min-h-[600px] rounded-lg border border-gray-200"
+                  className="w-full h-full min-h-[700px] rounded-lg border border-gray-200"
                   title="Resume Preview"
+                  style={{ height: 'calc(100vh - 250px)' }}
                 />
               ) : (
                 <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg min-h-[600px]">

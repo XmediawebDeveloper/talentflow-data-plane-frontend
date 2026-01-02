@@ -483,9 +483,14 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
                     );
                   }
                   if (col.id === 'education') {
+                    const educationDisplay = typeof resume.education === 'string'
+                      ? resume.education
+                      : Array.isArray(resume.education) && resume.education.length > 0
+                        ? (resume.education[0]?.degree || resume.education[0]?.institution || 'Education available')
+                        : 'N/A';
                     return (
                       <td key={col.id} className="py-3 px-4">
-                        <div className="text-sm text-gray-600">{resume.education || 'N/A'}</div>
+                        <div className="text-sm text-gray-600">{educationDisplay}</div>
                       </td>
                     );
                   }
@@ -673,7 +678,13 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
               )}
               {enabledColumns.find(c => c.id === 'education') && resume.education && (
                 <div className="text-gray-600">
-                  <span className="text-gray-500">Education:</span> {resume.education}
+                  <span className="text-gray-500">Education:</span> {
+                    typeof resume.education === 'string'
+                      ? resume.education
+                      : Array.isArray(resume.education) && resume.education.length > 0
+                        ? (resume.education[0]?.degree || resume.education[0]?.institution || 'Education available')
+                        : ''
+                  }
                 </div>
               )}
               {enabledColumns.find(c => c.id === 'scoredDate') && (

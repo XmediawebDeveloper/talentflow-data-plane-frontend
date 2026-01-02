@@ -376,7 +376,13 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
                         ) : (
                           <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
                         )}
-                        <span><strong>Education:</strong> {resume.education || 'Not specified'}</span>
+                        <span><strong>Education:</strong> {
+                          typeof resume.education === 'string'
+                            ? resume.education
+                            : Array.isArray(resume.education) && resume.education.length > 0
+                              ? (resume.education[0]?.degree || resume.education[0]?.institution || 'Education available')
+                              : 'Not specified'
+                        }</span>
                       </li>
                     </ul>
                   </div>
@@ -544,7 +550,13 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
                   </div>
                 ) : (
                   <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <h4 className="font-semibold text-gray-900 mb-2">{resume.education || 'Education not specified'}</h4>
+                    <h4 className="font-semibold text-gray-900 mb-2">{
+                      typeof resume.education === 'string'
+                        ? resume.education
+                        : Array.isArray(resume.education) && resume.education.length > 0
+                          ? (resume.education[0]?.degree || resume.education[0]?.institution || 'Education available')
+                          : 'Education not specified'
+                    }</h4>
                   </div>
                 )}
               </div>
