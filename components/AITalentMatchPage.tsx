@@ -74,19 +74,44 @@ export default function AITalentMatchPage({
   // Versions modal
   const [selectedVersionsCandidate, setSelectedVersionsCandidate] = useState<MatchedCandidateWithVersions | null>(null);
 
-  // Check for preselected job
+  // Handle preselected job from JD view page
   useEffect(() => {
     const preselectedJobId = sessionStorage.getItem('preselectedJobId');
-    if (preselectedJobId) {
-      setSelectedJob(preselectedJobId);
-      sessionStorage.removeItem('preselectedJobId');
-      // Set view mode to 'new' and automatically trigger AI match for preselected job
+    const showResultsOnly = sessionStorage.getItem('showResultsOnly') === 'true';
+
+    if (!preselectedJobId) return;
+    // Wait for jobs to be loaded before processing
+    if (jobs.length === 0) return;
+
+    // Clear sessionStorage immediately
+    sessionStorage.removeItem('preselectedJobId');
+    sessionStorage.removeItem('showResultsOnly');
+
+    // Set the selected job
+    setSelectedJob(preselectedJobId);
+
+    // Check if there are existing match results for this job
+    const existingMatch = matchHistory.find(h => h.jobId === preselectedJobId);
+
+    if (existingMatch && existingMatch.matchedCandidates.length > 0) {
+      // Show existing results directly
+      setSelectedHistoryItem(existingMatch);
+      setMatchedCandidates(existingMatch.matchedCandidates);
+      setViewMode('results');
+    } else if (showResultsOnly) {
+      // User clicked "AI Talent Match Results" - show empty results view for this JD
+      // Set empty results so the results view shows "no results" message
+      setMatchedCandidates([]);
+      setViewMode('results');
+    } else {
+      // User clicked "AI Talent Match" - run new match
       setViewMode('new');
+      // Trigger matching panel after a short delay to ensure job is selected
       setTimeout(() => {
         setShowMatchingPanel(true);
-      }, 300);
+      }, 500);
     }
-  }, []);
+  }, [jobs, matchHistory]);
 
   const publishedJobs = jobs.filter(j => j.status === 'Published' || j.status === 'Active');
   const selectedJobData = jobs.find(j => j.id === selectedJob);
@@ -878,6 +903,26 @@ export default function AITalentMatchPage({
 
         {/* Scrollable Candidates List */}
         <div className="flex-1 overflow-y-auto p-6">
+          {matchedCandidates.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full py-16">
+              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-6">
+                <Sparkles className="w-10 h-10 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No AI Match Results Yet</h3>
+              <p className="text-gray-600 text-center max-w-md mb-6">
+                AI Talent Match has not been run for this job yet. Run AI matching to find candidates that match this job description.
+              </p>
+              <button
+                onClick={() => {
+                  setShowMatchingPanel(true);
+                }}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all font-medium flex items-center gap-2 shadow-md"
+              >
+                <Sparkles className="w-5 h-5" />
+                Run AI Talent Match
+              </button>
+            </div>
+          ) : (
           <div className="space-y-3">
             {filteredCandidates.map((candidate, index) => (
               <div
@@ -989,6 +1034,7 @@ export default function AITalentMatchPage({
               </div>
             ))}
           </div>
+          )}
         </div>
       </main>
     );
@@ -1008,9 +1054,9 @@ export default function AITalentMatchPage({
       />
       
       {/* AI Matching Progress Panel */}
-      {showMatchingPanel && selectedJobData && (
+      {showMatchingPanel && selectedJob && (
         <AITalentMatchProgressPanel
-          jobTitle={selectedJobData.title}
+          jobTitle={selectedJobData?.title || 'Job Description'}
           jobId={selectedJob}
           onComplete={handleMatchingComplete}
           onError={(error) => {

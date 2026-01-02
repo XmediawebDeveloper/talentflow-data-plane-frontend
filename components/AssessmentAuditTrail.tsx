@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Filter, Download, X, CheckCircle, XCircle, Clock, AlertTriangle, FileText, RefreshCw, Eye, Calendar, Mail, User, Building2, Hash, Activity } from 'lucide-react';
+import { assessmentService, AuditLogResponse } from '@/lib/services';
 
 interface AuditLog {
   id: string;
@@ -33,198 +34,98 @@ interface AssessmentAuditTrailProps {
 }
 
 export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAuditTrailProps) {
-  // Mock audit logs data
-  const mockLogs: AuditLog[] = initialLogs || [
-    {
-      id: 'audit-1',
-      tenantId: 'tenant-001',
-      tenantName: 'TalentFlow Enterprise',
-      jdId: 'jd-001',
-      jdTitle: 'Senior Software Engineer',
-      candidateEmail: 'sarah.johnson@email.com',
-      candidateName: 'Sarah Johnson',
-      invitedBy: 'Alex Morgan',
-      invitedByEmail: 'alex.morgan@talentflow.com',
-      startTime: '2025-12-01T10:15:00Z',
-      endTime: '2025-12-01T11:00:00Z',
-      completionStatus: 'Completed',
-      unitConsumed: true,
-      errors: [],
-      consentAccepted: true,
-      consentAcceptedAt: '2025-12-01T10:14:30Z',
-      consentIpAddress: '192.168.1.100',
-      assessmentName: 'Senior Software Engineer Assessment',
-      invitedDate: '2025-11-28',
-      expiryDate: '2025-12-05',
-      refundStatus: 'None'
-    },
-    {
-      id: 'audit-2',
-      tenantId: 'tenant-001',
-      tenantName: 'TalentFlow Enterprise',
-      jdId: 'jd-001',
-      jdTitle: 'Senior Software Engineer',
-      candidateEmail: 'michael.chen@email.com',
-      candidateName: 'Michael Chen',
-      invitedBy: 'Jessica Lee',
-      invitedByEmail: 'jessica.lee@talentflow.com',
-      startTime: '2025-12-02T14:30:00Z',
-      endTime: '2025-12-02T15:22:00Z',
-      completionStatus: 'Completed',
-      unitConsumed: true,
-      errors: [],
-      consentAccepted: true,
-      consentAcceptedAt: '2025-12-02T14:29:45Z',
-      consentIpAddress: '192.168.1.101',
-      assessmentName: 'Senior Software Engineer Assessment',
-      invitedDate: '2025-11-29',
-      expiryDate: '2025-12-06',
-      refundStatus: 'None'
-    },
-    {
-      id: 'audit-3',
-      tenantId: 'tenant-001',
-      tenantName: 'TalentFlow Enterprise',
-      jdId: 'jd-001',
-      jdTitle: 'Senior Software Engineer',
-      candidateEmail: 'david.kim@email.com',
-      candidateName: 'David Kim',
-      invitedBy: 'Jessica Lee',
-      invitedByEmail: 'jessica.lee@talentflow.com',
-      startTime: '2025-12-01T09:00:00Z',
-      endTime: null,
-      completionStatus: 'Failed',
-      unitConsumed: true,
-      errors: ['Connection timeout at round 2', 'Session expired due to inactivity'],
-      consentAccepted: true,
-      consentAcceptedAt: '2025-12-01T08:59:30Z',
-      consentIpAddress: '192.168.1.102',
-      assessmentName: 'Senior Software Engineer Assessment',
-      invitedDate: '2025-11-29',
-      expiryDate: '2025-12-06',
-      refundStatus: 'Requested',
-      refundReason: 'Technical error - Session timeout during assessment',
-      refundRequestedBy: 'Jessica Lee',
-      refundRequestedAt: '2025-12-01T10:30:00Z'
-    },
-    {
-      id: 'audit-4',
-      tenantId: 'tenant-001',
-      tenantName: 'TalentFlow Enterprise',
-      jdId: 'jd-001',
-      jdTitle: 'Senior Software Engineer',
-      candidateEmail: 'emily.rodriguez@email.com',
-      candidateName: 'Emily Rodriguez',
-      invitedBy: 'Alex Morgan',
-      invitedByEmail: 'alex.morgan@talentflow.com',
-      startTime: '2025-11-30T16:45:00Z',
-      endTime: '2025-11-30T17:33:00Z',
-      completionStatus: 'Completed',
-      unitConsumed: true,
-      errors: [],
-      consentAccepted: true,
-      consentAcceptedAt: '2025-11-30T16:44:20Z',
-      consentIpAddress: '192.168.1.103',
-      assessmentName: 'Senior Software Engineer Assessment',
-      invitedDate: '2025-11-27',
-      expiryDate: '2025-12-04',
-      refundStatus: 'None'
-    },
-    {
-      id: 'audit-5',
-      tenantId: 'tenant-001',
-      tenantName: 'TalentFlow Enterprise',
-      jdId: 'jd-001',
-      jdTitle: 'Senior Software Engineer',
-      candidateEmail: 'robert.taylor@email.com',
-      candidateName: 'Robert Taylor',
-      invitedBy: 'Jessica Lee',
-      invitedByEmail: 'jessica.lee@talentflow.com',
-      startTime: null,
-      endTime: null,
-      completionStatus: 'Not Started',
-      unitConsumed: false,
-      errors: [],
-      consentAccepted: false,
-      consentAcceptedAt: null,
-      consentIpAddress: null,
-      assessmentName: 'Senior Software Engineer Assessment',
-      invitedDate: '2025-11-30',
-      expiryDate: '2025-12-07',
-      refundStatus: 'None'
-    },
-    {
-      id: 'audit-6',
-      tenantId: 'tenant-001',
-      tenantName: 'TalentFlow Enterprise',
-      jdId: 'jd-001',
-      jdTitle: 'Senior Software Engineer',
-      candidateEmail: 'amanda.white@email.com',
-      candidateName: 'Amanda White',
-      invitedBy: 'Alex Morgan',
-      invitedByEmail: 'alex.morgan@talentflow.com',
-      startTime: '2025-11-29T11:00:00Z',
-      endTime: '2025-11-29T11:42:00Z',
-      completionStatus: 'Completed',
-      unitConsumed: true,
-      errors: [],
-      consentAccepted: true,
-      consentAcceptedAt: '2025-11-29T10:59:50Z',
-      consentIpAddress: '192.168.1.104',
-      assessmentName: 'Senior Software Engineer Assessment',
-      invitedDate: '2025-11-26',
-      expiryDate: '2025-12-03',
-      refundStatus: 'None'
-    },
-    {
-      id: 'audit-7',
-      tenantId: 'tenant-001',
-      tenantName: 'TalentFlow Enterprise',
-      jdId: 'jd-001',
-      jdTitle: 'Senior Software Engineer',
-      candidateEmail: 'john.doe@email.com',
-      candidateName: 'John Doe',
-      invitedBy: 'Alex Morgan',
-      invitedByEmail: 'alex.morgan@talentflow.com',
-      startTime: '2025-11-28T13:30:00Z',
-      endTime: null,
-      completionStatus: 'In Progress',
-      unitConsumed: true,
-      errors: [],
-      consentAccepted: true,
-      consentAcceptedAt: '2025-11-28T13:29:15Z',
-      consentIpAddress: '192.168.1.105',
-      assessmentName: 'Senior Software Engineer Assessment',
-      invitedDate: '2025-11-25',
-      expiryDate: '2025-12-02',
-      refundStatus: 'None'
-    },
-    {
-      id: 'audit-8',
-      tenantId: 'tenant-001',
-      tenantName: 'TalentFlow Enterprise',
-      jdId: 'jd-002',
-      jdTitle: 'Frontend Developer',
-      candidateEmail: 'lisa.anderson@email.com',
-      candidateName: 'Lisa Anderson',
-      invitedBy: 'Jessica Lee',
-      invitedByEmail: 'jessica.lee@talentflow.com',
-      startTime: null,
-      endTime: null,
-      completionStatus: 'Expired',
-      unitConsumed: false,
-      errors: ['Assessment expired without completion'],
-      consentAccepted: true,
-      consentAcceptedAt: '2025-11-20T10:00:00Z',
-      consentIpAddress: '192.168.1.106',
-      assessmentName: 'Frontend Developer Assessment',
-      invitedDate: '2025-11-20',
-      expiryDate: '2025-11-27',
-      refundStatus: 'None'
-    }
-  ];
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiStats, setApiStats] = useState({
+    total_completed: 0,
+    total_failed: 0,
+    total_in_progress: 0,
+    total_not_started: 0,
+    total_expired: 0,
+    units_consumed: 0,
+    refunds_pending: 0,
+    refunds_approved: 0,
+  });
 
-  const [logs, setLogs] = useState<AuditLog[]>(mockLogs);
+  // Map API response to local format
+  const mapApiToLocal = (apiLog: AuditLogResponse): AuditLog => {
+    const statusMap: Record<string, AuditLog['completionStatus']> = {
+      'completed': 'Completed',
+      'started': 'In Progress',
+      'pending': 'Not Started',
+      'failed': 'Failed',
+      'expired': 'Expired',
+      'sent': 'Not Started',
+      'opened': 'Not Started',
+      'abandoned': 'Failed',
+    };
+
+    const refundMap: Record<string, AuditLog['refundStatus']> = {
+      'none': 'None',
+      'requested': 'Requested',
+      'approved': 'Approved',
+      'rejected': 'Rejected',
+    };
+
+    return {
+      id: apiLog.id,
+      tenantId: apiLog.tenant_id,
+      tenantName: apiLog.tenant_name || 'TalentFlow',
+      jdId: apiLog.jd_id,
+      jdTitle: apiLog.jd_title,
+      candidateEmail: apiLog.candidate_email,
+      candidateName: apiLog.candidate_name,
+      invitedBy: apiLog.invited_by_name || 'Unknown',
+      invitedByEmail: apiLog.invited_by_email || '',
+      startTime: apiLog.started_at || null,
+      endTime: apiLog.completed_at || null,
+      completionStatus: statusMap[apiLog.completion_status] || 'Not Started',
+      unitConsumed: apiLog.unit_consumed,
+      errors: apiLog.errors || [],
+      consentAccepted: apiLog.consent_accepted,
+      consentAcceptedAt: apiLog.consent_accepted_at || null,
+      consentIpAddress: apiLog.consent_ip || null,
+      assessmentName: apiLog.assessment_title,
+      invitedDate: apiLog.invited_date?.split('T')[0] || '',
+      expiryDate: apiLog.expires_at?.split('T')[0] || '',
+      refundStatus: refundMap[apiLog.refund_status] || 'None',
+      refundReason: apiLog.refund_reason,
+      refundRequestedBy: apiLog.refund_requested_by_name,
+      refundRequestedAt: apiLog.refund_requested_at,
+    };
+  };
+
+  // Fetch audit trail data from API
+  useEffect(() => {
+    const loadAuditTrail = async () => {
+      setIsLoading(true);
+      try {
+        const response = await assessmentService.getAuditTrail({ page_size: 100 });
+        if (response?.items) {
+          const mappedLogs = response.items.map(mapApiToLocal);
+          setLogs(mappedLogs);
+          setApiStats({
+            total_completed: response.total_completed,
+            total_failed: response.total_failed,
+            total_in_progress: response.total_in_progress,
+            total_not_started: response.total_not_started,
+            total_expired: response.total_expired,
+            units_consumed: response.units_consumed,
+            refunds_pending: response.refunds_pending,
+            refunds_approved: response.refunds_approved,
+          });
+        }
+        console.log('[TalentFlow] Loaded audit trail from API');
+      } catch (error) {
+        console.log('[TalentFlow] Failed to load audit trail from API:', error);
+        // Keep empty logs on error
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAuditTrail();
+  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedLog, setSelectedLog] = useState<string | null>(null);
@@ -293,46 +194,70 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
     setShowRefundModal(true);
   };
 
-  const handleSubmitRefund = () => {
+  const handleSubmitRefund = async () => {
     if (!selectedRefundLog || !refundReason.trim()) {
       alert('Please provide a refund reason');
       return;
     }
 
-    setLogs(logs.map(log => 
-      log.id === selectedRefundLog.id
-        ? {
-            ...log,
-            refundStatus: 'Requested',
-            refundReason,
-            refundRequestedBy: 'Current User',
-            refundRequestedAt: new Date().toISOString()
-          }
-        : log
-    ));
+    try {
+      await assessmentService.requestRefund(selectedRefundLog.id, refundReason);
 
-    setShowRefundModal(false);
-    setSelectedRefundLog(null);
-    setRefundReason('');
-    alert('Refund request submitted successfully');
-  };
-
-  const handleApproveRefund = (logId: string) => {
-    if (confirm('Approve this refund request? This will restore 1 assessment unit.')) {
-      setLogs(logs.map(log => 
-        log.id === logId ? { ...log, refundStatus: 'Approved' as const } : log
+      // Update local state
+      setLogs(logs.map(log =>
+        log.id === selectedRefundLog.id
+          ? {
+              ...log,
+              refundStatus: 'Requested' as const,
+              refundReason,
+              refundRequestedBy: 'Current User',
+              refundRequestedAt: new Date().toISOString()
+            }
+          : log
       ));
-      alert('Refund approved. 1 assessment unit has been restored.');
+
+      setShowRefundModal(false);
+      setSelectedRefundLog(null);
+      setRefundReason('');
+      alert('Refund request submitted successfully');
+    } catch (error) {
+      console.error('Failed to submit refund request:', error);
+      alert('Failed to submit refund request. Please try again.');
     }
   };
 
-  const handleRejectRefund = (logId: string) => {
+  const handleApproveRefund = async (logId: string) => {
+    if (confirm('Approve this refund request? This will restore 1 assessment unit.')) {
+      try {
+        const response = await assessmentService.processRefund(logId, 'approve');
+
+        setLogs(logs.map(log =>
+          log.id === logId ? { ...log, refundStatus: 'Approved' as const } : log
+        ));
+
+        alert(response.message || 'Refund approved. 1 assessment unit has been restored.');
+      } catch (error) {
+        console.error('Failed to approve refund:', error);
+        alert('Failed to approve refund. Please try again.');
+      }
+    }
+  };
+
+  const handleRejectRefund = async (logId: string) => {
     const reason = prompt('Reason for rejecting this refund:');
     if (reason) {
-      setLogs(logs.map(log => 
-        log.id === logId ? { ...log, refundStatus: 'Rejected' as const } : log
-      ));
-      alert('Refund request rejected.');
+      try {
+        const response = await assessmentService.processRefund(logId, 'reject', reason);
+
+        setLogs(logs.map(log =>
+          log.id === logId ? { ...log, refundStatus: 'Rejected' as const } : log
+        ));
+
+        alert(response.message || 'Refund request rejected.');
+      } catch (error) {
+        console.error('Failed to reject refund:', error);
+        alert('Failed to reject refund. Please try again.');
+      }
     }
   };
 
@@ -389,16 +314,17 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
     return `${minutes} min`;
   };
 
+  // Use API stats or calculate from local logs as fallback
   const stats = {
     total: logs.length,
-    completed: logs.filter(l => l.completionStatus === 'Completed').length,
-    inProgress: logs.filter(l => l.completionStatus === 'In Progress').length,
-    failed: logs.filter(l => l.completionStatus === 'Failed').length,
-    notStarted: logs.filter(l => l.completionStatus === 'Not Started').length,
-    expired: logs.filter(l => l.completionStatus === 'Expired').length,
-    unitsConsumed: logs.filter(l => l.unitConsumed).length,
-    refundRequested: logs.filter(l => l.refundStatus === 'Requested').length,
-    refundApproved: logs.filter(l => l.refundStatus === 'Approved').length
+    completed: apiStats.total_completed || logs.filter(l => l.completionStatus === 'Completed').length,
+    inProgress: apiStats.total_in_progress || logs.filter(l => l.completionStatus === 'In Progress').length,
+    failed: apiStats.total_failed || logs.filter(l => l.completionStatus === 'Failed').length,
+    notStarted: apiStats.total_not_started || logs.filter(l => l.completionStatus === 'Not Started').length,
+    expired: apiStats.total_expired || logs.filter(l => l.completionStatus === 'Expired').length,
+    unitsConsumed: apiStats.units_consumed || logs.filter(l => l.unitConsumed).length,
+    refundRequested: apiStats.refunds_pending || logs.filter(l => l.refundStatus === 'Requested').length,
+    refundApproved: apiStats.refunds_approved || logs.filter(l => l.refundStatus === 'Approved').length
   };
 
   return (

@@ -1,5 +1,6 @@
 import { X, Save, AlertCircle, Clock, FileText, Award, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useState } from 'react';
+import { assessmentService } from '@/lib/services';
 
 interface AssessmentEditModalProps {
   isOpen: boolean;
@@ -15,10 +16,11 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
   });
 
   const [errors, setErrors] = useState<any>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const newErrors: any = {};
 
     if (!editedAssessment.title?.trim()) {
@@ -34,8 +36,37 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
       return;
     }
 
-    onSave(editedAssessment);
-    onClose();
+    setIsSaving(true);
+    try {
+      // Map status to API format
+      const statusMap: { [key: string]: string } = {
+        'Draft': 'draft',
+        'Active': 'published',
+        'Completed': 'closed',
+        'Archived': 'archived'
+      };
+
+      // Call the API to update assessment
+      const updateData: any = {
+        title: editedAssessment.title,
+        description: editedAssessment.description,
+      };
+
+      // Only include status if it changed
+      if (editedAssessment.status) {
+        updateData.status = statusMap[editedAssessment.status] || editedAssessment.status.toLowerCase();
+      }
+
+      await assessmentService.update(assessment.id, updateData);
+
+      onSave(editedAssessment);
+      onClose();
+    } catch (error) {
+      console.error('Failed to update assessment:', error);
+      alert(`Failed to update assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const updateSection = (index: number, field: string, value: any) => {
@@ -309,7 +340,8 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
         <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between">
           <button
             onClick={onClose}
-            className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            disabled={isSaving}
+            className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
@@ -319,16 +351,18 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                 setEditedAssessment({ ...editedAssessment, status: 'Draft' });
                 handleSave();
               }}
-              className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              disabled={isSaving}
+              className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
             >
-              Save as Draft
+              {isSaving ? 'Saving...' : 'Save as Draft'}
             </button>
             <button
               onClick={handleSave}
-              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
+              disabled={isSaving}
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
-              Save Changes
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </div>

@@ -60,6 +60,18 @@ export type {
   InvitationResponse,
   AssessmentAttemptResponse,
   AssessmentResultsListResponse,
+  // New API types
+  AssessmentStatsResponse,
+  AssessmentCloneRequest,
+  AssessmentCloneResponse,
+  ExportFormat,
+  AuditLogResponse,
+  AuditTrailListResponse,
+  RefundRequestCreate,
+  RefundRequestResponse,
+  RefundAction,
+  RefundProcessRequest,
+  RefundProcessResponse,
 } from './assessmentService';
 
 // User Management

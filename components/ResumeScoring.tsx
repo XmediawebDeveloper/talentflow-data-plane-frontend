@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
 
 interface ResumeScoringProps {
-  resumes: Resume[];
-  jobs: Job[];
+  resumes: Resume[] | any[];
+  jobs?: Job[];
+  jobTitle?: string;
   onBack: () => void;
-  onComplete: () => void;
+  onComplete?: () => void;
+  onProceedToApplicants?: () => void;
 }
 
 interface ScoringResult {
@@ -29,13 +31,25 @@ interface DetailedScoreCategory {
   reasoning: string;
 }
 
-export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: ResumeScoringProps) {
+export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onComplete, onProceedToApplicants }: ResumeScoringProps) {
+  // Create a virtual job if only jobTitle is provided (single job context)
+  const effectiveJobs: Job[] = jobs && jobs.length > 0
+    ? jobs
+    : jobTitle
+      ? [{ id: 'single-job', title: jobTitle, location: '', status: 'Published', applicants: 0, daysActive: 0 } as Job]
+      : [];
+
   const [scoringResults, setScoringResults] = useState<ScoringResult[]>(() => {
     // Generate mock scoring results
     const results: ScoringResult[] = [];
+    if (!resumes || resumes.length === 0 || effectiveJobs.length === 0) {
+      return [];
+    }
     resumes.forEach(resume => {
-      jobs.forEach(job => {
-        const score = Math.floor(Math.random() * 40) + 60; // 60-100
+      effectiveJobs.forEach(job => {
+        // Use existing score from resume if available (from upload flow)
+        const existingScore = resume.score || resume.scorePercentage;
+        const score = existingScore || Math.floor(Math.random() * 40) + 60; // 60-100
         let matchType: 'excellent' | 'good' | 'fair' | 'poor';
         if (score >= 90) matchType = 'excellent';
         else if (score >= 75) matchType = 'good';
@@ -47,8 +61,8 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
           jobId: job.id,
           score,
           matchType,
-          keyMatches: ['React', 'TypeScript', 'Node.js'].slice(0, Math.floor(Math.random() * 2) + 2),
-          missingSkills: ['AWS', 'Docker'].slice(0, Math.floor(Math.random() * 2)),
+          keyMatches: resume.skills || ['React', 'TypeScript', 'Node.js'].slice(0, Math.floor(Math.random() * 2) + 2),
+          missingSkills: resume.gaps || ['AWS', 'Docker'].slice(0, Math.floor(Math.random() * 2)),
         });
       });
     });
@@ -190,14 +204,20 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
             <div>
               <h1 className="text-gray-900 mb-2">Resume Scoring Analysis</h1>
               <p className="text-sm text-gray-600">
-                AI-powered match scoring for {resumes.length} resume{resumes.length > 1 ? 's' : ''} across {jobs.length} job opening{jobs.length > 1 ? 's' : ''}
+                AI-powered match scoring for {resumes?.length || 0} resume{(resumes?.length || 0) !== 1 ? 's' : ''} {effectiveJobs.length > 1 ? `across ${effectiveJobs.length} job openings` : jobTitle ? `for ${jobTitle}` : ''}
               </p>
             </div>
             <button
-              onClick={onComplete}
+              onClick={() => {
+                if (onProceedToApplicants) {
+                  onProceedToApplicants();
+                } else if (onComplete) {
+                  onComplete();
+                }
+              }}
               className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
             >
-              Complete & Apply
+              {onProceedToApplicants ? 'Proceed to Applicants' : 'Complete & Apply'}
             </button>
           </div>
         </div>
@@ -278,10 +298,10 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {scoringResults.map((result, index) => {
-                  const resume = resumes.find(r => r.id === result.resumeId);
-                  const job = jobs.find(j => j.id === result.jobId);
+                  const resume = resumes?.find(r => r.id === result.resumeId);
+                  const job = effectiveJobs.find(j => j.id === result.jobId);
                   const resultKey = `${result.resumeId}-${result.jobId}`;
-                  
+
                   if (!resume || !job) return null;
 
                   return (
@@ -289,11 +309,11 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-sm">
-                            {resume.name.split(' ').map(n => n[0]).join('')}
+                            {(resume.name || resume.candidateName || 'U')?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                           </div>
                           <div>
-                            <div className="text-sm text-gray-900">{resume.name}</div>
-                            <div className="text-xs text-gray-500">{resume.title}</div>
+                            <div className="text-sm text-gray-900">{resume.name || resume.candidateName || 'Unknown'}</div>
+                            <div className="text-xs text-gray-500">{resume.title || resume.experience || ''}</div>
                           </div>
                         </div>
                       </td>
@@ -360,23 +380,23 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
         {/* Detailed Analysis Section */}
         {selectedResultForDetail && (() => {
           const result = scoringResults.find(r => `${r.resumeId}-${r.jobId}` === selectedResultForDetail);
-          const resume = resumes.find(r => r.id === result?.resumeId);
-          const job = jobs.find(j => j.id === result?.jobId);
+          const resume = resumes?.find(r => r.id === result?.resumeId);
+          const job = effectiveJobs.find(j => j.id === result?.jobId);
           const detailedScores = getDetailedScores(selectedResultForDetail);
 
           if (!result || !resume || !job) return null;
 
           return (
             <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-lg mb-6">
-              <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 border-b-4 border-gray-600">
+              <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-white mb-2">📊 Detailed Score Breakdown</h3>
-                    <p className="text-gray-100 text-sm">
-                      <span className="bg-white bg-opacity-20 px-2 py-1 rounded">{resume.name}</span> → <span className="bg-white bg-opacity-20 px-2 py-1 rounded">{job.title}</span>
-                    </p>
-                    <p className="text-gray-200 text-xs mt-2">
-                      💡 Click any row to expand and view detailed AI reasoning
+                    <h3 className="text-gray-900 font-semibold flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-gray-700" />
+                      Scoring Rubric & Evaluation
+                    </h3>
+                    <p className="text-gray-600 text-sm mt-1">
+                      <span className="font-medium">{resume.name || resume.candidateName || 'Unknown'}</span> → <span className="font-medium">{job.title}</span>
                     </p>
                   </div>
                   <button
@@ -391,117 +411,140 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
 
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
-                  <thead className="bg-gray-100">
+                  <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="text-left px-6 py-4 text-xs text-gray-700 border-b-2 border-gray-300 w-8"></th>
-                      <th className="text-left px-6 py-4 text-xs text-gray-700 border-b-2 border-gray-300">CATEGORY</th>
-                      <th className="text-center px-6 py-4 text-xs text-gray-700 border-b-2 border-gray-300">RATING</th>
-                      <th className="text-center px-6 py-4 text-xs text-gray-700 border-b-2 border-gray-300">MATCH STATUS</th>
-                      <th className="text-center px-6 py-4 text-xs text-gray-700 border-b-2 border-gray-300">REQUIREMENT</th>
-                      <th className="text-center px-6 py-4 text-xs text-gray-700 border-b-2 border-gray-300">SCORE</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                        Evaluation Category
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
+                        Rating (out of 10)
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
+                        Rating Range
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                        Eligible Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                        Criteria
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                        AI Reasoning
+                      </th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="bg-white divide-y divide-gray-200">
                     {detailedScores.map((category, index) => {
-                      const isExpanded = expandedRow === `${selectedResultForDetail}-${index}`;
-                      const getStatusColor = (status: string) => {
-                        switch (status) {
-                          case 'Excellent': return 'bg-green-100 text-green-800 border-green-200';
-                          case 'Good': return 'bg-gray-100 text-gray-800 border-gray-200';
-                          case 'Partial': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-                          case 'Poor': return 'bg-red-100 text-red-800 border-red-200';
-                          default: return 'bg-gray-100 text-gray-800 border-gray-200';
-                        }
+                      const getRatingRange = (rating: number): string => {
+                        if (rating === 10) return 'Excellent';
+                        if (rating === 9) return 'Very Good';
+                        if (rating === 8) return 'Good';
+                        if (rating === 7) return 'Average';
+                        return 'Below Average';
                       };
 
-                      const getRequirementColor = (req: string) => {
-                        return req === 'Required' 
-                          ? 'bg-red-50 text-red-700 border-red-200' 
-                          : 'bg-gray-50 text-gray-900 border-gray-200';
+                      const getRatingBgColor = (rating: number): string => {
+                        if (rating >= 9) return 'bg-green-100 border-green-300 text-green-700';
+                        if (rating === 8) return 'bg-gray-100 border-gray-300 text-gray-900';
+                        if (rating === 7) return 'bg-yellow-100 border-yellow-300 text-yellow-700';
+                        return 'bg-red-100 border-red-300 text-red-700';
                       };
+
+                      const getRatingRangeColor = (rating: number): string => {
+                        if (rating >= 9) return 'text-green-700 font-semibold';
+                        if (rating === 8) return 'text-gray-900 font-semibold';
+                        if (rating === 7) return 'text-yellow-700 font-semibold';
+                        return 'text-red-700 font-semibold';
+                      };
+
+                      const isEligible = category.rating > 7;
 
                       return (
-                        <>
-                          <tr 
-                            key={index}
-                            onClick={() => setExpandedRow(isExpanded ? null : `${selectedResultForDetail}-${index}`)}
-                            className={`border-b border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors ${isExpanded ? 'bg-gray-50' : 'bg-white'}`}
-                          >
-                            <td className="px-6 py-5 border-r border-gray-200">
-                              {isExpanded ? (
-                                <ChevronUp className="w-4 h-4 text-gray-800" />
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <Briefcase className="w-4 h-4 text-gray-500" />
+                              <span className="text-sm font-medium text-gray-900">{category.category}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`inline-flex items-center justify-center w-14 h-14 rounded-lg font-bold border ${getRatingBgColor(category.rating)}`}>
+                              {category.rating}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`text-sm ${getRatingRangeColor(category.rating)}`}>
+                              {getRatingRange(category.rating)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              {isEligible ? (
+                                <CheckCircle className="w-5 h-5 text-green-600" />
                               ) : (
-                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                                <AlertCircle className="w-5 h-5 text-red-600" />
                               )}
-                            </td>
-                            <td className="px-6 py-5 border-r border-gray-200">
-                              <span className="text-sm text-gray-900">{category.category}</span>
-                            </td>
-                            <td className="px-6 py-5 text-center border-r border-gray-200">
-                              <div className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 rounded-md">
-                                <span className="text-sm text-gray-900">
-                                  {category.rating}/{category.maxRating}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-5 text-center border-r border-gray-200">
-                              <span className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs border ${getStatusColor(category.matchStatus)}`}>
-                                {category.matchStatus}
+                              <span className={`text-sm font-medium ${isEligible ? 'text-green-700' : 'text-red-700'}`}>
+                                {isEligible ? 'Eligible' : 'Not Eligible'}
                               </span>
-                            </td>
-                            <td className="px-6 py-5 text-center border-r border-gray-200">
-                              <span className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs border ${getRequirementColor(category.requirement)}`}>
-                                {category.requirement}
-                              </span>
-                            </td>
-                            <td className="px-6 py-5 text-center">
-                              <div className="inline-flex items-center gap-2">
-                                <div className="w-16 bg-gray-200 rounded-full h-2">
-                                  <div 
-                                    className={`h-2 rounded-full ${category.score >= 90 ? 'bg-green-600' : category.score >= 70 ? 'bg-gray-800' : category.score >= 50 ? 'bg-yellow-600' : 'bg-red-600'}`}
-                                    style={{ width: `${category.score}%` }}
-                                  ></div>
-                                </div>
-                                <span className="text-sm text-gray-900 min-w-[3rem]">{category.score}%</span>
-                              </div>
-                            </td>
-                          </tr>
-                          {isExpanded && (
-                            <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
-                              <td className="border-r border-gray-200"></td>
-                              <td colSpan={5} className="px-6 py-5">
-                                <div className="flex items-start gap-4">
-                                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-800 to-gray-700 flex items-center justify-center flex-shrink-0 shadow-lg">
-                                    <Star className="w-5 h-5 text-white" />
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <div className="text-xs text-gray-800 px-2 py-1 bg-gray-200 rounded-md">AI REASONING</div>
-                                    </div>
-                                    <p className="text-sm text-gray-800 leading-relaxed bg-white px-4 py-3 rounded-lg border border-gray-200 shadow-sm">
-                                      {category.reasoning}
-                                    </p>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
+                              category.requirement === 'Required'
+                                ? 'bg-red-100 text-red-700 border border-red-300'
+                                : 'bg-gray-100 text-gray-900 border border-gray-300'
+                            }`}>
+                              {category.requirement}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="text-sm text-gray-600 leading-relaxed">{category.reasoning}</p>
+                          </td>
+                        </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
 
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-5 border-t-2 border-gray-300">
+              {/* Summary Stats */}
+              <div className="grid grid-cols-4 gap-4 p-6 border-t border-gray-200">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-green-700">
+                    {detailedScores.filter(c => c.rating > 7).length}
+                  </div>
+                  <div className="text-sm text-gray-700 mt-1">Eligible Criteria</div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-red-700">
+                    {detailedScores.filter(c => c.rating <= 7).length}
+                  </div>
+                  <div className="text-sm text-gray-700 mt-1">Not Eligible Criteria</div>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {detailedScores.filter(c => c.requirement === 'Required').length}
+                  </div>
+                  <div className="text-sm text-gray-700 mt-1">Required Criteria</div>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {(detailedScores.reduce((sum, c) => sum + c.rating, 0) / detailedScores.length).toFixed(1)}
+                  </div>
+                  <div className="text-sm text-gray-700 mt-1">Average Rating</div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="text-sm text-gray-600">
                       Overall Match Score:
                     </div>
-                    <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border-2 border-gray-800 shadow-sm">
+                    <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border border-gray-300">
                       {getScoreIcon(result.matchType)}
-                      <span className="text-xl text-gray-900">{result.score}%</span>
+                      <span className="text-xl font-bold text-gray-900">{result.score}%</span>
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border ${getMatchColor(result.matchType)}`}>
                         {result.matchType.charAt(0).toUpperCase() + result.matchType.slice(1)} Match
                       </span>
@@ -509,7 +552,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                   </div>
                   <button
                     onClick={() => setSelectedResultForDetail(null)}
-                    className="px-4 py-2 text-sm text-white bg-gray-800 rounded-lg hover:bg-gray-900 transition-colors shadow-md"
+                    className="px-4 py-2 text-sm text-white bg-gray-800 rounded-lg hover:bg-gray-900 transition-colors"
                   >
                     Close Detailed View
                   </button>
@@ -540,7 +583,7 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                   // ✅ SCORING COMPLETED FEEDBACK
                   toast.success({
                     title: 'AI scoring completed!',
-                    description: `${resumes.length} resume${resumes.length > 1 ? 's' : ''} scored across ${jobs.length} job${jobs.length > 1 ? 's' : ''}. Applications ready to submit.`,
+                    description: `${resumes?.length || 0} resume${(resumes?.length || 0) !== 1 ? 's' : ''} scored${effectiveJobs.length > 1 ? ` across ${effectiveJobs.length} jobs` : ''}. Applications ready to submit.`,
                     action: {
                       label: 'View Results',
                       onClick: () => {
@@ -548,11 +591,15 @@ export default function ResumeScoring({ resumes, jobs, onBack, onComplete }: Res
                       }
                     }
                   });
-                  onComplete();
+                  if (onProceedToApplicants) {
+                    onProceedToApplicants();
+                  } else if (onComplete) {
+                    onComplete();
+                  }
                 }}
                 className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
               >
-                Complete & Apply
+                {onProceedToApplicants ? 'Proceed to Applicants' : 'Complete & Apply'}
               </button>
             </div>
           </div>

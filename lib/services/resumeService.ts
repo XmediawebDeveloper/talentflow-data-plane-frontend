@@ -120,20 +120,16 @@ export const resumeService = {
    * Upload single resume
    */
   async upload(file: File, folderId?: string): Promise<Resume> {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (folderId) {
-        formData.append('folder_id', folderId);
-      }
-
-      const response = await api.post<Resume>('/resumes/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      return response.data;
-    } catch (error) {
-      throw new Error(handleApiError(error));
+    const formData = new FormData();
+    formData.append('file', file);
+    if (folderId) {
+      formData.append('folder_id', folderId);
     }
+
+    const response = await api.post<Resume>('/resumes/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
   },
 
   /**
@@ -171,7 +167,7 @@ export const resumeService = {
   },
 
   /**
-   * Resolve duplicate
+   * Resolve duplicate (for batch uploads)
    */
   async resolveDuplicate(batchItemId: string, action: 'discard' | 'overwrite' | 'version') {
     try {
@@ -183,6 +179,29 @@ export const resumeService = {
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  /**
+   * Resolve duplicate and upload (for single file uploads)
+   */
+  async resolveDuplicateAndUpload(
+    file: File,
+    existingResumeId: string,
+    action: 'discard' | 'overwrite' | 'version',
+    folderId?: string
+  ): Promise<Resume> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('existing_resume_id', existingResumeId);
+    formData.append('action', action);
+    if (folderId) {
+      formData.append('folder_id', folderId);
+    }
+
+    const response = await api.post<Resume>('/resumes/upload/resolve-duplicate-upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
   },
 
   /**
@@ -264,19 +283,22 @@ export const folderService = {
    */
   async create(name: string, parentId?: string): Promise<Folder> {
     try {
+      console.log('[folderService] Creating folder:', { name, parent_id: parentId });
       const response = await api.post<Folder>('/folders', { name, parent_id: parentId });
+      console.log('[folderService] Folder created:', response.data);
       return response.data;
-    } catch (error) {
-      throw new Error(handleApiError(error));
+    } catch (error: any) {
+      console.error('[folderService] Error creating folder:', error?.response?.data || error);
+      throw error; // Re-throw original error to preserve response data
     }
   },
 
   /**
    * Update folder
    */
-  async update(id: string, name: string, parentId?: string): Promise<Folder> {
+  async update(id: string, data: { name?: string; parent_id?: string }): Promise<Folder> {
     try {
-      const response = await api.put<Folder>(`/folders/${id}`, { name, parent_id: parentId });
+      const response = await api.put<Folder>(`/folders/${id}`, data);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

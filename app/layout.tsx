@@ -30,7 +30,7 @@ export default function RootLayout({
         <link rel="shortcut icon" href="/logos/favicon.png" type="image/png" />
         <link rel="apple-touch-icon" href="/logos/favicon.png" />
       </head>
-      <body className={inter.className}>
+      <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

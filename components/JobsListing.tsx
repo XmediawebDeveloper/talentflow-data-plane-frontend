@@ -15,9 +15,10 @@ interface JobsListingProps {
   onPublishJob?: (job: Job) => void;
   onDisableJob?: (job: Job) => void;
   onRepublishJob?: (job: Job) => void;
+  onArchiveJob?: (job: Job) => void;
 }
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob }: JobsListingProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [locationFilter, setLocationFilter] = useState<string>('all');
@@ -333,17 +334,17 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
   return (
     <main className="flex-1 overflow-y-auto bg-gray-50">
-      <div className="p-8 max-w-7xl mx-auto">
+      <div className="p-8">
         {/* Simple Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-gray-900 mb-2">Job Openings</h1>
-              <p className="text-gray-600">Create and manage your job postings</p>
+              <h1 className="text-2xl font-semibold text-gray-900 mb-2">Job Openings</h1>
+              <p className="text-base text-gray-600">Create and manage your job postings</p>
             </div>
             <button
               onClick={onCreateNew}
-              className="px-5 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2"
+              className="px-6 py-3.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-base font-medium"
             >
               <Plus className="w-5 h-5" />
               <span>Create New Job</span>
@@ -351,100 +352,100 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
           </div>
 
           {/* Simple Stats Cards */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg p-5 border border-gray-200">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <Briefcase className="w-5 h-5 text-gray-700" />
+          <div className="grid grid-cols-4 gap-5 mb-6">
+            <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <Briefcase className="w-6 h-6 text-gray-700" />
                 </div>
-                <span className="text-sm text-gray-600">Total Jobs</span>
+                <span className="text-base text-gray-600">Total Jobs</span>
               </div>
-              <div className="text-3xl text-gray-900">{stats.total}</div>
+              <div className="text-4xl font-semibold text-gray-900">{stats.total}</div>
             </div>
 
-            <div className="bg-white rounded-lg p-5 border border-gray-200">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+            <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                  <CheckCircle2 className="w-6 h-6 text-green-600" />
                 </div>
-                <span className="text-sm text-gray-600">Active</span>
+                <span className="text-base text-gray-600">Active</span>
               </div>
-              <div className="text-3xl text-gray-900">{stats.published}</div>
+              <div className="text-4xl font-semibold text-gray-900">{stats.published}</div>
             </div>
 
-            <div className="bg-white rounded-lg p-5 border border-gray-200">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-yellow-600" />
+            <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-yellow-600" />
                 </div>
-                <span className="text-sm text-gray-600">Drafts</span>
+                <span className="text-base text-gray-600">Drafts</span>
               </div>
-              <div className="text-3xl text-gray-900">{stats.draft}</div>
+              <div className="text-4xl font-semibold text-gray-900">{stats.draft}</div>
             </div>
 
-            <div className="bg-white rounded-lg p-5 border border-gray-200">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <Users className="w-5 h-5 text-gray-700" />
+            <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <Users className="w-6 h-6 text-gray-700" />
                 </div>
-                <span className="text-sm text-gray-600">Applicants</span>
+                <span className="text-base text-gray-600">Applicants</span>
               </div>
-              <div className="text-3xl text-gray-900">{stats.totalApplicants}</div>
+              <div className="text-4xl font-semibold text-gray-900">{stats.totalApplicants}</div>
             </div>
           </div>
 
           {/* Simple Search and Filters */}
-          <div className="bg-white rounded-lg p-5 border border-gray-200">
-            <div className="flex items-center gap-3 mb-4">
+          <div className="bg-white rounded-xl p-6 border border-gray-200">
+            <div className="flex items-center gap-4 mb-5">
               {/* Search */}
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search jobs..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+                  className="w-full pl-12 pr-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                 />
               </div>
 
               {/* View Toggle */}
-              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+              <div className="flex items-center gap-1 bg-gray-100 p-1.5 rounded-lg">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded ${
+                  className={`p-2.5 rounded ${
                     viewMode === 'grid'
                       ? 'bg-white text-gray-800 shadow-sm'
                       : 'text-gray-600'
                   }`}
                 >
-                  <LayoutGrid className="w-4 h-4" />
+                  <LayoutGrid className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`p-2 rounded ${
+                  className={`p-2.5 rounded ${
                     viewMode === 'list'
                       ? 'bg-white text-gray-800 shadow-sm'
                       : 'text-gray-600'
                   }`}
                 >
-                  <List className="w-4 h-4" />
+                  <List className="w-5 h-5" />
                 </button>
               </div>
 
               {/* More Filters Button */}
               <button
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className={`px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 ${
+                className={`px-5 py-3 rounded-lg font-medium transition-all flex items-center gap-2 text-base ${
                   activeFiltersCount > 0 || showAdvancedFilters
                     ? 'bg-gray-100 text-gray-800 border border-gray-300'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                <SlidersHorizontal className="w-4 h-4" />
+                <SlidersHorizontal className="w-5 h-5" />
                 <span>More Filters</span>
                 {activeFiltersCount > 0 && (
-                  <span className="px-1.5 py-0.5 bg-gray-800 text-white rounded text-xs">
+                  <span className="px-2 py-0.5 bg-gray-800 text-white rounded text-sm">
                     {activeFiltersCount}
                   </span>
                 )}
@@ -452,13 +453,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
             </div>
 
             {/* Quick Status Filters */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Show:</span>
+            <div className="flex items-center gap-3">
+              <span className="text-base text-gray-600">Show:</span>
               {['all', 'Published', 'Draft', 'Closed', 'Disabled', 'Archived'].map((status) => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
+                  className={`px-4 py-2 rounded-lg text-base transition-all ${
                     statusFilter === status
                       ? 'bg-gray-800 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -482,9 +483,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                     setDatePostedFilter('all');
                     setSalaryRangeFilter('all');
                   }}
-                  className="ml-auto text-sm text-red-600 hover:text-red-700 flex items-center gap-1"
+                  className="ml-auto text-base text-red-600 hover:text-red-700 flex items-center gap-1"
                 >
-                  <XCircle className="w-4 h-4" />
+                  <XCircle className="w-5 h-5" />
                   Clear
                 </button>
               )}
@@ -492,16 +493,16 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
             {/* More Filters Panel */}
             {showAdvancedFilters && (
-              <div className="mt-5 pt-5 border-t border-gray-200">
-                <div className="grid grid-cols-3 gap-4">
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="grid grid-cols-3 gap-5">
                   {/* Location */}
                   {uniqueLocations.length > 1 && (
                     <div>
-                      <label className="block text-sm text-gray-700 mb-2">Location</label>
+                      <label className="block text-base text-gray-700 mb-2 font-medium">Location</label>
                       <select
                         value={locationFilter}
                         onChange={(e) => setLocationFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
                       >
                         <option value="all">All Locations</option>
                         {uniqueLocations.map(loc => (
@@ -514,11 +515,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   {/* Department */}
                   {uniqueDepartments.length > 0 && (
                     <div>
-                      <label className="block text-sm text-gray-700 mb-2">Department</label>
+                      <label className="block text-base text-gray-700 mb-2 font-medium">Department</label>
                       <select
                         value={departmentFilter}
                         onChange={(e) => setDepartmentFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
                       >
                         <option value="all">All Departments</option>
                         {uniqueDepartments.map(dept => (
@@ -531,11 +532,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   {/* Employment Type */}
                   {uniqueEmploymentTypes.length > 0 && (
                     <div>
-                      <label className="block text-sm text-gray-700 mb-2">Job Type</label>
+                      <label className="block text-base text-gray-700 mb-2 font-medium">Job Type</label>
                       <select
                         value={employmentTypeFilter}
                         onChange={(e) => setEmploymentTypeFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
                       >
                         <option value="all">All Types</option>
                         {uniqueEmploymentTypes.map(type => (
@@ -551,8 +552,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
         </div>
 
         {/* Results Count */}
-        <div className="mb-4">
-          <p className="text-sm text-gray-600">
+        <div className="mb-5">
+          <p className="text-base text-gray-600">
             Showing {filteredJobs.length} {filteredJobs.length === 1 ? 'job' : 'jobs'}
             {filteredJobs.length !== jobs.length && ` (filtered from ${jobs.length} total)`}
           </p>
@@ -560,18 +561,18 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
         {/* Sort and Bulk Actions Bar */}
         {sortedJobs.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
             <div className="flex items-center justify-between">
               {/* Left: Bulk Selection */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-5">
                 <button
                   onClick={handleSelectAll}
-                  className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900"
+                  className="flex items-center gap-2 text-base text-gray-700 hover:text-gray-900"
                 >
                   {selectedJobs.size === sortedJobs.length && sortedJobs.length > 0 ? (
-                    <CheckSquare className="w-5 h-5 text-gray-800" />
+                    <CheckSquare className="w-6 h-6 text-gray-800" />
                   ) : (
-                    <Square className="w-5 h-5 text-gray-400" />
+                    <Square className="w-6 h-6 text-gray-400" />
                   )}
                   <span>
                     {selectedJobs.size > 0
@@ -585,48 +586,48 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   <div className="relative">
                     <button
                       onClick={() => setShowBulkActions(!showBulkActions)}
-                      className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-sm"
+                      className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-base"
                     >
                       <span>Bulk Actions</span>
-                      <ChevronDown className="w-4 h-4" />
+                      <ChevronDown className="w-5 h-5" />
                     </button>
 
                     {showBulkActions && (
-                      <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                      <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                         <button
                           onClick={handleBulkPublish}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
                         >
-                          <Send className="w-4 h-4 text-green-600" />
+                          <Send className="w-5 h-5 text-green-600" />
                           Publish Selected (Drafts)
                         </button>
                         <button
                           onClick={handleBulkDisable}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
                         >
-                          <Ban className="w-4 h-4 text-red-600" />
+                          <Ban className="w-5 h-5 text-red-600" />
                           Disable Selected (Published)
                         </button>
                         <button
                           onClick={handleBulkArchive}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
                         >
-                          <Archive className="w-4 h-4 text-gray-600" />
+                          <Archive className="w-5 h-5 text-gray-600" />
                           Archive Selected
                         </button>
                         <div className="border-t border-gray-200 my-2" />
                         <button
                           onClick={handleBulkExport}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
                         >
-                          <Download className="w-4 h-4 text-gray-700" />
+                          <Download className="w-5 h-5 text-gray-700" />
                           Export Selected to CSV
                         </button>
                         <button
                           onClick={handleBulkDelete}
-                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
+                          className="w-full px-5 py-3 text-left text-base text-red-600 hover:bg-red-50 flex items-center gap-3"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-5 h-5" />
                           Delete Selected
                         </button>
                       </div>
@@ -636,12 +637,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
               </div>
 
               {/* Right: Sort Controls */}
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-600">Sort by:</span>
+              <div className="flex items-center gap-4">
+                <span className="text-base text-gray-600">Sort by:</span>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
+                  className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
                 >
                   <option value="date">Date Posted</option>
                   <option value="applicants">Applicants</option>
@@ -651,10 +652,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 </select>
                 <button
                   onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                   title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
                 >
-                  <ArrowUpDown className={`w-4 h-4 ${sortOrder === 'desc' ? 'rotate-180' : ''} transition-transform`} />
+                  <ArrowUpDown className={`w-5 h-5 ${sortOrder === 'desc' ? 'rotate-180' : ''} transition-transform`} />
                 </button>
               </div>
             </div>
@@ -665,77 +666,77 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
         {currentJobs.length > 0 ? (
           viewMode === 'grid' ? (
             // Grid View
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {currentJobs.map(job => {
                 const statusConfig = getStatusConfig(job.status);
 
                 return (
                   <div
                     key={job.id}
-                    className="bg-white rounded-lg border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer overflow-hidden"
+                    className="bg-white rounded-xl border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer overflow-hidden"
                     onClick={() => onViewJob(job)}
                   >
                     {/* Card Header */}
-                    <div className="p-5 border-b border-gray-100">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <Briefcase className="w-5 h-5 text-gray-700" />
+                    <div className="p-6 border-b border-gray-100">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Briefcase className="w-6 h-6 text-gray-700" />
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-xs ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-1.5`}>
-                          <div className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`}></div>
+                        <span className={`px-3 py-1.5 rounded-full text-sm ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-2`}>
+                          <div className={`w-2 h-2 rounded-full ${statusConfig.dot}`}></div>
                           {job.status}
                         </span>
                       </div>
-                      <h3 className="text-lg text-gray-900 mb-2 line-clamp-2">
+                      <h3 className="text-xl font-medium text-gray-900 mb-2 line-clamp-2">
                         {job.title}
                       </h3>
                     </div>
 
                     {/* Card Body */}
-                    <div className="p-5">
-                      <div className="space-y-2 mb-4">
+                    <div className="p-6">
+                      <div className="space-y-3 mb-5">
                         {job.department && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Building2 className="w-4 h-4 text-gray-400" />
+                          <div className="flex items-center gap-3 text-base text-gray-600">
+                            <Building2 className="w-5 h-5 text-gray-400" />
                             <span>{job.department}</span>
                           </div>
                         )}
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <MapPin className="w-4 h-4 text-gray-400" />
+                        <div className="flex items-center gap-3 text-base text-gray-600">
+                          <MapPin className="w-5 h-5 text-gray-400" />
                           <span>{job.location}</span>
                         </div>
                         {job.employmentType && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Clock className="w-4 h-4 text-gray-400" />
+                          <div className="flex items-center gap-3 text-base text-gray-600">
+                            <Clock className="w-5 h-5 text-gray-400" />
                             <span>{job.employmentType}</span>
                           </div>
                         )}
                         {job.experience && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <TrendingUp className="w-4 h-4 text-gray-400" />
+                          <div className="flex items-center gap-3 text-base text-gray-600">
+                            <TrendingUp className="w-5 h-5 text-gray-400" />
                             <span>{job.experience} years</span>
                           </div>
                         )}
                         {job.postedDate && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Calendar className="w-4 h-4 text-gray-400" />
+                          <div className="flex items-center gap-3 text-base text-gray-600">
+                            <Calendar className="w-5 h-5 text-gray-400" />
                             <span>Posted {new Date(job.postedDate).toLocaleDateString()}</span>
                           </div>
                         )}
                       </div>
 
                       {/* Salary & Skills Info */}
-                      <div className="space-y-2 mb-4">
+                      <div className="space-y-3 mb-5">
                         {(job as any).salary && (
-                          <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg">
-                            <DollarSign className="w-4 h-4 text-green-600" />
-                            <span className="text-sm text-green-700">{(job as any).salary}</span>
+                          <div className="flex items-center gap-3 px-4 py-2.5 bg-green-50 rounded-lg">
+                            <DollarSign className="w-5 h-5 text-green-600" />
+                            <span className="text-base text-green-700">{(job as any).salary}</span>
                           </div>
                         )}
                         {((job as any).mustHaveSkills?.length > 0 || (job as any).niceToHaveSkills?.length > 0) && (
-                          <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
-                            <Target className="w-4 h-4 text-gray-700" />
-                            <span className="text-sm text-gray-700">
+                          <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-100 rounded-lg">
+                            <Target className="w-5 h-5 text-gray-700" />
+                            <span className="text-base text-gray-700">
                               {(job as any).mustHaveSkills?.length || 0} required + {(job as any).niceToHaveSkills?.length || 0} preferred skills
                             </span>
                           </div>
@@ -743,83 +744,78 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                       </div>
 
                       {/* Applicants */}
-                      <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg mb-4">
-                        <Users className="w-4 h-4 text-gray-600" />
-                        <span className="text-sm text-gray-700">
+                      <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50 rounded-lg mb-5">
+                        <Users className="w-5 h-5 text-gray-600" />
+                        <span className="text-base text-gray-700">
                           {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
                         </span>
                       </div>
 
-                      {/* Actions */}
-                      <div className="flex flex-col gap-2">
-                        {/* View Button - Always visible */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onViewJob(job);
-                          }}
-                          className="w-full px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View
-                        </button>
-
-                        {/* Edit Button - Only for Draft */}
-                        {job.status === 'Draft' && onEditJob && (
+                      {/* Actions - Hide for Draft status */}
+                      {job.status !== 'Draft' && (
+                        <div className="flex flex-col gap-3">
+                          {/* View Button - For Published and other statuses */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onEditJob(job);
+                              onViewJob(job);
                             }}
-                            className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
+                            className="w-full px-5 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-base font-medium flex items-center justify-center gap-2"
                           >
-                            <Edit className="w-4 h-4" />
-                            Edit
+                            <Eye className="w-5 h-5" />
+                            View
                           </button>
-                        )}
 
-                        {/* Publish Button - Only for Draft */}
-                        {job.status === 'Draft' && onPublishJob && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onPublishJob(job);
-                            }}
-                            className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
-                          >
-                            <Send className="w-4 h-4" />
-                            Publish
-                          </button>
-                        )}
+                          {/* Edit Button - For Published */}
+                          {job.status === 'Published' && onEditJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditJob(job);
+                              }}
+                              className="w-full px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-base font-medium flex items-center justify-center gap-2"
+                            >
+                              <Edit className="w-5 h-5" />
+                              Edit
+                            </button>
+                          )}
 
-                        {/* Disable Button - Only for Published */}
-                        {job.status === 'Published' && onDisableJob && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDisableJob(job);
-                            }}
-                            className="w-full px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
-                          >
-                            <Ban className="w-4 h-4" />
-                            Disable
-                          </button>
-                        )}
+                          {/* Disable Button - Only for Published */}
+                          {job.status === 'Published' && onDisableJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDisableJob(job);
+                              }}
+                              className="w-full px-5 py-3 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-base font-medium flex items-center justify-center gap-2"
+                            >
+                              <Ban className="w-5 h-5" />
+                              Disable
+                            </button>
+                          )}
 
-                        {/* Republish Button - Only for Closed */}
-                        {job.status === 'Closed' && onRepublishJob && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRepublishJob(job);
-                            }}
-                            className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                            Republish
-                          </button>
-                        )}
-                      </div>
+                          {/* Republish Button - Only for Closed/Disabled */}
+                          {(job.status === 'Closed' || job.status === 'Disabled') && onRepublishJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRepublishJob(job);
+                              }}
+                              className="w-full px-5 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-base font-medium flex items-center justify-center gap-2"
+                            >
+                              <RefreshCw className="w-5 h-5" />
+                              Republish
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Draft - Show "Continue" hint */}
+                      {job.status === 'Draft' && (
+                        <div className="text-center text-base text-yellow-600 py-3">
+                          Click to continue editing
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -827,81 +823,81 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
             </div>
           ) : (
             // List View
-            <div className="space-y-3">
+            <div className="space-y-4">
               {currentJobs.map(job => {
                 const statusConfig = getStatusConfig(job.status);
 
                 return (
                   <div
                     key={job.id}
-                    className="bg-white rounded-lg border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer p-5"
+                    className="bg-white rounded-xl border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer p-6"
                     onClick={() => onViewJob(job)}
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-5">
                       {/* Job Icon */}
-                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Briefcase className="w-6 h-6 text-gray-700" />
+                      <div className="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Briefcase className="w-7 h-7 text-gray-700" />
                       </div>
 
                       {/* Job Info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg text-gray-900 truncate">
+                        <div className="flex items-center gap-4 mb-3">
+                          <h3 className="text-xl font-medium text-gray-900 truncate">
                             {job.title}
                           </h3>
-                          <span className={`px-3 py-1 rounded-full text-xs ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-1.5 flex-shrink-0`}>
-                            <div className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`}></div>
+                          <span className={`px-3 py-1.5 rounded-full text-sm ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-2 flex-shrink-0`}>
+                            <div className={`w-2 h-2 rounded-full ${statusConfig.dot}`}></div>
                             {job.status}
                           </span>
                         </div>
-                        
+
                         {/* Primary Info Row */}
-                        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-2">
+                        <div className="flex flex-wrap items-center gap-5 text-base text-gray-600 mb-3">
                           {job.department && (
-                            <span className="flex items-center gap-1.5">
-                              <Building2 className="w-4 h-4 text-gray-400" />
+                            <span className="flex items-center gap-2">
+                              <Building2 className="w-5 h-5 text-gray-400" />
                               {job.department}
                             </span>
                           )}
-                          <span className="flex items-center gap-1.5">
-                            <MapPin className="w-4 h-4 text-gray-400" />
+                          <span className="flex items-center gap-2">
+                            <MapPin className="w-5 h-5 text-gray-400" />
                             {job.location}
                           </span>
                           {job.employmentType && (
-                            <span className="flex items-center gap-1.5">
-                              <Clock className="w-4 h-4 text-gray-400" />
+                            <span className="flex items-center gap-2">
+                              <Clock className="w-5 h-5 text-gray-400" />
                               {job.employmentType}
                             </span>
                           )}
                           {job.experience && (
-                            <span className="flex items-center gap-1.5">
-                              <TrendingUp className="w-4 h-4 text-gray-400" />
+                            <span className="flex items-center gap-2">
+                              <TrendingUp className="w-5 h-5 text-gray-400" />
                               {job.experience} years
                             </span>
                           )}
                           {job.postedDate && (
-                            <span className="flex items-center gap-1.5">
-                              <Calendar className="w-4 h-4 text-gray-400" />
+                            <span className="flex items-center gap-2">
+                              <Calendar className="w-5 h-5 text-gray-400" />
                               Posted {new Date(job.postedDate).toLocaleDateString()}
                             </span>
                           )}
-                          <span className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 rounded">
-                            <Users className="w-4 h-4 text-gray-400" />
+                          <span className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
+                            <Users className="w-5 h-5 text-gray-400" />
                             {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
                           </span>
                         </div>
 
                         {/* Additional Info Row - Salary & Skills */}
-                        <div className="flex items-center flex-wrap gap-2">
+                        <div className="flex items-center flex-wrap gap-3">
                           {(job as any).salary && (
-                            <div className="flex items-center gap-1.5 px-3 py-1 bg-green-50 rounded-lg text-sm">
-                              <DollarSign className="w-4 h-4 text-green-600" />
+                            <div className="flex items-center gap-2 px-4 py-1.5 bg-green-50 rounded-lg text-base">
+                              <DollarSign className="w-5 h-5 text-green-600" />
                               <span className="text-green-700">{(job as any).salary}</span>
                             </div>
                           )}
                           {((job as any).mustHaveSkills?.length > 0 || (job as any).niceToHaveSkills?.length > 0) && (
-                            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 rounded-lg text-sm">
-                              <Target className="w-4 h-4 text-gray-700" />
+                            <div className="flex items-center gap-2 px-4 py-1.5 bg-gray-100 rounded-lg text-base">
+                              <Target className="w-5 h-5 text-gray-700" />
                               <span className="text-gray-700">
                                 {(job as any).mustHaveSkills?.length || 0} required + {(job as any).niceToHaveSkills?.length || 0} preferred
                               </span>
@@ -910,76 +906,71 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         </div>
                       </div>
 
-                      {/* Actions */}
-                      <div className="flex flex-col gap-2 flex-shrink-0">
-                        {/* View Button - Always visible */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onViewJob(job);
-                          }}
-                          className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium flex items-center justify-center gap-2"
-                        >
-                          <Eye className="w-5 h-5" />
-                          View
-                        </button>
-
-                        {/* Edit Button - Only for Draft */}
-                        {job.status === 'Draft' && onEditJob && (
+                      {/* Actions - Hide for Draft status */}
+                      {job.status !== 'Draft' && (
+                        <div className="flex flex-col gap-3 flex-shrink-0">
+                          {/* View Button - For Published and other statuses */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onEditJob(job);
+                              onViewJob(job);
                             }}
-                            className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium flex items-center justify-center gap-2"
+                            className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-base font-medium flex items-center justify-center gap-2"
                           >
-                            <Edit className="w-5 h-5" />
-                            Edit
+                            <Eye className="w-5 h-5" />
+                            View
                           </button>
-                        )}
 
-                        {/* Publish Button - Only for Draft */}
-                        {job.status === 'Draft' && onPublishJob && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onPublishJob(job);
-                            }}
-                            className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-medium flex items-center justify-center gap-2"
-                          >
-                            <Send className="w-5 h-5" />
-                            Publish
-                          </button>
-                        )}
+                          {/* Edit Button - For Published */}
+                          {job.status === 'Published' && onEditJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditJob(job);
+                              }}
+                              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-base font-medium flex items-center justify-center gap-2"
+                            >
+                              <Edit className="w-5 h-5" />
+                              Edit
+                            </button>
+                          )}
 
-                        {/* Disable Button - Only for Published */}
-                        {job.status === 'Published' && onDisableJob && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDisableJob(job);
-                            }}
-                            className="px-5 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all font-medium flex items-center justify-center gap-2"
-                          >
-                            <Ban className="w-5 h-5" />
-                            Disable
-                          </button>
-                        )}
+                          {/* Disable Button - Only for Published */}
+                          {job.status === 'Published' && onDisableJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDisableJob(job);
+                              }}
+                              className="px-6 py-3 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-base font-medium flex items-center justify-center gap-2"
+                            >
+                              <Ban className="w-5 h-5" />
+                              Disable
+                            </button>
+                          )}
 
-                        {/* Republish Button - Only for Closed */}
-                        {job.status === 'Closed' && onRepublishJob && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRepublishJob(job);
-                            }}
-                            className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-medium flex items-center justify-center gap-2"
-                          >
-                            <RefreshCw className="w-5 h-5" />
-                            Republish
-                          </button>
-                        )}
-                      </div>
+                          {/* Republish Button - Only for Closed/Disabled */}
+                          {(job.status === 'Closed' || job.status === 'Disabled') && onRepublishJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRepublishJob(job);
+                              }}
+                              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-base font-medium flex items-center justify-center gap-2"
+                            >
+                              <RefreshCw className="w-5 h-5" />
+                              Republish
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Draft - Show "Continue" hint */}
+                      {job.status === 'Draft' && (
+                        <div className="flex items-center text-base text-yellow-600 px-5">
+                          <span>Click to continue editing →</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -988,19 +979,19 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
           )
         ) : (
           // Empty State
-          <div className="bg-white rounded-lg border border-gray-200 p-16 text-center">
+          <div className="bg-white rounded-xl border border-gray-200 p-20 text-center">
             <div className="max-w-md mx-auto">
-              <div className="w-20 h-20 mx-auto mb-5 bg-gray-100 rounded-full flex items-center justify-center">
+              <div className="w-24 h-24 mx-auto mb-6 bg-gray-100 rounded-full flex items-center justify-center">
                 {searchQuery || activeFiltersCount > 0 ? (
-                  <Search className="w-10 h-10 text-gray-400" />
+                  <Search className="w-12 h-12 text-gray-400" />
                 ) : (
-                  <Briefcase className="w-10 h-10 text-gray-400" />
+                  <Briefcase className="w-12 h-12 text-gray-400" />
                 )}
               </div>
-              <h3 className="text-xl text-gray-900 mb-2">
+              <h3 className="text-2xl font-medium text-gray-900 mb-3">
                 {searchQuery || activeFiltersCount > 0 ? 'No jobs found' : 'No jobs yet'}
               </h3>
-              <p className="text-gray-600 mb-6">
+              <p className="text-lg text-gray-600 mb-8">
                 {searchQuery || activeFiltersCount > 0
                   ? 'Try changing your search or filters'
                   : 'Create your first job opening to get started'
@@ -1019,7 +1010,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                     setDatePostedFilter('all');
                     setSalaryRangeFilter('all');
                   }}
-                  className="px-5 py-2.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all inline-flex items-center gap-2"
+                  className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all inline-flex items-center gap-2 text-base font-medium"
                 >
                   <XCircle className="w-5 h-5" />
                   Clear Filters
@@ -1027,7 +1018,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
               ) : (
                 <button
                   onClick={onCreateNew}
-                  className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all inline-flex items-center gap-2"
+                  className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all inline-flex items-center gap-2 text-base font-medium"
                 >
                   <Plus className="w-5 h-5" />
                   Create Job
@@ -1039,16 +1030,16 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
         {/* Pagination Controls */}
         {totalPages > 1 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-4 mt-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mt-6">
             <div className="flex items-center justify-between">
               {/* Left: Items per page selector and showing info */}
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Show:</span>
+              <div className="flex items-center gap-5">
+                <div className="flex items-center gap-3">
+                  <span className="text-base text-gray-600">Show:</span>
                   <select
                     value={itemsPerPage}
                     onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                    className="px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
                   >
                     <option value={6}>6</option>
                     <option value={12}>12</option>
@@ -1056,13 +1047,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                     <option value={48}>48</option>
                     <option value={100}>100</option>
                   </select>
-                  <span className="text-sm text-gray-600">per page</span>
+                  <span className="text-base text-gray-600">per page</span>
                 </div>
-                
+
                 <div className="h-6 w-px bg-gray-300" />
-                
-                <span className="text-sm text-gray-600">
-                  Showing <span className="text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-gray-900">{Math.min(currentPage * itemsPerPage, sortedJobs.length)}</span> of <span className="text-gray-900">{sortedJobs.length}</span> jobs
+
+                <span className="text-base text-gray-600">
+                  Showing <span className="font-medium text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium text-gray-900">{Math.min(currentPage * itemsPerPage, sortedJobs.length)}</span> of <span className="font-medium text-gray-900">{sortedJobs.length}</span> jobs
                 </span>
               </div>
 
@@ -1072,24 +1063,24 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className={`p-2 rounded-lg border transition-all ${
+                  className={`p-2.5 rounded-lg border transition-all ${
                     currentPage === 1
                       ? 'border-gray-200 text-gray-400 cursor-not-allowed'
                       : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                   }`}
                   title="Previous page"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-5 h-5" />
                 </button>
 
                 {/* Page Numbers */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   {getPageNumbers().map((page, index) => (
                     <button
                       key={index}
                       onClick={() => typeof page === 'number' && handlePageChange(page)}
                       disabled={page === '...'}
-                      className={`min-w-[36px] h-9 px-3 rounded-lg text-sm transition-all ${
+                      className={`min-w-[42px] h-10 px-4 rounded-lg text-base transition-all ${
                         page === currentPage
                           ? 'bg-gray-800 text-white shadow-sm'
                           : page === '...'
@@ -1106,14 +1097,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className={`p-2 rounded-lg border transition-all ${
+                  className={`p-2.5 rounded-lg border transition-all ${
                     currentPage === totalPages
                       ? 'border-gray-200 text-gray-400 cursor-not-allowed'
                       : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                   }`}
                   title="Next page"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
             </div>
@@ -1123,7 +1114,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
       {/* AI Match Modal */}
       {showAIMatchModal && selectedJobForAIMatch && (
-        <AITalentMatchProgressPanel 
+        <AITalentMatchProgressPanel
           jobTitle={selectedJobForAIMatch.title}
           onComplete={(results) => {
             console.log('AI Match completed with results:', results);
