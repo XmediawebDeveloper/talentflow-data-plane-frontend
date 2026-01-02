@@ -45,12 +45,14 @@ function JDCreationContent() {
   }
 
   return (
-    <JDCreation
-      onBack={handleViewAllJobs}
-      editingJD={editingJD ? {
+    <div className="h-[calc(100vh-64px)] overflow-hidden">
+      <JDCreation
+        onBack={handleViewAllJobs}
+        editingJD={editingJD ? {
         id: editingJD.id,
         title: editingJD.title,
         description: editingJD.description,
+        status: editingJD.status,  // Pass status to determine if draft or published
         creation_stage: editingJD.creation_stage || 'create',
         must_have_skills: editingJD.must_have_skills,
         nice_to_have_skills: editingJD.nice_to_have_skills,
@@ -61,6 +63,8 @@ function JDCreationContent() {
         salary_min: editingJD.salary_min,
         salary_max: editingJD.salary_max,
         compensation_type: editingJD.compensation_type,
+        employment_type: editingJD.employment_type,
+        remote_type: editingJD.remote_type,
         assessment_guidance: editingJD.assessment_guidance,
         internal_comments: editingJD.internal_comments,
         must_have_comments: editingJD.must_have_comments,
@@ -71,7 +75,8 @@ function JDCreationContent() {
           is_required: loc.is_required,
         })),
       } : null}
-    />
+      />
+    </div>
   );
 }
 

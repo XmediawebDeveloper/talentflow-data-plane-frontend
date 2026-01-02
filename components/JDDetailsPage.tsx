@@ -1,10 +1,107 @@
 'use client';
 
-import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, Award } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, Award, User, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect, ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { jdService, JDResponse } from '@/lib/services/jdService';
+import { jdService, JDResponse, JDVersion } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+
+// Parse and render JD description with proper formatting
+const renderJDDescription = (description: string): ReactNode => {
+  if (!description) return null;
+
+  // Split by lines
+  const lines = description.split('\n');
+  const elements: ReactNode[] = [];
+  let currentList: string[] = [];
+  let listKey = 0;
+  let skipSkillsSection = false;
+
+  const flushList = () => {
+    if (currentList.length > 0) {
+      elements.push(
+        <ul key={`list-${listKey++}`} className="space-y-2 mb-4 ml-1">
+          {currentList.map((item, i) => (
+            <li key={i} className="flex items-start gap-2 text-gray-700">
+              <span className="text-gray-400 mt-1">•</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      );
+      currentList = [];
+    }
+  };
+
+  lines.forEach((line, index) => {
+    const trimmedLine = line.trim();
+
+    // Skip empty lines but flush any pending list
+    if (!trimmedLine) {
+      flushList();
+      skipSkillsSection = false;
+      return;
+    }
+
+    // Skip Must-Have Skills and Nice-to-Have Skills sections (they're shown separately)
+    if (/^(Must-Have Skills|Nice-to-Have Skills)$/i.test(trimmedLine)) {
+      flushList();
+      skipSkillsSection = true;
+      return;
+    }
+
+    // Skip content in skills sections
+    if (skipSkillsSection) {
+      return;
+    }
+
+    // H2 Headers (## or lines ending with certain keywords)
+    if (trimmedLine.startsWith('## ') ||
+        /^(About the Role|Key Responsibilities|Requirements|What We Offer|Job Summary|Qualifications|Benefits|About Us|How to Apply)$/i.test(trimmedLine)) {
+      flushList();
+      const headerText = trimmedLine.replace(/^##\s*/, '');
+      elements.push(
+        <div key={`h3-${index}`} className="mt-6 mb-3 first:mt-0">
+          <h3 className="text-base font-semibold text-gray-900">{headerText}</h3>
+          <div className="h-px bg-gray-200 mt-2"></div>
+        </div>
+      );
+      return;
+    }
+
+    // H3 Headers (### or Must Have / Nice to Have)
+    if (trimmedLine.startsWith('### ') ||
+        /^(Must Have|Nice to Have)$/i.test(trimmedLine)) {
+      flushList();
+      const headerText = trimmedLine.replace(/^###\s*/, '');
+      elements.push(
+        <h4 key={`h4-${index}`} className="text-sm font-medium text-gray-800 mt-4 mb-2">
+          {headerText}
+        </h4>
+      );
+      return;
+    }
+
+    // Bullet points
+    if (trimmedLine.startsWith('- ') || trimmedLine.startsWith('* ') || trimmedLine.startsWith('• ')) {
+      currentList.push(trimmedLine.replace(/^[-*•]\s*/, ''));
+      return;
+    }
+
+    // Regular paragraph
+    flushList();
+    elements.push(
+      <p key={`p-${index}`} className="text-gray-700 mb-3 leading-relaxed">
+        {trimmedLine}
+      </p>
+    );
+  });
+
+  // Flush any remaining list
+  flushList();
+
+  return <div className="space-y-1">{elements}</div>;
+};
 
 export default function JDDetailsPage() {
   const router = useRouter();
@@ -13,10 +110,14 @@ export default function JDDetailsPage() {
 
   const [jd, setJd] = useState<JDResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [versions, setVersions] = useState<JDVersion[]>([]);
+  const [currentVersion, setCurrentVersion] = useState<number>(0);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   useEffect(() => {
     if (jdId) {
       fetchJD();
+      fetchVersions();
     }
   }, [jdId]);
 
@@ -31,6 +132,18 @@ export default function JDDetailsPage() {
       toast.error('Failed to load job description');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchVersions = async () => {
+    if (!jdId) return;
+    try {
+      const history = await jdService.getVersionHistory(jdId);
+      setVersions(history.versions || []);
+      setCurrentVersion(history.current_version || 0);
+    } catch (error) {
+      console.error('Failed to fetch version history:', error);
+      // Don't show error toast - versions might not exist yet
     }
   };
 
@@ -182,41 +295,45 @@ export default function JDDetailsPage() {
             {/* Description */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Description</h2>
-              <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
-                {jd.description}
+              <div className="jd-content text-gray-700 text-sm leading-relaxed">
+                {renderJDDescription(jd.description || '')}
               </div>
             </div>
 
             {/* Skills */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Required Skills</h2>
+            {((jd.must_have_skills && jd.must_have_skills.length > 0) || (jd.nice_to_have_skills && jd.nice_to_have_skills.length > 0)) && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Skills & Qualifications</h2>
 
-              {jd.must_have_skills && jd.must_have_skills.length > 0 && (
-                <div className="mb-4">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Must Have</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {jd.must_have_skills.map((skill, i) => (
-                      <span key={i} className="px-3 py-1 bg-red-50 text-red-700 rounded-full text-sm">
-                        {skill}
-                      </span>
-                    ))}
+                {jd.must_have_skills && jd.must_have_skills.length > 0 && (
+                  <div className="mb-5">
+                    <h3 className="text-sm font-medium text-gray-900 mb-3">Required Skills</h3>
+                    <ul className="space-y-2 ml-1">
+                      {jd.must_have_skills.map((skill, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                          <span className="text-gray-400 mt-0.5">•</span>
+                          <span>{skill}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                </div>
-              )}
+                )}
 
-              {jd.nice_to_have_skills && jd.nice_to_have_skills.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Nice to Have</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {jd.nice_to_have_skills.map((skill, i) => (
-                      <span key={i} className="px-3 py-1 bg-gray-50 text-gray-900 rounded-full text-sm">
-                        {skill}
-                      </span>
-                    ))}
+                {jd.nice_to_have_skills && jd.nice_to_have_skills.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900 mb-3">Preferred Skills</h3>
+                    <ul className="space-y-2 ml-1">
+                      {jd.nice_to_have_skills.map((skill, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                          <span className="text-gray-400 mt-0.5">•</span>
+                          <span>{skill}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* Assessment Guidance */}
             {jd.assessment_guidance && (
@@ -273,9 +390,18 @@ export default function JDDetailsPage() {
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-gray-600">
                       <Briefcase className="w-4 h-4" />
-                      Type
+                      Employment Type
                     </span>
                     <span className="text-gray-900 capitalize">{jd.employment_type.replace('_', ' ')}</span>
+                  </div>
+                )}
+                {jd.remote_type && (
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-gray-600">
+                      <MapPin className="w-4 h-4" />
+                      Work Mode
+                    </span>
+                    <span className="text-gray-900 capitalize">{jd.remote_type.replace('_', ' ')}</span>
                   </div>
                 )}
                 {(jd.experience_min || jd.experience_max) && (
@@ -306,10 +432,15 @@ export default function JDDetailsPage() {
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-gray-600">
                       <DollarSign className="w-4 h-4" />
-                      Salary
+                      Compensation
                     </span>
                     <span className="text-gray-900">
                       ${jd.salary_min?.toLocaleString() || 0} - ${jd.salary_max?.toLocaleString() || '∞'}
+                      {jd.compensation_type && (
+                        <span className="text-gray-500 text-xs ml-1">
+                          ({jd.compensation_type})
+                        </span>
+                      )}
                     </span>
                   </div>
                 )}
@@ -330,8 +461,11 @@ export default function JDDetailsPage() {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Metadata</h2>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">ID</span>
-                  <span className="text-gray-900 font-mono text-xs">{jd.id}</span>
+                  <span className="text-gray-500">Posted By</span>
+                  <span className="text-gray-900 flex items-center gap-1">
+                    <User className="w-3 h-3" />
+                    {jd.created_by_name || 'Unknown'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Created</span>
@@ -347,8 +481,63 @@ export default function JDDetailsPage() {
                   <span className="text-gray-500">Method</span>
                   <span className="text-gray-900 capitalize">{jd.creation_method?.replace('_', ' ') || 'Manual'}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Version</span>
+                  <span className="text-gray-900">{currentVersion > 0 ? currentVersion : 1}</span>
+                </div>
               </div>
             </div>
+
+            {/* Version History */}
+            {versions.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <button
+                  onClick={() => setShowVersionHistory(!showVersionHistory)}
+                  className="w-full flex items-center justify-between text-lg font-semibold text-gray-900"
+                >
+                  <span className="flex items-center gap-2">
+                    <History className="w-5 h-5" />
+                    Version History ({versions.length})
+                  </span>
+                  {showVersionHistory ? (
+                    <ChevronUp className="w-5 h-5 text-gray-500" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-gray-500" />
+                  )}
+                </button>
+
+                {showVersionHistory && (
+                  <div className="mt-4 space-y-3">
+                    {versions.map((version) => (
+                      <div
+                        key={version.id}
+                        className="p-3 bg-gray-50 rounded-lg border border-gray-100"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-gray-900">
+                            Version {version.version_number}
+                            {version.version_number === currentVersion && (
+                              <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                                Current
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 space-y-1">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {formatDate(version.published_at)}
+                          </div>
+                          <div className="text-gray-600 mt-1">
+                            {version.title}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

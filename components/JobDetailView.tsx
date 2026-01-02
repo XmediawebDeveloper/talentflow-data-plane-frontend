@@ -847,10 +847,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {/* Job Description - Actual Content */}
                 {job.description ? (
                   <div>
-                    <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-600 inline-block">
+                    <h2 className="text-base font-semibold text-gray-900 mb-4">
                       Job Description
                     </h2>
-                    <div className="mt-4 markdown-content">
+                    <div className="h-px bg-gray-200 mb-4"></div>
+                    <div className="markdown-content prose prose-sm max-w-none text-gray-700">
                       <ReactMarkdown>{job.description}</ReactMarkdown>
                     </div>
                   </div>
@@ -860,51 +861,54 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 )}
 
-                {/* Must-Have Skills */}
-                {job.skills && job.skills.length > 0 && (
+                {/* Skills & Qualifications */}
+                {((job.skills && job.skills.length > 0) || (job.niceToHaveSkills && job.niceToHaveSkills.length > 0)) && (
                   <div>
-                    <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-red-500 inline-block">
-                      Must-Have Skills
+                    <h2 className="text-base font-semibold text-gray-900 mb-4">
+                      Skills & Qualifications
                     </h2>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {job.skills.map((skill, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1.5 bg-red-50 text-red-700 rounded-md text-sm border border-red-200"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                    <div className="h-px bg-gray-200 mb-4"></div>
 
-                {/* Nice-to-Have Skills */}
-                {job.niceToHaveSkills && job.niceToHaveSkills.length > 0 && (
-                  <div>
-                    <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-blue-500 inline-block">
-                      Nice-to-Have Skills
-                    </h2>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {job.niceToHaveSkills.map((skill, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-md text-sm border border-blue-200"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
+                    {/* Required Skills */}
+                    {job.skills && job.skills.length > 0 && (
+                      <div className="mb-5">
+                        <h3 className="text-sm font-medium text-gray-900 mb-3">Required Skills</h3>
+                        <ul className="space-y-2 ml-1">
+                          {job.skills.map((skill, index) => (
+                            <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
+                              <span className="text-gray-400 mt-0.5">•</span>
+                              <span>{skill}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Preferred Skills */}
+                    {job.niceToHaveSkills && job.niceToHaveSkills.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-900 mb-3">Preferred Skills</h3>
+                        <ul className="space-y-2 ml-1">
+                          {job.niceToHaveSkills.map((skill, index) => (
+                            <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
+                              <span className="text-gray-400 mt-0.5">•</span>
+                              <span>{skill}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {/* Compensation */}
                 {(job.salaryMin || job.salaryMax) && (
                   <div>
-                    <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-green-500 inline-block">
+                    <h2 className="text-base font-semibold text-gray-900 mb-4">
                       Compensation
                     </h2>
-                    <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="h-px bg-gray-200 mb-4"></div>
+                    <div className="bg-gray-50 rounded-lg p-4">
                       <p className="text-lg text-gray-900 flex items-baseline gap-2 flex-wrap">
                         <span className="font-semibold">
                           {job.salaryMin && (
@@ -930,10 +934,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
                 {/* Job Details Grid */}
                 <div>
-                  <h2 className="text-xl text-gray-900 mb-4 pb-2 border-b-2 border-gray-400 inline-block">
+                  <h2 className="text-base font-semibold text-gray-900 mb-4">
                     Job Details
                   </h2>
-                  <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div className="h-px bg-gray-200 mb-4"></div>
+                  <div className="grid grid-cols-2 gap-4">
                     {job.department && (
                       <div className="bg-gray-50 rounded-lg p-4">
                         <div className="text-sm text-gray-500 mb-1">Department</div>
