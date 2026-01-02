@@ -26,13 +26,35 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 export function LandingPageContent() {
   const [demoModalOpen, setDemoModalOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [trialDays, setTrialDays] = useState<number>(14);
+
+  // Fetch trial days from API
+  useEffect(() => {
+    const fetchTrialDays = async () => {
+      try {
+        const response = await fetch(`${API_URL}/addons/free-trial`);
+        if (response.ok) {
+          const data = await response.json();
+          const settings = data.data || data;
+          if (settings.trial_days) {
+            setTrialDays(settings.trial_days);
+          }
+        }
+      } catch (error) {
+        console.log('Could not fetch trial days, using default');
+      }
+    };
+    fetchTrialDays();
+  }, []);
 
   return (
     <div className="min-h-screen overflow-hidden">
@@ -111,7 +133,7 @@ export function LandingPageContent() {
             <div className="flex flex-wrap items-center justify-center gap-8 text-sm text-gray-600 dark:text-gray-400 pt-4">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-green-500" />
-                <span>14-day free trial</span>
+                <span>{trialDays}-day free trial</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-green-500" />
@@ -346,15 +368,19 @@ export function LandingPageContent() {
               Join 2,500+ companies using TalentFlow to build amazing teams faster
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
-              <Button size="lg" className="h-16 px-12 text-lg rounded-2xl bg-white text-gray-800 hover:bg-gray-50 shadow-2xl" asChild>
-                <Link href="/signup">
-                  Start Free Trial
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </Link>
-              </Button>
-              <Button size="lg" variant="outline" className="h-16 px-12 text-lg rounded-2xl border-2 border-white text-white hover:bg-white/10" asChild>
-                <Link href="/pricing">View Pricing</Link>
-              </Button>
+              <Link
+                href="/signup"
+                className="inline-flex items-center justify-center h-16 px-12 text-lg rounded-2xl bg-white text-gray-900 font-semibold hover:bg-gray-100 shadow-2xl transition-colors"
+              >
+                Start Free Trial
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Link>
+              <Link
+                href="/pricing"
+                className="inline-flex items-center justify-center h-16 px-12 text-lg rounded-2xl border-2 border-white text-white font-semibold hover:bg-white/10 transition-colors"
+              >
+                View Pricing
+              </Link>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-8 text-white/80 pt-8">
