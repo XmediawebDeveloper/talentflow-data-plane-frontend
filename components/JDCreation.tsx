@@ -2493,7 +2493,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               </button>
               {publishedJdId && (
                 <button
-                  onClick={() => router.push(`/recruitment/jd-details?id=${publishedJdId}`)}
+                  onClick={() => router.push(`/recruitment/job-details?id=${publishedJdId}`)}
                   className="px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                 >
                   View JD
