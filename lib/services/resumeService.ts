@@ -283,19 +283,22 @@ export const folderService = {
    */
   async create(name: string, parentId?: string): Promise<Folder> {
     try {
+      console.log('[folderService] Creating folder:', { name, parent_id: parentId });
       const response = await api.post<Folder>('/folders', { name, parent_id: parentId });
+      console.log('[folderService] Folder created:', response.data);
       return response.data;
-    } catch (error) {
-      throw new Error(handleApiError(error));
+    } catch (error: any) {
+      console.error('[folderService] Error creating folder:', error?.response?.data || error);
+      throw error; // Re-throw original error to preserve response data
     }
   },
 
   /**
    * Update folder
    */
-  async update(id: string, name: string, parentId?: string): Promise<Folder> {
+  async update(id: string, data: { name?: string; parent_id?: string }): Promise<Folder> {
     try {
-      const response = await api.put<Folder>(`/folders/${id}`, { name, parent_id: parentId });
+      const response = await api.put<Folder>(`/folders/${id}`, data);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

@@ -163,8 +163,12 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               const msg = err.msg || err.message || 'Invalid value';
               return field ? `${field}: ${msg}` : msg;
             }).join(', ');
-          } else if (typeof data.detail === 'object' && data.detail.message) {
-            errorMessage = data.detail.message;
+          } else if (typeof data.detail === 'object') {
+            if (data.detail.errors && Array.isArray(data.detail.errors) && data.detail.errors.length > 0) {
+              errorMessage = data.detail.errors.join(', ');
+            } else if (data.detail.message) {
+              errorMessage = data.detail.message;
+            }
           }
         } else if (data.message) {
           errorMessage = data.message;
@@ -208,19 +212,22 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     setError('');
 
     try {
-      // Validate email format before proceeding
-      const emailParts = form.adminEmail.split('@');
-      if (emailParts.length !== 2 || !emailParts[1]) {
-        throw new Error('Please enter a valid email address');
+      // Generate subdomain from company name (not email domain)
+      let subdomain = '';
+      if (form.companyName) {
+        subdomain = form.companyName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
       }
 
-      const domainParts = emailParts[1].split('.');
-      if (domainParts.length < 2 || !domainParts[0]) {
-        throw new Error('Please enter a valid email address with a domain');
+      // Fallback to email domain if company name doesn't produce valid subdomain
+      if (subdomain.length < 3) {
+        const emailParts = form.adminEmail.split('@');
+        if (emailParts.length === 2 && emailParts[1]) {
+          const domainParts = emailParts[1].split('.');
+          if (domainParts.length >= 1 && domainParts[0]) {
+            subdomain = domainParts[0].toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
+          }
+        }
       }
-
-      const emailDomain = domainParts[0].toLowerCase();
-      let subdomain = emailDomain.replace(/[^a-z0-9]/g, '').slice(0, 20);
 
       // Ensure subdomain is at least 3 characters
       if (subdomain.length < 3) {
@@ -262,8 +269,13 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               const msg = err.msg || err.message || 'Invalid value';
               return field ? `${field}: ${msg}` : msg;
             }).join(', ');
-          } else if (typeof data.detail === 'object' && data.detail.message) {
-            errorMessage = data.detail.message;
+          } else if (typeof data.detail === 'object') {
+            // Handle nested error object with errors array
+            if (data.detail.errors && Array.isArray(data.detail.errors) && data.detail.errors.length > 0) {
+              errorMessage = data.detail.errors.join(', ');
+            } else if (data.detail.message) {
+              errorMessage = data.detail.message;
+            }
           }
         } else if (data.message) {
           errorMessage = data.message;
@@ -359,8 +371,12 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               const msg = err.msg || err.message || 'Invalid value';
               return field ? `${field}: ${msg}` : msg;
             }).join(', ');
-          } else if (typeof data.detail === 'object' && data.detail.message) {
-            errorMessage = data.detail.message;
+          } else if (typeof data.detail === 'object') {
+            if (data.detail.errors && Array.isArray(data.detail.errors) && data.detail.errors.length > 0) {
+              errorMessage = data.detail.errors.join(', ');
+            } else if (data.detail.message) {
+              errorMessage = data.detail.message;
+            }
           }
         } else if (data.message) {
           errorMessage = data.message;
@@ -415,8 +431,12 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               const msg = err.msg || err.message || 'Invalid value';
               return field ? `${field}: ${msg}` : msg;
             }).join(', ');
-          } else if (typeof data.detail === 'object' && data.detail.message) {
-            errorMessage = data.detail.message;
+          } else if (typeof data.detail === 'object') {
+            if (data.detail.errors && Array.isArray(data.detail.errors) && data.detail.errors.length > 0) {
+              errorMessage = data.detail.errors.join(', ');
+            } else if (data.detail.message) {
+              errorMessage = data.detail.message;
+            }
           }
         } else if (data.message) {
           errorMessage = data.message;

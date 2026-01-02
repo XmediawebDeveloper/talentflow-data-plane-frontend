@@ -2,6 +2,7 @@
 
 import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, FileText, Clock } from 'lucide-react';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Resume, Folder } from '@/lib/types/types';
 import { EmptyState } from './ui/empty-state';
 import Pagination from './Pagination';
@@ -45,10 +46,11 @@ export default function ResumeTable({
   showTeamMemberBadge = false,
   onVersion,
 }: ResumeTableProps) {
+  const router = useRouter();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [versionHistoryResume, setVersionHistoryResume] = useState<Resume | null>(null);
   const [versionSelectorResume, setVersionSelectorResume] = useState<Resume | null>(null);
-  
+
   // NEW: Modal states for complete workflows
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMoveToFolderModal, setShowMoveToFolderModal] = useState(false);
@@ -299,9 +301,9 @@ export default function ResumeTable({
                   ) : (
                     <>
                       <button
-                        onClick={() => onQuickView(resume)}
+                        onClick={() => router.push(`/recruitment/resume-detail/${resume.id}`)}
                         className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                        title="Quick View Resume"
+                        title="View Resume Details"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
@@ -313,8 +315,13 @@ export default function ResumeTable({
                         <Briefcase className="w-4 h-4" />
                       </button>
                       <button
+                        onClick={() => {
+                          // Open resume file in new tab for preview
+                          const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+                          window.open(`${apiUrl}/resumes/${resume.id}/download`, '_blank');
+                        }}
                         className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                        title="Download"
+                        title="Preview Resume"
                       >
                         <Download className="w-4 h-4" />
                       </button>

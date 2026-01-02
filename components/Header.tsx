@@ -1,8 +1,10 @@
-import { Bell, Search, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command, Sparkles } from 'lucide-react';
+import { Bell, Search, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command, Sparkles, Building2, UserCircle, UsersRound } from 'lucide-react';
 import { useState } from 'react';
 import { User as UserType } from '@/lib/types/tenant';
 import NotificationCenter from './NotificationCenter';
 import QuickActions from './QuickActions';
+
+type ViewMode = 'admin' | 'recruiter' | 'team';
 
 interface HeaderProps {
   onLogout: () => void;
@@ -11,14 +13,26 @@ interface HeaderProps {
   onOpenTour?: () => void;
   onOpenShortcuts?: () => void;
   onOpenSettings?: () => void;
+  viewMode?: ViewMode;
+  onViewModeChange?: (mode: ViewMode) => void;
 }
 
-export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings }: HeaderProps) {
+export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, viewMode: externalViewMode, onViewModeChange }: HeaderProps) {
   if (!user) return null;
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
+  const [internalViewMode, setInternalViewMode] = useState<ViewMode>('team');
+
+  const viewMode = externalViewMode || internalViewMode;
+  const handleViewModeChange = (mode: ViewMode) => {
+    if (onViewModeChange) {
+      onViewModeChange(mode);
+    } else {
+      setInternalViewMode(mode);
+    }
+  };
   
   const roleLabels = {
     tenant_admin: 'Tenant Admin',
@@ -40,12 +54,49 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           <input
             type="text"
             placeholder="Search candidates, jobs, assessments..."
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors text-gray-900"
           />
         </div>
       </div>
 
       <div className="flex items-center gap-3 ml-8">
+        {/* View Mode Switcher */}
+        <div className="flex items-center bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => handleViewModeChange('admin')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              viewMode === 'admin'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            Admin
+          </button>
+          <button
+            onClick={() => handleViewModeChange('recruiter')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              viewMode === 'recruiter'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <UserCircle className="w-4 h-4" />
+            Recruiter View
+          </button>
+          <button
+            onClick={() => handleViewModeChange('team')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              viewMode === 'team'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <UsersRound className="w-4 h-4" />
+            Recruiter Team View
+          </button>
+        </div>
+
         {/* Keyboard Shortcuts Button */}
         {onOpenShortcuts && (
           <button

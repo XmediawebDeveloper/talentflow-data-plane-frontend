@@ -20,6 +20,9 @@ export interface Resume {
   versions?: ResumeVersion[];
   versionCount?: number; // Total number of versions
   assignedTo?: string; // Team member ID
+  fileName?: string; // Original file name
+  fileType?: string; // File type (pdf, doc, docx)
+  fileSizeKb?: number; // File size in KB
 
   // Extended fields for detailed view
   professionalSummary?: string;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, Clock, Loader2 } from 'lucide-react';
 import ResumeTable from '@/components/ResumeTable';
 import StatsCards from '@/components/StatsCards';
@@ -16,6 +17,7 @@ import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeS
 import { toast } from 'sonner';
 
 export default function ResumeDatabasePage() {
+  const router = useRouter();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -324,6 +326,7 @@ export default function ResumeDatabasePage() {
           <h1 className="text-2xl font-semibold text-gray-900 mb-2">Internal Resume Database</h1>
           <p className="text-sm text-gray-600">All resumes across your organization</p>
         </div>
+{/* Upload buttons hidden
         <div className="flex gap-3">
           <button
             onClick={() => setShowUploadHistory(true)}
@@ -345,6 +348,7 @@ export default function ResumeDatabasePage() {
             Upload Resume
           </button>
         </div>
+*/}
       </div>
 
       <StatsCards
@@ -385,7 +389,7 @@ export default function ResumeDatabasePage() {
           onQuickView={(resume) => setQuickViewResume(resume)}
           onApplyToJob={(resume) => console.log('Apply to job:', resume)}
           onDelete={(id) => handleDelete(id)}
-          onViewDetails={(resume) => setViewingResume(resume)}
+          onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
         />
       </div>
 

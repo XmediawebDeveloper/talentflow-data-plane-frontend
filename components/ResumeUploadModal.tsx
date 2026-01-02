@@ -41,13 +41,31 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
   // Check quota on mount and when files change
   useEffect(() => {
     const checkResumeQuota = async () => {
-      const canUpload = await checkQuota('RU', selectedFiles.length || 1);
-      setQuotaChecked(true);
-      if (quotaStatus.data?.total_remaining !== undefined) {
-        setQuotaRemaining(quotaStatus.data.total_remaining);
+      try {
+        const canUpload = await checkQuota('RU', selectedFiles.length || 1);
+        setQuotaChecked(true);
+        if (quotaStatus.data?.total_remaining !== undefined) {
+          setQuotaRemaining(quotaStatus.data.total_remaining);
+        }
+      } catch (error) {
+        console.error('Quota check failed:', error);
+        // Fail-open: allow upload if quota check fails
+        setQuotaChecked(true);
+        setQuotaRemaining(-1);
       }
     };
+
+    // Set a timeout to ensure modal becomes usable even if quota check is slow
+    const timeoutId = setTimeout(() => {
+      if (!quotaChecked) {
+        setQuotaChecked(true);
+        setQuotaRemaining(-1);
+      }
+    }, 3000);
+
     checkResumeQuota();
+
+    return () => clearTimeout(timeoutId);
   }, [checkQuota, selectedFiles.length]);
 
   // Check if selected files exceed quota
