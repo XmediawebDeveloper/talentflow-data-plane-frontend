@@ -171,20 +171,26 @@ interface QueuedUpgrade {
   current_plan_name: string | null;
   new_plan_id: number;
   new_plan_name: string;
-  payment_amount: number;
-  payment_currency: string;
-  billing_interval: string;
-  isolation_type: string;
+  payment_amount?: number;
+  payment_currency?: string;
+  billing_interval?: string;
+  isolation_type?: string;
   status: string;
   auto_apply_date: string | null;
-  terms_accepted: boolean;
-  terms_accepted_at: string | null;
-  applied_at: string | null;
-  cancelled_at: string | null;
-  cancelled_reason: string | null;
-  plan_quotas: PlanQuotas;
-  extra_data: Record<string, any>;
-  created_at: string;
+  terms_accepted?: boolean;
+  terms_accepted_at?: string | null;
+  applied_at?: string | null;
+  cancelled_at?: string | null;
+  cancelled_reason?: string | null;
+  plan_quotas?: PlanQuotas;
+  extra_data?: Record<string, any>;
+  created_at?: string;
+  // Admin API fields
+  days_until_activation?: number;
+  can_cancel?: boolean;
+  reason?: string;
+  notes?: string;
+  billing_invoice_number?: string;
 }
 
 interface FreeTrialSettings {
@@ -222,7 +228,10 @@ const getGradientForPlan = (planName: string, tier: string): string => {
   return "from-gray-600 to-gray-700";
 };
 
-const formatCurrency = (amount: number, currency: string): string => {
+const formatCurrency = (amount: number | undefined | null, currency: string): string => {
+  if (amount === undefined || amount === null) {
+    return '-';
+  }
   const currencySymbols: Record<string, string> = {
     'USD': '$',
     'INR': '₹',
@@ -341,6 +350,8 @@ export default function CurrentPlanPage() {
   const [tcAccepted, setTcAccepted] = useState(false);
   const [isApplyingUpgrade, setIsApplyingUpgrade] = useState(false);
   const [isCancellingUpgrade, setIsCancellingUpgrade] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
 
   // Get tenant ID from token on mount
   useEffect(() => {
@@ -654,18 +665,17 @@ export default function CurrentPlanPage() {
     }
   };
 
-  // Cancel queued upgrade
-  const handleCancelUpgrade = async (upgrade: QueuedUpgrade) => {
-    if (!confirm(`Are you sure you want to cancel the queued upgrade to ${upgrade.new_plan_name}?`)) {
-      return;
-    }
+  // Cancel queued upgrade (called from Cancel Modal)
+  const handleCancelUpgrade = async () => {
+    if (!selectedQueuedUpgrade) return;
 
     try {
       setIsCancellingUpgrade(true);
       setError(null);
 
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_URL}/subscription/queued-upgrades/${upgrade.id}?reason=Cancelled by user`, {
+      const reasonParam = encodeURIComponent(cancelReason.trim() || 'Cancelled by user');
+      const response = await fetch(`${API_URL}/subscription/queued-upgrades/${selectedQueuedUpgrade.id}?reason=${reasonParam}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -676,7 +686,10 @@ export default function CurrentPlanPage() {
       const data = await response.json();
 
       if (response.ok && data.status === 'success') {
-        setSuccessMessage(`Queued upgrade to ${upgrade.new_plan_name} has been cancelled.`);
+        setSuccessMessage(`Queued upgrade to ${selectedQueuedUpgrade.new_plan_name} has been cancelled.`);
+        setShowCancelModal(false);
+        setSelectedQueuedUpgrade(null);
+        setCancelReason('');
         await fetchQueuedUpgrades();
       } else {
         setError(data.detail || 'Failed to cancel upgrade');
@@ -1191,19 +1204,30 @@ export default function CurrentPlanPage() {
                       <div className="flex items-center gap-2 mb-2">
                         <Package className="w-5 h-5 text-gray-600" />
                         <span className="font-semibold text-gray-900">{upgrade.new_plan_name}</span>
-                        <Badge className="bg-amber-100 text-amber-700 text-xs">Queued</Badge>
+                        <Badge className="bg-amber-100 text-amber-700 text-xs">
+                          {upgrade.status === 'SCHEDULED' ? 'Scheduled' : 'Queued'}
+                        </Badge>
+                        {upgrade.days_until_activation !== undefined && upgrade.days_until_activation > 0 && (
+                          <span className="text-xs text-amber-600">
+                            ({upgrade.days_until_activation} day{upgrade.days_until_activation !== 1 ? 's' : ''} until activation)
+                          </span>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        <div>
-                          <span className="text-gray-500">Amount Paid:</span>
-                          <span className="ml-1 font-medium text-gray-900">
-                            {formatCurrency(upgrade.payment_amount, upgrade.payment_currency)}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Billing:</span>
-                          <span className="ml-1 font-medium text-gray-900">{upgrade.billing_interval}</span>
-                        </div>
+                        {upgrade.payment_amount !== undefined && (
+                          <div>
+                            <span className="text-gray-500">Amount Paid:</span>
+                            <span className="ml-1 font-medium text-gray-900">
+                              {formatCurrency(upgrade.payment_amount, upgrade.payment_currency || 'INR')}
+                            </span>
+                          </div>
+                        )}
+                        {upgrade.billing_interval && (
+                          <div>
+                            <span className="text-gray-500">Billing:</span>
+                            <span className="ml-1 font-medium text-gray-900">{upgrade.billing_interval}</span>
+                          </div>
+                        )}
                         <div>
                           <span className="text-gray-500">Auto-applies:</span>
                           <span className="ml-1 font-medium text-gray-900">
@@ -1217,6 +1241,9 @@ export default function CurrentPlanPage() {
                           </span>
                         </div>
                       </div>
+                      {upgrade.reason && (
+                        <p className="text-xs text-gray-500 mt-2">Reason: {upgrade.reason}</p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 ml-4">
                       <button
@@ -1230,18 +1257,20 @@ export default function CurrentPlanPage() {
                         <Zap className="w-4 h-4" />
                         Apply Now
                       </button>
-                      <button
-                        onClick={() => handleCancelUpgrade(upgrade)}
-                        disabled={isCancellingUpgrade}
-                        className="px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors flex items-center gap-2"
-                      >
-                        {isCancellingUpgrade ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
+                      {upgrade.can_cancel !== false && (
+                        <button
+                          onClick={() => {
+                            setSelectedQueuedUpgrade(upgrade);
+                            setCancelReason('');
+                            setShowCancelModal(true);
+                          }}
+                          disabled={isCancellingUpgrade}
+                          className="px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors flex items-center gap-2"
+                        >
                           <XCircle className="w-4 h-4" />
-                        )}
-                        Cancel
-                      </button>
+                          Cancel
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1262,6 +1291,11 @@ export default function CurrentPlanPage() {
               <h2 className="text-lg font-semibold text-gray-900 text-center">
                 {isOnTrial || isLocked ? 'Choose a Plan' : 'Available Plans'}
               </h2>
+              {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
+                <p className="text-sm text-amber-600 text-center mt-2">
+                  You have a pending upgrade queued. Cancel it above or apply it now to select a different plan.
+                </p>
+              )}
             </div>
             <div className={`grid gap-8 pt-8 ${
               plans.length === 1 ? 'md:grid-cols-1 max-w-md' :
@@ -1393,21 +1427,25 @@ export default function CurrentPlanPage() {
 
                     <button
                       onClick={() => handleChoosePlan(plan)}
-                      disabled={plan.isCurrent || isSelectingPlan || isSelectedPending || !plan.price}
+                      disabled={plan.isCurrent || isSelectingPlan || isSelectedPending || !plan.price || queuedUpgrades.length > 0}
                       className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 ${
                         plan.isCurrent || isSelectedPending
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                          : !plan.price
-                            ? "bg-gray-100 text-gray-500 cursor-not-allowed"
-                            : plan.popular
-                              ? "bg-gray-800 text-white hover:bg-gray-700"
-                              : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                          : queuedUpgrades.length > 0
+                            ? "bg-amber-100 text-amber-600 cursor-not-allowed"
+                            : !plan.price
+                              ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+                              : plan.popular
+                                ? "bg-gray-800 text-white hover:bg-gray-700"
+                                : "border border-gray-300 text-gray-700 hover:bg-gray-50"
                       }`}
                     >
                       {plan.isCurrent ? (
                         'Current Plan'
                       ) : isSelectedPending ? (
                         'Pending Payment'
+                      ) : queuedUpgrades.length > 0 ? (
+                        'Upgrade Queued'
                       ) : !plan.price ? (
                         'Contact Sales'
                       ) : isOnTrial || isLocked ? (
@@ -1863,6 +1901,138 @@ export default function CurrentPlanPage() {
                     <>
                       <CheckCircle className="w-5 h-5" />
                       Apply Now
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Queued Upgrade Modal */}
+      {showCancelModal && selectedQueuedUpgrade && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                    <XCircle className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Cancel Upgrade</h2>
+                    <p className="text-sm text-gray-600">Cancel queued plan upgrade</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowCancelModal(false);
+                    setSelectedQueuedUpgrade(null);
+                    setCancelReason('');
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Warning */}
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-red-800 mb-1">Are you sure?</h4>
+                    <p className="text-sm text-red-700">
+                      You are about to cancel the queued upgrade to <strong>{selectedQueuedUpgrade.new_plan_name}</strong>.
+                      If you paid for this upgrade, you may need to request a refund separately.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upgrade Details */}
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                <h4 className="font-medium text-gray-900 text-sm">Upgrade Details</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">New Plan:</span>
+                    <span className="font-medium text-gray-900">{selectedQueuedUpgrade.new_plan_name}</span>
+                  </div>
+                  {selectedQueuedUpgrade.payment_amount !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Amount Paid:</span>
+                      <span className="font-medium text-gray-900">
+                        {formatCurrency(selectedQueuedUpgrade.payment_amount, selectedQueuedUpgrade.payment_currency || 'INR')}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Scheduled for:</span>
+                    <span className="font-medium text-gray-900">
+                      {selectedQueuedUpgrade.auto_apply_date ? formatDate(selectedQueuedUpgrade.auto_apply_date) : 'On plan expiry'}
+                    </span>
+                  </div>
+                  {selectedQueuedUpgrade.days_until_activation !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Days until activation:</span>
+                      <span className="font-medium text-gray-900">
+                        {selectedQueuedUpgrade.days_until_activation} day{selectedQueuedUpgrade.days_until_activation !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Queued on:</span>
+                    <span className="font-medium text-gray-900">
+                      {selectedQueuedUpgrade.created_at ? formatDate(selectedQueuedUpgrade.created_at) : '-'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cancellation Reason */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for cancellation (optional)
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Please let us know why you're cancelling..."
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCancelModal(false);
+                    setSelectedQueuedUpgrade(null);
+                    setCancelReason('');
+                  }}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Keep Upgrade
+                </button>
+                <button
+                  onClick={handleCancelUpgrade}
+                  disabled={isCancellingUpgrade}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isCancellingUpgrade ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Cancelling...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-5 h-5" />
+                      Cancel Upgrade
                     </>
                   )}
                 </button>
