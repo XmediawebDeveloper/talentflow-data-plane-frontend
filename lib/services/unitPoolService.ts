@@ -261,6 +261,40 @@ export const unitPoolService = {
     }
   },
 
+  /**
+   * UN02: Validate before action - Pre-validation for unit-consuming operations
+   * Call this before starting Resume Scoring, Assessment, or AI Interview
+   */
+  async validateBeforeAction(request: {
+    unit_type: UnitType;
+    units_required?: number;
+    action_type: string;
+    entity_id?: string;
+  }): Promise<{
+    valid: boolean;
+    can_proceed: boolean;
+    unit_type: UnitType;
+    unit_name: string;
+    units_required: number;
+    units_available: number;
+    tenant_status?: string;
+    error?: string;
+    message: string;
+    action_required?: string;
+  }> {
+    try {
+      const response = await api.post('/unit-pool/validate-before-action', {
+        unit_type: request.unit_type,
+        units_required: request.units_required || 1,
+        action_type: request.action_type,
+        entity_id: request.entity_id,
+      });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
   // =========================================================================
   // ADMIN ENDPOINTS (Tenant Admin / Super Admin)
   // =========================================================================
