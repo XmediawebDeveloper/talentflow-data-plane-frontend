@@ -123,6 +123,11 @@ export default function ResumeDetailPage() {
         const pdfBlob = new Blob([blob], { type: 'application/pdf' });
         const url = URL.createObjectURL(pdfBlob);
         setPdfUrl(url);
+      } else if (blob.type.includes('wordprocessingml') || blob.type.includes('msword')) {
+        // LibreOffice not installed - received DOCX file, trigger download
+        console.log('Received DOCX file instead of PDF - LibreOffice not installed on server');
+        toast.info('Preview not available. Click Download to view the resume.');
+        setPdfUrl(null);
       } else {
         console.error('Preview did not return PDF');
         toast.error('Failed to generate preview');
