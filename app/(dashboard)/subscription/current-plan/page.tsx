@@ -194,15 +194,15 @@ interface QueuedUpgrade {
 }
 
 interface FreeTrialSettings {
+  id?: number;
   trial_days: number;
   features: {
     MAX_JOBS: number;
     MAX_SEATS: number;
     ASSESSMENTS: number;
     AI_INTERVIEW: number;
-    RESUME_UPLOAD: number;
     RESUME_SCORING: number;
-    TOTAL_RESUME_STORAGE: number;
+    RESUME_STORAGE: number;
   };
   trial_includes: string[];
 }
@@ -405,11 +405,10 @@ export default function CurrentPlanPage() {
             MAX_SEATS: q.max_seats?.subscription?.limit === 'unlimited' ? 999 : (q.max_seats?.subscription?.limit || 5),
             ASSESSMENTS: q.AS?.subscription?.limit === 'unlimited' ? 999 : (q.AS?.subscription?.limit || 50),
             AI_INTERVIEW: q.AIU?.subscription?.limit === 'unlimited' ? 999 : (q.AIU?.subscription?.limit || 25),
-            RESUME_UPLOAD: q.RU?.subscription?.limit === 'unlimited' ? 999 : (q.RU?.subscription?.limit || 100),
             RESUME_SCORING: q.RS?.subscription?.limit === 'unlimited' ? 999 : (q.RS?.subscription?.limit || 100),
-            TOTAL_RESUME_STORAGE: q.storage_gb?.subscription?.limit === 'unlimited' ? 999 : ((q.storage_gb?.subscription?.limit || 10) * 100),
+            RESUME_STORAGE: q.RU?.subscription?.limit === 'unlimited' ? 999 : (q.RU?.subscription?.limit || 100),
           },
-          trial_includes: ['Resume Upload', 'Resume Scoring', 'Assessments', 'AI Interviews'],
+          trial_includes: ['Resume Storage', 'Resume Scoring', 'Assessments', 'AI Interviews'],
         };
         setFreeTrialSettings(trialSettings);
 
