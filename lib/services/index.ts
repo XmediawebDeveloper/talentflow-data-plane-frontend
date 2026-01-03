@@ -94,3 +94,26 @@ export type {
   EducationLevelCreate,
   IndustryTypeCreate,
 } from './masterDataService';
+
+// Candidate Assessment (Public)
+export { candidateService } from './candidateService';
+export type {
+  AssessmentInfo,
+  ConsentResponse,
+  SystemCheckResult,
+  SystemCheckResponse,
+  CurrentQuestion,
+  QuestionOption,
+  StartAssessmentResponse,
+  AnswerSubmission,
+  SubmitAnswerResponse,
+  CompleteAssessmentResponse,
+  AssessmentResult,
+  QuestionEvaluation,
+  RoundScore,
+  CandidateInsights,
+  TimeAnalysis,
+  HeartbeatResponse,
+  ProctorEvent,
+  ProctorEventResponse,
+} from './candidateService';
