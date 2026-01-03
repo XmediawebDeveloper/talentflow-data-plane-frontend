@@ -11,12 +11,18 @@ import {
   Calendar,
   Loader2,
   UserCog,
-  Check
+  Check,
+  Settings2,
+  Link2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import rbacService from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
 import { RoleListItem, Permission } from '@/lib/types/rbac';
+import { UserRole } from '@/lib/types/tenant';
+import FeaturePermissionManager from './FeaturePermissionManager';
+import DependencyMatrix from './DependencyMatrix';
+import UserLimits, { useUserLimits } from './UserLimits';
 
 // Types
 interface UserPermissions {
@@ -90,20 +96,24 @@ interface ApiUser {
   last_login?: string;
 }
 
-// Default role labels for known roles
+// Default role labels for known roles - RBAC01-07
 const defaultRoleLabels: Record<string, string> = {
   tenant_admin: 'Admin',
   admin: 'Admin',
   recruiter: 'Recruiter',
   viewer: 'Viewer',
+  billing_manager: 'Billing',
+  standard_user: 'User',
 };
 
-// Default badge colors for known roles
+// Default badge colors for known roles - RBAC01-07
 const defaultRoleBadgeColors: Record<string, string> = {
   tenant_admin: 'bg-gray-200 text-gray-800',
   admin: 'bg-gray-200 text-gray-800',
-  recruiter: 'bg-gray-100 text-gray-700',
+  recruiter: 'bg-blue-100 text-blue-700',
   viewer: 'bg-gray-50 text-gray-600',
+  billing_manager: 'bg-green-100 text-green-700',
+  standard_user: 'bg-gray-100 text-gray-600',
 };
 
 // Get role label - use RBAC name or fallback to defaults
@@ -237,6 +247,13 @@ export default function UserManagement() {
   const [editSelectedRoleId, setEditSelectedRoleId] = useState<number | null>(null);
   const [selectedPermissionIds, setSelectedPermissionIds] = useState<Set<number>>(new Set());
   const [editSelectedPermissionIds, setEditSelectedPermissionIds] = useState<Set<number>>(new Set());
+
+  // RBAC06-07: Feature permission states
+  const [featurePermissionUser, setFeaturePermissionUser] = useState<ApiUser | null>(null);
+  const [isDependencyMatrixOpen, setIsDependencyMatrixOpen] = useState(false);
+
+  // RBAC01: User limits hook
+  const { limits, isAtLimit, canAddUsers, refresh: refreshLimits } = useUserLimits();
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [editRoleDropdownOpen, setEditRoleDropdownOpen] = useState(false);
@@ -621,13 +638,41 @@ export default function UserManagement() {
               <p className="text-sm text-gray-600">Manage users and their permissions</p>
             </div>
           </div>
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-md"
-          >
-            <Plus className="w-5 h-5" />
-            Add User
-          </button>
+          <div className="flex items-center gap-3">
+            {/* RBAC07: Dependency Matrix button */}
+            <button
+              onClick={() => setIsDependencyMatrixOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              title="View Feature Dependencies"
+            >
+              <Link2 className="w-5 h-5" />
+              Dependencies
+            </button>
+            {/* RBAC01: Check user limits before showing Add User button */}
+            <button
+              onClick={() => {
+                if (isAtLimit) {
+                  toast.error('User limit reached. Please upgrade your plan or deactivate existing users.');
+                  return;
+                }
+                setIsCreateModalOpen(true);
+              }}
+              disabled={isAtLimit}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors shadow-md ${
+                isAtLimit
+                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                  : 'bg-gray-800 text-white hover:bg-gray-700'
+              }`}
+            >
+              <Plus className="w-5 h-5" />
+              Add User
+            </button>
+          </div>
+        </div>
+
+        {/* RBAC01: User Limits */}
+        <div className="mt-6">
+          <UserLimits compact />
         </div>
       </div>
 
@@ -764,15 +809,25 @@ export default function UserManagement() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-2">
+                      {/* RBAC06: Feature Permissions button */}
+                      <button
+                        onClick={() => setFeaturePermissionUser(user)}
+                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Feature Permissions"
+                      >
+                        <Settings2 className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => openEditModal(user)}
                         className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Edit User"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteUser(user.id)}
                         className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete User"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1101,6 +1156,24 @@ export default function UserManagement() {
           </div>
         </div>
       )}
+
+      {/* RBAC06: Feature Permission Manager Modal */}
+      {featurePermissionUser && (
+        <FeaturePermissionManager
+          userId={featurePermissionUser.id}
+          userName={featurePermissionUser.name}
+          userRole={featurePermissionUser.role as UserRole}
+          isOpen={true}
+          onClose={() => setFeaturePermissionUser(null)}
+          onUpdate={() => loadUsers()}
+        />
+      )}
+
+      {/* RBAC07: Dependency Matrix Modal */}
+      <DependencyMatrix
+        isOpen={isDependencyMatrixOpen}
+        onClose={() => setIsDependencyMatrixOpen(false)}
+      />
     </main>
   );
 }

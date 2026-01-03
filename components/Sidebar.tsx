@@ -26,10 +26,12 @@ import {
   TrendingUp,
   ChevronDown,
   ChevronRight,
-  Briefcase
+  Briefcase,
+  Eye,
+  DollarSign
 } from 'lucide-react';
-import { useState } from 'react';
-import { User, Tenant } from '@/lib/types/tenant';
+import { useState, useMemo } from 'react';
+import { User, Tenant, UserRole, FeatureFlags } from '@/lib/types/tenant';
 
 interface SidebarProps {
   activeSection: string;
@@ -43,26 +45,40 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   permission?: string;
+  feature?: keyof FeatureFlags;
   adminOnly?: boolean;
+  billingAccess?: boolean;  // RBAC03: For billing manager access
+  viewerAccess?: boolean;   // RBAC05: For viewer read-only access
   children?: NavItem[];
 }
 
 export default function Sidebar({ activeSection, onSectionChange, user, tenant }: SidebarProps) {
   const [expandedSections, setExpandedSections] = useState<string[]>(['recruitment-tools', 'organization', 'subscription', 'settings', 'reports']);
 
-  const roleLabels = {
+  // RBAC01-07: Extended role labels
+  const roleLabels: Record<UserRole, string> = {
     tenant_admin: 'Admin',
     recruiter: 'Recruiter',
     viewer: 'Viewer',
+    billing_manager: 'Billing',
+    standard_user: 'User',
   };
 
-  const roleBadgeColors = {
+  // RBAC01-07: Extended role badge colors
+  const roleBadgeColors: Record<UserRole, string> = {
     tenant_admin: 'bg-gray-100 text-gray-900 border-gray-200',
-    recruiter: 'bg-gray-100 text-gray-900 border-gray-200',
-    viewer: 'bg-gray-100 text-gray-700 border-gray-200',
+    recruiter: 'bg-blue-100 text-blue-800 border-blue-200',
+    viewer: 'bg-gray-100 text-gray-600 border-gray-200',
+    billing_manager: 'bg-green-100 text-green-800 border-green-200',
+    standard_user: 'bg-gray-100 text-gray-700 border-gray-200',
   };
 
+  // RBAC role checks
   const isTenantAdmin = user?.role === 'tenant_admin';
+  const isRecruiter = user?.role === 'recruiter';
+  const isViewer = user?.role === 'viewer';
+  const isBillingManager = user?.role === 'billing_manager';
+  const isStandardUser = user?.role === 'standard_user';
 
   // Check if user has a specific permission
   const hasPermission = (permission?: string): boolean => {
@@ -72,29 +88,46 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
     return user.permissions[permission as keyof typeof user.permissions] === true;
   };
 
-  // Define all menu items
+  // RBAC06: Check if user has a specific feature enabled
+  const hasFeature = (feature?: keyof FeatureFlags): boolean => {
+    if (!feature) return true;
+    if (isTenantAdmin) return true;  // Admin has all features
+    if (isViewer) return false;       // Viewer has no features
+    // Check feature flags
+    if (user?.featureFlags) {
+      return user.featureFlags[feature] ?? false;
+    }
+    // Check enabled features list
+    if (user?.enabledFeatures) {
+      return user.enabledFeatures.includes(feature);
+    }
+    return false;
+  };
+
+  // Define all menu items with RBAC01-07 support
   const allNavItems: NavItem[] = [
     // Dashboard - Everyone sees
     {
       id: 'dashboard',
       label: 'Dashboard',
-      icon: LayoutDashboard
+      icon: LayoutDashboard,
+      viewerAccess: true  // RBAC05: Viewers can see dashboard
     },
 
-    // Recruitment Tools - Admin sees ALL, Users see based on permissions
+    // Recruitment Tools - Admin sees ALL, Users see based on permissions/features
     {
       id: 'recruitment-tools',
       label: 'Recruitment Tools',
       icon: FileText,
       children: [
-        { id: 'jd-creation', label: 'JD Creation', icon: FileText, permission: 'canCreateJD' },
-        { id: 'job-openings', label: 'Job Openings', icon: Briefcase, permission: 'canViewResumes' },
-        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, permission: 'canViewResumes' },
-        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, permission: 'canViewResumes' },
-        { id: 'assessments', label: 'Assessments', icon: ClipboardList, permission: 'canCreateAssessments' },
-        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, permission: 'canViewResumes' },
-        { id: 'my-resumes', label: 'My Resumes', icon: Users, permission: 'canUploadResumes' },
-        { id: 'resume-database', label: 'Internal Resume Database', icon: Database, permission: 'canAccessInternalDB' },
+        { id: 'jd-creation', label: 'JD Creation', icon: FileText, permission: 'canCreateJD', feature: 'jd_create' },
+        { id: 'job-openings', label: 'Job Openings', icon: Briefcase, permission: 'canManageJD', feature: 'jd_manage' },
+        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, permission: 'canViewResumes', feature: 'resume_scoring' },
+        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, permission: 'canViewResumes', feature: 'ai_talent_match' },
+        { id: 'assessments', label: 'Assessments', icon: ClipboardList, permission: 'canCreateAssessments', feature: 'assessment' },
+        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, permission: 'canViewResumes', feature: 'ai_interview' },
+        { id: 'my-resumes', label: 'My Resumes', icon: Users, permission: 'canUploadResumes', feature: 'resume_upload' },
+        { id: 'resume-database', label: 'Internal Resume Database', icon: Database, permission: 'canAccessInternalDB', feature: 'resume_database_access' },
       ]
     },
 
@@ -112,19 +145,19 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
       ]
     },
 
-    // Subscription & Billing - Admin only
+    // Subscription & Billing - Admin and Billing Manager (RBAC03)
     {
       id: 'subscription',
       label: 'Subscription & Billing',
       icon: CreditCard,
-      adminOnly: true,
+      billingAccess: true,  // RBAC03: Accessible by billing_manager
       children: [
-        { id: 'current-plan', label: 'Current Plan', icon: CreditCard, adminOnly: true },
-        { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, adminOnly: true },
-        { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, adminOnly: true },
-        { id: 'billing-history', label: 'Billing History', icon: Receipt, adminOnly: true },
-        { id: 'refund-history', label: 'Refund History', icon: RefreshCw, adminOnly: true },
-        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, adminOnly: true },
+        { id: 'current-plan', label: 'Current Plan', icon: CreditCard, billingAccess: true },
+        { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, billingAccess: true },
+        { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, adminOnly: true },  // Admin only - can modify
+        { id: 'billing-history', label: 'Billing History', icon: Receipt, billingAccess: true },
+        { id: 'refund-history', label: 'Refund History', icon: RefreshCw, billingAccess: true },
+        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, billingAccess: true },
       ]
     },
 
@@ -137,21 +170,22 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
       children: [
         { id: 'general-settings', label: 'General Settings', icon: Settings, adminOnly: true },
         { id: 'permissions', label: 'Permissions & Roles', icon: Shield, adminOnly: true },
-        { id: 'api-management', label: 'API Management', icon: Key, adminOnly: true },
+        { id: 'api-management', label: 'API Management', icon: Key, adminOnly: true, feature: 'api_access' },
         { id: 'branding', label: 'Branding & White Label', icon: Palette, adminOnly: true },
         { id: 'integrations', label: 'Integrations', icon: Link, adminOnly: true },
         { id: 'security', label: 'Security Settings', icon: Lock, adminOnly: true },
       ]
     },
 
-    // Reports & Analytics
+    // Reports & Analytics - RBAC05: Viewers have read-only access
     {
       id: 'reports',
       label: 'Reports & Analytics',
       icon: BarChart3,
+      viewerAccess: true,  // RBAC05: Viewers can see reports
       children: [
         { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, adminOnly: true },
-        { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, permission: 'canViewAnalytics' },
+        { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, permission: 'canViewAnalytics', viewerAccess: true, feature: 'reporting' },
         { id: 'activity-logs', label: 'Activity Logs', icon: BarChart3, adminOnly: true },
       ]
     },
@@ -160,17 +194,35 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
     {
       id: 'support-tickets',
       label: 'Support Tickets',
-      icon: HelpCircle
+      icon: HelpCircle,
+      viewerAccess: true
     },
   ];
 
-  // Filter nav items based on permissions
+  // Filter nav items based on RBAC01-07 roles, permissions, and features
   const filterNavItems = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
-      // Admin only check
-      if (item.adminOnly && !isTenantAdmin) return false;
+      // Tenant Admin has access to everything
+      if (isTenantAdmin) return true;
 
-      // Permission check
+      // RBAC03: Billing Manager access check
+      if (item.billingAccess && isBillingManager) return true;
+
+      // RBAC05: Viewer access check - only items marked as viewerAccess
+      if (isViewer) {
+        return item.viewerAccess === true;
+      }
+
+      // Admin only check - non-admins can't see these
+      if (item.adminOnly) return false;
+
+      // RBAC03: Billing access items are only for admin/billing_manager
+      if (item.billingAccess && !isBillingManager) return false;
+
+      // RBAC06: Feature flag check - if feature is specified, user must have it
+      if (item.feature && !hasFeature(item.feature)) return false;
+
+      // Permission check - if permission is specified, user must have it
       if (item.permission && !hasPermission(item.permission)) return false;
 
       return true;
