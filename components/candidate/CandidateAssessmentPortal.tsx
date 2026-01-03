@@ -16,6 +16,7 @@ import { AssessmentInterface } from './AssessmentInterface';
 import { ResultsScreen } from './ResultsScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { ErrorScreen } from './ErrorScreen';
+import { ScoringScreen } from './ScoringScreen';
 
 type AssessmentStep =
   | 'loading'
@@ -26,6 +27,7 @@ type AssessmentStep =
   | 'generating_questions'
   | 'assessment'
   | 'completing'
+  | 'scoring'
   | 'results';
 
 interface CandidateAssessmentPortalProps {
@@ -69,6 +71,40 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     };
   }, [step]);
 
+  // Poll for scoring results
+  const pollForScoringResults = useCallback(() => {
+    let attempts = 0;
+    const maxAttempts = 30;
+    const pollInterval = 2000;
+
+    const poll = setInterval(async () => {
+      attempts++;
+      try {
+        const resultData = await candidateService.getResults(token);
+        if (resultData && resultData.overall_score !== undefined && !isNaN(resultData.overall_score)) {
+          clearInterval(poll);
+          setResults(resultData);
+          setStep('results');
+          return;
+        }
+      } catch {
+        // Not ready yet
+      }
+      if (attempts >= maxAttempts) {
+        clearInterval(poll);
+        // Show whatever we have
+        try {
+          const resultData = await candidateService.getResults(token);
+          setResults(resultData);
+          setStep('results');
+        } catch {
+          setError('Scoring is taking longer than expected. Please refresh the page.');
+          setStep('error');
+        }
+      }
+    }, pollInterval);
+  }, [token]);
+
   const loadAssessmentInfo = async () => {
     try {
       setStep('loading');
@@ -77,10 +113,23 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
 
       // Determine initial step based on status
       if (info.attempt_status === 'completed') {
-        // Already completed, show results
-        const resultData = await candidateService.getResults(token);
-        setResults(resultData);
-        setStep('results');
+        // Already completed, check if results are ready
+        try {
+          const resultData = await candidateService.getResults(token);
+          // Check if results are actually ready (not processing)
+          if (resultData && resultData.overall_score !== undefined && !isNaN(resultData.overall_score)) {
+            setResults(resultData);
+            setStep('results');
+          } else {
+            // Results still processing, show scoring screen and poll
+            setStep('scoring');
+            pollForScoringResults();
+          }
+        } catch {
+          // Results not ready, show scoring screen
+          setStep('scoring');
+          pollForScoringResults();
+        }
       } else if (info.can_resume) {
         // Can resume existing attempt
         const question = await candidateService.getCurrentQuestion(token);
@@ -92,11 +141,11 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         });
         setStep('assessment');
       } else if (!info.consent_accepted) {
-        // Need to accept consent
-        setStep('landing');
+        // Need to accept consent FIRST
+        setStep('consent');
       } else if (info.can_start) {
-        // Consent accepted, can start
-        setStep('system_check');
+        // Consent accepted, show landing/preview
+        setStep('landing');
       } else {
         // Cannot start (expired, etc)
         setError(info.message || 'This assessment is not available');
@@ -109,14 +158,16 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   };
 
   const handleBeginClick = () => {
-    setStep('consent');
+    // Consent already accepted, proceed to system check
+    setStep('system_check');
   };
 
   const handleConsentAccept = async () => {
     try {
       await candidateService.acceptConsent(token);
       setAssessmentInfo(prev => prev ? { ...prev, consent_accepted: true } : null);
-      setStep('system_check');
+      // After consent accepted, show landing/preview page
+      setStep('landing');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to accept consent');
     }
@@ -129,6 +180,14 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       // Start the assessment - this triggers AI question generation
       const response = await candidateService.startAssessment(token);
       setAssessmentData(response);
+
+      // Check if questions were actually generated
+      if (!response.first_question || response.total_questions === 0) {
+        setError('Failed to generate assessment questions. Please try again or contact support.');
+        setStep('error');
+        return;
+      }
+
       setCurrentQuestion(response.first_question);
       setProgress({
         answered: 0,
@@ -171,12 +230,61 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   const handleCompleteAssessment = async () => {
     try {
       setStep('completing');
-      await candidateService.completeAssessment(token);
 
-      // Fetch results
-      const resultData = await candidateService.getResults(token);
-      setResults(resultData);
-      setStep('results');
+      // Try to call complete endpoint (may not be needed if already completed in /answer)
+      try {
+        await candidateService.completeAssessment(token);
+      } catch {
+        // Ignore if already completed
+      }
+
+      // Show scoring in progress
+      setStep('scoring');
+
+      // Poll for results (scoring happens in background)
+      let attempts = 0;
+      const maxAttempts = 30; // 30 attempts * 2 seconds = 60 seconds max wait
+      const pollInterval = 2000; // 2 seconds
+
+      const pollForResults = async (): Promise<boolean> => {
+        try {
+          const resultData = await candidateService.getResults(token);
+          // Check if results are ready (not just "processing" status)
+          if (resultData && resultData.overall_score !== undefined && !isNaN(resultData.overall_score)) {
+            setResults(resultData);
+            setStep('results');
+            return true;
+          }
+        } catch {
+          // Results not ready yet
+        }
+        return false;
+      };
+
+      // First attempt
+      if (await pollForResults()) return;
+
+      // Poll with interval
+      const poll = setInterval(async () => {
+        attempts++;
+        if (await pollForResults()) {
+          clearInterval(poll);
+          return;
+        }
+        if (attempts >= maxAttempts) {
+          clearInterval(poll);
+          // Show results anyway (may have NaN values but better than error)
+          try {
+            const resultData = await candidateService.getResults(token);
+            setResults(resultData);
+            setStep('results');
+          } catch {
+            setError('Scoring is taking longer than expected. Please refresh the page.');
+            setStep('error');
+          }
+        }
+      }, pollInterval);
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to complete assessment');
       setStep('error');
@@ -281,7 +389,10 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         <ConsentModal
           assessmentInfo={assessmentInfo!}
           onAccept={handleConsentAccept}
-          onDecline={() => setStep('landing')}
+          onDecline={() => {
+            setError('You must accept the terms and conditions to proceed with the assessment.');
+            setStep('error');
+          }}
         />
       );
 
@@ -303,11 +414,20 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       );
 
     case 'assessment':
+      // Ensure currentQuestion is loaded before rendering
+      if (!currentQuestion) {
+        return (
+          <LoadingScreen
+            message="Loading question..."
+            subMessage="Please wait while we fetch the next question."
+          />
+        );
+      }
       return (
         <AssessmentInterface
           token={token}
           assessmentInfo={assessmentInfo!}
-          currentQuestion={currentQuestion!}
+          currentQuestion={currentQuestion}
           progress={progress}
           rounds={assessmentData?.rounds || []}
           onAnswerSubmit={handleAnswerSubmit}
@@ -322,9 +442,12 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       return (
         <LoadingScreen
           message="Submitting your assessment..."
-          subMessage="Our AI is evaluating your responses. Please wait."
+          subMessage="Please wait..."
         />
       );
+
+    case 'scoring':
+      return <ScoringScreen />;
 
     case 'results':
       return (

@@ -35,7 +35,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
     return `${minutes}m ${secs}s`;
   };
 
-  const getRecommendationColor = (recommendation: string) => {
+  const getRecommendationColor = (recommendation: string | undefined) => {
     switch (recommendation) {
       case 'strong_yes':
         return 'bg-green-100 text-green-700 border-green-200';
@@ -52,7 +52,8 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
     }
   };
 
-  const formatRecommendation = (recommendation: string) => {
+  const formatRecommendation = (recommendation: string | undefined) => {
+    if (!recommendation) return 'Pending';
     return recommendation.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
@@ -65,8 +66,12 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
   };
 
   const getRoundQuestions = (roundType: string) => {
-    return results.question_evaluations.filter(q => q.round_type === roundType);
+    return (results.question_evaluations || []).filter(q => q.round_type === roundType);
   };
+
+  // Safe accessors for arrays that might be undefined
+  const questionEvaluations = results.question_evaluations || [];
+  const roundScores = results.round_scores || [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -170,7 +175,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
             <div className="text-center p-4 bg-gray-50 rounded-xl">
               <Target className="w-6 h-6 text-green-500 mx-auto mb-2" />
               <p className="text-2xl font-bold text-gray-800">
-                {results.question_evaluations.filter(q => q.is_correct).length} / {results.question_evaluations.length}
+                {questionEvaluations.filter(q => q.is_correct).length} / {questionEvaluations.length}
               </p>
               <p className="text-sm text-gray-500">Correct Answers</p>
             </div>
@@ -187,7 +192,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
           <div className="px-8 py-6 border-b border-gray-100">
             <h2 className="text-lg font-semibold text-gray-800 mb-4">Round-wise Performance</h2>
             <div className="space-y-4">
-              {results.round_scores.map(round => (
+              {roundScores.map(round => (
                 <div key={round.round_type} className="bg-gray-50 rounded-xl overflow-hidden">
                   <button
                     onClick={() => toggleRound(round.round_type)}
@@ -282,7 +287,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
                   <h3 className="font-medium text-green-800">Strengths</h3>
                 </div>
                 <ul className="space-y-2">
-                  {results.candidate_insights?.strengths.map((strength, idx) => (
+                  {(results.candidate_insights?.strengths || []).map((strength, idx) => (
                     <li key={idx} className="flex items-start gap-2 text-sm text-green-700">
                       <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                       {strength}
@@ -298,7 +303,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
                   <h3 className="font-medium text-amber-800">Areas for Improvement</h3>
                 </div>
                 <ul className="space-y-2">
-                  {results.candidate_insights?.improvement_areas.map((area, idx) => (
+                  {(results.candidate_insights?.improvement_areas || []).map((area, idx) => (
                     <li key={idx} className="flex items-start gap-2 text-sm text-amber-700">
                       <span className="text-amber-400">-</span>
                       {area}

@@ -54,7 +54,7 @@ export interface SystemCheckResult {
   camera_available: boolean;
   microphone_available: boolean;
   screen_share_available: boolean;
-  browser_supported: boolean;
+  browser_compatible: boolean;  // Must match backend field name
   internet_speed_mbps: number | null;
 }
 
@@ -117,11 +117,13 @@ export interface StartAssessmentResponse {
 }
 
 export interface AnswerSubmission {
+  answer_type?: 'text' | 'video' | 'mcq' | 'code';  // Auto-detected by backend if not provided
   text_response?: string;
   video_response_url?: string;
   selected_options?: string[];
   code_submission?: string;
   language?: string;
+  time_taken_seconds?: number;  // Time spent on question
 }
 
 export interface SubmitAnswerResponse {
@@ -242,9 +244,12 @@ export const candidateService = {
   /**
    * Accept terms and consent
    */
-  async acceptConsent(token: string): Promise<ConsentResponse> {
+  async acceptConsent(token: string, termsAccepted: boolean = true, proctoringConsent: boolean = true): Promise<ConsentResponse> {
     try {
-      const response = await candidateApi.post<ConsentResponse>(`/candidate/assessment/${token}/consent`);
+      const response = await candidateApi.post<ConsentResponse>(`/candidate/assessment/${token}/consent`, {
+        terms_accepted: termsAccepted,
+        proctoring_consent: proctoringConsent,
+      });
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -370,10 +375,16 @@ export const candidateService = {
   /**
    * Send heartbeat to keep session alive
    */
-  async sendHeartbeat(token: string): Promise<HeartbeatResponse> {
+  async sendHeartbeat(token: string, options?: { tabVisible?: boolean; cameraActive?: boolean; screenShareActive?: boolean }): Promise<HeartbeatResponse> {
     try {
       const response = await candidateApi.post<HeartbeatResponse>(
-        `/candidate/assessment/${token}/heartbeat`
+        `/candidate/assessment/${token}/heartbeat`,
+        {
+          timestamp: new Date().toISOString(),
+          tab_visible: options?.tabVisible ?? document.visibilityState === 'visible',
+          camera_active: options?.cameraActive,
+          screen_share_active: options?.screenShareActive,
+        }
       );
       return response.data;
     } catch (error) {
@@ -391,7 +402,11 @@ export const candidateService = {
     try {
       const response = await candidateApi.post<ProctorEventResponse>(
         `/candidate/assessment/${token}/proctor-event`,
-        event
+        {
+          event_type: event.event_type,
+          timestamp: new Date().toISOString(),
+          details: event.event_data,
+        }
       );
       return response.data;
     } catch (error) {

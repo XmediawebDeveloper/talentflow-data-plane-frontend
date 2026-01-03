@@ -73,8 +73,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     // Run checks
     await checkBrowser();
     await checkInternet();
-    await checkCamera();
-    await checkMicrophone();
+    await checkCameraAndMicrophone();  // Combined to avoid permission conflicts
     await checkScreenShare();
 
     setIsChecking(false);
@@ -119,41 +118,85 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     }
   };
 
-  const checkCamera = async () => {
+  const checkCameraAndMicrophone = async () => {
+    // Request both camera and microphone together to avoid permission conflicts
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       streamRef.current = stream;
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
 
-      setCameraCheck({ status: 'success', message: 'Camera working' });
-    } catch (err: any) {
-      if (err.name === 'NotAllowedError') {
-        setCameraCheck({ status: 'error', message: 'Camera permission denied' });
-      } else if (err.name === 'NotFoundError') {
-        setCameraCheck({ status: 'error', message: 'No camera found' });
+      // Check if we got both video and audio tracks
+      const videoTracks = stream.getVideoTracks();
+      const audioTracks = stream.getAudioTracks();
+
+      if (videoTracks.length > 0) {
+        setCameraCheck({ status: 'success', message: 'Camera working' });
       } else {
-        setCameraCheck({ status: 'error', message: 'Camera error: ' + err.message });
+        setCameraCheck({ status: 'error', message: 'No video track available' });
       }
+
+      if (audioTracks.length > 0) {
+        setMicCheck({ status: 'success', message: 'Microphone working' });
+      } else {
+        setMicCheck({ status: 'error', message: 'No audio track available' });
+      }
+
+    } catch (err: any) {
+      console.error('Media device error:', err.name, err.message);
+
+      // Handle specific error types
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setCameraCheck({ status: 'error', message: 'Camera permission denied' });
+        setMicCheck({ status: 'error', message: 'Microphone permission denied' });
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setCameraCheck({ status: 'error', message: 'No camera found' });
+        setMicCheck({ status: 'error', message: 'No microphone found' });
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        // Device is being used by another application
+        setCameraCheck({ status: 'error', message: 'Camera in use by another app' });
+        setMicCheck({ status: 'error', message: 'Microphone in use by another app' });
+      } else if (err.name === 'OverconstrainedError') {
+        setCameraCheck({ status: 'error', message: 'Camera constraints not satisfied' });
+        setMicCheck({ status: 'error', message: 'Microphone constraints not satisfied' });
+      } else if (err.name === 'SecurityError') {
+        setCameraCheck({ status: 'error', message: 'Security error - use HTTPS' });
+        setMicCheck({ status: 'error', message: 'Security error - use HTTPS' });
+      } else {
+        setCameraCheck({ status: 'error', message: `Camera error: ${err.name}` });
+        setMicCheck({ status: 'error', message: `Microphone error: ${err.name}` });
+      }
+
+      // Try to get more specific info - maybe only one device is the problem
+      await checkCameraSeparately();
+      await checkMicrophoneSeparately();
     }
   };
 
-  const checkMicrophone = async () => {
+  const checkCameraSeparately = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setCameraCheck({ status: 'success', message: 'Camera working' });
+    } catch (err: any) {
+      console.error('Camera-only error:', err.name, err.message);
+      // Keep the existing error message if already set
+    }
+  };
+
+  const checkMicrophoneSeparately = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop()); // Stop immediately, we just need to check permission
-
+      stream.getTracks().forEach(track => track.stop());
       setMicCheck({ status: 'success', message: 'Microphone working' });
     } catch (err: any) {
-      if (err.name === 'NotAllowedError') {
-        setMicCheck({ status: 'error', message: 'Microphone permission denied' });
-      } else if (err.name === 'NotFoundError') {
-        setMicCheck({ status: 'error', message: 'No microphone found' });
-      } else {
-        setMicCheck({ status: 'error', message: 'Microphone error: ' + err.message });
-      }
+      console.error('Microphone-only error:', err.name, err.message);
+      // Keep the existing error message if already set
     }
   };
 
@@ -178,7 +221,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         camera_available: cameraCheck.status === 'success',
         microphone_available: micCheck.status === 'success',
         screen_share_available: screenCheck.status === 'success',
-        browser_supported: browserCheck.status === 'success',
+        browser_compatible: browserCheck.status === 'success',
         internet_speed_mbps: null
       };
 
