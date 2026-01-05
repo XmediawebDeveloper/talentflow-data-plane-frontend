@@ -13,6 +13,7 @@ const publicRoutes = [
   '/faq',
   '/login',
   '/signup',
+  '/assessment', // Candidate assessment portal (public)
 ];
 
 // Define admin-only routes

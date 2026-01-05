@@ -13,6 +13,8 @@ import { Job } from '@/lib/types/types';
 import { assessmentService } from '@/lib/services';
 import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
+import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface AssessmentsProps {
   jobs: Job[];
@@ -21,7 +23,7 @@ interface AssessmentsProps {
 }
 
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation }: AssessmentsProps) {
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'archived' | 'audit-trail'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'archived' | 'audit-trail' | 'proctoring'>('all');
   const [showCreation, setShowCreation] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [selectedAssessmentForResults, setSelectedAssessmentForResults] = useState<any>(null);
@@ -39,20 +41,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
 
-  // Proctoring settings per tab
-  const [proctoringSettings, setProctoringSettings] = useState<{
-    all: boolean;
-    active: boolean;
-    draft: boolean;
-    completed: boolean;
-    archived: boolean;
-  }>({
-    all: true,
-    active: true,
-    draft: false,
-    completed: false,
-    archived: false,
-  });
+  // Proctoring settings from API
+  const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings | null>(null);
+  const [isLoadingProctoring, setIsLoadingProctoring] = useState(false);
+  const [isSavingProctoring, setIsSavingProctoring] = useState(false);
+  const [proctoringError, setProctoringError] = useState<string | null>(null);
+  const [proctoringEvents, setProctoringEvents] = useState<ProctoringEvent[]>([]);
+  const [proctoringEventsTotal, setProctoringEventsTotal] = useState(0);
+  const [flaggedCount, setFlaggedCount] = useState(0);
 
   // Stats from API
   const [stats, setStats] = useState({
@@ -126,6 +122,68 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
     loadAllData();
   }, []);
+
+  // Load proctoring settings when proctoring tab is active
+  useEffect(() => {
+    if (activeTab === 'proctoring') {
+      loadProctoringData();
+    }
+  }, [activeTab]);
+
+  // Load proctoring settings and events from API
+  const loadProctoringData = async () => {
+    setIsLoadingProctoring(true);
+    setProctoringError(null);
+
+    try {
+      const [settingsResult, eventsResult] = await Promise.allSettled([
+        proctoringService.getSettings(),
+        proctoringService.getEvents({ page_size: 10 }),
+      ]);
+
+      if (settingsResult.status === 'fulfilled') {
+        setProctoringSettings(settingsResult.value);
+      } else {
+        console.error('Failed to load proctoring settings:', settingsResult.reason);
+        setProctoringError('Failed to load proctoring settings');
+      }
+
+      if (eventsResult.status === 'fulfilled') {
+        setProctoringEvents(eventsResult.value.items);
+        setProctoringEventsTotal(eventsResult.value.total);
+        setFlaggedCount(eventsResult.value.flagged_attempts);
+      }
+    } catch (error) {
+      console.error('Failed to load proctoring data:', error);
+      setProctoringError('Failed to load proctoring data');
+    } finally {
+      setIsLoadingProctoring(false);
+    }
+  };
+
+  // Update proctoring setting
+  const updateProctoringSettings = async (updates: Partial<ProctoringSettings>) => {
+    if (!proctoringSettings) return;
+
+    setIsSavingProctoring(true);
+    setProctoringError(null);
+
+    // Optimistically update local state
+    const previousSettings = proctoringSettings;
+    setProctoringSettings({ ...proctoringSettings, ...updates });
+
+    try {
+      const updated = await proctoringService.updateSettings(updates);
+      setProctoringSettings(updated);
+    } catch (error) {
+      console.error('Failed to update proctoring settings:', error);
+      setProctoringError('Failed to save settings');
+      // Rollback on error
+      setProctoringSettings(previousSettings);
+    } finally {
+      setIsSavingProctoring(false);
+    }
+  };
 
   // Use API assessments only (no local state needed - all assessments are saved to DB)
   const assessments = apiAssessments;
@@ -371,125 +429,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </div>
         </div>
 
-        {/* Proctoring Mode Settings - Only show for assessment tabs (not audit-trail) */}
-        {activeTab !== 'audit-trail' && (
-          <>
-            {/* Settings Header */}
-            <div className="bg-gradient-to-r from-violet-600 to-purple-500 rounded-t-lg p-4 mb-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <Shield className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-white">
-                    {activeTab === 'all' ? 'All Assessments' : activeTab === 'active' ? 'Active Assessments' : activeTab === 'draft' ? 'Draft Assessments' : activeTab === 'completed' ? 'Completed Assessments' : 'Archived Assessments'} - Settings
-                  </h3>
-                  <p className="text-xs text-white/80">
-                    Configure proctoring and security features for {activeTab === 'all' ? 'all' : activeTab} assessments
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Proctoring Mode Card */}
-            <div className="bg-white border border-gray-200 border-t-0 rounded-b-lg p-5 mb-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <Video className="w-5 h-5 text-gray-600" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h4 className="text-sm font-medium text-gray-900">Proctoring Mode</h4>
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        proctoringSettings[activeTab as keyof typeof proctoringSettings]
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-200 text-gray-600'
-                      }`}>
-                        {proctoringSettings[activeTab as keyof typeof proctoringSettings] ? 'Enabled' : 'Disabled'}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
-                        {activeTab === 'all' ? 'All Assessments Only' : `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Only`}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-4">
-                      {proctoringSettings[activeTab as keyof typeof proctoringSettings]
-                        ? `Advanced monitoring is active for ${activeTab === 'all' ? 'all' : activeTab} assessments. They will include webcam monitoring, screen recording, tab-switching detection, and AI-powered cheating prevention to ensure test integrity.`
-                        : `Standard mode active for ${activeTab === 'all' ? 'all' : activeTab} assessments. They will run without advanced monitoring features. Enable proctoring for high-stakes assessments requiring enhanced security.`
-                      }
-                    </p>
-
-                    {/* Feature List */}
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-2 mb-4">
-                      {[
-                        { label: 'Webcam Monitoring', enabled: proctoringSettings[activeTab as keyof typeof proctoringSettings] },
-                        { label: 'Screen Recording', enabled: proctoringSettings[activeTab as keyof typeof proctoringSettings] },
-                        { label: 'Tab Switch Detection', enabled: proctoringSettings[activeTab as keyof typeof proctoringSettings] },
-                        { label: 'AI Cheating Prevention', enabled: proctoringSettings[activeTab as keyof typeof proctoringSettings] },
-                        { label: 'Copy-Paste Blocking', enabled: proctoringSettings[activeTab as keyof typeof proctoringSettings] },
-                        { label: 'Browser Lockdown', enabled: proctoringSettings[activeTab as keyof typeof proctoringSettings] },
-                      ].map((feature, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          {feature.enabled ? (
-                            <CheckCircle2 className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <X className="w-4 h-4 text-gray-400" />
-                          )}
-                          <span className={`text-sm ${feature.enabled ? 'text-green-600' : 'text-gray-400'}`}>
-                            {feature.label}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Privacy Notice - Only show when enabled */}
-                    {proctoringSettings[activeTab as keyof typeof proctoringSettings] && (
-                      <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                        <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                        <p className="text-xs text-blue-700">
-                          <span className="font-medium">Privacy Notice:</span> Candidates will be informed about monitoring before starting the assessment. Recordings are encrypted and stored securely for 90 days. This setting applies to {activeTab === 'all' ? 'all' : activeTab} assessments only.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Toggle Switch */}
-                <div className="flex flex-col items-center gap-1">
-                  <button
-                    onClick={() => {
-                      setProctoringSettings(prev => ({
-                        ...prev,
-                        [activeTab]: !prev[activeTab as keyof typeof prev]
-                      }));
-                    }}
-                    className={`relative w-14 h-7 rounded-full transition-colors ${
-                      proctoringSettings[activeTab as keyof typeof proctoringSettings]
-                        ? 'bg-blue-500'
-                        : 'bg-gray-300'
-                    }`}
-                  >
-                    <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
-                      proctoringSettings[activeTab as keyof typeof proctoringSettings]
-                        ? 'translate-x-8'
-                        : 'translate-x-1'
-                    }`}>
-                      {proctoringSettings[activeTab as keyof typeof proctoringSettings] ? (
-                        <CheckCircle2 className="w-5 h-5 text-blue-500" />
-                      ) : (
-                        <X className="w-5 h-5 text-gray-400" />
-                      )}
-                    </div>
-                  </button>
-                  <span className="text-xs text-gray-500 font-medium">
-                    {proctoringSettings[activeTab as keyof typeof proctoringSettings] ? 'ON' : 'OFF'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
         {/* Stats Cards */}
         <div className="grid grid-cols-4 gap-6 mb-6">
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
@@ -606,6 +545,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 >
                   Audit Trail
                 </button>
+                <button
+                  onClick={() => setActiveTab('proctoring')}
+                  className={`py-4 text-sm border-b-2 transition-colors flex items-center gap-1.5 ${
+                    activeTab === 'proctoring'
+                      ? 'border-gray-800 text-gray-800'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Shield className="w-4 h-4" />
+                  Proctoring Mode
+                </button>
               </div>
               {/* Grid/List View Toggle */}
               <div className="flex items-center gap-1 border border-gray-200 rounded-lg p-1">
@@ -637,7 +587,280 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
           {/* Assessment List */}
           <div className="p-6">
-            {activeTab === 'audit-trail' ? (
+            {activeTab === 'proctoring' ? (
+              /* Proctoring Mode Settings Tab */
+              <div className="space-y-6">
+                {/* Loading State */}
+                {isLoadingProctoring ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="w-10 h-10 border-4 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
+                      <p className="text-gray-600">Loading proctoring settings...</p>
+                    </div>
+                  </div>
+                ) : proctoringError && !proctoringSettings ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <AlertTriangle className="w-12 h-12 text-red-400 mb-4" />
+                    <p className="text-red-600 mb-4">{proctoringError}</p>
+                    <button
+                      onClick={loadProctoringData}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Retry
+                    </button>
+                  </div>
+                ) : proctoringSettings && (
+                  <>
+                    {/* Settings Header with Status */}
+                    <div className="bg-gradient-to-r from-violet-600 to-purple-500 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                            <Shield className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-medium text-white">Proctoring Settings</h3>
+                            <p className="text-xs text-white/80">
+                              Configure security features for candidate assessments
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {isSavingProctoring && (
+                            <span className="text-xs text-white/80 flex items-center gap-1">
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                              Saving...
+                            </span>
+                          )}
+                          {flaggedCount > 0 && (
+                            <span className="px-3 py-1 bg-red-500 text-white rounded-full text-xs font-medium">
+                              {flaggedCount} Flagged Attempts
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Error Message */}
+                    {proctoringError && (
+                      <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <AlertTriangle className="w-4 h-4 text-red-500" />
+                        <p className="text-sm text-red-700">{proctoringError}</p>
+                      </div>
+                    )}
+
+                    {/* Main Proctoring Toggle */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-5">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                            <Video className="w-5 h-5 text-gray-600" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className="text-sm font-medium text-gray-900">Proctoring Mode</h4>
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                proctoringSettings.proctoring_enabled
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-gray-200 text-gray-600'
+                              }`}>
+                                {proctoringSettings.proctoring_enabled ? 'Enabled' : 'Disabled'}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-4">
+                              {proctoringSettings.proctoring_enabled
+                                ? 'Advanced monitoring is active. Assessments will include configured security features to ensure test integrity.'
+                                : 'Standard mode active. Assessments will run without advanced monitoring features. Enable proctoring for high-stakes assessments.'
+                              }
+                            </p>
+
+                            {/* Privacy Notice */}
+                            {proctoringSettings.proctoring_enabled && (
+                              <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                                <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                                <p className="text-xs text-blue-700">
+                                  <span className="font-medium">Privacy Notice:</span> Candidates will be informed about monitoring before starting. Recordings are encrypted and stored for {proctoringSettings.recording_retention_days} days.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Main Toggle Switch */}
+                        <div className="flex flex-col items-center gap-1">
+                          <button
+                            onClick={() => updateProctoringSettings({ proctoring_enabled: !proctoringSettings.proctoring_enabled })}
+                            disabled={isSavingProctoring}
+                            className={`relative w-14 h-7 rounded-full transition-colors ${
+                              proctoringSettings.proctoring_enabled
+                                ? 'bg-blue-500'
+                                : 'bg-gray-300'
+                            } ${isSavingProctoring ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                              proctoringSettings.proctoring_enabled
+                                ? 'translate-x-8'
+                                : 'translate-x-1'
+                            }`}>
+                              {proctoringSettings.proctoring_enabled ? (
+                                <CheckCircle2 className="w-5 h-5 text-blue-500" />
+                              ) : (
+                                <X className="w-5 h-5 text-gray-400" />
+                              )}
+                            </div>
+                          </button>
+                          <span className="text-xs text-gray-500 font-medium">
+                            {proctoringSettings.proctoring_enabled ? 'ON' : 'OFF'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Individual Security Features */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-6">
+                      <h3 className="text-sm font-medium text-gray-900 mb-4">Security Features</h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        {[
+                          { key: 'webcam_monitoring', name: 'Webcam Monitoring', description: 'Record and analyze candidate video during assessment', icon: Video },
+                          { key: 'screen_recording', name: 'Screen Recording', description: 'Capture screen activity throughout the test', icon: Monitor },
+                          { key: 'tab_switch_detection', name: 'Tab Switch Detection', description: 'Detect when candidates switch browser tabs', icon: Eye },
+                          { key: 'ai_cheating_prevention', name: 'AI Cheating Prevention', description: 'AI-powered detection of suspicious behavior', icon: Brain },
+                          { key: 'copy_paste_blocking', name: 'Copy-Paste Blocking', description: 'Prevent copying questions or pasting answers', icon: Clipboard },
+                          { key: 'browser_lockdown', name: 'Browser Lockdown', description: 'Restrict access to other applications', icon: Lock },
+                        ].map((feature) => {
+                          const IconComponent = feature.icon;
+                          const isEnabled = proctoringSettings[feature.key as keyof ProctoringSettings] as boolean;
+                          return (
+                            <div key={feature.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg">
+                              <div className="flex items-start gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center flex-shrink-0 border border-gray-200">
+                                  <IconComponent className="w-4 h-4 text-gray-600" />
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">{feature.name}</div>
+                                  <div className="text-xs text-gray-500">{feature.description}</div>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => updateProctoringSettings({ [feature.key]: !isEnabled })}
+                                disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
+                                className={`relative w-11 h-6 rounded-full transition-colors ${
+                                  isEnabled && proctoringSettings.proctoring_enabled
+                                    ? 'bg-green-500'
+                                    : 'bg-gray-300'
+                                } ${isSavingProctoring || !proctoringSettings.proctoring_enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                                  isEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                                }`} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Threshold Settings */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-6">
+                      <h3 className="text-sm font-medium text-gray-900 mb-4">Threshold Settings</h3>
+                      <div className="grid grid-cols-3 gap-6">
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-2">Max Tab Switches Before Warning</label>
+                          <input
+                            type="number"
+                            value={proctoringSettings.max_tab_switches}
+                            onChange={(e) => updateProctoringSettings({ max_tab_switches: parseInt(e.target.value) || 3 })}
+                            disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            min="1"
+                            max="10"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-2">Max Violations Before Flag</label>
+                          <input
+                            type="number"
+                            value={proctoringSettings.max_violations_before_flag}
+                            onChange={(e) => updateProctoringSettings({ max_violations_before_flag: parseInt(e.target.value) || 5 })}
+                            disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            min="1"
+                            max="20"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-2">Recording Retention (Days)</label>
+                          <input
+                            type="number"
+                            value={proctoringSettings.recording_retention_days}
+                            onChange={(e) => updateProctoringSettings({ recording_retention_days: parseInt(e.target.value) || 90 })}
+                            disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            min="7"
+                            max="365"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recent Proctoring Events */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-medium text-gray-900">Recent Proctoring Events</h3>
+                        <span className="text-xs text-gray-500">{proctoringEventsTotal} total events</span>
+                      </div>
+                      {proctoringEvents.length === 0 ? (
+                        <div className="text-center py-8">
+                          <Shield className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                          <p className="text-sm text-gray-500">No proctoring events recorded yet</p>
+                          <p className="text-xs text-gray-400 mt-1">Events will appear here when candidates take proctored assessments</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {proctoringEvents.slice(0, 5).map((event) => (
+                            <div key={event.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                  event.severity === 'high' ? 'bg-red-100' :
+                                  event.severity === 'medium' ? 'bg-yellow-100' : 'bg-gray-100'
+                                }`}>
+                                  <AlertTriangle className={`w-4 h-4 ${
+                                    event.severity === 'high' ? 'text-red-500' :
+                                    event.severity === 'medium' ? 'text-yellow-500' : 'text-gray-400'
+                                  }`} />
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900 capitalize">
+                                    {event.event_type.replace(/_/g, ' ')}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {event.candidate_name || 'Unknown'} • {event.assessment_title || 'Assessment'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  event.severity === 'high' ? 'bg-red-100 text-red-700' :
+                                  event.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {event.severity}
+                                </span>
+                                {event.reviewed ? (
+                                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                ) : (
+                                  <span className="w-2 h-2 bg-orange-400 rounded-full" />
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : activeTab === 'audit-trail' ? (
               <AssessmentAuditTrail />
             ) : isLoading ? (
               /* Loading State */
