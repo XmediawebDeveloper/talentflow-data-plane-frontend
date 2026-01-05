@@ -223,6 +223,27 @@ export interface ProctorEventResponse {
   message: string;
 }
 
+export interface CodeExecutionResult {
+  success: boolean;
+  output?: string;
+  error?: string;
+  compile_error?: string;
+  exit_code: number;
+}
+
+export interface PrepareAssessmentResponse {
+  attempt_id: string;
+  status: 'pending_system_check' | 'generating' | 'ready';
+  message: string;
+}
+
+export interface GenerationStatusResponse {
+  status: 'not_started' | 'generating' | 'ready' | 'failed';
+  questions_ready: boolean;
+  total_questions: number;
+  message: string;
+}
+
 // ===================== API Functions =====================
 
 export const candidateService = {
@@ -254,6 +275,47 @@ export const candidateService = {
     } catch (error) {
       if (axios.isAxiosError(error)) {
         throw new Error(error.response?.data?.detail || 'Failed to accept consent');
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Prepare assessment - triggers background question generation
+   * Call this when user clicks "Begin Assessment"
+   */
+  async prepareAssessment(token: string): Promise<PrepareAssessmentResponse> {
+    try {
+      const response = await candidateApi.post<PrepareAssessmentResponse>(
+        `/candidate/assessment/${token}/prepare`
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.detail || 'Failed to prepare assessment');
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Check question generation status
+   * Poll this during system check to know when questions are ready
+   */
+  async getGenerationStatus(token: string): Promise<GenerationStatusResponse> {
+    try {
+      const response = await candidateApi.get<GenerationStatusResponse>(
+        `/candidate/assessment/${token}/generation-status`
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        return {
+          status: 'failed',
+          questions_ready: false,
+          total_questions: 0,
+          message: error.response?.data?.detail || 'Failed to check status'
+        };
       }
       throw error;
     }
@@ -414,6 +476,36 @@ export const candidateService = {
         throw new Error(error.response?.data?.detail || 'Failed to report event');
       }
       throw error;
+    }
+  },
+
+  /**
+   * Execute code and get results
+   */
+  async executeCode(language: string, code: string, stdin?: string): Promise<CodeExecutionResult> {
+    try {
+      const response = await candidateApi.post<CodeExecutionResult>(
+        `/candidate/code/run`,
+        {
+          language,
+          code,
+          stdin: stdin || '',
+        }
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.detail || 'Code execution failed',
+          exit_code: 1
+        };
+      }
+      return {
+        success: false,
+        error: 'Code execution failed',
+        exit_code: 1
+      };
     }
   },
 };

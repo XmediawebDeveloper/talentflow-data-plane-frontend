@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Play, CheckCircle, XCircle, Clock, AlertCircle, Copy, Check } from 'lucide-react';
+import { Play, CheckCircle, XCircle, Clock, AlertCircle, Copy, Check, Code } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { CurrentQuestion } from '@/lib/services/candidateService';
+import { CurrentQuestion, candidateService } from '@/lib/services/candidateService';
 
 interface CodingQuestionViewProps {
   question: CurrentQuestion;
@@ -31,62 +31,94 @@ interface TestResult {
   error?: string;
 }
 
+interface ExecutionOutput {
+  success: boolean;
+  output?: string;
+  error?: string;
+  compile_error?: string;
+}
+
 export function CodingQuestionView({ question, answer, onAnswerChange }: CodingQuestionViewProps) {
-  const languages = Object.keys(question.starter_code || { python: '' });
-  const [selectedLanguage, setSelectedLanguage] = useState(
-    answer.language || languages[0] || 'python'
-  );
+  // Agent selects ONE language based on JD analysis - no dropdown for candidate
+  const assignedLanguage = Object.keys(question.starter_code || { python: '' })[0] || 'python';
   const [code, setCode] = useState(
     answer.code_submission ||
-    question.starter_code?.[selectedLanguage] ||
+    question.starter_code?.[assignedLanguage] ||
     ''
   );
   const [isRunning, setIsRunning] = useState(false);
   const [testResults, setTestResults] = useState<TestResult[] | null>(null);
+  const [executionOutput, setExecutionOutput] = useState<ExecutionOutput | null>(null);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'problem' | 'output'>('problem');
-
-  useEffect(() => {
-    // Update code when language changes
-    if (!answer.code_submission) {
-      setCode(question.starter_code?.[selectedLanguage] || '');
-    }
-  }, [selectedLanguage, question.starter_code]);
 
   useEffect(() => {
     // Update answer when code changes
     onAnswerChange({
       ...answer,
       code_submission: code,
-      language: selectedLanguage
+      language: assignedLanguage
     });
-  }, [code, selectedLanguage]);
+  }, [code, assignedLanguage]);
 
   const handleRunCode = async () => {
     setIsRunning(true);
     setActiveTab('output');
+    setExecutionOutput(null);
+    setTestResults(null);
 
-    // Simulate running tests - in production, this would call a code execution API
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      // Execute code with sample input
+      const result = await candidateService.executeCode(
+        assignedLanguage,
+        code,
+        question.sample_input || ''
+      );
 
-    // Mock test results
-    const mockResults: TestResult[] = [
-      {
-        passed: true,
-        input: question.sample_input || 'Sample input',
-        expected: question.sample_output || 'Sample output',
-        actual: question.sample_output || 'Sample output'
-      },
-      {
-        passed: Math.random() > 0.3,
-        input: 'Test case 2 input',
-        expected: 'Expected output 2',
-        actual: Math.random() > 0.3 ? 'Expected output 2' : 'Incorrect output'
+      // Store raw execution output for display
+      setExecutionOutput({
+        success: result.success,
+        output: result.output,
+        error: result.error,
+        compile_error: result.compile_error
+      });
+
+      // If execution was successful, compare with expected output
+      if (result.success && question.sample_output) {
+        const actualOutput = (result.output || '').trim();
+        const expectedOutput = question.sample_output.trim();
+        const passed = actualOutput === expectedOutput;
+
+        const testResult: TestResult = {
+          passed,
+          input: question.sample_input || 'No input',
+          expected: expectedOutput,
+          actual: actualOutput,
+          error: passed ? undefined : 'Output does not match expected result'
+        };
+
+        setTestResults([testResult]);
+      } else if (!result.success) {
+        // Execution failed - show error as test failure
+        const testResult: TestResult = {
+          passed: false,
+          input: question.sample_input || 'No input',
+          expected: question.sample_output || 'Expected output',
+          actual: result.compile_error || result.error || 'Execution failed',
+          error: result.compile_error || result.error
+        };
+
+        setTestResults([testResult]);
       }
-    ];
-
-    setTestResults(mockResults);
-    setIsRunning(false);
+    } catch (error) {
+      console.error('Code execution error:', error);
+      setExecutionOutput({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to execute code'
+      });
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -217,36 +249,135 @@ export function CodingQuestionView({ question, answer, onAnswerChange }: CodingQ
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <div className="w-12 h-12 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin mx-auto mb-4" />
-                  <p className="text-gray-600">Running tests...</p>
+                  <p className="text-gray-600">Running code...</p>
                 </div>
+              </div>
+            ) : executionOutput ? (
+              <div className="space-y-4">
+                {/* Compilation Error */}
+                {executionOutput.compile_error && (
+                  <div className="p-4 rounded-xl bg-red-50 border border-red-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <XCircle className="w-5 h-5 text-red-600" />
+                      <span className="font-medium text-red-800">Compilation Error</span>
+                    </div>
+                    <pre className="bg-red-100 p-3 rounded-lg text-sm font-mono text-red-700 overflow-x-auto whitespace-pre-wrap">
+                      {executionOutput.compile_error}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Runtime Error */}
+                {executionOutput.error && !executionOutput.compile_error && (
+                  <div className="p-4 rounded-xl bg-red-50 border border-red-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <XCircle className="w-5 h-5 text-red-600" />
+                      <span className="font-medium text-red-800">Runtime Error</span>
+                    </div>
+                    <pre className="bg-red-100 p-3 rounded-lg text-sm font-mono text-red-700 overflow-x-auto whitespace-pre-wrap">
+                      {executionOutput.error}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Execution Output */}
+                {executionOutput.output && (
+                  <div className="p-4 rounded-xl bg-gray-50 border border-gray-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-medium text-gray-800">Output</span>
+                    </div>
+                    <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+                      {executionOutput.output}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Test Results Summary */}
+                {testResults && testResults.length > 0 && (
+                  <>
+                    <div className={`p-4 rounded-xl ${
+                      passedTests === totalTests
+                        ? 'bg-green-50 border border-green-200'
+                        : 'bg-red-50 border border-red-200'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        {passedTests === totalTests ? (
+                          <CheckCircle className="w-6 h-6 text-green-600" />
+                        ) : (
+                          <XCircle className="w-6 h-6 text-red-600" />
+                        )}
+                        <div>
+                          <p className={`font-medium ${
+                            passedTests === totalTests ? 'text-green-800' : 'text-red-800'
+                          }`}>
+                            {passedTests === totalTests
+                              ? 'Sample test passed!'
+                              : 'Sample test failed'}
+                          </p>
+                          {!executionOutput.success && (
+                            <p className="text-sm text-red-600 mt-1">
+                              Fix the errors above and try again.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Individual Results - Only show if we have test comparison */}
+                    {executionOutput.success && testResults.map((result, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-4 rounded-xl border ${
+                          result.passed
+                            ? 'border-green-200 bg-green-50/50'
+                            : 'border-red-200 bg-red-50/50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-3">
+                          {result.passed ? (
+                            <CheckCircle className="w-5 h-5 text-green-600" />
+                          ) : (
+                            <XCircle className="w-5 h-5 text-red-600" />
+                          )}
+                          <span className={`font-medium ${
+                            result.passed ? 'text-green-800' : 'text-red-800'
+                          }`}>
+                            Sample Test Case
+                          </span>
+                        </div>
+
+                        <div className="space-y-2 text-sm">
+                          <div>
+                            <span className="text-gray-500">Input:</span>
+                            <pre className="bg-white p-2 rounded mt-1 font-mono text-gray-700">
+                              {result.input}
+                            </pre>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Expected Output:</span>
+                            <pre className="bg-white p-2 rounded mt-1 font-mono text-gray-700">
+                              {result.expected}
+                            </pre>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Your Output:</span>
+                            <pre className={`p-2 rounded mt-1 font-mono ${
+                              result.passed
+                                ? 'bg-white text-gray-700'
+                                : 'bg-red-100 text-red-700'
+                            }`}>
+                              {result.actual || '(no output)'}
+                            </pre>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             ) : testResults ? (
               <div className="space-y-4">
-                {/* Summary */}
-                <div className={`p-4 rounded-xl ${
-                  passedTests === totalTests
-                    ? 'bg-green-50 border border-green-200'
-                    : 'bg-red-50 border border-red-200'
-                }`}>
-                  <div className="flex items-center gap-3">
-                    {passedTests === totalTests ? (
-                      <CheckCircle className="w-6 h-6 text-green-600" />
-                    ) : (
-                      <XCircle className="w-6 h-6 text-red-600" />
-                    )}
-                    <div>
-                      <p className={`font-medium ${
-                        passedTests === totalTests ? 'text-green-800' : 'text-red-800'
-                      }`}>
-                        {passedTests === totalTests
-                          ? 'All tests passed!'
-                          : `${passedTests} of ${totalTests} tests passed`}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Individual Results */}
+                {/* Legacy fallback - should not be reached */}
                 {testResults.map((result, idx) => (
                   <div
                     key={idx}
@@ -310,19 +441,13 @@ export function CodingQuestionView({ question, answer, onAnswerChange }: CodingQ
 
       {/* Right Panel - Code Editor */}
       <div className="w-1/2 flex flex-col">
-        {/* Language Selector & Run Button */}
+        {/* Language Display & Run Button */}
         <div className="flex items-center justify-between mb-4">
-          <select
-            value={selectedLanguage}
-            onChange={(e) => setSelectedLanguage(e.target.value)}
-            className="px-4 py-2 bg-gray-100 rounded-lg text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"
-          >
-            {languages.map(lang => (
-              <option key={lang} value={lang}>
-                {lang.charAt(0).toUpperCase() + lang.slice(1)}
-              </option>
-            ))}
-          </select>
+          {/* Language is auto-selected by AI based on JD - no dropdown */}
+          <div className="px-4 py-2 bg-gray-100 rounded-lg text-sm font-medium text-gray-700 flex items-center gap-2">
+            <Code className="w-4 h-4" />
+            <span>{assignedLanguage.charAt(0).toUpperCase() + assignedLanguage.slice(1)}</span>
+          </div>
 
           <Button
             variant="primary"

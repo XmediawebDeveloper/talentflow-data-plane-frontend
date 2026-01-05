@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, RefObject } from 'react';
 import {
   Clock,
-  ChevronLeft,
   ChevronRight,
   Send,
   AlertCircle,
@@ -82,6 +81,12 @@ export function AssessmentInterface({
     currentQuestion.time_limit_seconds
   );
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [allQuestionsAnswered, setAllQuestionsAnswered] = useState(false);
+
+  // Track when all questions are answered
+  useEffect(() => {
+    setAllQuestionsAnswered(progress.answered >= progress.total && progress.total > 0);
+  }, [progress.answered, progress.total]);
 
   // Reset answer when question changes
   useEffect(() => {
@@ -122,9 +127,16 @@ export function AssessmentInterface({
     try {
       const response = await onAnswerSubmit(currentQuestion.question_id, answer);
 
-      if (response.is_last_question && !autoSubmit) {
+      // Auto-advance to next question only if not in review mode
+      // User stays on current question if they're reviewing/editing
+      if (!response.is_last_question && !allQuestionsAnswered) {
+        // Auto-navigate to next question only during initial answering
+        onNavigate(currentQuestion.question_number + 1);
+      } else if (autoSubmit) {
+        // Time expired - auto-show completion modal
         setShowCompleteConfirm(true);
       }
+      // Otherwise, stay on current question (review mode) - user can navigate manually
     } catch (error) {
       console.error('Failed to submit answer:', error);
     } finally {
@@ -196,7 +208,7 @@ export function AssessmentInterface({
                 const isActive = round.round_type === currentQuestion.round_type;
                 return (
                   <div
-                    key={round.round_type}
+                    key={`${round.round_type}-${idx}`}
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
                       isActive ? 'bg-gray-100' : ''
                     }`}
@@ -253,6 +265,28 @@ export function AssessmentInterface({
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
         <div className="max-w-5xl mx-auto px-4 py-6">
+          {/* Review Mode Banner */}
+          {allQuestionsAnswered && (
+            <div className="mb-4 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-green-800">All questions answered!</p>
+                  <p className="text-sm text-green-600">You can review and edit your answers before submitting.</p>
+                </div>
+              </div>
+              <Button
+                variant="primary"
+                onClick={() => setShowCompleteConfirm(true)}
+              >
+                <Send className="w-4 h-4 mr-2" />
+                Submit Assessment
+              </Button>
+            </div>
+          )}
+
           {/* Question Card */}
           <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
             {/* Question Header */}
@@ -275,9 +309,9 @@ export function AssessmentInterface({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {currentQuestion.tags.map(tag => (
+                  {currentQuestion.tags.map((tag, idx) => (
                     <span
-                      key={tag}
+                      key={`${tag}-${idx}`}
                       className="px-2 py-1 bg-gray-200 text-gray-600 text-xs rounded-full"
                     >
                       {tag}
@@ -315,19 +349,9 @@ export function AssessmentInterface({
             </div>
 
             {/* Actions */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  onClick={() => onNavigate(currentQuestion.question_number - 1)}
-                  disabled={currentQuestion.question_number === 1}
-                >
-                  <ChevronLeft className="w-4 h-4 mr-1" />
-                  Previous
-                </Button>
-              </div>
-
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-end">
               <div className="flex items-center gap-3">
+                {/* Save & Next button - saves and moves to next question */}
                 {!isLastQuestion ? (
                   <Button
                     variant="primary"
@@ -335,50 +359,61 @@ export function AssessmentInterface({
                     loading={isSubmitting}
                     disabled={isSubmitting}
                   >
+                    <CheckCircle className="w-4 h-4 mr-2" />
                     Save & Next
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 ) : (
+                  /* Submit button - shown on last question */
                   <Button
                     variant="primary"
-                    onClick={() => handleSubmit()}
+                    onClick={() => {
+                      handleSubmit();
+                      setShowCompleteConfirm(true);
+                    }}
                     loading={isSubmitting}
                     disabled={isSubmitting}
                   >
                     <Send className="w-4 h-4 mr-2" />
-                    Submit Assessment
+                    Save & Submit Assessment
                   </Button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Navigation Grid */}
+          {/* Progress Indicator */}
           <div className="mt-6 bg-white rounded-xl shadow p-4">
-            <p className="text-sm font-medium text-gray-700 mb-3">Question Navigation</p>
+            <p className="text-sm font-medium text-gray-700 mb-3">Progress</p>
             <div className="flex flex-wrap gap-2">
               {Array.from({ length: currentQuestion.total_questions }, (_, i) => {
                 const num = i + 1;
                 const isCurrent = num === currentQuestion.question_number;
-                const isAnswered = num <= progress.answered;
+                const isAnswered = num < currentQuestion.question_number;
 
                 return (
-                  <button
+                  <div
                     key={num}
-                    onClick={() => onNavigate(num)}
-                    className={`w-10 h-10 rounded-lg text-sm font-medium transition-colors ${
+                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center ${
                       isCurrent
                         ? 'bg-gray-800 text-white'
                         : isAnswered
-                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-gray-100 text-gray-400'
                     }`}
                   >
-                    {num}
-                  </button>
+                    {isAnswered ? (
+                      <CheckCircle className="w-5 h-5" />
+                    ) : (
+                      num
+                    )}
+                  </div>
                 );
               })}
             </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Question {currentQuestion.question_number} of {currentQuestion.total_questions}
+            </p>
           </div>
         </div>
       </main>

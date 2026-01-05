@@ -157,9 +157,20 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     }
   };
 
-  const handleBeginClick = () => {
-    // Consent already accepted, proceed to system check
-    setStep('system_check');
+  const handleBeginClick = async () => {
+    try {
+      // Trigger question generation in background BEFORE system check
+      console.log('[PORTAL] Triggering background question generation...');
+      await candidateService.prepareAssessment(token);
+      console.log('[PORTAL] Question generation started, proceeding to system check');
+
+      // Proceed to system check while questions generate in parallel
+      setStep('system_check');
+    } catch (err) {
+      console.error('[PORTAL] Failed to prepare assessment:', err);
+      // Still proceed to system check - questions will be generated on start if prepare failed
+      setStep('system_check');
+    }
   };
 
   const handleConsentAccept = async () => {
@@ -175,28 +186,116 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
 
   const handleSystemCheckComplete = async () => {
     try {
-      setStep('generating_questions');
+      // Check if questions are already ready (from parallel generation)
+      console.log('[PORTAL] System check complete, checking if questions are ready...');
+      const status = await candidateService.getGenerationStatus(token);
+      console.log('[PORTAL] Generation status:', status);
 
-      // Start the assessment - this triggers AI question generation
-      const response = await candidateService.startAssessment(token);
-      setAssessmentData(response);
+      if (status.status === 'ready' && status.questions_ready) {
+        // Questions are ready! Start immediately
+        console.log('[PORTAL] Questions ready, starting assessment immediately');
+        setStep('generating_questions'); // Brief loading state
 
-      // Check if questions were actually generated
-      if (!response.first_question || response.total_questions === 0) {
-        setError('Failed to generate assessment questions. Please try again or contact support.');
-        setStep('error');
-        return;
+        const response = await candidateService.startAssessment(token);
+        setAssessmentData(response);
+
+        if (!response.first_question || response.total_questions === 0) {
+          setError('Failed to load assessment questions. Please try again.');
+          setStep('error');
+          return;
+        }
+
+        setCurrentQuestion(response.first_question);
+        setProgress({
+          answered: 0,
+          total: response.total_questions,
+          percent: 0
+        });
+
+        setStep('assessment');
+      } else if (status.status === 'generating') {
+        // Still generating - show loading and poll until ready
+        console.log('[PORTAL] Questions still generating, waiting...');
+        setStep('generating_questions');
+
+        // Poll for completion
+        const pollForReady = async () => {
+          for (let i = 0; i < 30; i++) {  // Max 60 seconds (30 * 2s)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const checkStatus = await candidateService.getGenerationStatus(token);
+
+            if (checkStatus.status === 'ready' && checkStatus.questions_ready) {
+              console.log('[PORTAL] Questions now ready!');
+              const response = await candidateService.startAssessment(token);
+              setAssessmentData(response);
+
+              if (!response.first_question || response.total_questions === 0) {
+                setError('Failed to load assessment questions. Please try again.');
+                setStep('error');
+                return;
+              }
+
+              setCurrentQuestion(response.first_question);
+              setProgress({
+                answered: 0,
+                total: response.total_questions,
+                percent: 0
+              });
+
+              setStep('assessment');
+              return;
+            } else if (checkStatus.status === 'failed') {
+              setError('Question generation failed. Please try again.');
+              setStep('error');
+              return;
+            }
+          }
+
+          // Timeout - try starting anyway (fallback)
+          console.log('[PORTAL] Generation timeout, trying to start anyway');
+          try {
+            const response = await candidateService.startAssessment(token);
+            setAssessmentData(response);
+            if (response.first_question) {
+              setCurrentQuestion(response.first_question);
+              setProgress({ answered: 0, total: response.total_questions, percent: 0 });
+              setStep('assessment');
+            } else {
+              setError('Question generation timed out. Please try again.');
+              setStep('error');
+            }
+          } catch {
+            setError('Question generation timed out. Please try again.');
+            setStep('error');
+          }
+        };
+
+        pollForReady();
+      } else {
+        // Not started or failed - trigger generation now (fallback to old flow)
+        console.log('[PORTAL] Generation not started, using fallback flow');
+        setStep('generating_questions');
+
+        const response = await candidateService.startAssessment(token);
+        setAssessmentData(response);
+
+        if (!response.first_question || response.total_questions === 0) {
+          setError('Failed to generate assessment questions. Please try again.');
+          setStep('error');
+          return;
+        }
+
+        setCurrentQuestion(response.first_question);
+        setProgress({
+          answered: 0,
+          total: response.total_questions,
+          percent: 0
+        });
+
+        setStep('assessment');
       }
-
-      setCurrentQuestion(response.first_question);
-      setProgress({
-        answered: 0,
-        total: response.total_questions,
-        percent: 0
-      });
-
-      setStep('assessment');
     } catch (err) {
+      console.error('[PORTAL] Error in handleSystemCheckComplete:', err);
       setError(err instanceof Error ? err.message : 'Failed to start assessment');
       setStep('error');
     }

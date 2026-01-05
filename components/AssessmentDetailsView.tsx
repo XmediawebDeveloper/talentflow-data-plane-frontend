@@ -1,5 +1,5 @@
-import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2 } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import { assessmentService } from '@/lib/services';
 
 interface AssessmentDetailsViewProps {
@@ -9,6 +9,16 @@ interface AssessmentDetailsViewProps {
   onPreview: () => void;
   onShare: () => void;
   onViewResults: () => void;
+}
+
+interface Section {
+  name: string;
+  type: 'hr' | 'technical' | 'coding';
+  enabled: boolean;
+  percentage: number;
+  topics: string[];
+  languages?: string[];
+  icon: any;
 }
 
 export default function AssessmentDetailsView({
@@ -21,15 +31,69 @@ export default function AssessmentDetailsView({
 }: AssessmentDetailsViewProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity'>('overview');
 
-  // Analytics data derived from assessment - shows actual values or N/A
+  // Construct sections array from individual assessment fields
+  const sections = useMemo<Section[]>(() => {
+    const result: Section[] = [];
+
+    if (assessment.hr_enabled) {
+      result.push({
+        name: 'HR / Behavioral',
+        type: 'hr',
+        enabled: true,
+        percentage: assessment.hr_percentage || 0,
+        topics: assessment.hr_topics || [],
+        icon: MessageSquare
+      });
+    }
+
+    if (assessment.technical_enabled) {
+      result.push({
+        name: 'Technical',
+        type: 'technical',
+        enabled: true,
+        percentage: assessment.technical_percentage || 0,
+        topics: assessment.technical_topics || [],
+        icon: Cpu
+      });
+    }
+
+    if (assessment.coding_enabled) {
+      result.push({
+        name: 'Coding',
+        type: 'coding',
+        enabled: true,
+        percentage: assessment.coding_percentage || 0,
+        topics: assessment.coding_topics || [],
+        languages: assessment.coding_languages || [],
+        icon: Code
+      });
+    }
+
+    return result;
+  }, [assessment]);
+
+  // Format duration from minutes
+  const formattedDuration = useMemo(() => {
+    const minutes = assessment.duration_minutes || 30;
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const remainingMinutes = minutes % 60;
+      return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+    }
+    return `${minutes} min`;
+  }, [assessment.duration_minutes]);
+
+  // Analytics data derived from assessment - uses correct API field names
   const analyticsData = {
-    totalInvites: assessment.candidates || 0,
-    completed: 0, // Will be fetched when results are loaded
-    inProgress: 0,
-    notStarted: 0,
-    averageScore: null as number | null,
+    totalInvites: assessment.candidates || assessment.invitations_count || 0,
+    completed: assessment.completed_count || 0,
+    inProgress: 0,  // Not tracked currently
+    notStarted: (assessment.candidates || assessment.invitations_count || 0) - (assessment.completed_count || 0),
+    averageScore: assessment.average_score as number | null,
     averageTime: 'N/A',
-    passRate: assessment.passRate || 'N/A'
+    passRate: assessment.pass_rate !== null && assessment.pass_rate !== undefined
+      ? `${assessment.pass_rate}%`
+      : 'N/A'
   };
 
   return (
@@ -53,7 +117,7 @@ export default function AssessmentDetailsView({
               <div>
                 <div className="flex items-center gap-3 mb-2">
                   <h1 className="text-2xl text-white">{assessment.title}</h1>
-                  {assessment.sections && (
+                  {sections.length > 0 && (
                     <span className="px-2 py-1 bg-gray-700/30 backdrop-blur-sm text-white rounded text-xs flex items-center gap-1 border border-white/20">
                       <Sparkles className="w-3 h-3" />
                       AI-Generated
@@ -82,11 +146,11 @@ export default function AssessmentDetailsView({
                 <div className="flex items-center gap-6 text-sm text-gray-100">
                   <span className="flex items-center gap-2">
                     <Clock className="w-4 h-4" />
-                    {assessment.duration}
+                    {formattedDuration}
                   </span>
                   <span className="flex items-center gap-2">
                     <FileText className="w-4 h-4" />
-                    {assessment.questions} questions
+                    {sections.length} section{sections.length !== 1 ? 's' : ''}
                   </span>
                   <span className="flex items-center gap-2">
                     <Users className="w-4 h-4" />
@@ -218,7 +282,7 @@ export default function AssessmentDetailsView({
                   <span className="text-sm text-gray-600">Avg. Score</span>
                 </div>
                 <div className="text-3xl text-gray-900 mb-1">
-                  {analyticsData.averageScore !== null ? `${analyticsData.averageScore}%` : 'N/A'}
+                  {analyticsData.averageScore != null ? `${analyticsData.averageScore.toFixed(1)}%` : 'N/A'}
                 </div>
                 <div className="text-xs text-gray-500">Mean performance</div>
               </div>
@@ -245,26 +309,28 @@ export default function AssessmentDetailsView({
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <div className="text-sm text-gray-600 mb-1">Assessment Type</div>
-                  <div className="text-gray-900">{assessment.type}</div>
+                  <div className="text-gray-900">
+                    {sections.map(s => s.name).join(' + ') || 'General'}
+                  </div>
                 </div>
                 <div>
                   <div className="text-sm text-gray-600 mb-1">Duration</div>
-                  <div className="text-gray-900">{assessment.duration}</div>
+                  <div className="text-gray-900">{formattedDuration}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600 mb-1">Total Questions</div>
-                  <div className="text-gray-900">{assessment.questions} questions</div>
+                  <div className="text-sm text-gray-600 mb-1">Sections</div>
+                  <div className="text-gray-900">{sections.length} section{sections.length !== 1 ? 's' : ''}</div>
                 </div>
                 <div>
                   <div className="text-sm text-gray-600 mb-1">Passing Score</div>
                   <div className="text-gray-900">70%</div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600 mb-1">Created On</div>
-                  <div className="text-gray-900">{assessment.created}</div>
+                  <div className="text-sm text-gray-600 mb-1">Proctoring</div>
+                  <div className="text-gray-900">{assessment.proctoring_enabled ? 'Enabled' : 'Disabled'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600 mb-1">Last Modified</div>
+                  <div className="text-sm text-gray-600 mb-1">Created On</div>
                   <div className="text-gray-900">{assessment.created}</div>
                 </div>
               </div>
@@ -287,7 +353,7 @@ export default function AssessmentDetailsView({
                         candidate_name: 'Anonymous Candidate',
                         candidate_email: `anonymous-${Date.now()}@placeholder.local`,
                       });
-                      const shareableLink = `${window.location.origin}/assessment/take/${invitation.token}`;
+                      const shareableLink = `${window.location.origin}/assessment/take/${invitation.invitation_token}`;
                       navigator.clipboard.writeText(shareableLink);
                       alert('Shareable link copied! This link can be used by one candidate.');
                     } catch (error) {
@@ -375,52 +441,89 @@ export default function AssessmentDetailsView({
         {/* Sections Tab */}
         {activeTab === 'sections' && (
           <div className="space-y-4">
-            {assessment.sections && assessment.sections.length > 0 ? (
-              assessment.sections.map((section: any, index: number) => (
-                <div key={index} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center text-white font-medium">
-                          {index + 1}
-                        </div>
-                        <div>
-                          <h4 className="text-gray-900 font-medium">{section.name}</h4>
-                          <div className="text-sm text-gray-600 mt-0.5">
-                            {section.questionCount || 10} questions • {section.percentage}% of total score
+            {sections.length > 0 ? (
+              sections.map((section, index) => {
+                const SectionIcon = section.icon;
+                return (
+                  <div key={section.type} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center text-white">
+                            <SectionIcon className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="text-gray-900 font-medium">{section.name}</h4>
+                            <div className="text-sm text-gray-600 mt-0.5">
+                              {section.percentage}% of total score
+                            </div>
                           </div>
                         </div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-xs font-medium">
+                            {section.percentage} points
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-xs font-medium">
-                          {section.percentage} points
-                        </span>
+                    </div>
+
+                    <div className="p-6">
+                      <div className="text-sm text-gray-700 mb-4">
+                        {section.type === 'hr' && 'Evaluates communication skills, cultural fit, and behavioral competencies.'}
+                        {section.type === 'technical' && 'Tests domain knowledge, technical concepts, and problem-solving abilities.'}
+                        {section.type === 'coding' && 'Assesses programming skills through hands-on coding challenges.'}
+                      </div>
+
+                      {/* Topics */}
+                      {section.topics.length > 0 && (
+                        <div className="mb-4">
+                          <div className="text-xs text-gray-600 mb-2 font-medium">Topics Covered</div>
+                          <div className="flex flex-wrap gap-2">
+                            {section.topics.map((topic, i) => (
+                              <span key={i} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                                {topic}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Coding Languages */}
+                      {section.type === 'coding' && section.languages && section.languages.length > 0 && (
+                        <div className="mb-4">
+                          <div className="text-xs text-gray-600 mb-2 font-medium">Programming Languages</div>
+                          <div className="flex flex-wrap gap-2">
+                            {section.languages.map((lang, i) => (
+                              <span key={i} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-mono">
+                                {lang}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <div className="text-xs text-gray-600 mb-1">Question Type</div>
+                          <div className="text-sm text-gray-900">
+                            {section.type === 'coding' ? 'Code Challenge' : 'Mixed Format'}
+                          </div>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <div className="text-xs text-gray-600 mb-1">Time Allocation</div>
+                          <div className="text-sm text-gray-900">
+                            {Math.round((assessment.duration_minutes || 30) * (section.percentage / 100))} min
+                          </div>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <div className="text-xs text-gray-600 mb-1">Weightage</div>
+                          <div className="text-sm text-gray-900">{section.percentage}%</div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  
-                  <div className="p-6">
-                    <div className="text-sm text-gray-700 mb-4">
-                      {section.description || `This section evaluates candidate proficiency in ${section.name.toLowerCase()}.`}
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <div className="text-xs text-gray-600 mb-1">Question Type</div>
-                        <div className="text-sm text-gray-900">Mixed Format</div>
-                      </div>
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <div className="text-xs text-gray-600 mb-1">Time Allocation</div>
-                        <div className="text-sm text-gray-900">{Math.round(parseInt(assessment.duration) * (section.percentage / 100))} min</div>
-                      </div>
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <div className="text-xs text-gray-600 mb-1">Difficulty</div>
-                        <div className="text-sm text-gray-900">Medium</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-12 text-center">
                 <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -499,7 +602,7 @@ export default function AssessmentDetailsView({
             </div>
 
             {/* Section Performance */}
-            {assessment.sections && assessment.sections.length > 0 && (
+            {sections.length > 0 && (
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                 <h3 className="text-lg text-gray-900 mb-4">Section Performance</h3>
 
@@ -511,25 +614,39 @@ export default function AssessmentDetailsView({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {assessment.sections.map((section: any, index: number) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center text-white text-sm font-medium">
-                            {index + 1}
+                    {sections.map((section, index) => {
+                      const SectionIcon = section.icon;
+                      // Get section-specific score from assessment data
+                      const sectionScore = section.type === 'hr' ? assessment.hr_score
+                        : section.type === 'technical' ? assessment.technical_score
+                        : section.type === 'coding' ? assessment.coding_score
+                        : null;
+                      const scoreDisplay = sectionScore != null ? `${sectionScore}%` : 'N/A';
+                      const scoreWidth = sectionScore != null ? `${sectionScore}%` : '0%';
+
+                      return (
+                        <div key={section.type} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center text-white">
+                              <SectionIcon className="w-4 h-4" />
+                            </div>
+                            <span className="text-sm text-gray-900">{section.name}</span>
                           </div>
-                          <span className="text-sm text-gray-900">{section.name}</span>
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <div className="text-sm font-medium text-gray-700">{scoreDisplay}</div>
+                              <div className="text-xs text-gray-500">Avg. Score</div>
+                            </div>
+                            <div className="w-24 bg-gray-200 rounded-full h-2">
+                              <div
+                                className={`h-2 rounded-full ${sectionScore != null && sectionScore >= 70 ? 'bg-green-500' : 'bg-gray-400'}`}
+                                style={{ width: scoreWidth }}
+                              ></div>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <div className="text-sm font-medium text-gray-500">N/A</div>
-                            <div className="text-xs text-gray-500">Avg. Score</div>
-                          </div>
-                          <div className="w-24 bg-gray-200 rounded-full h-2">
-                            <div className="bg-gray-300 h-2 rounded-full" style={{ width: '0%' }}></div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
