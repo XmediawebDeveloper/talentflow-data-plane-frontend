@@ -2525,7 +2525,6 @@ Use professional language, clear formatting, and make it engaging for candidates
                   />
                 </div>
               </div>
-            </div>
 
             <div className="flex justify-between items-center mt-8">
               <button
