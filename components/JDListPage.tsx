@@ -1,10 +1,18 @@
 'use client';
 
-import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, User, Clock, ArrowUpDown, Power } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { jdService, JDResponse } from '@/lib/services/jdService';
+import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+
+// JD03: Status tabs for filtering
+const STATUS_TABS = [
+  { id: 'all', label: 'All JDs' },
+  { id: 'published', label: 'Published' },
+  { id: 'draft', label: 'Drafts' },
+  { id: 'archived', label: 'Archived' },
+];
 
 export default function JDListPage() {
   const router = useRouter();
@@ -26,6 +34,41 @@ export default function JDListPage() {
       setStatusFilter(statusParam);
     }
   }, [searchParams]);
+  // JD04: Sort state
+  const [sortBy, setSortBy] = useState<string>('latest');
+
+  // JD01 & JD03: Access check state
+  const [accessCheck, setAccessCheck] = useState<JDAccessCheckResponse | null>(null);
+  const [accessCheckLoading, setAccessCheckLoading] = useState(true);
+  const [accessError, setAccessError] = useState<string | null>(null);
+
+  // JD01 & JD03: Pre-flight access check on mount
+  useEffect(() => {
+    const checkAccess = async () => {
+      setAccessCheckLoading(true);
+      try {
+        const response = await jdService.accessCheck();
+        setAccessCheck(response);
+
+        // Show warnings if any
+        if (response.warnings && response.warnings.length > 0) {
+          response.warnings.forEach(warning => toast.warning(warning));
+        }
+
+        // Show blocking error
+        if (!response.can_create_jd && response.blocking_error) {
+          setAccessError(response.blocking_error);
+        }
+      } catch (error) {
+        console.error('Access check failed:', error);
+        // Don't block on access check failure - allow viewing JDs
+      } finally {
+        setAccessCheckLoading(false);
+      }
+    };
+
+    checkAccess();
+  }, []);
 
   // Fetch JDs from API
   const fetchJDs = async () => {
@@ -34,6 +77,7 @@ export default function JDListPage() {
       const response = await jdService.list({
         status: statusFilter !== 'all' ? statusFilter : undefined,
         search: searchQuery || undefined,
+        sort_by: sortBy,
         page: currentPage,
         page_size: 20,
       });
@@ -50,7 +94,7 @@ export default function JDListPage() {
 
   useEffect(() => {
     fetchJDs();
-  }, [statusFilter, currentPage]);
+  }, [statusFilter, currentPage, sortBy]);
 
   // Debounced search
   useEffect(() => {
@@ -85,6 +129,30 @@ export default function JDListPage() {
       fetchJDs();
     } catch (error) {
       toast.error('Failed to delete');
+    }
+    setActiveDropdown(null);
+  };
+
+  // JD04: Publish draft JD
+  const handlePublish = async (jdId: string) => {
+    try {
+      await jdService.publish(jdId);
+      toast.success('Job description published');
+      fetchJDs();
+    } catch (error) {
+      toast.error('Failed to publish');
+    }
+    setActiveDropdown(null);
+  };
+
+  // JD04: Disable published JD
+  const handleDisable = async (jdId: string) => {
+    try {
+      await jdService.updateStatus(jdId, 'disabled');
+      toast.success('Job description disabled');
+      fetchJDs();
+    } catch (error) {
+      toast.error('Failed to disable');
     }
     setActiveDropdown(null);
   };
@@ -160,11 +228,56 @@ export default function JDListPage() {
     });
   };
 
+  // JD03: Check if user can create JD
+  const canCreateJD = accessCheck?.can_create_jd !== false;
+
   return (
     <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
       <div className="max-w-7xl mx-auto">
+        {/* JD01 & JD03: Access Error Banner */}
+        {accessError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-medium text-red-800">Access Restricted</h3>
+              <p className="text-sm text-red-700 mt-1">{accessError}</p>
+              {accessCheck?.failed_checks && accessCheck.failed_checks.length > 0 && (
+                <ul className="text-sm text-red-600 mt-2 list-disc list-inside">
+                  {accessCheck.failed_checks.map((check, idx) => (
+                    <li key={idx}>{check}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* JD03: Unit availability warning */}
+        {accessCheck && !accessCheck.units.passed && accessCheck.can_create_jd && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-medium text-yellow-800">Low Unit Availability</h3>
+              <p className="text-sm text-yellow-700 mt-1">
+                Some units are running low. You can still create JDs, but scoring/assessment features may be limited.
+              </p>
+              <div className="flex gap-4 mt-2 text-xs text-yellow-700">
+                {!accessCheck.units.RS.sufficient && (
+                  <span>Resume Scoring: {accessCheck.units.RS.available} remaining</span>
+                )}
+                {!accessCheck.units.AS.sufficient && (
+                  <span>Assessments: {accessCheck.units.AS.available} remaining</span>
+                )}
+                {!accessCheck.units.AIU.sufficient && (
+                  <span>AI Interviews: {accessCheck.units.AIU.available} remaining</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Job Descriptions</h1>
             <p className="text-sm text-gray-600 mt-1">
@@ -172,12 +285,35 @@ export default function JDListPage() {
             </p>
           </div>
           <button
-            onClick={() => router.push('/recruitment/jd-creation')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium"
+            onClick={() => canCreateJD && router.push('/recruitment/jd-creation')}
+            disabled={!canCreateJD || accessCheckLoading}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
+              canCreateJD
+                ? 'bg-gray-800 text-white hover:bg-gray-900'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+            title={!canCreateJD ? accessError || 'Cannot create JD' : 'Create a new job description'}
           >
             <Plus className="w-4 h-4" />
             Create New JD
           </button>
+        </div>
+
+        {/* JD03: Status Tabs */}
+        <div className="flex items-center gap-1 mb-6 bg-white rounded-lg border border-gray-200 p-1">
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => { setStatusFilter(tab.id); setCurrentPage(1); }}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                statusFilter === tab.id
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Bulk Actions Bar */}
@@ -203,7 +339,7 @@ export default function JDListPage() {
           </div>
         )}
 
-        {/* Filters */}
+        {/* Search Bar */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
           <div className="flex items-center gap-4">
             {/* Select All Checkbox */}
@@ -227,18 +363,27 @@ export default function JDListPage() {
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
               />
             </div>
+            {/* JD04: Sort dropdown */}
             <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-400" />
+              <ArrowUpDown className="w-4 h-4 text-gray-400" />
               <select
-                value={statusFilter}
-                onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white"
+                value={sortBy}
+                onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
               >
-                <option value="all">All Status</option>
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="archived">Archived</option>
+                <option value="latest">Latest Updated</option>
+                <option value="oldest">Oldest Updated</option>
+                <option value="a-z">Title A-Z</option>
+                <option value="z-a">Title Z-A</option>
+                <option value="created_latest">Recently Created</option>
+                <option value="created_oldest">Oldest Created</option>
               </select>
+            </div>
+            {/* Results count */}
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <span className="px-2 py-1 bg-gray-100 rounded">
+                {total} results
+              </span>
             </div>
           </div>
         </div>
@@ -258,7 +403,7 @@ export default function JDListPage() {
                 ? 'Try adjusting your filters'
                 : 'Create your first job description to get started'}
             </p>
-            {!searchQuery && statusFilter === 'all' && (
+            {!searchQuery && statusFilter === 'all' && canCreateJD && (
               <button
                 onClick={() => router.push('/recruitment/jd-creation')}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
@@ -322,6 +467,11 @@ export default function JDListPage() {
                         <span className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
                           Created {formatDate(jd.created_at)}
+                        </span>
+                        {/* JD04: Last Updated */}
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-4 h-4" />
+                          Updated {formatDate(jd.updated_at)}
                         </span>
                         {jd.published_at && (
                           <span className="flex items-center gap-1">
@@ -389,6 +539,26 @@ export default function JDListPage() {
                             <Edit2 className="w-4 h-4" />
                             Edit
                           </button>
+                          {/* JD04: Publish action for draft JDs */}
+                          {jd.status === 'draft' && (
+                            <button
+                              onClick={() => handlePublish(jd.id)}
+                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-green-700 hover:bg-green-50"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              Publish
+                            </button>
+                          )}
+                          {/* JD04: Disable action for published JDs */}
+                          {jd.status === 'published' && (
+                            <button
+                              onClick={() => handleDisable(jd.id)}
+                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-orange-700 hover:bg-orange-50"
+                            >
+                              <Power className="w-4 h-4" />
+                              Disable
+                            </button>
+                          )}
                           {jd.status !== 'archived' && (
                             <button
                               onClick={() => handleArchive(jd.id)}

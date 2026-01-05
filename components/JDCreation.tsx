@@ -1,6 +1,6 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -54,6 +54,9 @@ interface ExtractedData {
   locationsRequired: boolean;
   assessmentGuidance: string;
   internalRecruiterComments: string[];
+  // JD09: Additional extraction fields
+  certifications: string[];
+  domainKeywords: string[];
 }
 
 interface EditingJDData {
@@ -316,6 +319,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     locationsRequired: false,
     assessmentGuidance: '',
     internalRecruiterComments: [],
+    // JD09: Certifications and Domain Keywords
+    certifications: [],
+    domainKeywords: [],
   });
   const [isExtracting, setIsExtracting] = useState(false);
   const [newSkill, setNewSkill] = useState('');
@@ -343,6 +349,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
   // Save to draft state
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+
+  // JD06: Autosave state
+  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastAutosaveTime, setLastAutosaveTime] = useState<Date | null>(null);
 
   // Master data state
   const [experienceLevels, setExperienceLevels] = useState<ExperienceLevel[]>([]);
@@ -382,6 +392,63 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     };
     checkJobQuota();
   }, [checkQuota]);
+
+  // JD06: Autosave as draft when user types (debounced)
+  useEffect(() => {
+    // Only autosave in manual mode during create step, when we have content
+    if (step !== 'create' || mode !== 'manual') return;
+    if (!jobTitle.trim() && !manualJD.trim()) return;
+
+    // Need minimum content to autosave (Job Title must have at least 2 chars)
+    if (jobTitle.trim().length < 2) return;
+
+    // Skip if already editing an existing JD (to avoid duplicate saves on load)
+    // Only skip on initial load - allow autosave after user makes changes
+    const hasMinimumContent = jobTitle.trim().length >= 2;
+    if (!hasMinimumContent) return;
+
+    const autosaveTimer = setTimeout(async () => {
+      // Don't autosave if currently saving via another action
+      if (isSavingDraft || isPublishing) return;
+
+      setAutosaveStatus('saving');
+
+      try {
+        const jdData = {
+          title: jobTitle,
+          description: manualJD,
+          creation_stage: 'create' as const,
+        };
+
+        let savedJd;
+        if (editingId) {
+          // Update existing draft
+          savedJd = await jdService.update(editingId, jdData);
+        } else {
+          // Create new draft
+          savedJd = await jdService.create(jdData);
+          setEditingId(savedJd.id);
+        }
+
+        setAutosaveStatus('saved');
+        setLastAutosaveTime(new Date());
+
+        // Reset status after 3 seconds
+        setTimeout(() => {
+          setAutosaveStatus('idle');
+        }, 3000);
+      } catch (error) {
+        console.error('[JD06] Autosave failed:', error);
+        setAutosaveStatus('error');
+        // Reset error status after 5 seconds
+        setTimeout(() => {
+          setAutosaveStatus('idle');
+        }, 5000);
+      }
+    }, 2000); // 2 second debounce
+
+    return () => clearTimeout(autosaveTimer);
+  }, [jobTitle, manualJD, step, mode, editingId, isSavingDraft, isPublishing]);
 
   const handleGenerateJD = async () => {
     // Check quota before generating
@@ -526,6 +593,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         locationsRequired: false,
         assessmentGuidance: '',
         internalRecruiterComments: [],
+        // JD09: Extract certifications and domain keywords
+        certifications: params.certifications || [],
+        domainKeywords: params.domain_keywords || [],
       };
 
       setExtractedData(extraction);
@@ -712,6 +782,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     // Validate mandatory fields
     const missingFields: string[] = [];
 
+    // Must have at least one must-have skill
+    if (extractedData.mustHaveSkills.length === 0) {
+      missingFields.push('At least one Must-Have Skill');
+    }
     if (!extractedData.experience) {
       missingFields.push('Experience');
     }
@@ -725,7 +799,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     if (missingFields.length > 0) {
       toast({
         title: 'Missing Required Fields',
-        description: `Please select: ${missingFields.join(', ')}`,
+        description: `Please complete: ${missingFields.join(', ')}`,
         variant: 'error',
       });
       return;
@@ -854,6 +928,31 @@ Use professional language, clear formatting, and make it engaging for candidates
     setStep('review');
   };
 
+  // JD12: Compute validation status for review screen
+  const getValidationStatus = () => {
+    const missingFields: string[] = [];
+
+    if (extractedData.mustHaveSkills.length === 0) {
+      missingFields.push('At least one Must-Have Skill');
+    }
+    if (!extractedData.experience) {
+      missingFields.push('Experience');
+    }
+    if (!extractedData.education) {
+      missingFields.push('Education');
+    }
+    if (!extractedData.industryType) {
+      missingFields.push('Industry Type');
+    }
+
+    return {
+      isValid: missingFields.length === 0,
+      missingFields,
+    };
+  };
+
+  const validationStatus = getValidationStatus();
+
   // Handle regenerating JD based on modified extracted data
   const handleRegenerateFromExtractedData = async () => {
     setIsRegenerating(true);
@@ -930,6 +1029,9 @@ Use professional language, clear formatting, and make it engaging for candidates
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
         allow_overqualified: extractedData.allowOverqualified,
+        // JD11: Include certifications and domain_keywords in data sync
+        certifications: extractedData.certifications,
+        domain_keywords: extractedData.domainKeywords,
         locations: extractedData.locations.map(loc => ({
           city: loc.city,
           is_required: extractedData.locationsRequired,
@@ -1062,6 +1164,9 @@ Use professional language, clear formatting, and make it engaging for candidates
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
         allow_overqualified: extractedData.allowOverqualified,
+        // JD11: Include certifications and domain_keywords in data sync
+        certifications: extractedData.certifications,
+        domain_keywords: extractedData.domainKeywords,
         creation_stage: step,  // Save the current step so user can continue from here
         locations: extractedData.locations.map(loc => ({
           city: loc.city,
@@ -1298,7 +1403,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
                         maxLength={VALIDATION.JOB_TITLE.max}
-                        placeholder="e.g., Senior Software Engineer"
+                        placeholder="e.g., Senior Java Developer – Banking Domain"
                         className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
                           jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
                             ? 'border-red-300 bg-red-50'
@@ -1313,11 +1418,15 @@ Use professional language, clear formatting, and make it engaging for candidates
                           {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
                         </p>
                       </div>
+                      {/* JD07: Helper text for minimal prompt */}
+                      <p className="text-xs text-gray-500 mt-1">
+                        Enter a job title or a minimal prompt – AI will generate the full JD
+                      </p>
                     </div>
 
                     <div>
                       <label className="block text-sm text-gray-700 mb-2">
-                        AI Prompt <span className="text-red-500">*</span>
+                        AI Prompt – Quick Job Details <span className="text-gray-400 text-xs">(Optional)</span>
                       </label>
                       <textarea
                         value={aiPrompt}
@@ -1326,16 +1435,16 @@ Use professional language, clear formatting, and make it engaging for candidates
                         placeholder="Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"
                         rows={12}
                         className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
-                          aiPrompt.length > 0 && !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max)
+                          aiPrompt.length > 0 && aiPrompt.length > VALIDATION.AI_PROMPT.max
                             ? 'border-red-300 bg-red-50'
                             : 'border-gray-300'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${getCharCountColor(aiPrompt.length, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max)}`}>
-                          {aiPrompt.length < VALIDATION.AI_PROMPT.min && aiPrompt.length > 0 && `Min ${VALIDATION.AI_PROMPT.min} characters required`}
+                        <p className="text-xs text-gray-500">
+                          {aiPrompt.length > 0 && aiPrompt.length < VALIDATION.AI_PROMPT.min && `Tip: Add more details (${VALIDATION.AI_PROMPT.min - aiPrompt.length} more chars) for better results`}
                         </p>
-                        <p className={`text-xs ${getCharCountColor(aiPrompt.length, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max)}`}>
+                        <p className={`text-xs ${aiPrompt.length > VALIDATION.AI_PROMPT.max ? 'text-red-500' : 'text-gray-500'}`}>
                           {aiPrompt.length}/{VALIDATION.AI_PROMPT.max}
                         </p>
                       </div>
@@ -1362,7 +1471,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                       onClick={handleGenerateJD}
                       disabled={
                         !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
-                        !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max) ||
+                        aiPrompt.length > VALIDATION.AI_PROMPT.max ||
                         isGenerating ||
                         !hasQuota ||
                         isCheckingQuota
@@ -1389,7 +1498,30 @@ Use professional language, clear formatting, and make it engaging for candidates
               {/* Manual Input Mode */}
               {mode === 'manual' && (
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                  <h2 className="text-gray-900 mb-6">Job Details</h2>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-gray-900">Job Details</h2>
+                    {/* JD06: Autosave status indicator */}
+                    <div className="flex items-center gap-2 text-sm">
+                      {autosaveStatus === 'saving' && (
+                        <span className="flex items-center gap-1.5 text-gray-500">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Saving...
+                        </span>
+                      )}
+                      {autosaveStatus === 'saved' && (
+                        <span className="flex items-center gap-1.5 text-green-600">
+                          <Cloud className="w-4 h-4" />
+                          Draft saved
+                        </span>
+                      )}
+                      {autosaveStatus === 'error' && (
+                        <span className="flex items-center gap-1.5 text-red-500">
+                          <CloudOff className="w-4 h-4" />
+                          Save failed
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
                   <div className="space-y-5">
                     <div>
@@ -1401,7 +1533,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
                         maxLength={VALIDATION.JOB_TITLE.max}
-                        placeholder="e.g., Senior Software Engineer"
+                        placeholder="e.g., Senior Java Developer"
                         className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
                           jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
                             ? 'border-red-300 bg-red-50'
@@ -1941,11 +2073,131 @@ Use professional language, clear formatting, and make it engaging for candidates
                     <span className="text-sm text-gray-700">Required</span>
                   </label>
                 </div>
+              </div>
 
-                {/* Salary */}
+              {/* JD09: Certifications and Domain Keywords - 2 Column Layout */}
+              <div className="grid grid-cols-2 gap-6 mb-8">
+                {/* Certifications */}
                 <div>
-                  <h3 className="text-gray-900 mb-3">Salary Range</h3>
-                  <div className="flex items-center gap-3">
+                  <h3 className="text-gray-900 mb-4">Certifications</h3>
+                  <div className="space-y-2 mb-3">
+                    {extractedData.certifications.map((cert, index) => (
+                      <div key={index} className="flex items-center justify-between p-2.5 bg-white border border-gray-200 rounded-lg group">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                          <span className="text-sm text-gray-700">{cert}</span>
+                        </div>
+                        <button
+                          onClick={() => setExtractedData(prev => ({
+                            ...prev,
+                            certifications: prev.certifications.filter((_, i) => i !== index)
+                          }))}
+                          className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Add certification..."
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
+                          setExtractedData(prev => ({
+                            ...prev,
+                            certifications: [...prev.certifications, (e.target as HTMLInputElement).value.trim()]
+                          }));
+                          (e.target as HTMLInputElement).value = '';
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={(e) => {
+                        const input = (e.target as HTMLElement).previousElementSibling as HTMLInputElement;
+                        if (input?.value.trim()) {
+                          setExtractedData(prev => ({
+                            ...prev,
+                            certifications: [...prev.certifications, input.value.trim()]
+                          }));
+                          input.value = '';
+                        }
+                      }}
+                      className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {extractedData.certifications.length === 0 && (
+                    <p className="text-xs text-gray-500 mt-2">No certifications extracted. Add manually if needed.</p>
+                  )}
+                </div>
+
+                {/* Domain Keywords */}
+                <div>
+                  <h3 className="text-gray-900 mb-4">Domain Keywords</h3>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {extractedData.domainKeywords.map((keyword, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm group"
+                      >
+                        {keyword}
+                        <button
+                          onClick={() => setExtractedData(prev => ({
+                            ...prev,
+                            domainKeywords: prev.domainKeywords.filter((_, i) => i !== index)
+                          }))}
+                          className="text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Add domain keyword..."
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
+                          setExtractedData(prev => ({
+                            ...prev,
+                            domainKeywords: [...prev.domainKeywords, (e.target as HTMLInputElement).value.trim()]
+                          }));
+                          (e.target as HTMLInputElement).value = '';
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={(e) => {
+                        const input = (e.target as HTMLElement).previousElementSibling as HTMLInputElement;
+                        if (input?.value.trim()) {
+                          setExtractedData(prev => ({
+                            ...prev,
+                            domainKeywords: [...prev.domainKeywords, input.value.trim()]
+                          }));
+                          input.value = '';
+                        }
+                      }}
+                      className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {extractedData.domainKeywords.length === 0 && (
+                    <p className="text-xs text-gray-500 mt-2">No domain keywords extracted. Add manually if needed.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Salary */}
+              <div className="mb-8">
+                <h3 className="text-gray-900 mb-3">Salary Range</h3>
+                <div className="flex items-center gap-3">
                     <div className="relative flex-1">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
                       <input
@@ -2258,7 +2510,9 @@ Use professional language, clear formatting, and make it engaging for candidates
                       🔒 Private
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600 mb-3">Private notes not visible to candidates</p>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Private notes for team use only. Not visible to candidates or used in scoring/assessments.
+                  </p>
                   <textarea
                     value={extractedData.internalRecruiterComments.join('\n')}
                     onChange={(e) => setExtractedData(prev => ({
@@ -2323,6 +2577,13 @@ Use professional language, clear formatting, and make it engaging for candidates
                     <h3 className="text-lg text-gray-900 flex items-center gap-2">
                       <FileText className="w-5 h-5 text-gray-800" />
                       Final Job Description
+                      {/* JD12: AI-Generated indicator */}
+                      {mode === 'ai' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                          <Wand2 className="w-3 h-3" />
+                          AI Generated
+                        </span>
+                      )}
                     </h3>
                     <p className="text-sm text-gray-600 mt-1">This is the job description that will be published</p>
                   </div>
@@ -2399,6 +2660,13 @@ Use professional language, clear formatting, and make it engaging for candidates
                   <h3 className="text-lg text-gray-900 flex items-center gap-2">
                     📊 Extracted Data Summary
                     <Eye className="w-5 h-5 text-gray-500" />
+                    {/* JD12: AI-Generated indicator for extracted parameters */}
+                    {mode === 'ai' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                        <Wand2 className="w-3 h-3" />
+                        AI Extracted
+                      </span>
+                    )}
                   </h3>
                   <p className="text-sm text-gray-600 mt-1">Click to {showExtractedSummary ? 'hide' : 'view'} structured requirements</p>
                 </div>
@@ -2418,7 +2686,16 @@ Use professional language, clear formatting, and make it engaging for candidates
 
               {/* Skills Section */}
               <div className="p-6 border-b border-gray-200">
-                <h3 className="text-gray-900 mb-4">Skills & Requirements</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-gray-900">Skills & Requirements</h3>
+                  <button
+                    onClick={() => setStep('extract')}
+                    className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Edit
+                  </button>
+                </div>
                 <div className="grid grid-cols-3 gap-6">
                   {/* Must-Have Skills */}
                   <div>
@@ -2465,7 +2742,16 @@ Use professional language, clear formatting, and make it engaging for candidates
 
               {/* Requirements Grid */}
               <div className="p-6 border-b border-gray-200">
-                <h3 className="text-gray-900 mb-4">Requirements</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-gray-900">Requirements</h3>
+                  <button
+                    onClick={() => setStep('extract')}
+                    className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Edit
+                  </button>
+                </div>
                 <div className="grid grid-cols-3 gap-6">
                   {/* Experience */}
                   <div className="bg-gray-50 p-4 rounded-lg">
@@ -2496,9 +2782,64 @@ Use professional language, clear formatting, and make it engaging for candidates
                 </div>
               </div>
 
+              {/* JD12: Certifications */}
+              {extractedData.certifications.length > 0 && (
+                <div className="p-6 border-b border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-900">Certifications ({extractedData.certifications.length})</h3>
+                    <button
+                      onClick={() => setStep('extract')}
+                      className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Edit
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {extractedData.certifications.map((cert, index) => (
+                      <div key={index} className="bg-purple-50 text-purple-800 px-3 py-2 rounded-lg text-sm border border-purple-200">
+                        {cert}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* JD12: Domain Keywords */}
+              {extractedData.domainKeywords.length > 0 && (
+                <div className="p-6 border-b border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-900">Domain Keywords ({extractedData.domainKeywords.length})</h3>
+                    <button
+                      onClick={() => setStep('extract')}
+                      className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Edit
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {extractedData.domainKeywords.map((keyword, index) => (
+                      <div key={index} className="bg-blue-50 text-blue-800 px-3 py-2 rounded-lg text-sm border border-blue-200">
+                        {keyword}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Compensation */}
               <div className="p-6 border-b border-gray-200">
-                <h3 className="text-gray-900 mb-4">Compensation</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-gray-900">Compensation</h3>
+                  <button
+                    onClick={() => setStep('extract')}
+                    className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Edit
+                  </button>
+                </div>
                 <div className="bg-green-50 p-4 rounded-lg inline-flex items-center gap-2">
                   <span className="text-gray-900">
                     ₹{extractedData.salaryFrom ? parseInt(extractedData.salaryFrom).toLocaleString('en-IN') : '0'} -
@@ -2510,7 +2851,16 @@ Use professional language, clear formatting, and make it engaging for candidates
 
               {/* Employment Type & Work Model */}
               <div className="p-6 border-b border-gray-200">
-                <h3 className="text-gray-900 mb-4">Job Type</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-gray-900">Job Type</h3>
+                  <button
+                    onClick={() => setStep('extract')}
+                    className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Edit
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="text-sm text-gray-600 mb-2">Employment Type</h4>
@@ -2614,31 +2964,91 @@ Use professional language, clear formatting, and make it engaging for candidates
               )}
             </div>
 
+            {/* JD12: Validation Warning Banner */}
+            {!validationStatus.isValid && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-amber-800 font-medium">Cannot Publish - Missing Required Fields</h4>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Please complete the following before publishing:
+                    </p>
+                    <ul className="text-sm text-amber-700 mt-2 list-disc list-inside">
+                      {validationStatus.missingFields.map((field, index) => (
+                        <li key={index}>{field}</li>
+                      ))}
+                    </ul>
+                    <button
+                      onClick={() => setStep('extract')}
+                      className="mt-3 text-sm text-amber-800 underline hover:text-amber-900"
+                    >
+                      Go back to edit →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="flex gap-4 justify-between">
-              <button
-                onClick={() => setStep('extract')}
-                className="px-6 py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-              >
-                ← Back to Edit
-              </button>
-              <button
-                onClick={handleConfirmPublish}
-                disabled={isPublishing}
-                className="flex items-center gap-2 bg-green-600 text-white px-8 py-3 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isPublishing ? (
-                  <>
-                    <span className="animate-spin">⏳</span>
-                    Publishing...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-5 h-5" />
-                    Confirm & Publish
-                  </>
-                )}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setStep('extract')}
+                  className="px-6 py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  ← Back to Edit
+                </button>
+                {/* JD12: Cancel button to return to JD List */}
+                <button
+                  onClick={() => router.push('/recruitment/jobs')}
+                  className="px-6 py-3 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+              <div className="flex gap-3">
+                {/* JD12: Save as Draft button */}
+                <button
+                  onClick={handleSaveDraft}
+                  disabled={isSavingDraft}
+                  className="flex items-center gap-2 px-6 py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  {isSavingDraft ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Cloud className="w-4 h-4" />
+                      Save as Draft
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={handleConfirmPublish}
+                  disabled={isPublishing || !validationStatus.isValid}
+                  className={`flex items-center gap-2 px-8 py-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    validationStatus.isValid
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-gray-300 text-gray-500'
+                  }`}
+                  title={!validationStatus.isValid ? 'Complete all required fields to publish' : ''}
+                >
+                  {isPublishing ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      Publishing...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-5 h-5" />
+                      Confirm & Publish
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}

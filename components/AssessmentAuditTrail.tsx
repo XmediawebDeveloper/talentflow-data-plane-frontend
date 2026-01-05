@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { Search, Filter, Download, X, CheckCircle, XCircle, Clock, AlertTriangle, FileText, RefreshCw, Eye, Calendar, Mail, User, Building2, Hash, Activity } from 'lucide-react';
 import { assessmentService, AuditLogResponse } from '@/lib/services';
 
@@ -558,9 +558,8 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
                 </tr>
               ) : (
                 filteredLogs.map((log, index) => (
-                  <>
+                  <Fragment key={log.id}>
                     <tr
-                      key={log.id}
                       className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
                         index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
                       }`}
@@ -778,7 +777,7 @@ export default function AssessmentAuditTrail({ logs: initialLogs }: AssessmentAu
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))
               )}
             </tbody>

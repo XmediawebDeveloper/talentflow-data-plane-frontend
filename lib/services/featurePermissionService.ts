@@ -131,11 +131,27 @@ export const featurePermissionService = {
 
   /**
    * Get current user limits for the tenant
+   * Uses /users/limits/status endpoint which fetches from Admin API
    */
   async getUserLimits(): Promise<UserLimitsResponse> {
     try {
-      const response = await api.get<UserLimitsResponse>(`${TENANT_ADMIN_BASE_URL}/user-limits`);
-      return response.data;
+      const response = await api.get<any>('/users/limits/status');
+      // Map the response to UserLimitsResponse format
+      const data = response.data;
+      const maxUsers = data.max_users === 'Unlimited' ? -1 : (data.max_users || 5);
+      const currentUsers = data.current_users || 0;
+      const remainingSeats = data.remaining_seats === 'Unlimited' ? -1 : (data.remaining_seats || 0);
+      const percentageUsed = data.percentage_used || 0;
+
+      return {
+        current_users: currentUsers,
+        max_users: maxUsers,
+        available_slots: remainingSeats,
+        usage_percentage: percentageUsed,
+        is_at_limit: data.status === 'exceeded' || (maxUsers !== -1 && currentUsers >= maxUsers),
+        approaching_limit: data.status === 'warning' || percentageUsed >= 80,
+        plan_name: data.plan_name || 'Unknown',
+      };
     } catch (error) {
       throw new Error(handleApiError(error));
     }
