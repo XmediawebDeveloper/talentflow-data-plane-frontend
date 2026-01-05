@@ -4,7 +4,7 @@ import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, 
 import { useState, useRef, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import ReactMarkdown from 'react-markdown';
-import { jdService, JDVersion } from '@/lib/services/jdService';
+import { jdService, JDVersion, JDUsageStatus } from '@/lib/services/jdService';
 import ResumeUploadModal from './ResumeUploadModal';
 import ResumeScoring from './ResumeScoring';
 import JobApplicants from './JobApplicants';
@@ -32,6 +32,8 @@ interface ExtendedJob extends Job {
   hasAiMatchResults?: boolean;
   rawDescription?: string;
   mustHaveComments?: string[];
+  // JD13: Usage status for edit/republish logic
+  usageStatus?: JDUsageStatus;
 }
 
 interface JobDetailViewProps {
@@ -42,12 +44,15 @@ interface JobDetailViewProps {
   onScoreResumes?: (resumeIds: string[], jobId: string, source: 'my-resumes' | 'internal-db') => void;
   onNavigateToAITalentMatch?: (jobId: string) => void; // Navigate to AI Talent Match page
   onDisable?: (job: Job) => void; // Disable job
+  onEnable?: (job: Job) => void; // JD15: Enable job (re-enable disabled JD)
   onArchive?: (job: Job) => void; // Archive job
   onDelete?: (job: Job) => void; // Delete job
   onViewAssessmentResult?: (assessmentResult: any, jobTitle: string) => void; // Navigate to assessment result detail
+  onRepublish?: (job: Job) => void; // JD13: Republish job after editing
+  isTenantAdmin?: boolean; // JD15: Whether user is Tenant Admin (for disable/enable buttons)
 }
 
-export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onArchive, onDelete, onViewAssessmentResult }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false }: JobDetailViewProps) {
   const handleEdit = () => {
     if (onEdit) {
       onEdit(job);
@@ -250,6 +255,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         return 'bg-yellow-100 text-yellow-700 border-yellow-200';
       case 'Closed':
         return 'bg-gray-100 text-gray-700 border-gray-200';
+      case 'Disabled':  // JD15: Disabled status styling
+        return 'bg-red-100 text-red-700 border-red-200';
+      case 'Archived':
+        return 'bg-purple-100 text-purple-700 border-purple-200';
       default:
         return 'bg-gray-100 text-gray-700 border-gray-200';
     }
@@ -571,6 +580,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       <CandidateScoringDetailPage
         resume={viewingScoredResume}
         jobTitle={job.title}
+        jobId={job.id}
         onBack={() => setViewingScoredResume(null)}
       />
     );
@@ -629,12 +639,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     <div className="text-xs text-gray-500">Posted On</div>
                     <div className="text-sm text-gray-900">
                       {job.postedDate
-                        ? new Date(job.postedDate).toLocaleDateString('en-US', {
+                        ? new Date(job.postedDate).toLocaleString('en-US', {
                             month: 'short',
                             day: 'numeric',
                             year: 'numeric',
                             hour: '2-digit',
-                            minute: '2-digit'
+                            minute: '2-digit',
+                            hour12: true
                           })
                         : 'N/A'}
                     </div>
@@ -718,14 +729,30 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               )}
             </div>
 
+            {/* JD13: Usage Status Info Banner */}
+            {job.status === 'Published' && job.usageStatus?.is_used && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+                <Ban className="w-4 h-4 flex-shrink-0" />
+                <span>
+                  This JD is in use ({job.usageStatus.usage.total_usage_count} {job.usageStatus.usage.total_usage_count === 1 ? 'usage' : 'usages'}) and cannot be edited.
+                </span>
+              </div>
+            )}
+
             {/* Action Buttons - Only for Published jobs */}
             {job.status === 'Published' && (
               <div className="flex items-center gap-2">
-                {/* Edit Button - Always shown for Published JDs */}
+                {/* JD13: Edit Button - Disabled when JD is used in modules */}
                 {onEdit && (
                   <button
                     onClick={handleEdit}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2"
+                    disabled={job.usageStatus?.is_used}
+                    className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
+                      job.usageStatus?.is_used
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                    title={job.usageStatus?.is_used ? job.usageStatus.edit_restriction_reason : 'Edit this job description'}
                   >
                     <Edit className="w-4 h-4" />
                     <span className="font-medium">Edit & Republish</span>
@@ -740,10 +767,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     <span className="font-medium">Archive</span>
                   </button>
                 )}
-                {onDisable && (
+                {/* JD15: Disable button - Only visible to Tenant Admins */}
+                {onDisable && isTenantAdmin && (
                   <button
                     onClick={handleDisable}
                     className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all flex items-center gap-2"
+                    title="Disable this JD (Tenant Admin only)"
                   >
                     <Ban className="w-4 h-4" />
                     <span className="font-medium">Disable</span>
@@ -756,6 +785,32 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     title="Delete Job"
                   >
                     <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* JD15: Action Buttons - For Disabled jobs */}
+            {job.status === 'Disabled' && (
+              <div className="flex items-center gap-2">
+                {/* JD15: Enable button - Only visible to Tenant Admins */}
+                {onEnable && isTenantAdmin && (
+                  <button
+                    onClick={() => onEnable(job)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center gap-2"
+                    title="Re-enable this JD (Tenant Admin only)"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span className="font-medium">Re-enable JD</span>
+                  </button>
+                )}
+                {onArchive && (
+                  <button
+                    onClick={handleArchive}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-all flex items-center gap-2"
+                  >
+                    <Archive className="w-4 h-4" />
+                    <span className="font-medium">Archive</span>
                   </button>
                 )}
               </div>

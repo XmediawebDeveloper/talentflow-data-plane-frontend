@@ -387,154 +387,10 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
           if (!result || !resume || !job) return null;
 
           return (
-            <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-lg mb-6">
-              <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-gray-900 font-semibold flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5 text-gray-700" />
-                      Scoring Rubric & Evaluation
-                    </h3>
-                    <p className="text-gray-600 text-sm mt-1">
-                      <span className="font-medium">{resume.name || resume.candidateName || 'Unknown'}</span> → <span className="font-medium">{job.title}</span>
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => alert('PDF export functionality coming soon!')}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-white text-gray-800 rounded-lg hover:bg-gray-50 transition-all shadow-md hover:shadow-lg"
-                  >
-                    <FileText className="w-4 h-4" />
-                    Export as PDF
-                  </button>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                        Evaluation Category
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                        Rating (out of 10)
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                        Rating Range
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                        Eligible Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                        Criteria
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                        AI Reasoning
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {detailedScores.map((category, index) => {
-                      const getRatingRange = (rating: number): string => {
-                        if (rating === 10) return 'Excellent';
-                        if (rating === 9) return 'Very Good';
-                        if (rating === 8) return 'Good';
-                        if (rating === 7) return 'Average';
-                        return 'Below Average';
-                      };
-
-                      const getRatingBgColor = (rating: number): string => {
-                        if (rating >= 9) return 'bg-green-100 border-green-300 text-green-700';
-                        if (rating === 8) return 'bg-gray-100 border-gray-300 text-gray-900';
-                        if (rating === 7) return 'bg-yellow-100 border-yellow-300 text-yellow-700';
-                        return 'bg-red-100 border-red-300 text-red-700';
-                      };
-
-                      const getRatingRangeColor = (rating: number): string => {
-                        if (rating >= 9) return 'text-green-700 font-semibold';
-                        if (rating === 8) return 'text-gray-900 font-semibold';
-                        if (rating === 7) return 'text-yellow-700 font-semibold';
-                        return 'text-red-700 font-semibold';
-                      };
-
-                      const isEligible = category.rating > 7;
-
-                      return (
-                        <tr key={index} className="hover:bg-gray-50">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              <Briefcase className="w-4 h-4 text-gray-500" />
-                              <span className="text-sm font-medium text-gray-900">{category.category}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <span className={`inline-flex items-center justify-center w-14 h-14 rounded-lg font-bold border ${getRatingBgColor(category.rating)}`}>
-                              {category.rating}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <span className={`text-sm ${getRatingRangeColor(category.rating)}`}>
-                              {getRatingRange(category.rating)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              {isEligible ? (
-                                <CheckCircle className="w-5 h-5 text-green-600" />
-                              ) : (
-                                <AlertCircle className="w-5 h-5 text-red-600" />
-                              )}
-                              <span className={`text-sm font-medium ${isEligible ? 'text-green-700' : 'text-red-700'}`}>
-                                {isEligible ? 'Eligible' : 'Not Eligible'}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
-                              category.requirement === 'Required'
-                                ? 'bg-red-100 text-red-700 border border-red-300'
-                                : 'bg-gray-100 text-gray-900 border border-gray-300'
-                            }`}>
-                              {category.requirement}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm text-gray-600 leading-relaxed">{category.reasoning}</p>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Summary Stats */}
-              <div className="grid grid-cols-4 gap-4 p-6 border-t border-gray-200">
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-green-700">
-                    {detailedScores.filter(c => c.rating > 7).length}
-                  </div>
-                  <div className="text-sm text-gray-700 mt-1">Eligible Criteria</div>
-                </div>
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-red-700">
-                    {detailedScores.filter(c => c.rating <= 7).length}
-                  </div>
-                  <div className="text-sm text-gray-700 mt-1">Not Eligible Criteria</div>
-                </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-gray-900">
-                    {detailedScores.filter(c => c.requirement === 'Required').length}
-                  </div>
-                  <div className="text-sm text-gray-700 mt-1">Required Criteria</div>
-                </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-gray-900">
-                    {(detailedScores.reduce((sum, c) => sum + c.rating, 0) / detailedScores.length).toFixed(1)}
-                  </div>
-                  <div className="text-sm text-gray-700 mt-1">Average Rating</div>
-                </div>
-              </div>
+            <>
+              {/* STATIC SCORING RUBRIC TABLE REMOVED - User requested removal of mock data display */}
+              {/* This static table has been commented out as it shows hardcoded mock data */}
+              {/* Real scoring data should come from API endpoint /api/v1/scoring/score */}
 
               <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
                 <div className="flex items-center justify-between">
@@ -558,7 +414,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                   </button>
                 </div>
               </div>
-            </div>
+            </>
           );
         })()}
 

@@ -389,7 +389,10 @@ export default function UserManagement() {
         },
       });
 
-      if (!response.ok) throw new Error('Failed to fetch users');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to fetch users');
+      }
 
       const data = await response.json();
       const mappedUsers: ApiUser[] = (data.users || data).map((user: any) => ({
@@ -402,9 +405,10 @@ export default function UserManagement() {
         last_login: user.last_login_at,
       }));
       setUsers(mappedUsers);
-    } catch (error) {
-      console.warn('API unavailable, using mock data:', error);
-      setUsers(mockUsers);
+    } catch (error: any) {
+      console.error('Error loading users:', error);
+      toast.error(error.message || 'Failed to load users');
+      setUsers([]); // Show empty state instead of mock data
     } finally {
       setIsLoading(false);
     }
@@ -482,15 +486,24 @@ export default function UserManagement() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to create user');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        // Handle user limit exceeded error
+        if (errorData.detail?.error === 'USER_LIMIT_EXCEEDED') {
+          toast.error(errorData.detail.message || 'User limit exceeded. Please upgrade your plan.');
+        } else {
+          toast.error(errorData.detail?.message || errorData.detail || 'Failed to create user');
+        }
+        return;
+      }
 
       toast.success('User created successfully');
       resetCreateModal();
+      refreshLimits(); // Refresh user limits count
       loadUsers();
-    } catch (error) {
-      console.warn('API unavailable, simulating create:', error);
-      toast.error('Failed to create user');
-      resetCreateModal();
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      toast.error(error.message || 'Failed to create user');
     } finally {
       setIsSaving(false);
     }
@@ -542,14 +555,23 @@ export default function UserManagement() {
         },
       });
 
-      if (!response.ok) throw new Error('Failed to deactivate user');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        // Handle last admin deactivation blocked
+        if (errorData.detail?.error === 'LAST_ADMIN_DEACTIVATION_BLOCKED') {
+          toast.error(errorData.detail.message || 'Cannot deactivate the last admin user');
+        } else {
+          toast.error(errorData.detail?.message || errorData.detail || 'Failed to deactivate user');
+        }
+        return;
+      }
 
       toast.success('User deactivated successfully');
+      refreshLimits(); // Refresh user limits count
       loadUsers();
-    } catch (error) {
-      console.warn('API unavailable, simulating deactivation:', error);
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, is_active: false } : u));
-      toast.success('User deactivated (offline mode)');
+    } catch (error: any) {
+      console.error('Error deactivating user:', error);
+      toast.error(error.message || 'Failed to deactivate user');
     }
   };
 
@@ -563,14 +585,25 @@ export default function UserManagement() {
         },
       });
 
-      if (!response.ok) throw new Error('Failed to toggle user status');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        // Handle specific errors
+        if (errorData.detail?.error === 'USER_LIMIT_EXCEEDED') {
+          toast.error(errorData.detail.message || 'User limit exceeded. Please upgrade your plan.');
+        } else if (errorData.detail?.error === 'LAST_ADMIN_DEACTIVATION_BLOCKED') {
+          toast.error(errorData.detail.message || 'Cannot deactivate the last admin user');
+        } else {
+          toast.error(errorData.detail?.message || errorData.detail || 'Failed to update user status');
+        }
+        return;
+      }
 
       toast.success(user.is_active ? 'User deactivated' : 'User activated');
+      refreshLimits(); // Refresh user limits count
       loadUsers();
-    } catch (error) {
-      console.warn('API unavailable, simulating toggle:', error);
-      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_active: !u.is_active } : u));
-      toast.success(user.is_active ? 'User deactivated (offline)' : 'User activated (offline)');
+    } catch (error: any) {
+      console.error('Error toggling user status:', error);
+      toast.error(error.message || 'Failed to update user status');
     }
   };
 
@@ -601,15 +634,22 @@ export default function UserManagement() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to update user');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.detail?.error === 'LAST_ADMIN_ROLE_CHANGE_BLOCKED') {
+          toast.error(errorData.detail.message || 'Cannot change role of the last admin user');
+        } else {
+          toast.error(errorData.detail?.message || errorData.detail || 'Failed to update user');
+        }
+        return;
+      }
 
       toast.success('User updated successfully');
       resetEditModal();
       loadUsers();
-    } catch (error) {
-      console.warn('API unavailable, simulating update:', error);
-      toast.error('Failed to update user');
-      resetEditModal();
+    } catch (error: any) {
+      console.error('Error updating user:', error);
+      toast.error(error.message || 'Failed to update user');
     } finally {
       setIsSaving(false);
     }

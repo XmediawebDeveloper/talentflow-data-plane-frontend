@@ -41,8 +41,8 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
     if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
     if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
     if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
-    
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    return date.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
   };
 
   const getSuccessRate = (record: UploadRecord) => {

@@ -330,7 +330,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             const limit = isUnlimited ? -1 : (baseLimit + addonRemaining);
             const used = sub.used || 0;
             const remaining = isUnlimited ? -1 : (q.total_remaining !== undefined ? q.total_remaining : (sub.remaining || 0));
-            const usagePercentage = isUnlimited ? 0 : (sub.percentage || (limit > 0 ? (used / limit) * 100 : 0));
+            // Calculate percentage based on TOTAL limit (subscription + addon), not just subscription
+            const usagePercentage = isUnlimited ? 0 : (limit > 0 ? (used / limit) * 100 : 0);
 
             // Log addon credits for debugging
             if (addonRemaining > 0) {
