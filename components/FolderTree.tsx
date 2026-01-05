@@ -48,14 +48,17 @@ export default function FolderTree({
   };
 
   const handleCreateFolder = (parentId?: string) => {
+    // Ignore if parentId is an event object (from onClick handler)
+    const actualParentId = typeof parentId === 'string' ? parentId : undefined;
+
     if (newFolderName.trim()) {
-      onCreateFolder(newFolderName, parentId);
+      onCreateFolder(newFolderName, actualParentId);
       setNewFolderName('');
       setIsCreatingFolder(false);
       setCreatingSubFolderFor(null);
       // Expand parent folder if creating sub-folder
-      if (parentId && !expandedFolders.includes(parentId)) {
-        setExpandedFolders(prev => [...prev, parentId]);
+      if (actualParentId && !expandedFolders.includes(actualParentId)) {
+        setExpandedFolders(prev => [...prev, actualParentId]);
       }
     }
   };

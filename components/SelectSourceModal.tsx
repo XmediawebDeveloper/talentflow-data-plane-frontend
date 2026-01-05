@@ -51,17 +51,30 @@ export default function SelectSourceModal({
           const folderData = await folderService.list();
           setFolders(folderData || []);
         } catch (e) {
+          console.error('Failed to fetch folders:', e);
           setFolders([]);
         }
       }
     } catch (error) {
       console.error('Failed to fetch resumes:', error);
-      toast.error('Failed to load resumes');
+      toast.error('Failed to load resumes. Please try again.');
       setResumes([]);
     } finally {
       setLoading(false);
     }
   };
+
+  // Set a timeout to stop loading if API is too slow
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (loading) {
+        setLoading(false);
+        console.warn('Resume fetch timed out');
+      }
+    }, 10000);
+
+    return () => clearTimeout(timeoutId);
+  }, [loading]);
 
   // Filter resumes based on search and folder
   const getFilteredResumes = () => {

@@ -109,7 +109,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
   };
 
   const getMatchStatusColor = (status: string) => {
-    if (status === 'Excellent Match') return 'bg-green-100 text-green-700 border-green-300';
+    if (status === 'Exact Match' || status === 'Excellent Match') return 'bg-green-100 text-green-700 border-green-300';
     if (status === 'Partial Match') return 'bg-yellow-100 text-yellow-700 border-yellow-300';
     return 'bg-red-100 text-red-700 border-red-300';
   };
@@ -371,7 +371,13 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
                           ) : (
                             <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
                           )}
-                          <span>{resume.education || 'Education not specified'}</span>
+                          <span>
+                            {typeof resume.education === 'string'
+                              ? resume.education
+                              : Array.isArray(resume.education) && resume.education.length > 0
+                                ? (resume.education[0]?.degree || resume.education[0]?.institution || 'Education available')
+                                : 'Education not specified'}
+                          </span>
                         </li>
                       </ul>
                     </div>

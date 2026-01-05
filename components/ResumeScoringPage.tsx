@@ -225,15 +225,20 @@ export default function ResumeScoringPage({
         return 'Current';
       };
 
+      // Use matchStatus from API if available, otherwise calculate from score
+      const matchStatus = resume.matchStatus || (
+        resume.matchScore >= 85 ? 'Exact Match' :
+        resume.matchScore >= 70 ? 'Partial Match' : 'No Match'
+      );
+
       return {
         id: resume.id,
         // Use candidateName from API, fallback to name, then 'Unknown Candidate'
         candidateName: resume.candidateName || resume.name || 'Unknown Candidate',
         email: resume.candidateEmail || resume.email || 'N/A',
         phone: resume.phone || 'N/A',
-        matchStatus: resume.matchScore >= 85 ? 'Exact Match' :
-                     resume.matchScore >= 70 ? 'Partial Match' : 'No Match',
-        scorePercentage: resume.matchScore,
+        matchStatus: matchStatus,
+        scorePercentage: resume.matchScore || resume.scorePercentage || 0,
         scoredDate: new Date(scoredData.scoredAt).toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'short',
@@ -250,6 +255,7 @@ export default function ResumeScoringPage({
         gaps: resume.gaps,
         matchReason: resume.matchReason,
         scoreBreakdown: resume.scoreBreakdown,
+        criteriaScores: resume.criteriaScores, // Important: Pass criteriaScores for Score Table
         title: resume.title,
         currentCompany: resume.currentCompany,
         location: resume.location,
@@ -261,6 +267,12 @@ export default function ResumeScoringPage({
         educationDetails: resume.educationDetails,
         experienceDetails: resume.experienceDetails,
         languages: resume.languages,
+        // Explicit matched and missing skills from scoring
+        matchedSkills: resume.matchedSkills || resume.matched_skills || resume.skills || [],
+        missingSkills: resume.missingSkills || resume.missing_skills || [],
+        // Pass scoredBy from API data
+        scoredBy: resume.scoredBy || 'AI Resume Scorer',
+        scoredDate: resume.scoredDate || resume.created_at,
       };
     });
   };

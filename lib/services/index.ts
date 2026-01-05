@@ -95,6 +95,43 @@ export type {
   IndustryTypeCreate,
 } from './masterDataService';
 
+// RBAC & Feature Permissions (RBAC01-07)
+export { featurePermissionService } from './featurePermissionService';
+export type {
+  FeatureFlagCode,
+  UserFeatureFlagsResponse,
+  AvailableFeaturesResponse,
+  FeatureFlagAssignRequest,
+  BulkFeatureFlagRequest,
+  DependencyValidationRequest,
+  DependencyValidationResponse,
+  DependencyMatrixResponse,
+  UserDependencyStatusResponse,
+  UserLimitsResponse,
+  BillingAccessResponse,
+  ViewerAccessResponse,
+} from './featurePermissionService';
+
+// RBAC Service
+export { default as rbacService } from './rbacService';
+
+// Unit Pool Service (UN01)
+export { unitPoolService, getUnitTypeName, formatUsagePercentage, getUsageStatus, getStatusColor } from './unitPoolService';
+export type {
+  UnitType,
+  UnitPoolStatus,
+  AllPoolsResponse,
+  ConsumptionLogEntry,
+  AdjustmentLogEntry,
+  UsageSummaryResponse,
+  CheckAvailabilityResponse,
+  ConsumeUnitsRequest,
+  ConsumeUnitsResponse,
+  AdjustUnitsRequest,
+  SetUnitsRequest,
+  InitializePoolRequest,
+} from './unitPoolService';
+
 // Candidate Assessment (Public)
 export { candidateService } from './candidateService';
 export type {

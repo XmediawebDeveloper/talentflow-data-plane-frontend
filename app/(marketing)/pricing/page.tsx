@@ -104,15 +104,15 @@ interface Addon {
 }
 
 interface FreeTrialData {
+  id?: number;
   trial_days: number;
   features: {
     MAX_JOBS: number;
     MAX_SEATS: number;
     ASSESSMENTS: number;
     AI_INTERVIEW: number;
-    RESUME_UPLOAD: number;
     RESUME_SCORING: number;
-    TOTAL_RESUME_STORAGE: number;
+    RESUME_STORAGE: number;
   };
   trial_includes: string[];
 }
@@ -433,10 +433,22 @@ export default function PricingPage() {
                   {trialFeatures && (
                     <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        {(trialFeatures.RESUME_UPLOAD || trialFeatures.RU) && (
+                        {(trialFeatures.MAX_SEATS || trialFeatures.max_seats) && (
                           <div className="flex items-center gap-2">
                             <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
-                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.RESUME_UPLOAD || trialFeatures.RU} Resume Uploads</span>
+                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.MAX_SEATS || trialFeatures.max_seats} Team Members</span>
+                          </div>
+                        )}
+                        {(trialFeatures.MAX_JOBS || trialFeatures.max_jobs) && (
+                          <div className="flex items-center gap-2">
+                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.MAX_JOBS || trialFeatures.max_jobs} Job Postings</span>
+                          </div>
+                        )}
+                        {(trialFeatures.RESUME_STORAGE || trialFeatures.RU) && (
+                          <div className="flex items-center gap-2">
+                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.RESUME_STORAGE || trialFeatures.RU} Resume Storage</span>
                           </div>
                         )}
                         {(trialFeatures.RESUME_SCORING || trialFeatures.RS) && (

@@ -41,13 +41,31 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
   // Check quota on mount and when files change
   useEffect(() => {
     const checkResumeQuota = async () => {
-      const canUpload = await checkQuota('RU', selectedFiles.length || 1);
-      setQuotaChecked(true);
-      if (quotaStatus.data?.total_remaining !== undefined) {
-        setQuotaRemaining(quotaStatus.data.total_remaining);
+      try {
+        const canUpload = await checkQuota('RU', selectedFiles.length || 1);
+        setQuotaChecked(true);
+        if (quotaStatus.data?.total_remaining !== undefined) {
+          setQuotaRemaining(quotaStatus.data.total_remaining);
+        }
+      } catch (error) {
+        console.error('Quota check failed:', error);
+        // Fail-open: allow upload if quota check fails
+        setQuotaChecked(true);
+        setQuotaRemaining(-1);
       }
     };
+
+    // Set a timeout to ensure modal becomes usable even if quota check is slow
+    const timeoutId = setTimeout(() => {
+      if (!quotaChecked) {
+        setQuotaChecked(true);
+        setQuotaRemaining(-1);
+      }
+    }, 3000);
+
     checkResumeQuota();
+
+    return () => clearTimeout(timeoutId);
   }, [checkQuota, selectedFiles.length]);
 
   // Check if selected files exceed quota
@@ -105,32 +123,14 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
     ));
 
     try {
-      // Call API to check for duplicates
-      const formData = new FormData();
-      files.filter(f => f.status === 'pending' || f.status === 'checking').forEach(f => {
-        formData.append('files', f.file);
-      });
+      // Mark all files as valid after a brief check
+      // In production, this would call an API to check for real duplicates
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Mock duplicate check - In real implementation, call API
-      // const response = await resumeService.checkDuplicates(formData);
-
-      // Simulate API response with mock data
-      const mockCheckResults = await simulateDuplicateCheck(files.filter(f => f.status === 'checking'));
-
-      // Update file statuses based on check results
-      setFilesWithStatus(prev => prev.map(f => {
-        const result = mockCheckResults.find(r => r.fileName === f.file.name);
-        if (result) {
-          return {
-            ...f,
-            status: result.status,
-            existingResume: result.existingResume,
-            contentDifferences: result.contentDifferences,
-            error: result.error
-          };
-        }
-        return f;
-      }));
+      // Mark all checking files as valid
+      setFilesWithStatus(prev => prev.map(f =>
+        f.status === 'checking' ? { ...f, status: 'valid' as const } : f
+      ));
 
     } catch (error) {
       console.error('Error checking duplicates:', error);
@@ -141,69 +141,6 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
     } finally {
       setIsCheckingDuplicates(false);
     }
-  };
-
-  // Mock duplicate check simulation
-  const simulateDuplicateCheck = async (files: FileWithStatus[]): Promise<{
-    fileName: string;
-    status: 'valid' | 'duplicate' | 'version';
-    existingResume?: ExistingResume;
-    contentDifferences?: string[];
-    error?: string;
-  }[]> => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // For demo, randomly mark some files as duplicates/versions
-    return files.map(f => {
-      const random = Math.random();
-
-      // 70% valid, 15% version, 15% duplicate
-      if (random < 0.7) {
-        return { fileName: f.file.name, status: 'valid' as const };
-      } else if (random < 0.85) {
-        // Version - same candidate, different content
-        return {
-          fileName: f.file.name,
-          status: 'version' as const,
-          existingResume: {
-            id: 'existing-' + Date.now(),
-            candidate_name: f.file.name.replace(/\.(pdf|doc|docx)$/i, '').replace(/[-_]/g, ' '),
-            email: 'candidate@example.com',
-            folder_name: 'Senior Developers',
-            folder_path: 'My Resumes / Senior Developers',
-            upload_date: '2024-10-15',
-            file_size: 235520,
-            file_name: f.file.name,
-            version: 1
-          },
-          contentDifferences: [
-            'Skills section updated (added 3 new skills)',
-            'Work experience added: Senior Developer at TechCorp',
-            'Education details updated',
-            'Contact information modified'
-          ]
-        };
-      } else {
-        // Exact duplicate
-        return {
-          fileName: f.file.name,
-          status: 'duplicate' as const,
-          existingResume: {
-            id: 'existing-' + Date.now(),
-            candidate_name: f.file.name.replace(/\.(pdf|doc|docx)$/i, '').replace(/[-_]/g, ' '),
-            email: 'candidate@example.com',
-            folder_name: 'All Resumes',
-            folder_path: 'My Resumes / All Resumes',
-            upload_date: '2024-11-20',
-            file_size: f.file.size,
-            file_name: f.file.name,
-            version: 1
-          },
-          contentDifferences: []
-        };
-      }
-    });
   };
 
   const removeFile = (index: number) => {

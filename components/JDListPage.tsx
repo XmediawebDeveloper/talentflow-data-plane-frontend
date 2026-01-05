@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { jdService, JDResponse } from '@/lib/services/jdService';
@@ -16,6 +16,7 @@ export default function JDListPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [selectedJds, setSelectedJds] = useState<string[]>([]);
 
   // Fetch JDs from API
   const fetchJDs = async () => {
@@ -51,6 +52,11 @@ export default function JDListPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Clear selection when data changes
+  useEffect(() => {
+    setSelectedJds([]);
+  }, [jds]);
+
   const handleArchive = async (jdId: string) => {
     try {
       await jdService.archive(jdId);
@@ -72,6 +78,53 @@ export default function JDListPage() {
       toast.error('Failed to delete');
     }
     setActiveDropdown(null);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedJds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedJds.length} job description(s)?`)) return;
+
+    try {
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const jdId of selectedJds) {
+        try {
+          await jdService.delete(jdId);
+          successCount++;
+        } catch (error) {
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`${successCount} job description(s) deleted`);
+      }
+      if (failCount > 0) {
+        toast.error(`Failed to delete ${failCount} job description(s)`);
+      }
+
+      setSelectedJds([]);
+      fetchJDs();
+    } catch (error) {
+      toast.error('Failed to delete job descriptions');
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedJds(jds.map(jd => jd.id));
+    } else {
+      setSelectedJds([]);
+    }
+  };
+
+  const handleSelectJd = (jdId: string) => {
+    setSelectedJds(prev =>
+      prev.includes(jdId)
+        ? prev.filter(id => id !== jdId)
+        : [...prev, jdId]
+    );
   };
 
   const getStatusBadge = (status: string) => {
@@ -118,9 +171,43 @@ export default function JDListPage() {
           </button>
         </div>
 
+        {/* Bulk Actions Bar */}
+        {selectedJds.length > 0 && (
+          <div className="bg-gray-800 text-white rounded-lg p-4 mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <span className="font-medium">{selectedJds.length} selected</span>
+              <button
+                onClick={() => setSelectedJds([])}
+                className="text-gray-300 hover:text-white flex items-center gap-1"
+              >
+                <X className="w-4 h-4" />
+                Clear
+              </button>
+            </div>
+            <button
+              onClick={handleBulkDelete}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Selected
+            </button>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
           <div className="flex items-center gap-4">
+            {/* Select All Checkbox */}
+            {jds.length > 0 && (
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={selectedJds.length === jds.length && jds.length > 0}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                  className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
+                />
+              </div>
+            )}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -177,106 +264,118 @@ export default function JDListPage() {
             {jds.map((jd) => (
               <div
                 key={jd.id}
-                className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                className={`bg-white rounded-xl border ${selectedJds.includes(jd.id) ? 'border-gray-400 ring-1 ring-gray-400' : 'border-gray-200'} p-6 hover:shadow-md transition-shadow`}
               >
                 <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900">{jd.title}</h3>
-                      {getStatusBadge(jd.status)}
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
-                      {jd.department && (
-                        <span className="flex items-center gap-1">
-                          <FileText className="w-4 h-4" />
-                          {jd.department}
-                        </span>
-                      )}
-                      {/* Location hidden for now */}
-                      {false && jd.location && (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
-                          {jd.location}
-                        </span>
-                      )}
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        Created {formatDate(jd.created_at)}
-                      </span>
-                      {jd.published_at && (
-                        <span className="flex items-center gap-1">
-                          <CheckCircle2 className="w-4 h-4 text-green-500" />
-                          Published {formatDate(jd.published_at)}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-gray-600 text-sm line-clamp-2">
-                      {jd.description?.substring(0, 200)}...
-                    </p>
-                    {/* Stats */}
-                    <div className="flex items-center gap-6 mt-4 pt-4 border-t border-gray-100">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Users className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-600">{jd.applicants_count || 0} applicants</span>
+                  {/* Checkbox */}
+                  <div className="flex items-start gap-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedJds.includes(jd.id)}
+                      onChange={() => handleSelectJd(jd.id)}
+                      className="w-4 h-4 mt-1 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900">{jd.title}</h3>
+                        {getStatusBadge(jd.status)}
                       </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <FileText className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-600">{jd.scored_resumes_count || 0} scored</span>
+                      <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
+                        {jd.department && (
+                          <span className="flex items-center gap-1">
+                            <FileText className="w-4 h-4" />
+                            {jd.department}
+                          </span>
+                        )}
+                        {/* Location hidden for now */}
+                        {false && jd.location && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-4 h-4" />
+                            {jd.location}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-4 h-4" />
+                          Created {formatDate(jd.created_at)}
+                        </span>
+                        {jd.published_at && (
+                          <span className="flex items-center gap-1">
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                            Published {formatDate(jd.published_at)}
+                          </span>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <CheckCircle2 className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-600">{jd.assessments_count || 0} assessments</span>
+                      <p className="text-gray-600 text-sm line-clamp-2">
+                        {jd.description?.substring(0, 200)}...
+                      </p>
+                      {/* Stats */}
+                      <div className="flex items-center gap-6 mt-4 pt-4 border-t border-gray-100">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Users className="w-4 h-4 text-gray-400" />
+                          <span className="text-gray-600">{jd.applicants_count || 0} applicants</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <FileText className="w-4 h-4 text-gray-400" />
+                          <span className="text-gray-600">{jd.scored_resumes_count || 0} scored</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <CheckCircle2 className="w-4 h-4 text-gray-400" />
+                          <span className="text-gray-600">{jd.assessments_count || 0} assessments</span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="relative ml-4">
+                  <div className="flex items-center gap-3 ml-4">
+                    {/* Delete Button */}
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveDropdown(activeDropdown === jd.id ? null : jd.id);
-                      }}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      onClick={() => handleDelete(jd.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
                     >
-                      <MoreVertical className="w-5 h-5 text-gray-400" />
+                      <Trash2 className="w-4 h-4" />
+                      <span className="text-sm">Delete</span>
                     </button>
-                    {activeDropdown === jd.id && (
-                      <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                        <button
-                          onClick={() => { router.push(`/recruitment/jd-details?id=${jd.id}`); setActiveDropdown(null); }}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View Details
-                        </button>
-                        <button
-                          onClick={() => { router.push(`/recruitment/jd-creation?id=${jd.id}&edit=true`); setActiveDropdown(null); }}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          Edit
-                        </button>
-                        {jd.status !== 'archived' && (
+
+                    {/* More Actions Dropdown */}
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveDropdown(activeDropdown === jd.id ? null : jd.id);
+                        }}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
+                        <MoreVertical className="w-5 h-5 text-gray-400" />
+                      </button>
+                      {activeDropdown === jd.id && (
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
                           <button
-                            onClick={() => handleArchive(jd.id)}
+                            onClick={() => { router.push(`/recruitment/jd-details?id=${jd.id}`); setActiveDropdown(null); }}
                             className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           >
-                            <Archive className="w-4 h-4" />
-                            Archive
+                            <Eye className="w-4 h-4" />
+                            View Details
                           </button>
-                        )}
-                        {jd.status === 'draft' && (
                           <button
-                            onClick={() => handleDelete(jd.id)}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                            onClick={() => { router.push(`/recruitment/jd-creation?id=${jd.id}&edit=true`); setActiveDropdown(null); }}
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
+                            <Edit2 className="w-4 h-4" />
+                            Edit
                           </button>
-                        )}
-                      </div>
-                    )}
+                          {jd.status !== 'archived' && (
+                            <button
+                              onClick={() => handleArchive(jd.id)}
+                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Archive className="w-4 h-4" />
+                              Archive
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

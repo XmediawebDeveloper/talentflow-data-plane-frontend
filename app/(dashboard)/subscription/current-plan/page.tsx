@@ -147,21 +147,62 @@ interface TransactionResult {
   invoice_id: number;
   invoice_number: string;
   total_amount: number;
+  currency?: string;
   transaction_id: number;
   external_transaction_id: string;
   billing_interval: string;
+  // Queued upgrade fields
+  queued?: boolean;
+  queued_upgrade_id?: string;
+  auto_apply_date?: string;
+  current_plan_expires?: string;
+  message?: string;
+  stripe?: {
+    payment_intent_id: string;
+    subscription_id: string;
+    status: string;
+    payment_method: string;
+  };
+}
+
+interface QueuedUpgrade {
+  id: string;
+  current_plan_id: number | null;
+  current_plan_name: string | null;
+  new_plan_id: number;
+  new_plan_name: string;
+  payment_amount?: number;
+  payment_currency?: string;
+  billing_interval?: string;
+  isolation_type?: string;
+  status: string;
+  auto_apply_date: string | null;
+  terms_accepted?: boolean;
+  terms_accepted_at?: string | null;
+  applied_at?: string | null;
+  cancelled_at?: string | null;
+  cancelled_reason?: string | null;
+  plan_quotas?: PlanQuotas;
+  extra_data?: Record<string, any>;
+  created_at?: string;
+  // Admin API fields
+  days_until_activation?: number;
+  can_cancel?: boolean;
+  reason?: string;
+  notes?: string;
+  billing_invoice_number?: string;
 }
 
 interface FreeTrialSettings {
+  id?: number;
   trial_days: number;
   features: {
     MAX_JOBS: number;
     MAX_SEATS: number;
     ASSESSMENTS: number;
     AI_INTERVIEW: number;
-    RESUME_UPLOAD: number;
     RESUME_SCORING: number;
-    TOTAL_RESUME_STORAGE: number;
+    RESUME_STORAGE: number;
   };
   trial_includes: string[];
 }
@@ -187,7 +228,10 @@ const getGradientForPlan = (planName: string, tier: string): string => {
   return "from-gray-600 to-gray-700";
 };
 
-const formatCurrency = (amount: number, currency: string): string => {
+const formatCurrency = (amount: number | undefined | null, currency: string): string => {
+  if (amount === undefined || amount === null) {
+    return '-';
+  }
   const currencySymbols: Record<string, string> = {
     'USD': '$',
     'INR': '₹',
@@ -299,6 +343,16 @@ export default function CurrentPlanPage() {
   // Subscription status from quota-status API (source of truth for plan status)
   const [quotaSubscriptionStatus, setQuotaSubscriptionStatus] = useState<string | null>(null);
 
+  // Queued upgrades state
+  const [queuedUpgrades, setQueuedUpgrades] = useState<QueuedUpgrade[]>([]);
+  const [showTCModal, setShowTCModal] = useState(false);
+  const [selectedQueuedUpgrade, setSelectedQueuedUpgrade] = useState<QueuedUpgrade | null>(null);
+  const [tcAccepted, setTcAccepted] = useState(false);
+  const [isApplyingUpgrade, setIsApplyingUpgrade] = useState(false);
+  const [isCancellingUpgrade, setIsCancellingUpgrade] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+
   // Get tenant ID from token on mount
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -342,40 +396,51 @@ export default function CurrentPlanPage() {
       let trialSettings: FreeTrialSettings | null = null;
       if (quotaData?.quotas) {
         const q = quotaData.quotas;
+        // Get trial days remaining from API response
+        const trialDaysRemaining = quotaData.trial_info?.days_remaining ?? 14;
         trialSettings = {
-          trial_days: 14,
+          trial_days: trialDaysRemaining,
           features: {
             MAX_JOBS: q.max_jobs?.subscription?.limit === 'unlimited' ? 999 : (q.max_jobs?.subscription?.limit || 10),
             MAX_SEATS: q.max_seats?.subscription?.limit === 'unlimited' ? 999 : (q.max_seats?.subscription?.limit || 5),
             ASSESSMENTS: q.AS?.subscription?.limit === 'unlimited' ? 999 : (q.AS?.subscription?.limit || 50),
             AI_INTERVIEW: q.AIU?.subscription?.limit === 'unlimited' ? 999 : (q.AIU?.subscription?.limit || 25),
-            RESUME_UPLOAD: q.RU?.subscription?.limit === 'unlimited' ? 999 : (q.RU?.subscription?.limit || 100),
             RESUME_SCORING: q.RS?.subscription?.limit === 'unlimited' ? 999 : (q.RS?.subscription?.limit || 100),
-            TOTAL_RESUME_STORAGE: q.storage_gb?.subscription?.limit === 'unlimited' ? 999 : ((q.storage_gb?.subscription?.limit || 10) * 100),
+            RESUME_STORAGE: q.RU?.subscription?.limit === 'unlimited' ? 999 : (q.RU?.subscription?.limit || 100),
           },
-          trial_includes: ['Resume Upload', 'Resume Scoring', 'Assessments', 'AI Interviews'],
+          trial_includes: ['Resume Storage', 'Resume Scoring', 'Assessments', 'AI Interviews'],
         };
         setFreeTrialSettings(trialSettings);
 
         // Update company settings with data from quota-status API
         const quotas = quotaData.quotas;
-        // Get trial dates from trial_info (external API) or top-level (local fallback)
-        const trialStartDate = quotaData.trial_info?.trial_start_date || quotaData.trial_start_date;
-        const trialEndDate = quotaData.trial_info?.trial_end_date || quotaData.trial_end_date;
-        // Get plan dates (for paid plans) - prioritize plan dates over trial dates
-        const planStartDate = quotaData.plan_start_date || quotaData.billing_period?.start;
-        const planEndDate = quotaData.plan_expiry_date || quotaData.billing_period?.end;
+        const isTrial = quotaData.is_trial === true;
+
+        // For FREE TRIAL: Get dates from trial_info
+        const trialStartDate = quotaData.trial_info?.trial_start_date || null;
+        const trialEndDate = quotaData.trial_info?.trial_end_date || null;
+
+        // For PAID PLAN: Get dates from plan_info
+        const planStartDate = quotaData.plan_info?.plan_start_date || quotaData.plan_info?.start_date || null;
+        const planEndDate = quotaData.plan_info?.plan_expiry_date || quotaData.plan_info?.expiry_date || quotaData.plan_info?.end_date || null;
+
+        console.log('[CurrentPlan] is_trial:', isTrial);
+        console.log('[CurrentPlan] trial_info:', quotaData.trial_info);
+        console.log('[CurrentPlan] plan_info:', quotaData.plan_info);
+        console.log('[CurrentPlan] Dates - trial:', { trialStartDate, trialEndDate }, 'plan:', { planStartDate, planEndDate });
 
         setCompanySettings(prev => ({
           ...prev!,
           current_plan_name: quotaData.plan_name || prev?.current_plan_name,
           current_plan_id: quotaData.plan_info?.plan_id || prev?.current_plan_id,
-          subscription_status: quotaData.subscription_status || (quotaData.is_trial ? 'trial' : 'active') || prev?.subscription_status,
-          status: quotaData.subscription_status || (quotaData.is_trial ? 'trial' : 'active') || prev?.status,
-          trial_start_date: trialStartDate || prev?.trial_start_date,
-          trial_end_date: trialEndDate || prev?.trial_end_date,
-          plan_start_date: planStartDate || prev?.plan_start_date,
-          plan_expiry_date: planEndDate || prev?.plan_expiry_date,
+          subscription_status: isTrial ? 'trial' : (quotaData.subscription_status || 'active'),
+          status: isTrial ? 'trial' : (quotaData.subscription_status || 'active'),
+          // Only set trial dates if it's actually a trial
+          trial_start_date: isTrial ? trialStartDate : null,
+          trial_end_date: isTrial ? trialEndDate : null,
+          // Only set plan dates if it's a paid plan
+          plan_start_date: !isTrial ? planStartDate : null,
+          plan_expiry_date: !isTrial ? planEndDate : null,
           // Update quota limits from quota-status API
           max_seats: quotas?.max_seats?.subscription?.limit || prev?.max_seats || 5,
           max_jobs: quotas?.max_jobs?.subscription?.limit || prev?.max_jobs || 10,
@@ -386,22 +451,30 @@ export default function CurrentPlanPage() {
           storage_limit_gb: quotas?.storage_gb?.subscription?.limit || prev?.storage_limit_gb || 10,
         }));
 
-        // Extract base_price from plan_info if available
-        if (quotaData.plan_info?.base_price !== undefined) {
+        // Extract base_price from plan_info if available (only for paid plans)
+        if (!isTrial && quotaData.plan_info?.base_price !== undefined) {
           setCurrentPlanPrice(quotaData.plan_info.base_price);
           console.log('[CurrentPlan] Setting price from plan_info:', quotaData.plan_info.base_price);
+        } else if (isTrial) {
+          setCurrentPlanPrice(0); // Free trial has no price
         }
+
         if (quotaData.plan_info?.billing_period) {
           setCurrentPlanBillingPeriod(quotaData.plan_info.billing_period);
         }
+
         // Store subscription status from quota-status API (source of truth)
-        if (quotaData.subscription_status) {
+        // is_trial is the definitive way to know if user is on trial
+        if (isTrial) {
+          setQuotaSubscriptionStatus('trial');
+          console.log('[CurrentPlan] Setting subscription_status as trial (is_trial=true)');
+        } else if (quotaData.subscription_status) {
           setQuotaSubscriptionStatus(quotaData.subscription_status);
           console.log('[CurrentPlan] Setting subscription_status from quota:', quotaData.subscription_status);
-        } else if (quotaData.plan_name && quotaData.plan_name.toLowerCase() !== 'free trial') {
-          // If plan_name is not "Free Trial", consider it active
+        } else {
+          // Paid plan without explicit status - assume active
           setQuotaSubscriptionStatus('active');
-          console.log('[CurrentPlan] Setting subscription_status as active based on plan_name:', quotaData.plan_name);
+          console.log('[CurrentPlan] Setting subscription_status as active (paid plan)');
         }
       }
 
@@ -495,8 +568,9 @@ export default function CurrentPlanPage() {
             ?.filter(f => f.is_enabled)
             ?.map(f => f.feature_name) || [];
 
-          const isCurrent = settings?.current_plan_id === plan.id ||
-            settings?.current_plan_name?.toLowerCase() === plan.plan_name.toLowerCase();
+          const isCurrent =
+            (settings?.current_plan_id !== undefined && Number(settings.current_plan_id) === Number(plan.id)) ||
+            (settings?.current_plan_name?.toLowerCase() === plan.plan_name.toLowerCase());
 
           return {
             id: String(plan.id),
@@ -524,8 +598,112 @@ export default function CurrentPlanPage() {
     }
   };
 
+  // Fetch queued upgrades
+  const fetchQueuedUpgrades = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) return;
+
+      const response = await fetch(`${API_URL}/subscription/queued-upgrades`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const upgrades = result.data?.queued_upgrades || [];
+        setQueuedUpgrades(upgrades);
+        console.log('[CurrentPlan] Queued upgrades:', upgrades);
+      }
+    } catch (err) {
+      console.error('[CurrentPlan] Error fetching queued upgrades:', err);
+    }
+  };
+
+  // Apply queued upgrade immediately
+  const handleApplyUpgrade = async () => {
+    if (!selectedQueuedUpgrade || !tcAccepted) return;
+
+    try {
+      setIsApplyingUpgrade(true);
+      setError(null);
+
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`${API_URL}/subscription/queued-upgrades/${selectedQueuedUpgrade.id}/apply`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          queued_upgrade_id: selectedQueuedUpgrade.id,
+          terms_accepted: true,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        setSuccessMessage(`Successfully upgraded to ${selectedQueuedUpgrade.new_plan_name}!`);
+        setShowTCModal(false);
+        setSelectedQueuedUpgrade(null);
+        setTcAccepted(false);
+        // Refresh data
+        await fetchData();
+        await fetchQueuedUpgrades();
+      } else {
+        setError(data.detail || 'Failed to apply upgrade');
+      }
+    } catch (err) {
+      console.error('[CurrentPlan] Error applying upgrade:', err);
+      setError(err instanceof Error ? err.message : 'Failed to apply upgrade');
+    } finally {
+      setIsApplyingUpgrade(false);
+    }
+  };
+
+  // Cancel queued upgrade (called from Cancel Modal)
+  const handleCancelUpgrade = async () => {
+    if (!selectedQueuedUpgrade) return;
+
+    try {
+      setIsCancellingUpgrade(true);
+      setError(null);
+
+      const token = localStorage.getItem('accessToken');
+      const reasonParam = encodeURIComponent(cancelReason.trim() || 'Cancelled by user');
+      const response = await fetch(`${API_URL}/subscription/queued-upgrades/${selectedQueuedUpgrade.id}?reason=${reasonParam}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        setSuccessMessage(`Queued upgrade to ${selectedQueuedUpgrade.new_plan_name} has been cancelled.`);
+        setShowCancelModal(false);
+        setSelectedQueuedUpgrade(null);
+        setCancelReason('');
+        await fetchQueuedUpgrades();
+      } else {
+        setError(data.detail || 'Failed to cancel upgrade');
+      }
+    } catch (err) {
+      console.error('[CurrentPlan] Error cancelling upgrade:', err);
+      setError(err instanceof Error ? err.message : 'Failed to cancel upgrade');
+    } finally {
+      setIsCancellingUpgrade(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchQueuedUpgrades();
   }, []);
 
   const validatePaymentForm = (): boolean => {
@@ -659,40 +837,48 @@ export default function CurrentPlanPage() {
         console.log('[CurrentPlan] Plan selection successful:', data);
 
         // Store transaction result and show success modal
-        setTransactionResult(data.data || data);
+        const result = data.data || data;
+        setTransactionResult(result);
         setModalStep('result');
 
-        // The /subscription/{tenant_id}/select-plan endpoint already updates:
-        // 1. tenants table in landlord DB
-        // 2. company_settings in tenant DB
-        // 3. POSTs to external admin API
-        // So no additional API calls needed here
+        // Check if upgrade was queued (has active plan)
+        if (result.queued) {
+          console.log('[CurrentPlan] Upgrade queued:', result);
+          // Refresh queued upgrades list
+          await fetchQueuedUpgrades();
+        } else {
+          // The /subscription/{tenant_id}/select-plan endpoint already updates:
+          // 1. tenants table in landlord DB
+          // 2. company_settings in tenant DB
+          // 3. POSTs to external admin API
+          // So no additional API calls needed here
 
-        // Update local state with the new plan and quotas
-        if (selectedPlanForPayment) {
-          setCompanySettings(prev => ({
-            ...prev!,
-            selected_plan_id: selectedPlanForPayment.numericId,
-            current_plan_id: selectedPlanForPayment.numericId,
-            current_plan_name: selectedPlanForPayment.name,
-            subscription_status: 'active',
-            status: 'active',
-            payment_status: 'success',
-            // Update quotas from the selected plan
-            max_seats: selectedPlanForPayment.quotas?.max_seats || prev?.max_seats || 5,
-            max_jobs: selectedPlanForPayment.quotas?.max_jobs || prev?.max_jobs || 5,
-            max_resume_uploads: selectedPlanForPayment.quotas?.RU || prev?.max_resume_uploads || 100,
-            max_resume_searches: selectedPlanForPayment.quotas?.RS || prev?.max_resume_searches || 100,
-            max_assessments: selectedPlanForPayment.quotas?.AS || prev?.max_assessments || 10,
-            max_ai_interviews: selectedPlanForPayment.quotas?.AIU || prev?.max_ai_interviews || 10,
-            storage_limit_gb: selectedPlanForPayment.quotas?.storage_gb || prev?.storage_limit_gb || 5,
-          }));
+          // Update local state with the new plan and quotas
+          if (selectedPlanForPayment) {
+            setCompanySettings(prev => ({
+              ...prev!,
+              selected_plan_id: selectedPlanForPayment.numericId,
+              current_plan_id: selectedPlanForPayment.numericId,
+              current_plan_name: selectedPlanForPayment.name,
+              subscription_status: 'active',
+              status: 'active',
+              payment_status: 'success',
+              // Update quotas from the selected plan
+              max_seats: selectedPlanForPayment.quotas?.max_seats || prev?.max_seats || 5,
+              max_jobs: selectedPlanForPayment.quotas?.max_jobs || prev?.max_jobs || 5,
+              max_resume_uploads: selectedPlanForPayment.quotas?.RU || prev?.max_resume_uploads || 100,
+              max_resume_searches: selectedPlanForPayment.quotas?.RS || prev?.max_resume_searches || 100,
+              max_assessments: selectedPlanForPayment.quotas?.AS || prev?.max_assessments || 10,
+              max_ai_interviews: selectedPlanForPayment.quotas?.AIU || prev?.max_ai_interviews || 10,
+              storage_limit_gb: selectedPlanForPayment.quotas?.storage_gb || prev?.storage_limit_gb || 5,
+            }));
 
-          // Update the plans to mark the new one as current
-          setPlans(prevPlans => prevPlans.map(p => ({
-            ...p,
-            isCurrent: p.numericId === selectedPlanForPayment.numericId,
-          })));
+            // Update the plans to mark the new one as current
+            setPlans(prevPlans => prevPlans.map(p => ({
+              ...p,
+              isCurrent: p.numericId === selectedPlanForPayment.numericId,
+            })));
+          }
         }
 
         // Refresh data after upgrade
@@ -755,9 +941,11 @@ export default function CurrentPlanPage() {
   const statusBadge = getStatusBadge(companySettings?.status || 'trial', companySettings?.payment_status);
   const StatusIcon = statusBadge.icon;
 
-  const trialDaysRemaining = companySettings?.trial_end_date
-    ? getDaysRemaining(companySettings.trial_end_date)
-    : (freeTrialSettings?.trial_days || 15);
+  // For trial users, use days_remaining from API (via freeTrialSettings)
+  // For paid users, calculate from plan expiry date
+  const trialDaysRemaining = isOnTrial
+    ? (freeTrialSettings?.trial_days ?? (companySettings?.trial_end_date ? getDaysRemaining(companySettings.trial_end_date) : 14))
+    : (companySettings?.plan_expiry_date ? getDaysRemaining(companySettings.plan_expiry_date) : 0);
 
   // Calculate prices for payment
   const calculatePrices = () => {
@@ -921,24 +1109,28 @@ export default function CurrentPlanPage() {
                 {isOnTrial ? 'Trial Started' : 'Plan Start'}
               </p>
               <p className="text-xl font-semibold text-gray-900">
-                {companySettings?.trial_start_date
-                  ? formatDate(companySettings.trial_start_date)
-                  : companySettings?.plan_start_date
-                    ? formatDate(companySettings.plan_start_date)
-                    : '-'
+                {isOnTrial
+                  ? (companySettings?.trial_start_date
+                      ? formatDate(companySettings.trial_start_date)
+                      : '-')
+                  : (companySettings?.plan_start_date
+                      ? formatDate(companySettings.plan_start_date)
+                      : '-')
                 }
               </p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-600 mb-1">
-                {isOnTrial ? 'Trial Ends' : 'Expires'}
+                {isOnTrial ? 'Trial Ends' : 'Plan Expires'}
               </p>
               <p className="text-xl font-semibold text-gray-900">
-                {isOnTrial && companySettings?.trial_end_date
-                  ? formatDate(companySettings.trial_end_date)
-                  : companySettings?.plan_expiry_date
-                    ? formatDate(companySettings.plan_expiry_date)
-                    : '-'
+                {isOnTrial
+                  ? (companySettings?.trial_end_date
+                      ? formatDate(companySettings.trial_end_date)
+                      : '-')
+                  : (companySettings?.plan_expiry_date
+                      ? formatDate(companySettings.plan_expiry_date)
+                      : '-')
                 }
               </p>
             </div>
@@ -990,6 +1182,107 @@ export default function CurrentPlanPage() {
           )}
         </div>
 
+        {/* Queued Upgrades Section */}
+        {queuedUpgrades.length > 0 && (
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-6 mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <Clock className="w-8 h-8 text-amber-600" />
+              <div>
+                <h3 className="text-lg font-semibold text-amber-800">Pending Upgrades</h3>
+                <p className="text-sm text-amber-700">
+                  You have {queuedUpgrades.length} queued upgrade{queuedUpgrades.length > 1 ? 's' : ''} waiting to be applied
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {queuedUpgrades.map((upgrade) => (
+                <div key={upgrade.id} className="bg-white rounded-lg p-4 border border-amber-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Package className="w-5 h-5 text-gray-600" />
+                        <span className="font-semibold text-gray-900">{upgrade.new_plan_name}</span>
+                        <Badge className="bg-amber-100 text-amber-700 text-xs">
+                          {upgrade.status === 'SCHEDULED' ? 'Scheduled' : 'Queued'}
+                        </Badge>
+                        {upgrade.days_until_activation !== undefined && upgrade.days_until_activation > 0 && (
+                          <span className="text-xs text-amber-600">
+                            ({upgrade.days_until_activation} day{upgrade.days_until_activation !== 1 ? 's' : ''} until activation)
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        {upgrade.payment_amount !== undefined && (
+                          <div>
+                            <span className="text-gray-500">Amount Paid:</span>
+                            <span className="ml-1 font-medium text-gray-900">
+                              {formatCurrency(upgrade.payment_amount, upgrade.payment_currency || 'INR')}
+                            </span>
+                          </div>
+                        )}
+                        {upgrade.billing_interval && (
+                          <div>
+                            <span className="text-gray-500">Billing:</span>
+                            <span className="ml-1 font-medium text-gray-900">{upgrade.billing_interval}</span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-gray-500">Auto-applies:</span>
+                          <span className="ml-1 font-medium text-gray-900">
+                            {upgrade.auto_apply_date ? formatDate(upgrade.auto_apply_date) : 'On plan expiry'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Queued on:</span>
+                          <span className="ml-1 font-medium text-gray-900">
+                            {upgrade.created_at ? formatDate(upgrade.created_at) : '-'}
+                          </span>
+                        </div>
+                      </div>
+                      {upgrade.reason && (
+                        <p className="text-xs text-gray-500 mt-2">Reason: {upgrade.reason}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 ml-4">
+                      <button
+                        onClick={() => {
+                          setSelectedQueuedUpgrade(upgrade);
+                          setTcAccepted(false);
+                          setShowTCModal(true);
+                        }}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-2"
+                      >
+                        <Zap className="w-4 h-4" />
+                        Apply Now
+                      </button>
+                      {upgrade.can_cancel !== false && (
+                        <button
+                          onClick={() => {
+                            setSelectedQueuedUpgrade(upgrade);
+                            setCancelReason('');
+                            setShowCancelModal(true);
+                          }}
+                          disabled={isCancellingUpgrade}
+                          className="px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors flex items-center gap-2"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs text-amber-600 mt-4">
+              Queued upgrades will automatically apply when your current plan expires.
+              Click "Apply Now" to upgrade immediately (remaining credits will be forfeited).
+            </p>
+          </div>
+        )}
+
         {/* Available Plans */}
         {plans.length > 0 && (
           <>
@@ -997,6 +1290,11 @@ export default function CurrentPlanPage() {
               <h2 className="text-lg font-semibold text-gray-900 text-center">
                 {isOnTrial || isLocked ? 'Choose a Plan' : 'Available Plans'}
               </h2>
+              {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
+                <p className="text-sm text-amber-600 text-center mt-2">
+                  You have a pending upgrade queued. Cancel it above or apply it now to select a different plan.
+                </p>
+              )}
             </div>
             <div className={`grid gap-8 pt-8 ${
               plans.length === 1 ? 'md:grid-cols-1 max-w-md' :
@@ -1128,21 +1426,25 @@ export default function CurrentPlanPage() {
 
                     <button
                       onClick={() => handleChoosePlan(plan)}
-                      disabled={plan.isCurrent || isSelectingPlan || isSelectedPending || !plan.price}
+                      disabled={plan.isCurrent || isSelectingPlan || isSelectedPending || !plan.price || queuedUpgrades.length > 0}
                       className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 ${
                         plan.isCurrent || isSelectedPending
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                          : !plan.price
-                            ? "bg-gray-100 text-gray-500 cursor-not-allowed"
-                            : plan.popular
-                              ? "bg-gray-800 text-white hover:bg-gray-700"
-                              : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                          : queuedUpgrades.length > 0
+                            ? "bg-amber-100 text-amber-600 cursor-not-allowed"
+                            : !plan.price
+                              ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+                              : plan.popular
+                                ? "bg-gray-800 text-white hover:bg-gray-700"
+                                : "border border-gray-300 text-gray-700 hover:bg-gray-50"
                       }`}
                     >
                       {plan.isCurrent ? (
                         'Current Plan'
                       ) : isSelectedPending ? (
                         'Pending Payment'
+                      ) : queuedUpgrades.length > 0 ? (
+                        'Upgrade Queued'
                       ) : !plan.price ? (
                         'Contact Sales'
                       ) : isOnTrial || isLocked ? (
@@ -1358,56 +1660,383 @@ export default function CurrentPlanPage() {
             {/* Result */}
             {modalStep === 'result' && transactionResult && (
               <div className="p-6 space-y-4">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="w-10 h-10 text-green-600" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Plan Upgrade Successful!</h3>
-                  <p className="text-gray-600">Your subscription has been updated successfully.</p>
-                </div>
+                {transactionResult.queued ? (
+                  /* Queued Upgrade Result */
+                  <>
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Clock className="w-10 h-10 text-amber-600" />
+                      </div>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">Upgrade Queued!</h3>
+                      <p className="text-gray-600">Your payment was successful. The upgrade will apply automatically.</p>
+                    </div>
 
-                <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Plan:</span>
-                    <span className="font-medium text-gray-900">{transactionResult.plan_name}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Billing:</span>
-                    <span className="font-medium text-gray-900">{transactionResult.billing_interval}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Invoice:</span>
-                    <span className="font-medium text-gray-900">{transactionResult.invoice_number}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Amount Paid:</span>
-                    <span className="font-medium text-green-600">
-                      {formatCurrency(transactionResult.total_amount, transactionResult.currency || 'INR')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Payment ID:</span>
-                    <span className="font-medium text-gray-500 text-xs">{transactionResult.stripe?.payment_intent_id}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Status:</span>
-                    <Badge className="bg-green-100 text-green-700">{transactionResult.subscription_status}</Badge>
-                  </div>
-                </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Current Plan:</span>
+                        <span className="font-medium text-gray-900">{transactionResult.current_plan_name || 'Your current plan'}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">New Plan:</span>
+                        <span className="font-medium text-amber-700">{transactionResult.plan_name}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Auto-applies on:</span>
+                        <span className="font-medium text-gray-900">
+                          {transactionResult.auto_apply_date
+                            ? formatDate(transactionResult.auto_apply_date)
+                            : 'When current plan expires'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Amount Paid:</span>
+                        <span className="font-medium text-green-600">
+                          {formatCurrency(transactionResult.total_amount, transactionResult.currency || 'INR')}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Invoice:</span>
+                        <span className="font-medium text-gray-900">{transactionResult.invoice_number}</span>
+                      </div>
+                    </div>
 
-                <button
-                  onClick={async () => {
-                    setShowPaymentModal(false);
-                    setModalStep('isolation');
-                    // Refresh data to show updated plan
-                    await fetchData();
-                  }}
-                  className="w-full px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
-                >
-                  Done
-                </button>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+                      <p>{transactionResult.message}</p>
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        setShowPaymentModal(false);
+                        setModalStep('isolation');
+                        await fetchData();
+                        await fetchQueuedUpgrades();
+                      }}
+                      className="w-full px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
+                    >
+                      Got it
+                    </button>
+                  </>
+                ) : (
+                  /* Immediate Upgrade Result */
+                  <>
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-10 h-10 text-green-600" />
+                      </div>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">Plan Upgrade Successful!</h3>
+                      <p className="text-gray-600">Your subscription has been updated successfully.</p>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Plan:</span>
+                        <span className="font-medium text-gray-900">{transactionResult.plan_name}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Billing:</span>
+                        <span className="font-medium text-gray-900">{transactionResult.billing_interval}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Invoice:</span>
+                        <span className="font-medium text-gray-900">{transactionResult.invoice_number}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Amount Paid:</span>
+                        <span className="font-medium text-green-600">
+                          {formatCurrency(transactionResult.total_amount, transactionResult.currency || 'INR')}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Payment ID:</span>
+                        <span className="font-medium text-gray-500 text-xs">{transactionResult.stripe?.payment_intent_id}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Status:</span>
+                        <Badge className="bg-green-100 text-green-700">{transactionResult.subscription_status}</Badge>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        setShowPaymentModal(false);
+                        setModalStep('isolation');
+                        // Refresh data to show updated plan
+                        await fetchData();
+                      }}
+                      className="w-full px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
+                    >
+                      Done
+                    </button>
+                  </>
+                )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Terms & Conditions Modal for Applying Queued Upgrade */}
+      {showTCModal && selectedQueuedUpgrade && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Apply Upgrade Now</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Upgrade to {selectedQueuedUpgrade.new_plan_name}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowTCModal(false);
+                    setSelectedQueuedUpgrade(null);
+                    setTcAccepted(false);
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Warning */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-amber-800 mb-1">Important Notice</h4>
+                    <p className="text-sm text-amber-700">
+                      By applying this upgrade immediately, any remaining credits and unused quota
+                      on your current plan ({companySettings?.current_plan_name || 'your active plan'}) will be
+                      <strong> forfeited</strong>. Your new plan will start today.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upgrade Details */}
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                <h4 className="font-medium text-gray-900">Upgrade Details</h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-500">From:</span>
+                    <span className="ml-1 font-medium text-gray-900">
+                      {selectedQueuedUpgrade.current_plan_name || companySettings?.current_plan_name || 'Current Plan'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">To:</span>
+                    <span className="ml-1 font-medium text-green-600">{selectedQueuedUpgrade.new_plan_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Amount Paid:</span>
+                    <span className="ml-1 font-medium text-gray-900">
+                      {formatCurrency(selectedQueuedUpgrade.payment_amount, selectedQueuedUpgrade.payment_currency)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Billing:</span>
+                    <span className="ml-1 font-medium text-gray-900">{selectedQueuedUpgrade.billing_interval}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Terms & Conditions */}
+              <div className="border border-gray-200 rounded-xl p-4">
+                <h4 className="font-medium text-gray-900 mb-3">Terms & Conditions</h4>
+                <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600 space-y-2 max-h-40 overflow-y-auto">
+                  <p>1. Any unused credits, quotas, or features from your current subscription will be immediately terminated and cannot be recovered.</p>
+                  <p>2. Your new plan will start immediately upon confirmation and will be valid for the billing period you selected ({selectedQueuedUpgrade.billing_interval}).</p>
+                  <p>3. No prorated refunds will be issued for the remaining period of your current plan.</p>
+                  <p>4. This action cannot be undone once confirmed.</p>
+                  <p>5. Your billing cycle will reset based on today's date.</p>
+                </div>
+              </div>
+
+              {/* Accept Checkbox */}
+              <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
+                tcAccepted ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:bg-gray-50'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={tcAccepted}
+                  onChange={(e) => setTcAccepted(e.target.checked)}
+                  className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                />
+                <div className="flex-1">
+                  <span className="font-medium text-gray-900">I accept the terms and conditions</span>
+                  <p className="text-sm text-gray-500 mt-1">
+                    I understand that remaining credits on my current plan will be forfeited and my new plan will start immediately.
+                  </p>
+                </div>
+              </label>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowTCModal(false);
+                    setSelectedQueuedUpgrade(null);
+                    setTcAccepted(false);
+                  }}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleApplyUpgrade}
+                  disabled={!tcAccepted || isApplyingUpgrade}
+                  className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isApplyingUpgrade ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Applying...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      Apply Now
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Queued Upgrade Modal */}
+      {showCancelModal && selectedQueuedUpgrade && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                    <XCircle className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Cancel Upgrade</h2>
+                    <p className="text-sm text-gray-600">Cancel queued plan upgrade</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowCancelModal(false);
+                    setSelectedQueuedUpgrade(null);
+                    setCancelReason('');
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Warning */}
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-red-800 mb-1">Are you sure?</h4>
+                    <p className="text-sm text-red-700">
+                      You are about to cancel the queued upgrade to <strong>{selectedQueuedUpgrade.new_plan_name}</strong>.
+                      If you paid for this upgrade, you may need to request a refund separately.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upgrade Details */}
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                <h4 className="font-medium text-gray-900 text-sm">Upgrade Details</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">New Plan:</span>
+                    <span className="font-medium text-gray-900">{selectedQueuedUpgrade.new_plan_name}</span>
+                  </div>
+                  {selectedQueuedUpgrade.payment_amount !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Amount Paid:</span>
+                      <span className="font-medium text-gray-900">
+                        {formatCurrency(selectedQueuedUpgrade.payment_amount, selectedQueuedUpgrade.payment_currency || 'INR')}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Scheduled for:</span>
+                    <span className="font-medium text-gray-900">
+                      {selectedQueuedUpgrade.auto_apply_date ? formatDate(selectedQueuedUpgrade.auto_apply_date) : 'On plan expiry'}
+                    </span>
+                  </div>
+                  {selectedQueuedUpgrade.days_until_activation !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Days until activation:</span>
+                      <span className="font-medium text-gray-900">
+                        {selectedQueuedUpgrade.days_until_activation} day{selectedQueuedUpgrade.days_until_activation !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Queued on:</span>
+                    <span className="font-medium text-gray-900">
+                      {selectedQueuedUpgrade.created_at ? formatDate(selectedQueuedUpgrade.created_at) : '-'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cancellation Reason */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for cancellation (optional)
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Please let us know why you're cancelling..."
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCancelModal(false);
+                    setSelectedQueuedUpgrade(null);
+                    setCancelReason('');
+                  }}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Keep Upgrade
+                </button>
+                <button
+                  onClick={handleCancelUpgrade}
+                  disabled={isCancellingUpgrade}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isCancellingUpgrade ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Cancelling...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-5 h-5" />
+                      Cancel Upgrade
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

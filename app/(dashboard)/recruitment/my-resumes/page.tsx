@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, Clock, Copy, GitBranch, Upload, Loader2 } from 'lucide-react';
 import ResumeTable from '@/components/ResumeTable';
 import StatsCards from '@/components/StatsCards';
@@ -10,7 +11,6 @@ import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadHistoryPanel from '@/components/UploadHistoryPanel';
 import UploadModal from '@/components/UploadModal';
 import DuplicateResumeModal, { DuplicateFile, ExistingResume } from '@/components/DuplicateResumeModal';
-import ResumeDetailView from '@/components/ResumeDetailView';
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import { Resume, Folder } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
@@ -18,6 +18,7 @@ import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeS
 import { toast } from 'sonner';
 
 export default function MyResumesPage() {
+  const router = useRouter();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -32,7 +33,6 @@ export default function MyResumesPage() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [showUploadHistory, setShowUploadHistory] = useState(false);
   const [uploadHistory, setUploadHistory] = useState<any[]>([]);
-  const [viewingResume, setViewingResume] = useState<Resume | null>(null);
   const [quickViewResume, setQuickViewResume] = useState<Resume | null>(null);
 
   // Duplicate detection state
@@ -172,7 +172,9 @@ export default function MyResumesPage() {
 
   const handleCreateFolder = async (name: string, parentId?: string) => {
     try {
+      console.log('[DEBUG] Creating folder:', { name, parentId });
       const newFolder = await folderService.create(name, parentId);
+      console.log('[DEBUG] Folder created:', newFolder);
       const converted: Folder = {
         id: newFolder.id,
         name: newFolder.name,
@@ -181,8 +183,10 @@ export default function MyResumesPage() {
       };
       setFolders(prev => [...prev, converted]);
       toast.success('Folder created');
-    } catch (error) {
-      toast.error('Failed to create folder');
+    } catch (error: any) {
+      console.error('[DEBUG] Failed to create folder:', error);
+      const message = error?.response?.data?.detail || error?.message || 'Unknown error';
+      toast.error(`Failed to create folder: ${message}`);
     }
   };
 
@@ -534,7 +538,7 @@ export default function MyResumesPage() {
             onDelete={(id) => handleDelete(id)}
             onMoveToFolder={handleMoveToFolder}
             folders={folders}
-            onViewDetails={(resume) => setViewingResume(resume)}
+            onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
           />
         </div>
       </div>
@@ -547,12 +551,8 @@ export default function MyResumesPage() {
           onUpload={handleUploadResumes}
           onCreateFolder={handleCreateFolder}
           onViewResume={(resumeId) => {
-            // Find the resume and open it
-            const resume = resumes.find(r => r.id === resumeId);
-            if (resume) {
-              setViewingResume(resume);
-            }
             setIsUploadModalOpen(false);
+            router.push(`/recruitment/resume-detail/${resumeId}`);
           }}
         />
       )}
@@ -562,14 +562,6 @@ export default function MyResumesPage() {
           records={uploadHistory}
           onClose={() => setShowUploadHistory(false)}
           currentSource="my-resumes"
-        />
-      )}
-
-      {viewingResume && (
-        <ResumeDetailView
-          resume={viewingResume}
-          onClose={() => setViewingResume(null)}
-          onDelete={(id) => handleDelete(id)}
         />
       )}
 
