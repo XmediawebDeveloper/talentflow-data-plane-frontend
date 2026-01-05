@@ -37,11 +37,28 @@ interface ScoredResumesTableProps {
   jobId?: string;
   availableUnits?: number;
   onViewCandidate?: (resume: ScoredResume) => void;
+  selectedResumes?: string[];
+  onSelectResume?: (resumeId: string) => void;
 }
 
-export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', availableUnits = 10, onViewCandidate }: ScoredResumesTableProps) {
+export default function ScoredResumesTable({
+  resumes,
+  jobTitle,
+  jobId = 'jd-1',
+  availableUnits = 10,
+  onViewCandidate,
+  selectedResumes: externalSelectedResumes = [],
+  onSelectResume
+}: ScoredResumesTableProps) {
   const [showColumnModal, setShowColumnModal] = useState(false);
-  const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
+  const [internalSelectedResumes, setInternalSelectedResumes] = useState<string[]>([]);
+
+  // Use external selection if provided, otherwise use internal
+  const selectedResumes = onSelectResume ? externalSelectedResumes : internalSelectedResumes;
+  const setSelectedResumes = onSelectResume ?
+    (ids: string[] | ((prev: string[]) => string[])) => {
+      // No-op when using external control
+    } : setInternalSelectedResumes;
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -111,9 +128,13 @@ export default function ScoredResumesTable({ resumes, jobTitle, jobId = 'jd-1', 
   };
 
   const handleSelectResume = (id: string) => {
-    setSelectedResumes(prev =>
-      prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
-    );
+    if (onSelectResume) {
+      onSelectResume(id);
+    } else {
+      setSelectedResumes(prev =>
+        prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
+      );
+    }
   };
 
   const handleColumnApply = (selectedColumnIds: string[]) => {

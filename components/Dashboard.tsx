@@ -1,9 +1,9 @@
-import { 
-  Users, 
-  Briefcase, 
-  FileText, 
-  Video, 
-  TrendingUp, 
+import {
+  Users,
+  Briefcase,
+  FileText,
+  Video,
+  TrendingUp,
   TrendingDown,
   ArrowRight,
   Clock,
@@ -15,8 +15,14 @@ import {
   Calendar,
   MapPin,
   Building2,
-  Sparkles
+  Sparkles,
+  Loader2,
+  Edit2,
+  Trash2
 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { jdService, JDResponse } from '@/lib/services/jdService';
+import { toast } from 'sonner';
 
 import { User, Tenant, getRemainingUnits } from '@/lib/types/tenant';
 import UnitsWarningBanner from './UnitsWarningBanner';
@@ -36,8 +42,8 @@ interface DashboardProps {
   tenant?: Tenant;
 }
 
-export default function Dashboard({ 
-  onNavigateToJobs, 
+export default function Dashboard({
+  onNavigateToJobs,
   onAIMatch,
   onNavigateToJDCreation,
   onNavigateToMyResumes,
@@ -50,11 +56,50 @@ export default function Dashboard({
   user,
   tenant
 }: DashboardProps = {}) {
-  
+
   // Get usage data from tenant
   const subscription = tenant?.subscription;
   const usage = subscription?.usage;
   const limits = subscription?.limits;
+
+  // JD State Management
+  const [publishedJDs, setPublishedJDs] = useState<JDResponse[]>([]);
+  const [draftJDs, setDraftJDs] = useState<JDResponse[]>([]);
+  const [loadingJDs, setLoadingJDs] = useState(true);
+
+  // Permission checks
+  const canCreateJD = user?.is_tenant_admin || user?.permissions?.canCreateJD;
+
+  // Fetch JDs from API
+  useEffect(() => {
+    const fetchJDs = async () => {
+      setLoadingJDs(true);
+      try {
+        // Fetch published JDs
+        const publishedResponse = await jdService.list({
+          status: 'published',
+          page_size: 5,
+          page: 1
+        });
+        setPublishedJDs(publishedResponse.items || []);
+
+        // Fetch draft JDs
+        const draftResponse = await jdService.list({
+          status: 'draft',
+          page_size: 5,
+          page: 1
+        });
+        setDraftJDs(draftResponse.items || []);
+      } catch (error) {
+        console.error('Failed to fetch JDs:', error);
+        toast.error('Failed to load job descriptions');
+      } finally {
+        setLoadingJDs(false);
+      }
+    };
+
+    fetchJDs();
+  }, []);
   return (
     <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
       <div className="max-w-7xl mx-auto">
@@ -298,182 +343,221 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* Existing Job Descriptions Section */}
+        {/* Published Job Descriptions Section */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6">
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-gray-900 text-2xl mb-2">Existing Job Descriptions</h2>
-                <p className="text-sm text-gray-600">Manage and track all your active job postings</p>
+                <h2 className="text-gray-900 text-2xl mb-2">Published Job Descriptions</h2>
+                <p className="text-sm text-gray-600">Active job postings accepting applications</p>
               </div>
-              <button 
-                onClick={() => onNavigateToJDCreation?.()}
-                className="px-5 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-900 transition-colors flex items-center gap-2 shadow-sm"
-              >
-                <Briefcase className="w-4 h-4" />
-                Post New Job
-              </button>
+              {canCreateJD && (
+                <button
+                  onClick={() => onNavigateToJDCreation?.()}
+                  className="px-5 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-900 transition-colors flex items-center gap-2 shadow-sm"
+                >
+                  <Briefcase className="w-4 h-4" />
+                  Create New JD
+                </button>
+              )}
             </div>
           </div>
           <div className="p-6">
-            <div className="space-y-5">
-              {[
-                {
-                  id: 'JD-001',
-                  title: 'Senior Java Developer',
-                  department: 'Engineering',
-                  location: 'San Francisco, CA',
-                  type: 'Full-time',
-                  description: 'Looking for an experienced Java developer with 5+ years of experience in building scalable applications.',
-                  posted: '3 days ago',
-                  applicants: 45,
-                  status: 'Hot',
-                  statusColor: 'red',
-                },
-                {
-                  id: 'JD-002',
-                  title: 'Product Manager',
-                  department: 'Product',
-                  location: 'Remote',
-                  type: 'Full-time',
-                  description: 'Seeking a strategic product manager to lead our B2B SaaS product roadmap and drive growth.',
-                  posted: '5 days ago',
-                  applicants: 32,
-                  status: 'Active',
-                  statusColor: 'green',
-                },
-                {
-                  id: 'JD-003',
-                  title: 'UI/UX Designer',
-                  department: 'Design',
-                  location: 'New York, NY',
-                  type: 'Full-time',
-                  description: 'Creative designer needed to craft beautiful and intuitive user experiences for our platform.',
-                  posted: '1 week ago',
-                  applicants: 28,
-                  status: 'Active',
-                  statusColor: 'green',
-                },
-                {
-                  id: 'JD-004',
-                  title: 'DevOps Engineer',
-                  department: 'Infrastructure',
-                  location: 'Austin, TX',
-                  type: 'Full-time',
-                  description: 'Expert DevOps engineer to build and maintain our cloud infrastructure and CI/CD pipelines.',
-                  posted: '2 days ago',
-                  applicants: 24,
-                  status: 'New',
-                  statusColor: 'blue',
-                },
-                {
-                  id: 'JD-005',
-                  title: 'Data Scientist',
-                  department: 'Analytics',
-                  location: 'Remote',
-                  type: 'Contract',
-                  description: 'Data scientist to develop ML models and drive data-driven decision making across the organization.',
-                  posted: '1 week ago',
-                  applicants: 19,
-                  status: 'Active',
-                  statusColor: 'green',
-                },
-              ].map((job) => (
-                <div
-                  key={job.id}
-                  className="border border-gray-200 rounded-xl p-6 hover:border-gray-300 hover:shadow-md transition-all bg-white"
+            {loadingJDs ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                <span className="ml-3 text-gray-600">Loading published jobs...</span>
+              </div>
+            ) : publishedJDs.length === 0 ? (
+              <div className="text-center py-12">
+                <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No published jobs yet</h3>
+                <p className="text-sm text-gray-600 mb-4">Create your first job description to start recruiting!</p>
+                {canCreateJD && (
+                  <button
+                    onClick={() => onNavigateToJDCreation?.()}
+                    className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors inline-flex items-center gap-2"
+                  >
+                    <Briefcase className="w-4 h-4" />
+                    Create New JD
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {publishedJDs.map((jd) => (
+                  <div
+                    key={jd.id}
+                    className="border border-gray-200 rounded-xl p-5 hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
+                    onClick={() => onViewJobDetails?.(jd)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-lg font-medium text-gray-900">{jd.title || 'Untitled'}</h3>
+                          <span className="px-3 py-1 rounded-full text-xs bg-green-100 text-green-700">
+                            Published
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-5 text-sm text-gray-600 mb-3">
+                          {jd.department && (
+                            <div className="flex items-center gap-2">
+                              <Building2 className="w-4 h-4 text-gray-400" />
+                              {jd.department}
+                            </div>
+                          )}
+                          {jd.location && (
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-gray-400" />
+                              {jd.location}
+                            </div>
+                          )}
+                          {jd.published_at && (
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-gray-400" />
+                              Published {new Date(jd.published_at).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                          <div className="flex items-center gap-1">
+                            <Users className="w-4 h-4 text-gray-400" />
+                            <span>{jd.applicants_count || 0} applicants</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <FileText className="w-4 h-4 text-gray-400" />
+                            <span>{jd.scored_resumes_count || 0} scored</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 ml-4">
+                        {onAIMatch && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAIMatch(jd);
+                            }}
+                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm flex items-center gap-2"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                            AI Match
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {publishedJDs.length > 0 && (
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">Showing {publishedJDs.length} published job{publishedJDs.length !== 1 ? 's' : ''}</div>
+                <button
+                  onClick={onNavigateToJobs}
+                  className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-2 transition-colors font-medium"
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
-                        <h3 className="text-gray-900 text-xl">{job.title}</h3>
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs ${
-                            job.statusColor === 'red'
-                              ? 'bg-red-100 text-red-700'
-                              : job.statusColor === 'green'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-900'
-                          }`}
-                        >
-                          {job.status}
-                        </span>
-                        <span className="text-sm text-gray-500">{job.id}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-4 leading-relaxed">{job.description}</p>
-                      <div className="flex items-center gap-5 text-sm text-gray-600">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-gray-400" />
-                          {job.department}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-4 h-4 text-gray-400" />
-                          {job.location}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-gray-400" />
-                          {job.type}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          Posted {job.posted}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-center ml-8 bg-gray-50 rounded-xl p-4 min-w-[120px]">
-                      <div className="text-3xl text-gray-800 mb-1">{job.applicants}</div>
-                      <div className="text-xs text-gray-600 mb-3">Applicants</div>
-                      <button className="px-4 py-2 text-sm text-gray-800 border border-gray-800 rounded-lg hover:bg-gray-50 transition-colors w-full">
-                        View Details
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
-                    {onAIMatch && (
-                      <>
-                        <button 
-                          onClick={() => onAIMatch(job)}
-                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-gray-700 hover:to-gray-900 transition-all text-sm shadow-sm"
-                        >
-                          <Sparkles className="w-4 h-4" />
-                          AI Talent Match
-                        </button>
-                        <span className="text-gray-300">•</span>
-                      </>
-                    )}
-                    <button className="text-sm text-gray-600 hover:text-gray-800 transition-colors">
-                      View Applicants
-                    </button>
-                    <span className="text-gray-300">•</span>
-                    <button className="text-sm text-gray-600 hover:text-gray-800 transition-colors">
-                      Edit JD
-                    </button>
-                    <span className="text-gray-300">•</span>
-                    <button className="text-sm text-gray-600 hover:text-gray-800 transition-colors">
-                      Share
-                    </button>
-                    <span className="text-gray-300">•</span>
-                    <button className="text-sm text-gray-600 hover:text-gray-800 transition-colors">
-                      Duplicate
-                    </button>
-                    <div className="ml-auto flex items-center gap-2">
-                      <BarChart3 className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-600">View Analytics</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  View All Published
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+          )}
+        </div>
+
+        {/* Draft Job Descriptions Section */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6">
+          <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">Showing 5 of 42 active jobs</div>
-              <button className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-2 transition-colors">
-                View All Jobs
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              <div>
+                <h2 className="text-gray-900 text-2xl mb-2">Draft Job Descriptions</h2>
+                <p className="text-sm text-gray-600">Incomplete job postings waiting to be published</p>
+              </div>
             </div>
           </div>
+          <div className="p-6">
+            {loadingJDs ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                <span className="ml-3 text-gray-600">Loading drafts...</span>
+              </div>
+            ) : draftJDs.length === 0 ? (
+              <div className="text-center py-12">
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No drafts saved</h3>
+                <p className="text-sm text-gray-600">All your job descriptions are published or you haven't started any drafts yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {draftJDs.map((jd) => (
+                  <div
+                    key={jd.id}
+                    className="border border-gray-200 rounded-xl p-5 hover:border-gray-300 hover:shadow-md transition-all bg-white"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-lg font-medium text-gray-900">{jd.title || 'Untitled Draft'}</h3>
+                          <span className="px-3 py-1 rounded-full text-xs bg-yellow-100 text-yellow-700">
+                            Draft
+                          </span>
+                          {jd.creation_stage && (
+                            <span className="text-xs text-gray-500">
+                              Stage: {jd.creation_stage}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-5 text-sm text-gray-600 mb-3">
+                          {jd.department && (
+                            <div className="flex items-center gap-2">
+                              <Building2 className="w-4 h-4 text-gray-400" />
+                              {jd.department}
+                            </div>
+                          )}
+                          {jd.location && (
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-gray-400" />
+                              {jd.location}
+                            </div>
+                          )}
+                          {jd.created_at && (
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-gray-400" />
+                              Created {new Date(jd.created_at).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 ml-4">
+                        <button
+                          onClick={() => onViewJobDetails?.(jd)}
+                          className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm flex items-center gap-2"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          Continue Editing
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {draftJDs.length > 0 && (
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">Showing {draftJDs.length} draft{draftJDs.length !== 1 ? 's' : ''}</div>
+                <button
+                  onClick={onNavigateToJobs}
+                  className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-2 transition-colors font-medium"
+                >
+                  View All Drafts
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Two Column Layout - Recent Activity & Quick Actions */}

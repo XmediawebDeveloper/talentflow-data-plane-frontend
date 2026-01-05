@@ -44,6 +44,7 @@ export interface JDCreate {
 
 export interface JDResponse extends JDCreate {
   id: string;
+  job_id?: string;  // Job ID like JD-001, JD-002
   tenant_id: string;
   created_by: string;
   created_by_name?: string;

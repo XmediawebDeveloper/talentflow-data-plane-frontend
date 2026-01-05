@@ -122,7 +122,8 @@ export const resumeService = {
   async upload(file: File, folderId?: string): Promise<Resume> {
     const formData = new FormData();
     formData.append('file', file);
-    if (folderId) {
+    // Only append folder_id if it's provided and not an empty string
+    if (folderId && folderId.trim() !== '') {
       formData.append('folder_id', folderId);
     }
 
@@ -141,7 +142,8 @@ export const resumeService = {
       files.forEach((file) => {
         formData.append('files', file);
       });
-      if (folderId) {
+      // Only append folder_id if it's provided and not an empty string
+      if (folderId && folderId.trim() !== '') {
         formData.append('folder_id', folderId);
       }
 
@@ -194,7 +196,8 @@ export const resumeService = {
     formData.append('file', file);
     formData.append('existing_resume_id', existingResumeId);
     formData.append('action', action);
-    if (folderId) {
+    // Only append folder_id if it's provided and not an empty string
+    if (folderId && folderId.trim() !== '') {
       formData.append('folder_id', folderId);
     }
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, DollarSign, List, LayoutGrid, Loader, Square, CheckSquare } from 'lucide-react';
-import { useState } from 'react';
+import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, DollarSign, List, LayoutGrid, Loader, Square, CheckSquare, ChevronRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
 import ResumeSelectionModal from './ResumeSelectionModal';
 import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
@@ -66,6 +67,7 @@ interface ResumeScoringPageProps {
   onNavigateToAITalentMatch?: (jobId: string) => void;
   onBack?: () => void;
   tenant?: Tenant;
+  initialJdId?: string | null;
 }
 
 export default function ResumeScoringPage({
@@ -76,8 +78,11 @@ export default function ResumeScoringPage({
   onSaveScores,
   onNavigateToAITalentMatch,
   onBack,
-  tenant
+  tenant,
+  initialJdId
 }: ResumeScoringPageProps) {
+  const router = useRouter();
+
   // Use props directly - data is fetched by the page route
   const jobs = propJobs;
   const resumes = propResumes;
@@ -100,6 +105,7 @@ export default function ResumeScoringPage({
 
   // State for real-time scoring status panel
   const [showScoringPanel, setShowScoringPanel] = useState(false);
+  const [isScoringMinimized, setIsScoringMinimized] = useState(false);
   const [resumesToScore, setResumesToScore] = useState<Array<{ id: string; name: string }>>([]);
   const [scoringSource, setScoringSource] = useState<'my-resumes' | 'database'>('database');
 
@@ -121,6 +127,25 @@ export default function ResumeScoringPage({
   // History view mode and selection
   const [historyViewMode, setHistoryViewMode] = useState<'grid' | 'list'>('list');
   const [selectedHistoryItems, setSelectedHistoryItems] = useState<Set<string>>(new Set());
+
+  // Bulk download state for scored resumes
+  const [selectedScoredResumes, setSelectedScoredResumes] = useState<string[]>([]);
+  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+
+  // Handle initial JD ID from URL - auto-open scored resumes view
+  useEffect(() => {
+    if (initialJdId && scoredHistory.length > 0) {
+      console.log('[ResumeScoringPage] Checking for initialJdId:', initialJdId);
+      const historyItem = scoredHistory.find(item => item.jobId === initialJdId);
+      if (historyItem) {
+        console.log('[ResumeScoringPage] Found history item for JD, auto-opening:', historyItem.jobTitle);
+        setSelectedHistoryItem(historyItem);
+        setViewMode('details');
+      } else {
+        console.log('[ResumeScoringPage] No history item found for JD:', initialJdId);
+      }
+    }
+  }, [initialJdId, scoredHistory]);
 
   // Split resumes - myResumes are all user-uploaded resumes, databaseResumes are all resumes
   const myResumes = resumes; // All resumes belong to the user (My Resumes)
@@ -209,6 +234,70 @@ export default function ResumeScoringPage({
     alert(`Download initiated!\n\n${selectedHistoryItems.size} scoring session${selectedHistoryItems.size > 1 ? 's' : ''} selected\n${totalResumes} total resume${totalResumes > 1 ? 's' : ''}\n\nIncluded:\n${selectedData.map((item, i) => `${i + 1}. ${item.jobTitle} - ${item.totalScored} resumes`).join('\n')}\n\n(Mock download - would download ZIP file with all resumes)`);
   };
 
+  // Bulk download scorecards as ZIP
+  const handleBulkDownloadScorecards = async () => {
+    if (selectedScoredResumes.length === 0) {
+      alert('Please select at least one candidate to download scorecards');
+      return;
+    }
+
+    setIsBulkDownloading(true);
+
+    try {
+      console.log('[BulkDownload] Downloading scorecards for:', selectedScoredResumes);
+
+      // Get token from localStorage
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        alert('Please login to download scorecards');
+        return;
+      }
+
+      // Call the backend API to get ZIP
+      const response = await fetch('https://talentflowdata.api.mo.vc/api/v1/scoring/scores/bulk-download', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(selectedScoredResumes),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error('[BulkDownload] Failed:', response.status, errorData);
+        alert(`Failed to download scorecards: ${errorData?.detail || response.statusText}`);
+        return;
+      }
+
+      // Get the ZIP blob
+      const blob = await response.blob();
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `TalentFlow_Scorecards_${new Date().getTime()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      console.log('[BulkDownload] ZIP downloaded successfully');
+      alert(`Successfully downloaded ${selectedScoredResumes.length} scorecards as ZIP file`);
+
+      // Clear selection
+      setSelectedScoredResumes([]);
+    } catch (error) {
+      console.error('[BulkDownload] Error:', error);
+      alert('Failed to download scorecards. Please try again.');
+    } finally {
+      setIsBulkDownloading(false);
+    }
+  };
+
   const publishedJobs = jobs.filter(j => j.status === 'Published' || j.status === 'Active');
   const selectedJobData = jobs.find(j => j.id === selectedJob);
 
@@ -283,7 +372,12 @@ export default function ResumeScoringPage({
       <CandidateScoringDetailPage
         resume={selectedCandidateForView}
         jobTitle={selectedHistoryItem.jobTitle}
+        jobId={selectedHistoryItem.jobId}
         onBack={() => {
+          setSelectedCandidateForView(null);
+          setViewMode('details');
+        }}
+        onMinimize={() => {
           setSelectedCandidateForView(null);
           setViewMode('details');
         }}
@@ -366,6 +460,53 @@ export default function ResumeScoringPage({
           </div>
         </div>
 
+        {/* Bulk Actions Bar */}
+        {scoredResumesData.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <input
+                  type="checkbox"
+                  checked={selectedScoredResumes.length === scoredResumesData.length && scoredResumesData.length > 0}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedScoredResumes(scoredResumesData.map(r => r.id));
+                    } else {
+                      setSelectedScoredResumes([]);
+                    }
+                  }}
+                  className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
+                />
+                <span className="text-sm text-gray-700 font-medium">
+                  {selectedScoredResumes.length > 0
+                    ? `${selectedScoredResumes.length} candidate${selectedScoredResumes.length > 1 ? 's' : ''} selected`
+                    : 'Select candidates'}
+                </span>
+              </div>
+
+              {selectedScoredResumes.length > 0 && (
+                <button
+                  onClick={handleBulkDownloadScorecards}
+                  disabled={isBulkDownloading}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isBulkDownloading ? (
+                    <>
+                      <Loader className="w-4 h-4 animate-spin" />
+                      Generating ZIP...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Download {selectedScoredResumes.length} Scorecard{selectedScoredResumes.length > 1 ? 's' : ''} (ZIP)
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Scored Resumes Table */}
         <ScoredResumesTable
           resumes={scoredResumesData}
@@ -375,6 +516,14 @@ export default function ResumeScoringPage({
           onViewCandidate={(resume) => {
             setSelectedCandidateForView(resume);
             setViewMode('candidateView');
+          }}
+          selectedResumes={selectedScoredResumes}
+          onSelectResume={(resumeId) => {
+            setSelectedScoredResumes(prev =>
+              prev.includes(resumeId)
+                ? prev.filter(id => id !== resumeId)
+                : [...prev, resumeId]
+            );
           }}
         />
 
@@ -748,6 +897,7 @@ export default function ResumeScoringPage({
                         onClick={() => {
                           setSelectedHistoryItem(item);
                           setViewMode('details');
+                          router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                         }}
                       >
                         <h3 className="text-lg text-gray-900 mb-1 hover:text-gray-800 transition-colors">
@@ -799,6 +949,7 @@ export default function ResumeScoringPage({
                           onClick={() => {
                             setSelectedHistoryItem(item);
                             setViewMode('details');
+                            router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
                           className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium"
                         >
@@ -822,6 +973,7 @@ export default function ResumeScoringPage({
                       onClick={() => {
                         setSelectedHistoryItem(item);
                         setViewMode('details');
+                        router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                       }}
                     >
                       <div className="flex items-start gap-4 mb-4">
@@ -945,6 +1097,7 @@ export default function ResumeScoringPage({
                           onClick={() => {
                             setSelectedHistoryItem(item);
                             setViewMode('details');
+                            router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
                           className="text-gray-800 hover:text-gray-900 text-sm font-medium flex items-center gap-1 justify-center cursor-pointer"
                         >
@@ -1266,13 +1419,14 @@ export default function ResumeScoringPage({
       )}
 
       {/* Real-Time Scoring Status Panel */}
-      {showScoringPanel && selectedJobData && (
+      {showScoringPanel && selectedJobData && !isScoringMinimized && (
         <ResumeScoringStatusPanel
           resumes={resumesToScore}
           jobTitle={selectedJobData.title}
           jobId={selectedJob}
           onComplete={(scoredResults) => {
             setShowScoringPanel(false);
+            setIsScoringMinimized(false);
 
             if (onSaveScores) {
               const scoredData: ScoredResumeData = {
@@ -1290,7 +1444,29 @@ export default function ResumeScoringPage({
               setViewMode('details');
             }
           }}
+          onMinimize={() => setIsScoringMinimized(true)}
         />
+      )}
+
+      {/* Minimized Scoring Indicator */}
+      {showScoringPanel && isScoringMinimized && selectedJobData && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <button
+            onClick={() => setIsScoringMinimized(false)}
+            className="bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-2xl hover:shadow-xl transition-all p-4 flex items-center gap-3 border-2 border-gray-600 hover:scale-105"
+          >
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Loader className="w-5 h-5 animate-spin text-white" />
+              </div>
+              <div className="text-left">
+                <div className="text-sm font-semibold">AI Scoring in Progress</div>
+                <div className="text-xs text-gray-200">{selectedJobData.title}</div>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-300" />
+          </button>
+        </div>
       )}
 
       {/* Bulk Scoring Progress Modal */}

@@ -1,13 +1,14 @@
 'use client';
 
-import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 
 export default function JDListPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [jds, setJds] = useState<JDResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -17,6 +18,14 @@ export default function JDListPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [selectedJds, setSelectedJds] = useState<string[]>([]);
+
+  // Read status from URL query parameter on mount
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    if (statusParam && ['published', 'draft', 'archived', 'disabled'].includes(statusParam)) {
+      setStatusFilter(statusParam);
+    }
+  }, [searchParams]);
 
   // Fetch JDs from API
   const fetchJDs = async () => {
@@ -277,21 +286,37 @@ export default function JDListPage() {
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
+                        {jd.job_id && (
+                          <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-sm font-medium border border-blue-200">
+                            {jd.job_id}
+                          </span>
+                        )}
                         <h3 className="text-lg font-semibold text-gray-900">{jd.title}</h3>
                         {getStatusBadge(jd.status)}
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
+                      <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
                         {jd.department && (
                           <span className="flex items-center gap-1">
                             <FileText className="w-4 h-4" />
                             {jd.department}
                           </span>
                         )}
-                        {/* Location hidden for now */}
-                        {false && jd.location && (
+                        {jd.employment_type && (
                           <span className="flex items-center gap-1">
-                            <MapPin className="w-4 h-4" />
-                            {jd.location}
+                            <Briefcase className="w-4 h-4" />
+                            <span className="capitalize">{jd.employment_type.replace('_', ' ')}</span>
+                          </span>
+                        )}
+                        {jd.remote_type && (
+                          <span className="flex items-center gap-1">
+                            <Monitor className="w-4 h-4" />
+                            <span className="capitalize">{jd.remote_type.replace('_', ' ')}</span>
+                          </span>
+                        )}
+                        {jd.created_by_name && (
+                          <span className="flex items-center gap-1">
+                            <User className="w-4 h-4" />
+                            Posted by {jd.created_by_name}
                           </span>
                         )}
                         <span className="flex items-center gap-1">
