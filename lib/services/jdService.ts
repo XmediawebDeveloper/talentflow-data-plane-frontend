@@ -146,13 +146,153 @@ export interface JDVersionHistoryResponse {
   total: number;
 }
 
+// JD13: Usage Status Types
+export interface JDUsageStatus {
+  jd_id: string;
+  status: string;
+  is_published: boolean;
+  usage: {
+    resume_scores_count: number;
+    assessments_count: number;
+    ai_matches_count: number;
+    total_usage_count: number;
+  };
+  is_used: boolean;
+  can_edit: boolean;
+  can_republish: boolean;
+  edit_restriction_reason?: string;
+}
+
+// JD14: Downstream API Types - Standardized format for all modules
+export interface JDDownstreamResponse {
+  jd_id: string;
+  tenant_id: string;
+  title: string;
+  description: string;
+  department?: string;
+  location?: string;
+  employment_type?: string;
+  remote_type?: string;
+  must_have_skills: string[];
+  nice_to_have_skills: string[];
+  domain_keywords: string[];
+  experience_min?: number;
+  experience_max?: number;
+  education_requirements?: Record<string, any>;
+  certifications: string[];
+  job_level?: string;
+  industry_type?: string;
+  salary_min?: number;
+  salary_max?: number;
+  salary_currency?: string;
+  compensation_type?: string;
+  coding_required: boolean;
+  supported_languages: string[];
+  assessment_guidance?: string;
+  allow_overqualified: boolean;
+  internal_comments?: string;
+  must_have_comments: string[];
+  status: 'published';
+  published_at?: string;
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
+  created_by_name?: string;
+  locations: JDLocation[];
+  api_version: string;
+  source: string;
+}
+
+export interface JDDownstreamListResponse {
+  items: JDDownstreamResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  api_version: string;
+  source: string;
+}
+
+// JD01 & JD03: Access Check Types
+export interface UnitAvailability {
+  available: number;
+  required: number;
+  sufficient: boolean;
+  is_unlimited: boolean;
+}
+
+export interface ValidationStatus {
+  passed: boolean;
+  message?: string;
+  code?: string;
+}
+
+export interface SubscriptionValidation extends ValidationStatus {
+  status?: string;
+  suspended_reason?: string;
+  expired_at?: string;
+}
+
+export interface AuthenticationValidation extends ValidationStatus {
+  user_id?: string;
+  tenant_id?: string;
+}
+
+export interface AuthorizationValidation extends ValidationStatus {
+  permission: string;
+  role?: string;
+  is_tenant_admin: boolean;
+}
+
+export interface UnitsValidation extends ValidationStatus {
+  RS: UnitAvailability;
+  AS: UnitAvailability;
+  AIU: UnitAvailability;
+}
+
+export interface JobQuotaValidation extends ValidationStatus {
+  used: number;
+  limit: number;
+  remaining: number;
+  is_unlimited: boolean;
+}
+
+export interface JDAccessCheckResponse {
+  all_checks_passed: boolean;
+  can_create_jd: boolean;
+  blocking_error?: string;
+  blocking_error_code?: string;
+  subscription: SubscriptionValidation;
+  authentication: AuthenticationValidation;
+  authorization: AuthorizationValidation;
+  units: UnitsValidation;
+  job_quota: JobQuotaValidation;
+  failed_checks: string[];
+  warnings: string[];
+}
+
 export const jdService = {
+  /**
+   * JD01 & JD03: Pre-flight access check for JD module
+   * Validates all pre-conditions before allowing JD access/creation
+   */
+  async accessCheck(): Promise<JDAccessCheckResponse> {
+    try {
+      const response = await api.get<JDAccessCheckResponse>('/jd/access-check');
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
   /**
    * List all JDs with filters
    */
   async list(params?: {
     status?: string;
     search?: string;
+    source?: string;  // JD02B: 'my-jds' or 'all'
+    sort_by?: string; // JD04: 'latest', 'oldest', 'a-z', 'z-a', 'created_latest', 'created_oldest'
     page?: number;
     page_size?: number;
   }): Promise<JDListResponse> {
@@ -280,6 +420,33 @@ export const jdService = {
   },
 
   /**
+   * JD15: Disable JD
+   * Only Tenant Admins can disable JDs.
+   * Disabled JDs are excluded from all downstream modules.
+   */
+  async disable(id: string): Promise<JDResponse> {
+    try {
+      const response = await api.post<JDResponse>(`/jd/${id}/disable`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * JD15: Enable JD (re-enable a disabled JD)
+   * Only Tenant Admins can enable JDs.
+   */
+  async enable(id: string): Promise<JDResponse> {
+    try {
+      const response = await api.post<JDResponse>(`/jd/${id}/enable`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Delete JD (drafts only)
    */
   async delete(id: string): Promise<void> {
@@ -351,6 +518,58 @@ export const jdService = {
   async getCurrentVersion(jdId: string): Promise<{ jd_id: string; current_version: number }> {
     try {
       const response = await api.get<{ jd_id: string; current_version: number }>(`/jd/${jdId}/current-version`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  // ==================== JD13: Usage Status ====================
+
+  /**
+   * JD13: Get usage status for a JD
+   * Returns whether JD is used in any module and if it can be edited/republished
+   */
+  async getUsageStatus(jdId: string): Promise<JDUsageStatus> {
+    try {
+      const response = await api.get<JDUsageStatus>(`/jd/${jdId}/usage-status`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  // ==================== JD14: Downstream API ====================
+
+  /**
+   * JD14: List published JDs for downstream modules
+   * Returns ONLY published JDs in standardized format for:
+   * - Resume Scoring
+   * - AI Talent Match
+   * - Assessment Generator
+   * - Reporting & Analytics
+   */
+  async listPublishedForDownstream(params?: {
+    search?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<JDDownstreamListResponse> {
+    try {
+      const response = await api.get<JDDownstreamListResponse>('/jd/published', { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * JD14: Get a single published JD for downstream modules
+   * Returns the JD ONLY if it is published.
+   * Draft, Disabled, and Archived JDs will return 404.
+   */
+  async getPublishedForDownstream(jdId: string): Promise<JDDownstreamResponse> {
+    try {
+      const response = await api.get<JDDownstreamResponse>(`/jd/published/${jdId}`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

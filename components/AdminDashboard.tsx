@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Building2, Users, BarChart3, Settings, Activity, FileText, Briefcase, Award, Loader2 } from 'lucide-react';
+import { Building2, Users, BarChart3, Settings, Activity, FileText, Briefcase, Award, Loader2, Zap, ClipboardCheck, Video } from 'lucide-react';
 import { User, Tenant } from '@/lib/types/tenant';
-import { dashboardService, DashboardStats, RecentActivity } from '@/lib/services/dashboardService';
+import { dashboardService, DashboardStats, RecentActivity, SubscriptionUnits, JDActivity } from '@/lib/services/dashboardService';
 
 interface AdminDashboardProps {
   user?: User;
@@ -24,6 +24,8 @@ export default function AdminDashboard({
 }: AdminDashboardProps) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [subscriptionUnits, setSubscriptionUnits] = useState<SubscriptionUnits | null>(null);  // JD02A
+  const [jdRecentActivity, setJdRecentActivity] = useState<JDActivity[]>([]);  // JD02A
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +36,8 @@ export default function AdminDashboard({
         const data = await dashboardService.getDashboard();
         setStats(data.stats);
         setRecentActivity(data.recent_activity);
+        setSubscriptionUnits(data.subscription_units);  // JD02A
+        setJdRecentActivity(data.jd_recent_activity || []);  // JD02A
         setError(null);
       } catch (err) {
         console.error('Failed to fetch dashboard:', err);
@@ -44,6 +48,8 @@ export default function AdminDashboard({
           resumes_this_week: 0,
           total_jds: 0,
           active_jds: 0,
+          draft_jds: 0,  // JD02A
+          my_jds: 0,     // JD02B
           total_users: 0,
           active_users: 0,
           total_scorings: 0,
@@ -123,7 +129,19 @@ export default function AdminDashboard({
             <div>
               <p className="text-sm text-gray-600">Job Descriptions</p>
               <p className="text-3xl font-semibold text-gray-900 mt-1">{stats?.total_jds || 0}</p>
-              <p className="text-xs text-green-600 mt-1">{stats?.active_jds || 0} active</p>
+              {/* JD02A & JD02B: Show published, draft, and my JDs counts */}
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className="text-xs text-green-600">{stats?.active_jds || 0} published</span>
+                <span className="text-xs text-gray-400">|</span>
+                <span className="text-xs text-yellow-600">{stats?.draft_jds || 0} draft</span>
+                {/* JD02B: Show "my JDs" for recruiters */}
+                {!canManageUsers && (stats?.my_jds ?? 0) > 0 && (
+                  <>
+                    <span className="text-xs text-gray-400">|</span>
+                    <span className="text-xs text-blue-600">{stats?.my_jds || 0} mine</span>
+                  </>
+                )}
+              </div>
             </div>
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
               <Briefcase className="w-6 h-6 text-purple-600" />
@@ -160,6 +178,136 @@ export default function AdminDashboard({
           </div>
         </div>
       </div>
+
+      {/* JD02A: Subscription Units */}
+      {subscriptionUnits && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Units</h2>
+          <div className="grid grid-cols-3 gap-4">
+            {/* Resume Scoring Units */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-600">Resume Scoring</p>
+                  <p className="text-xl font-semibold text-gray-900">
+                    {subscriptionUnits.RS.is_unlimited ? 'Unlimited' : subscriptionUnits.RS.available}
+                  </p>
+                </div>
+              </div>
+              {!subscriptionUnits.RS.is_unlimited && (
+                <div className="mt-3">
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>Used: {subscriptionUnits.RS.used}</span>
+                    <span>Limit: {subscriptionUnits.RS.limit}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div
+                      className={`h-1.5 rounded-full ${subscriptionUnits.RS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RS.percentage_used > 50 ? 'bg-yellow-500' : 'bg-blue-500'}`}
+                      style={{ width: `${Math.min(subscriptionUnits.RS.percentage_used, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Assessment Units */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <ClipboardCheck className="w-5 h-5 text-orange-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-600">Assessments</p>
+                  <p className="text-xl font-semibold text-gray-900">
+                    {subscriptionUnits.AS.is_unlimited ? 'Unlimited' : subscriptionUnits.AS.available}
+                  </p>
+                </div>
+              </div>
+              {!subscriptionUnits.AS.is_unlimited && (
+                <div className="mt-3">
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>Used: {subscriptionUnits.AS.used}</span>
+                    <span>Limit: {subscriptionUnits.AS.limit}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div
+                      className={`h-1.5 rounded-full ${subscriptionUnits.AS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AS.percentage_used > 50 ? 'bg-yellow-500' : 'bg-orange-500'}`}
+                      style={{ width: `${Math.min(subscriptionUnits.AS.percentage_used, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* AI Interview Units */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <Video className="w-5 h-5 text-purple-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-600">AI Interviews</p>
+                  <p className="text-xl font-semibold text-gray-900">
+                    {subscriptionUnits.AIU.is_unlimited ? 'Unlimited' : subscriptionUnits.AIU.available}
+                  </p>
+                </div>
+              </div>
+              {!subscriptionUnits.AIU.is_unlimited && (
+                <div className="mt-3">
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>Used: {subscriptionUnits.AIU.used}</span>
+                    <span>Limit: {subscriptionUnits.AIU.limit}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div
+                      className={`h-1.5 rounded-full ${subscriptionUnits.AIU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AIU.percentage_used > 50 ? 'bg-yellow-500' : 'bg-purple-500'}`}
+                      style={{ width: `${Math.min(subscriptionUnits.AIU.percentage_used, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* JD02A: JD Recent Activity */}
+      {jdRecentActivity.length > 0 && (
+        <div className="mb-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Recent JD Activity</h2>
+              <Briefcase className="w-5 h-5 text-gray-400" />
+            </div>
+            <div className="space-y-3">
+              {jdRecentActivity.map((activity) => (
+                <div
+                  key={activity.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                      <Briefcase className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {activity.jd_title || 'Untitled JD'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {activity.action_display} by {activity.user_name || 'System'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-gray-400">{activity.time_ago}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions & Recent Activity */}
       <div className="grid grid-cols-3 gap-6">
