@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Loader2, XCircle, Target, TrendingUp, Clock, AlertCircle, RefreshCw, History } from 'lucide-react';
+import { CheckCircle2, Loader2, XCircle, Target, TrendingUp, Clock, AlertCircle, RefreshCw, History, Minus } from 'lucide-react';
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { scoringService } from '@/lib/services';
 
@@ -64,13 +64,15 @@ interface ResumeScoringStatusPanelProps {
   onComplete: (scoredResumes: any[]) => void;
   jobTitle: string;
   jobId: string;
+  onMinimize?: () => void;
 }
 
 export default function ResumeScoringStatusPanel({
   resumes,
   onComplete,
   jobTitle,
-  jobId
+  jobId,
+  onMinimize
 }: ResumeScoringStatusPanelProps) {
   const [scoringResumes, setScoringResumes] = useState<ScoringResume[]>(
     resumes.map(r => ({
@@ -142,6 +144,7 @@ export default function ResumeScoringStatusPanel({
               strengths: result.strengths,
               gaps: result.gaps,
               scoreBreakdown: result.score_breakdown,
+              criteriaScores: result.criteria_scores,
               essentialScore: result.essential_score,
               nonEssentialScore: result.non_essential_score,
               // Capture candidate info from API response
@@ -169,8 +172,18 @@ export default function ResumeScoringStatusPanel({
         } catch (error: any) {
           console.error(`[Scoring] Error scoring ${resume.name}:`, error);
 
+          // Check if this is a duplicate score error
+          let errorReason = error.message || 'Failed to score resume';
+
+          // Detect duplicate key violation error
+          if (errorReason.includes('duplicate key') ||
+              errorReason.includes('already exists') ||
+              errorReason.includes('UniqueViolationError') ||
+              errorReason.includes('resume_scores_resume_id_job_description_id_key')) {
+            errorReason = 'This resume has already been scored for this job. Please view the existing score instead.';
+          }
+
           // Failed - create attempt history
-          const errorReason = error.message || 'Failed to score resume';
           const newAttempt: AttemptHistory = {
             attemptNumber: resume.currentAttempt || 1,
             timestamp: new Date(),
@@ -209,16 +222,17 @@ export default function ResumeScoringStatusPanel({
 
     // If no pending/scoring and we have results, check if we should complete
     if (pendingCount === 0 && scoringCount === 0 && !isProcessing) {
-      // If all completed (no errors), auto-complete after delay
+      // If all completed (no errors), auto-complete immediately
       if (errorCount === 0 && completedCount === resumes.length) {
-        setTimeout(() => {
-          console.log('[Scoring] Building final results, scoringResumes:', scoringResumes);
-          const scoredResults = scoringResumes.map(resume => {
-            console.log('[Scoring] Resume data:', resume.id, 'candidateName:', resume.candidateName, 'candidateEmail:', resume.candidateEmail);
-            console.log('[Scoring] Extended data:', 'professionalSummary:', resume.professionalSummary, 'technicalSkills:', resume.technicalSkills, 'languages:', resume.languages);
-            return {
-            ...resume,
-            matchScore: resume.score || 0,
+        console.log('[Scoring] All resumes completed successfully, auto-closing popup immediately');
+        console.log('[Scoring] Building final results, scoringResumes:', scoringResumes);
+        const scoredResults = scoringResumes.map(resume => {
+          console.log('[Scoring] Resume data:', resume.id, 'candidateName:', resume.candidateName, 'candidateEmail:', resume.candidateEmail);
+          console.log('[Scoring] Scoring data:', 'score:', resume.score, 'criteriaScores:', resume.criteriaScores);
+          console.log('[Scoring] Extended data:', 'professionalSummary:', resume.professionalSummary, 'technicalSkills:', resume.technicalSkills, 'languages:', resume.languages);
+          return {
+          ...resume,
+          matchScore: resume.score || 0,
             skillMatches: resume.strengths?.slice(0, 3) || [],
             matchReason: resume.aiSummary || (
               resume.score && resume.score >= 85
@@ -243,6 +257,7 @@ export default function ResumeScoringStatusPanel({
             })(),
             // Raw breakdown with full details from API
             rawBreakdown: resume.scoreBreakdown || [],
+            criteriaScores: resume.criteriaScores || {},
             essentialScore: resume.essentialScore,
             nonEssentialScore: resume.nonEssentialScore,
             // Ensure real scoring data is passed
@@ -257,10 +272,10 @@ export default function ResumeScoringStatusPanel({
             languages: resume.languages || [],
             certifications: resume.certifications || [],
           };
-          });
+        });
 
-          onComplete(scoredResults);
-        }, 1000);
+        // Auto-close popup immediately when all scoring completes
+        onComplete(scoredResults);
       }
     }
   }, [scoringResumes, isProcessing, resumes.length, onComplete]);
@@ -438,6 +453,15 @@ export default function ResumeScoringStatusPanel({
                 <h2 className="text-xl text-white font-semibold">AI Resume Scoring in Progress</h2>
                 <p className="text-sm text-gray-100">Analyzing candidates for: {jobTitle}</p>
               </div>
+              {onMinimize && (
+                <button
+                  onClick={onMinimize}
+                  className="mr-4 p-2 hover:bg-white/20 rounded-lg transition-colors"
+                  title="Minimize"
+                >
+                  <Minus className="w-5 h-5 text-white" />
+                </button>
+              )}
               <div className="text-right">
                 <div className="text-2xl text-white font-bold">{completedCount}/{resumes.length}</div>
                 <div className="text-xs text-gray-100">Successfully Scored</div>

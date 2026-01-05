@@ -580,6 +580,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       <CandidateScoringDetailPage
         resume={viewingScoredResume}
         jobTitle={job.title}
+        jobId={job.id}
         onBack={() => setViewingScoredResume(null)}
       />
     );
@@ -638,12 +639,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     <div className="text-xs text-gray-500">Posted On</div>
                     <div className="text-sm text-gray-900">
                       {job.postedDate
-                        ? new Date(job.postedDate).toLocaleDateString('en-US', {
+                        ? new Date(job.postedDate).toLocaleString('en-US', {
                             month: 'short',
                             day: 'numeric',
                             year: 'numeric',
                             hour: '2-digit',
-                            minute: '2-digit'
+                            minute: '2-digit',
+                            hour12: true
                           })
                         : 'N/A'}
                     </div>

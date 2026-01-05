@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ResumeScoringPage from '@/components/ResumeScoringPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService, folderService } from '@/lib/services/resumeService';
@@ -26,17 +27,28 @@ interface Job {
   status: string;
   applicants: number;
   employmentType?: string;
+  remoteType?: string;
+  mustHaveComments?: string[];
   experience?: string;
 }
 
 export default function ResumeScoringRoute() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [resumes, setResumes] = useState<any[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
   const [scoredHistory, setScoredHistory] = useState<ScoredResumeData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialJdId, setInitialJdId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check if there's a jd_id in URL params
+    const jdId = searchParams.get('jd_id');
+    if (jdId) {
+      console.log('[ResumeScoringRoute] Found jd_id in URL:', jdId);
+      setInitialJdId(jdId);
+    }
     fetchData();
     loadScoredHistory();
   }, []);
@@ -186,6 +198,9 @@ export default function ResumeScoringRoute() {
 
     setScoredHistory(newHistory);
 
+    // Update URL to persist the view across refreshes
+    router.push(`/recruitment/resume-scoring?jd_id=${data.jobId}`);
+
     // Save to localStorage
     try {
       localStorage.setItem('scoredHistory', JSON.stringify(newHistory));
@@ -274,6 +289,7 @@ export default function ResumeScoringRoute() {
       folders={folders}
       scoredHistory={scoredHistory}
       onSaveScores={saveScoredHistory}
+      initialJdId={initialJdId}
     />
   );
 }

@@ -477,22 +477,45 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         // If extracted_params are returned, pre-populate the extracted data
         if (response.extracted_params) {
           const params = response.extracted_params;
+
+          // Map experience_level from AI to experience years
+          let expValue = '';
+          if (params.experience_level) {
+            const levelMap: Record<string, string> = {
+              'entry': '0-2',
+              'junior': '2-5',
+              'mid': '5-7',
+              'senior': '7-10',
+              'architect': '10+',
+              'management': '10+',
+            };
+            expValue = levelMap[params.experience_level.toLowerCase()] || '';
+          }
+          if (!expValue && (params.experience_min || params.experience_max)) {
+            expValue = params.experience_min && params.experience_max
+              ? `${params.experience_min}-${params.experience_max}`
+              : params.experience_min
+                ? `${params.experience_min}+`
+                : '';
+          }
+
           setExtractedData(prev => ({
             ...prev,
             mustHaveSkills: params.must_have_skills || [],
             mustHaveComments: params.must_have_comments || [],
             niceToHaveSkills: params.nice_to_have_skills || [],
             education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
-            experience: params.experience_min && params.experience_max
-              ? `${params.experience_min}-${params.experience_max}`
-              : params.experience_min
-                ? `${params.experience_min}+`
-                : prev.experience,
+            experience: expValue || prev.experience,
             industryType: params.industry_type?.toLowerCase() || '',
+            employmentType: prev.employmentType,  // Keep existing value
+            workModel: prev.workModel,  // Keep existing value
             salaryFrom: params.salary_min ? params.salary_min.toString() : '',
             salaryTo: params.salary_max ? params.salary_max.toString() : '',
             compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || 'yearly',
-            locations: [],  // User will add locations manually
+            locations: (params.locations || []).map((loc: any) => ({
+              city: loc.city || '',
+              radius: '50'
+            })),
             allowOverqualified: false,
           }));
         }
@@ -525,25 +548,48 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       const params = await jdService.extractParamsFromText(jdText);
 
       // Map API response to component's ExtractedData format
+      // Map experience_level from AI (entry/junior/mid/senior/architect/management) to experience years
+      let experienceValue = '';
+      if (params.experience_level) {
+        const levelMap: Record<string, string> = {
+          'entry': '0-2',
+          'junior': '2-5',
+          'mid': '5-7',
+          'senior': '7-10',
+          'architect': '10+',
+          'management': '10+',
+        };
+        experienceValue = levelMap[params.experience_level.toLowerCase()] || '';
+      }
+      // Fall back to numeric experience if level not provided
+      if (!experienceValue && (params.experience_min || params.experience_max)) {
+        experienceValue = params.experience_min && params.experience_max
+          ? `${params.experience_min}-${params.experience_max}`
+          : params.experience_min
+            ? `${params.experience_min}+`
+            : '';
+      }
+
       const extraction: ExtractedData = {
         mustHaveSkills: params.must_have_skills || [],
         mustHaveComments: params.must_have_comments || [],
         niceToHaveSkills: params.nice_to_have_skills || [],
         education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
         educationRequired: true,
-        experience: params.experience_min && params.experience_max
-          ? `${params.experience_min}-${params.experience_max}`
-          : params.experience_min
-            ? `${params.experience_min}+`
-            : '',
+        experience: experienceValue,
         experienceRequired: true,
         industryType: params.industry_type?.toLowerCase() || '',
         industryTypeRequired: false,
         allowOverqualified: false,
+        employmentType: 'full_time',  // Default value
+        workModel: 'onsite',  // Default value
         salaryFrom: params.salary_min ? params.salary_min.toString() : '',
         salaryTo: params.salary_max ? params.salary_max.toString() : '',
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || 'yearly',
-        locations: [],  // User will add locations manually
+        locations: (params.locations || []).map((loc: any) => ({
+          city: loc.city || '',
+          radius: '50'  // Default radius
+        })),
         locationsRequired: false,
         assessmentGuidance: '',
         internalRecruiterComments: [],
@@ -732,8 +778,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     }));
   };
 
-  const handlePublish = () => {
-    // JD11: Validate mandatory fields before proceeding
+  const handlePublish = async () => {
+    // Validate mandatory fields
     const missingFields: string[] = [];
 
     // Must have at least one must-have skill
@@ -759,7 +805,126 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       return;
     }
 
-    // Go to review step to show summary
+    // BEFORE going to review, reformat the JD description using AI
+    console.log('[DEBUG] Reformatting JD description with AI before review...');
+    setIsRegenerating(true);
+
+    try {
+      // Build a detailed prompt from all the extracted data
+      // Safety checks: ensure all arrays exist
+      const mustHaveSkills = extractedData.mustHaveSkills || [];
+      const niceToHaveSkills = extractedData.niceToHaveSkills || [];
+      const locations = extractedData.locations || [];
+      const mustHaveComments = extractedData.mustHaveComments || [];
+
+      const skillsText = [
+        ...mustHaveSkills.map(s => `Must have: ${s}`),
+        ...niceToHaveSkills.map(s => `Nice to have: ${s}`),
+      ].join(', ');
+
+      const requirementsText = [
+        extractedData.experience ? `Experience: ${extractedData.experience}` : '',
+        extractedData.education ? `Education: ${extractedData.education}` : '',
+        extractedData.industryType ? `Industry: ${extractedData.industryType}` : '',
+        extractedData.employmentType ? `Employment Type: ${extractedData.employmentType}` : '',
+        extractedData.workModel ? `Work Model: ${extractedData.workModel}` : '',
+      ].filter(Boolean).join('. ');
+
+      const locationsText = locations.length > 0
+        ? `Location: ${locations.map(l => l.city).join(', ')}`
+        : '';
+
+      const commentsText = mustHaveComments.length > 0
+        ? `Additional Requirements: ${mustHaveComments.join(', ')}`
+        : '';
+
+      // Create comprehensive prompt for professional formatting using ALL extracted data
+      const reformatPrompt = `You are a professional HR recruiter. Create a comprehensive, well-structured job description using the information below.
+
+Job Title: ${jobTitle}
+
+Required Skills (Must Have):
+${mustHaveSkills.map(s => `- ${s}`).join('\n')}
+
+Preferred Skills (Nice to Have):
+${niceToHaveSkills.map(s => `- ${s}`).join('\n')}
+
+Experience Required: ${extractedData.experience || 'Not specified'}
+Education Required: ${extractedData.education || 'Not specified'}
+Industry: ${extractedData.industryType || 'Not specified'}
+Employment Type: ${extractedData.employmentType || 'full_time'}
+Work Model: ${extractedData.workModel || 'onsite'}
+Locations: ${locations.map(l => l.city).join(', ') || 'Not specified'}
+Salary Range: ${extractedData.salaryFrom && extractedData.salaryTo ? `₹${extractedData.salaryFrom} - ₹${extractedData.salaryTo} (${extractedData.compensationType})` : 'Competitive'}
+
+Additional Requirements:
+${mustHaveComments.map(c => `- ${c}`).join('\n') || 'None'}
+
+Internal Guidance: ${extractedData.assessmentGuidance || 'None'}
+
+IMPORTANT FORMATTING INSTRUCTIONS:
+Create a professional job description with these EXACT sections in this order:
+
+Job Title: ${jobTitle}
+
+Job Overview:
+[Write a compelling 2-3 sentence overview about the role and what the ideal candidate will do]
+
+Key Responsibilities:
+[List 5-7 main responsibilities as bullet points starting with action verbs]
+
+Required Skills and Experience:
+[List all must-have skills and experience requirements as bullet points]
+
+Preferred Skills:
+[List all nice-to-have skills as bullet points - only if there are nice-to-have skills]
+
+Education:
+[State the education requirement clearly]
+
+Experience Level:
+[State the experience level based on years mentioned]
+
+Industry:
+[State the industry type - "Preferred" or "Required" based on context]
+
+Why Join Us:
+[List 3-4 compelling reasons to join, such as competitive salary, growth opportunities, work culture, etc.]
+
+Use professional language, clear formatting, and make it engaging for candidates. Each section should be clearly labeled and well-organized.`;
+
+      console.log('[DEBUG] Calling AI to reformat JD...');
+      console.log('[DEBUG] Prompt:', reformatPrompt.substring(0, 200) + '...');
+
+      const response = await jdService.generate(reformatPrompt);
+      console.log('[DEBUG] AI Response received:', response);
+
+      if (response && response.description) {
+        setGeneratedJD(response.description);
+        console.log('[DEBUG] JD reformatted successfully, length:', response.description.length);
+
+        toast.success({
+          title: 'JD Reformatted',
+          description: 'Job description has been formatted professionally by AI.',
+        });
+      } else {
+        console.warn('[WARN] No description in response, keeping original');
+        toast.warning({
+          title: 'Using Original JD',
+          description: 'AI formatting unavailable. Using current version.',
+        });
+      }
+    } catch (error) {
+      console.error('[ERROR] Failed to reformat JD:', error);
+      toast.warning({
+        title: 'Formatting Warning',
+        description: 'Could not reformat JD with AI. Proceeding with current version.',
+      });
+    } finally {
+      setIsRegenerating(false);
+    }
+
+    // Go to review step to show the reformatted summary
     setStep('review');
   };
 
@@ -2371,10 +2536,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               </button>
               <button
                 onClick={handlePublish}
-                className="flex items-center gap-2 bg-green-600 text-white px-8 py-3 rounded-md hover:bg-green-700 transition-colors"
+                disabled={isRegenerating}
+                className="flex items-center gap-2 bg-green-600 text-white px-8 py-3 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Review & Publish
-                <ChevronRight className="w-5 h-5" />
+                {isRegenerating ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Formatting with AI...
+                  </>
+                ) : (
+                  <>
+                    Review & Publish
+                    <ChevronRight className="w-5 h-5" />
+                  </>
+                )}
               </button>
             </div>
           </div>
