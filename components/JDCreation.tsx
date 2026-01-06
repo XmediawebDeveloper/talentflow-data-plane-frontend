@@ -66,6 +66,7 @@ interface EditingJDData {
   description: string;
   status?: 'draft' | 'published' | 'archived';
   creation_stage: 'create' | 'extract' | 'review';
+  creation_method?: 'manual' | 'ai_generated';
   must_have_skills?: string[];
   nice_to_have_skills?: string[];
   education_requirements?: { degree?: string };
@@ -423,6 +424,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           title: jobTitle,
           description: manualJD,
           creation_stage: 'create' as const,
+          creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
         };
 
         let savedJd;
@@ -483,9 +485,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         if (response.extracted_params) {
           const params = response.extracted_params;
 
-          // Map experience_level from AI to experience years
+          // Map experience - prioritize explicit min/max values over level mapping
           let expValue = '';
-          if (params.experience_level) {
+
+          // First try to use experience_min and experience_max (more accurate)
+          if (params.experience_min !== null && params.experience_min !== undefined) {
+            if (params.experience_max !== null && params.experience_max !== undefined) {
+              expValue = `${params.experience_min}-${params.experience_max}`;
+            } else {
+              expValue = `${params.experience_min}+`;
+            }
+          } else if (params.experience_max !== null && params.experience_max !== undefined) {
+            expValue = `0-${params.experience_max}`;
+          }
+
+          // Fall back to experience_level mapping if no min/max
+          if (!expValue && params.experience_level) {
             const levelMap: Record<string, string> = {
               'entry': '0-2',
               'junior': '2-5',
@@ -494,14 +509,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               'architect': '10+',
               'management': '10+',
             };
-            expValue = levelMap[params.experience_level.toLowerCase()] || '';
-          }
-          if (!expValue && (params.experience_min || params.experience_max)) {
-            expValue = params.experience_min && params.experience_max
-              ? `${params.experience_min}-${params.experience_max}`
-              : params.experience_min
-                ? `${params.experience_min}+`
-                : '';
+            // Handle various formats like "mid", "Mid", "Mid Level", "mid-level"
+            const normalizedLevel = params.experience_level.toLowerCase().replace(/[^a-z]/g, '');
+            expValue = levelMap[normalizedLevel] || '';
           }
 
           setExtractedData(prev => ({
@@ -553,9 +563,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       const params = await jdService.extractParamsFromText(jdText);
 
       // Map API response to component's ExtractedData format
-      // Map experience_level from AI (entry/junior/mid/senior/architect/management) to experience years
+      // Map experience - prioritize explicit min/max values over level mapping
       let experienceValue = '';
-      if (params.experience_level) {
+
+      // First try to use experience_min and experience_max (more accurate)
+      if (params.experience_min !== null && params.experience_min !== undefined) {
+        if (params.experience_max !== null && params.experience_max !== undefined) {
+          experienceValue = `${params.experience_min}-${params.experience_max}`;
+        } else {
+          experienceValue = `${params.experience_min}+`;
+        }
+      } else if (params.experience_max !== null && params.experience_max !== undefined) {
+        experienceValue = `0-${params.experience_max}`;
+      }
+
+      // Fall back to experience_level mapping if no min/max
+      if (!experienceValue && params.experience_level) {
         const levelMap: Record<string, string> = {
           'entry': '0-2',
           'junior': '2-5',
@@ -564,15 +587,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           'architect': '10+',
           'management': '10+',
         };
-        experienceValue = levelMap[params.experience_level.toLowerCase()] || '';
-      }
-      // Fall back to numeric experience if level not provided
-      if (!experienceValue && (params.experience_min || params.experience_max)) {
-        experienceValue = params.experience_min && params.experience_max
-          ? `${params.experience_min}-${params.experience_max}`
-          : params.experience_min
-            ? `${params.experience_min}+`
-            : '';
+        // Handle various formats like "mid", "Mid", "Mid Level", "mid-level"
+        const normalizedLevel = params.experience_level.toLowerCase().replace(/[^a-z]/g, '');
+        experienceValue = levelMap[normalizedLevel] || '';
       }
 
       const extraction: ExtractedData = {
@@ -1008,9 +1025,24 @@ Use professional language, clear formatting, and make it engaging for candidates
     setIsPublishing(true);
 
     try {
-      // Parse experience values
-      const experienceMatch = extractedData.experience.match(/(\d+)/);
-      const experienceMin = experienceMatch ? parseInt(experienceMatch[1]) : undefined;
+      // Parse experience values - handle formats like "3-5", "5+", "0-2"
+      let experienceMin: number | undefined;
+      let experienceMax: number | undefined;
+      if (extractedData.experience) {
+        const rangeMatch = extractedData.experience.match(/(\d+)\s*-\s*(\d+)/);
+        const plusMatch = extractedData.experience.match(/(\d+)\+/);
+        if (rangeMatch) {
+          experienceMin = parseInt(rangeMatch[1]);
+          experienceMax = parseInt(rangeMatch[2]);
+        } else if (plusMatch) {
+          experienceMin = parseInt(plusMatch[1]);
+        } else {
+          const singleMatch = extractedData.experience.match(/(\d+)/);
+          if (singleMatch) {
+            experienceMin = parseInt(singleMatch[1]);
+          }
+        }
+      }
 
       // Build the JD data for backend
       const jdData = {
@@ -1026,6 +1058,7 @@ Use professional language, clear formatting, and make it engaging for candidates
         nice_to_have_skills: extractedData.niceToHaveSkills,
         education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
         experience_min: experienceMin,
+        experience_max: experienceMax,
         industry_type: extractedData.industryType || undefined,
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9]/g, '')) : undefined,
@@ -1047,6 +1080,7 @@ Use professional language, clear formatting, and make it engaging for candidates
             is_required: extractedData.locationsRequired,
           };
         }),
+        creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
       };
 
       console.log('[DEBUG] handleConfirmPublish - editingId:', editingId, 'isEditingDraft:', isEditingDraft);
@@ -1139,7 +1173,9 @@ Use professional language, clear formatting, and make it engaging for candidates
     if (hasUnsavedData() && !isPublished) {
       // Auto save as draft
       await handleSaveDraft();
-    } else if (onBack) {
+    }
+    // Always navigate back after saving (or if no unsaved data)
+    if (onBack) {
       onBack();
     }
   };
@@ -1149,9 +1185,24 @@ Use professional language, clear formatting, and make it engaging for candidates
     setIsSavingDraft(true);
 
     try {
-      // Parse experience values
-      const experienceMatch = extractedData.experience.match(/(\d+)/);
-      const experienceMin = experienceMatch ? parseInt(experienceMatch[1]) : undefined;
+      // Parse experience values - handle formats like "3-5", "5+", "0-2"
+      let experienceMin: number | undefined;
+      let experienceMax: number | undefined;
+      if (extractedData.experience) {
+        const rangeMatch = extractedData.experience.match(/(\d+)\s*-\s*(\d+)/);
+        const plusMatch = extractedData.experience.match(/(\d+)\+/);
+        if (rangeMatch) {
+          experienceMin = parseInt(rangeMatch[1]);
+          experienceMax = parseInt(rangeMatch[2]);
+        } else if (plusMatch) {
+          experienceMin = parseInt(plusMatch[1]);
+        } else {
+          const singleMatch = extractedData.experience.match(/(\d+)/);
+          if (singleMatch) {
+            experienceMin = parseInt(singleMatch[1]);
+          }
+        }
+      }
 
       // Build the JD data for backend
       const jdData = {
@@ -1167,6 +1218,7 @@ Use professional language, clear formatting, and make it engaging for candidates
         nice_to_have_skills: extractedData.niceToHaveSkills,
         education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
         experience_min: experienceMin,
+        experience_max: experienceMax,
         industry_type: extractedData.industryType || undefined,
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9]/g, '')) : undefined,
@@ -1189,6 +1241,7 @@ Use professional language, clear formatting, and make it engaging for candidates
             is_required: extractedData.locationsRequired,
           };
         }),
+        creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
       };
 
       // Update existing JD or create new one
@@ -1293,6 +1346,11 @@ Use professional language, clear formatting, and make it engaging for candidates
       setJobTitle(editingJD.title);
       setGeneratedJD(editingJD.description);
       setStep(editingJD.creation_stage);
+
+      // Restore the creation mode based on saved creation_method
+      if (editingJD.creation_method) {
+        setMode(editingJD.creation_method === 'ai_generated' ? 'ai' : 'manual');
+      }
 
       // Load extracted data if we're past the create step
       if (editingJD.creation_stage !== 'create') {
@@ -1447,7 +1505,7 @@ Use professional language, clear formatting, and make it engaging for candidates
 
                     <div>
                       <label className="block text-sm text-gray-700 mb-2">
-                        AI Prompt – Quick Job Details <span className="text-gray-400 text-xs">(Optional)</span>
+                        AI Prompt – Quick Job Details <span className="text-red-500">*</span>
                       </label>
                       <textarea
                         value={aiPrompt}
@@ -1675,7 +1733,13 @@ Use professional language, clear formatting, and make it engaging for candidates
                         />
                       ) : (
                         <div className="h-[600px] overflow-y-auto px-6 py-4 border border-gray-300 rounded-md bg-white markdown-content">
-                          <ReactMarkdown>{generatedJD}</ReactMarkdown>
+                          <ReactMarkdown>{generatedJD
+                            .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
+                              match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
+                            )
+                            .replace(/\*\*Certifications\*\*[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
+                            .replace(/Certifications[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
+                          }</ReactMarkdown>
                         </div>
                       )}
                     </div>
@@ -2256,7 +2320,18 @@ Use professional language, clear formatting, and make it engaging for candidates
 
               {/* Locations Section */}
               <div>
-                <h3 className="text-gray-900 mb-4">Locations</h3>
+                <div className="flex items-center gap-3 mb-4">
+                  <h3 className="text-gray-900">Locations</h3>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={extractedData.locationsRequired}
+                      onChange={(e) => setExtractedData(prev => ({ ...prev, locationsRequired: e.target.checked }))}
+                      className="w-4 h-4 text-gray-600 border-gray-300 rounded focus:ring-gray-500"
+                    />
+                    <span className="text-gray-500 text-xs">(Required)</span>
+                  </label>
+                </div>
 
                 {/* Inline Add Location - State, City, Radius in one line */}
                 <div className="flex items-end gap-3 mb-4">

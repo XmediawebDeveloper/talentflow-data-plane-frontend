@@ -25,9 +25,10 @@ export default function JobOpeningsPage() {
       // Convert API JD to component Job type
       const convertedJobs: Job[] = response.items.map((jd: any) => ({
         id: jd.id,
+        job_id: jd.job_id,  // Human-readable ID like JD-001
         title: jd.title || 'Untitled',
         status: mapStatus(jd.status),
-        location: jd.location || 'Remote',
+        location: jd.location || '',
         daysActive: calculateDaysActive(jd.created_at),
         requiredMatch: jd.required_match || 70,
         department: jd.department,
@@ -41,6 +42,7 @@ export default function JobOpeningsPage() {
         employmentType: jd.employment_type,
         created_at: jd.created_at, // For accurate sorting
         creation_stage: jd.creation_stage, // For draft JDs
+        creation_method: jd.creation_method, // AI or Manual
       }));
 
       setJobs(convertedJobs);

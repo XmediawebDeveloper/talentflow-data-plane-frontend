@@ -224,7 +224,7 @@ export default function ResumeScoringRoute() {
         id: jd.id,
         title: jd.title,
         department: jd.department || 'General',
-        location: jd.location || 'Remote',
+        location: jd.location || '',
         status: jd.status === 'published' ? 'Published' :
                 jd.status === 'draft' ? 'Draft' :
                 jd.status === 'archived' ? 'Archived' : 'Draft',

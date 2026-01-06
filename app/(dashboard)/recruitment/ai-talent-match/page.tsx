@@ -32,7 +32,7 @@ function transformJDToJob(jd: JDResponse): Job {
     id: jd.id,
     title: jd.title,
     department: jd.department,
-    location: jd.location || 'Remote',
+    location: jd.location || '',
     status: jd.status === 'published' ? 'Published' : jd.status === 'draft' ? 'Draft' : jd.status,
     applicants: jd.applicants_count || 0,
     employmentType: jd.employment_type,

@@ -42,7 +42,38 @@ export default function MyResumesPage() {
 
   useEffect(() => {
     fetchData();
+    fetchUploadHistory();
   }, []);
+
+  const fetchUploadHistory = async () => {
+    try {
+      const response = await resumeService.listUploadBatches(20);
+      if (response?.batches) {
+        // Convert API format to UploadHistoryPanel format
+        const history = response.batches.map((batch: any) => ({
+          id: batch.id,
+          date: batch.date,
+          fileName: batch.batch_name,
+          totalFiles: batch.total_files,
+          completed: batch.completed,
+          pending: batch.pending,
+          duplicated: batch.duplicates,
+          versioned: batch.versions,
+          errors: batch.errors,
+          source: 'my-resumes' as const,
+          statuses: batch.items?.map((item: any) => ({
+            id: item.id,
+            fileName: item.file_name,
+            status: item.status,
+            errorMessage: item.error_message,
+          })) || [],
+        }));
+        setUploadHistory(history);
+      }
+    } catch (error) {
+      console.error('Failed to fetch upload history:', error);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -210,15 +241,50 @@ export default function MyResumesPage() {
     }
   };
 
+  // Helper function to find or create "root" folder
+  const getOrCreateRootFolder = async (): Promise<string> => {
+    // Check if "root" folder already exists
+    const existingRoot = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
+    if (existingRoot) {
+      return existingRoot.id;
+    }
+
+    // Create "root" folder
+    try {
+      const newFolder = await folderService.create('root');
+      const converted: Folder = {
+        id: newFolder.id,
+        name: newFolder.name,
+        count: 0,
+        parentId: newFolder.parent_id,
+      };
+      setFolders(prev => [...prev, converted]);
+      return newFolder.id;
+    } catch (error: any) {
+      console.error('Failed to create root folder:', error);
+      throw error;
+    }
+  };
+
   const handleUploadResumes = async (files: File[], folderId?: string): Promise<{
     success: boolean;
     error?: string;
     existingResume?: { id: string; candidateName: string; uploadedAt?: string };
   }> => {
+    // If no folder is selected, use or create "root" folder
+    let targetFolderId = folderId;
+    if (!targetFolderId) {
+      try {
+        targetFolderId = await getOrCreateRootFolder();
+      } catch (error) {
+        return { success: false, error: 'Failed to create root folder for upload' };
+      }
+    }
+
     // For single file, use single upload endpoint
     if (files.length === 1) {
       try {
-        const r = await resumeService.upload(files[0], folderId);
+        const r = await resumeService.upload(files[0], targetFolderId);
         const converted = convertApiResume(r);
         setResumes(prev => [converted, ...prev]);
         toast.success('Resume uploaded successfully');
@@ -251,7 +317,7 @@ export default function MyResumesPage() {
             };
 
             setDuplicateFiles([duplicateFile]);
-            setPendingUploadFolderId(folderId);
+            setPendingUploadFolderId(targetFolderId);
             setIsUploadModalOpen(false);
             setIsDuplicateModalOpen(true);
 
@@ -273,9 +339,13 @@ export default function MyResumesPage() {
       const toastId = toast.loading(`Uploading ${files.length} resumes...`);
 
       // Start bulk upload - returns immediately with batch info
-      const batch = await resumeService.uploadBulk(files, folderId);
+      const batch = await resumeService.uploadBulk(files, targetFolderId);
 
       toast.loading(`Processing ${batch.total_files} resumes...`, { id: toastId });
+
+      // Refresh upload history immediately and show the panel
+      await fetchUploadHistory();
+      setShowUploadHistory(true);
 
       // Poll for batch status until complete
       const pollInterval = setInterval(async () => {
@@ -285,6 +355,9 @@ export default function MyResumesPage() {
           const processed = status.completed + status.errors;
           const total = status.total_files;
           const percentage = Math.round((processed / total) * 100);
+
+          // Update upload history to show progress
+          fetchUploadHistory();
 
           toast.loading(`Processing resumes: ${processed}/${total} (${percentage}%)`, { id: toastId });
 
@@ -304,8 +377,9 @@ export default function MyResumesPage() {
               );
             }
 
-            // Refresh the resume list
+            // Refresh the resume list and upload history
             fetchData();
+            fetchUploadHistory();
           }
         } catch (pollError) {
           console.error('Error polling batch status:', pollError);
@@ -464,7 +538,7 @@ export default function MyResumesPage() {
             className="flex items-center gap-2 border border-gray-300 px-4 py-2.5 rounded-md hover:bg-gray-50 transition-colors relative"
           >
             <Clock className="w-5 h-5" />
-            Upload History
+            Upload Progress
             {uploadHistory.length > 0 && (
               <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
                 {uploadHistory.length}

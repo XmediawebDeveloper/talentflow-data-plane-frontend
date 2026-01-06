@@ -39,6 +39,7 @@ export interface JDCreate {
   supported_languages?: string[];
   allow_overqualified?: boolean;
   creation_stage?: 'create' | 'extract' | 'review';  // Where user left off in draft
+  creation_method?: 'manual' | 'ai_generated';  // How the JD was created
   locations?: JDLocation[];
 }
 

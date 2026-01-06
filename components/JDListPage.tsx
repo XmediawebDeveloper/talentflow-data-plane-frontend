@@ -220,6 +220,18 @@ export default function JDListPage() {
     );
   };
 
+  const getCreationMethodBadge = (creationMethod: string) => {
+    const isAI = creationMethod === 'ai_generated';
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+        isAI ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
+      }`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${isAI ? 'bg-purple-500' : 'bg-blue-500'}`}></span>
+        {isAI ? 'AI' : 'Manual'}
+      </span>
+    );
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -438,14 +450,13 @@ export default function JDListPage() {
                         )}
                         <h3 className="text-lg font-semibold text-gray-900">{jd.title}</h3>
                         {getStatusBadge(jd.status)}
+                        {jd.creation_method && getCreationMethodBadge(jd.creation_method)}
                       </div>
                       <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
-                        {jd.department && (
-                          <span className="flex items-center gap-1">
-                            <FileText className="w-4 h-4" />
-                            {jd.department}
-                          </span>
-                        )}
+                        <span className="flex items-center gap-1">
+                          <FileText className="w-4 h-4" />
+                          {jd.industry_type || '-'}
+                        </span>
                         {jd.employment_type && (
                           <span className="flex items-center gap-1">
                             <Briefcase className="w-4 h-4" />

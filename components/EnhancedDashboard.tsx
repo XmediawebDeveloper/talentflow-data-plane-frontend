@@ -73,7 +73,7 @@ interface QuotaStatusData {
   quotas: QuotaInfo[];
 }
 
-export default function EnhancedDashboard({ user }: EnhancedDashboardProps) {
+export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardProps) {
   const router = useRouter();
   const [publishedJDs, setPublishedJDs] = useState<JDResponse[]>([]);
   const [draftJDs, setDraftJDs] = useState<JDResponse[]>([]);
@@ -384,29 +384,6 @@ export default function EnhancedDashboard({ user }: EnhancedDashboardProps) {
     };
   }, []);
 
-  const statsCards = [
-    {
-      name: 'Active Jobs',
-      value: stats.activeJobs.toString(),
-      icon: Briefcase,
-    },
-    {
-      name: 'Total Candidates',
-      value: stats.totalCandidates.toLocaleString(),
-      icon: Users,
-    },
-    {
-      name: 'Resumes Scored',
-      value: stats.resumesScored.toLocaleString(),
-      icon: Target,
-    },
-    {
-      name: 'Assessments Completed',
-      value: stats.assessmentsCompleted.toString(),
-      icon: CheckCircle,
-    },
-  ];
-
   const handleViewJobDetails = (jd: JDResponse) => {
     if (jd.status === 'draft') {
       const stage = jd.creation_stage || 'create';
@@ -431,51 +408,28 @@ export default function EnhancedDashboard({ user }: EnhancedDashboardProps) {
             Welcome back, {user?.name?.split(' ')[0] || 'there'}! Here's what's happening with your recruitment pipeline.
           </p>
         </div>
-        <div className="flex gap-2">
-          {canCreateJD && (
-            <Button
-              onClick={() => router.push('/recruitment/jd-creation')}
-              className="bg-gray-800 hover:bg-gray-900"
-            >
-              <Briefcase className="mr-2 h-4 w-4" />
-              Create Job
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {statsCards.map((stat) => (
-          <Card key={stat.name} className="border-gray-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                {stat.name}
-              </CardTitle>
-              <stat.icon className="h-4 w-4 text-gray-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-              {/* TODO: Show percentage change when analytics API is available
-              <div className="flex items-center text-xs text-gray-600">
-                <span className={stat.changeType === 'positive' ? 'text-green-600' : 'text-red-600'}>
-                  {stat.change}
-                </span>
-                <span className="ml-1">from last month</span>
-              </div>
-              */}
-            </CardContent>
-          </Card>
-        ))}
       </div>
 
       {/* JD Status Boxes */}
       <Card className="border-gray-200">
         <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">Job Description Status</CardTitle>
-          <CardDescription className="text-gray-600">
-            Overview of all job descriptions by status
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg font-semibold text-gray-900">Job Description Status</CardTitle>
+              <CardDescription className="text-gray-600">
+                Overview of all job descriptions by status
+              </CardDescription>
+            </div>
+            {canCreateJD && (
+              <Button
+                onClick={() => router.push('/recruitment/jd-creation')}
+                className="bg-gray-800 hover:bg-gray-900"
+              >
+                <Briefcase className="mr-2 h-4 w-4" />
+                Create Job
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-4">
@@ -484,16 +438,18 @@ export default function EnhancedDashboard({ user }: EnhancedDashboardProps) {
               className="p-4 rounded-lg border-2 border-green-200 bg-green-50 hover:border-green-300 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/jd-list?status=published')}
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                </div>
-                <Badge className="bg-green-600 hover:bg-green-700 text-white">
-                  {jdStatusCounts.published}
-                </Badge>
+              <div className="text-4xl font-bold text-green-600 mb-2">
+                {jdStatusCounts.published}
               </div>
-              <h3 className="text-sm font-medium text-gray-900 mb-1">Published</h3>
-              <p className="text-xs text-gray-600">Active job postings</p>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-green-100 rounded-lg">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900">Published</h3>
+                  <p className="text-xs text-gray-600">Active job postings</p>
+                </div>
+              </div>
             </div>
 
             {/* Draft JDs */}
@@ -501,16 +457,18 @@ export default function EnhancedDashboard({ user }: EnhancedDashboardProps) {
               className="p-4 rounded-lg border-2 border-yellow-200 bg-yellow-50 hover:border-yellow-300 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/jd-list?status=draft')}
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <Edit2 className="h-5 w-5 text-yellow-600" />
-                </div>
-                <Badge className="bg-yellow-600 hover:bg-yellow-700 text-white">
-                  {jdStatusCounts.draft}
-                </Badge>
+              <div className="text-4xl font-bold text-yellow-600 mb-2">
+                {jdStatusCounts.draft}
               </div>
-              <h3 className="text-sm font-medium text-gray-900 mb-1">Draft</h3>
-              <p className="text-xs text-gray-600">Incomplete postings</p>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-yellow-100 rounded-lg">
+                  <Edit2 className="h-4 w-4 text-yellow-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900">Draft</h3>
+                  <p className="text-xs text-gray-600">Incomplete postings</p>
+                </div>
+              </div>
             </div>
 
             {/* Disabled JDs */}
@@ -518,16 +476,18 @@ export default function EnhancedDashboard({ user }: EnhancedDashboardProps) {
               className="p-4 rounded-lg border-2 border-red-200 bg-red-50 hover:border-red-300 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/jd-list?status=disabled')}
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                </div>
-                <Badge className="bg-red-600 hover:bg-red-700 text-white">
-                  {jdStatusCounts.disabled}
-                </Badge>
+              <div className="text-4xl font-bold text-red-600 mb-2">
+                {jdStatusCounts.disabled}
               </div>
-              <h3 className="text-sm font-medium text-gray-900 mb-1">Disabled</h3>
-              <p className="text-xs text-gray-600">Temporarily hidden</p>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-red-100 rounded-lg">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900">Disabled</h3>
+                  <p className="text-xs text-gray-600">Temporarily hidden</p>
+                </div>
+              </div>
             </div>
 
             {/* Archived JDs */}
@@ -535,16 +495,18 @@ export default function EnhancedDashboard({ user }: EnhancedDashboardProps) {
               className="p-4 rounded-lg border-2 border-gray-200 bg-gray-50 hover:border-gray-300 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/jd-list?status=archived')}
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 bg-gray-100 rounded-lg">
-                  <Archive className="h-5 w-5 text-gray-600" />
-                </div>
-                <Badge className="bg-gray-600 hover:bg-gray-700 text-white">
-                  {jdStatusCounts.archived}
-                </Badge>
+              <div className="text-4xl font-bold text-gray-600 mb-2">
+                {jdStatusCounts.archived}
               </div>
-              <h3 className="text-sm font-medium text-gray-900 mb-1">Archived</h3>
-              <p className="text-xs text-gray-600">Closed postings</p>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-gray-100 rounded-lg">
+                  <Archive className="h-4 w-4 text-gray-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900">Archived</h3>
+                  <p className="text-xs text-gray-600">Closed postings</p>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -556,7 +518,7 @@ export default function EnhancedDashboard({ user }: EnhancedDashboardProps) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-lg font-semibold text-gray-900">
-                {quotaStatusData?.plan_name || 'Current Plan'} - Quotas & Usage
+                {tenant?.subscription?.planName || quotaStatusData?.plan_name || 'Current Plan'} - Quotas & Usage
               </CardTitle>
               <CardDescription className="text-gray-600">
                 Monitor your plan limits and current usage

@@ -169,6 +169,18 @@ export const resumeService = {
   },
 
   /**
+   * List all upload batches
+   */
+  async listUploadBatches(limit: number = 20): Promise<any> {
+    try {
+      const response = await api.get(`/resumes/upload/batches?limit=${limit}`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Resolve duplicate (for batch uploads)
    */
   async resolveDuplicate(batchItemId: string, action: 'discard' | 'overwrite' | 'version') {

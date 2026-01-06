@@ -66,6 +66,7 @@ function JobDetailsContent() {
         daysActive: calculateDaysActive(data.created_at),
         requiredMatch: 70,
         department: data.department,
+        industry_type: data.industry_type,
         experience: data.experience_min && data.experience_max
           ? `${data.experience_min}-${data.experience_max} years`
           : data.experience_min

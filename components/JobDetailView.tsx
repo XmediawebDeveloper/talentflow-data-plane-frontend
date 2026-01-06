@@ -21,6 +21,25 @@ import { scoringService } from '@/lib/services/scoringService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import { toast } from 'sonner';
 
+// Helper function to format UTC date to IST
+const formatToIST = (dateString: string): string => {
+  const utcDate = new Date(dateString);
+  // Add 5 hours 30 minutes (IST offset)
+  const istTime = utcDate.getTime() + (5.5 * 60 * 60 * 1000);
+  const istDate = new Date(istTime);
+
+  const day = istDate.getUTCDate();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[istDate.getUTCMonth()];
+  const year = istDate.getUTCFullYear();
+  const hours = istDate.getUTCHours();
+  const minutes = istDate.getUTCMinutes().toString().padStart(2, '0');
+  const ampm = hours >= 12 ? 'pm' : 'am';
+  const hour12 = hours % 12 || 12;
+
+  return `${day} ${month} ${year}, ${hour12.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+};
+
 // Extended Job interface with additional fields
 interface ExtendedJob extends Job {
   niceToHaveSkills?: string[];
@@ -609,12 +628,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 </span>
               </div>
               <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
-                {job.department && (
-                  <div className="flex items-center gap-1">
-                    <Briefcase className="w-4 h-4" />
-                    {job.department}
-                  </div>
-                )}
+                <div className="flex items-center gap-1">
+                  <Briefcase className="w-4 h-4" />
+                  {job.industry_type || '-'}
+                </div>
                 {job.location && (
                 <div className="flex items-center gap-1">
                   <MapPin className="w-4 h-4" />
@@ -638,16 +655,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <div>
                     <div className="text-xs text-gray-500">Posted On</div>
                     <div className="text-sm text-gray-900">
-                      {job.postedDate
-                        ? new Date(job.postedDate).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true
-                          })
-                        : 'N/A'}
+                      {job.postedDate ? new Date(new Date(job.postedDate).getTime() + 19800000).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A'}
                     </div>
                   </div>
                 </div>
@@ -919,7 +927,17 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 )}
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-4 h-4 text-blue-600" />
-                  <span>Posted {job.daysActive} days ago</span>
+                  <span>Posted {job.postedDate
+                    ? (() => {
+                        const postedDate = new Date(job.postedDate);
+                        const now = new Date();
+                        const diffMs = now.getTime() - postedDate.getTime();
+                        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                        if (diffDays === 0) return 'today';
+                        if (diffDays === 1) return '1 day ago';
+                        return `${diffDays} days ago`;
+                      })()
+                    : 'N/A'}</span>
                 </div>
               </div>
             </div>
@@ -935,7 +953,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     </h2>
                     <div className="h-px bg-gray-200 mb-4"></div>
                     <div className="markdown-content prose prose-sm max-w-none text-gray-700">
-                      <ReactMarkdown>{job.description}</ReactMarkdown>
+                      <ReactMarkdown>{job.description
+                        .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
+                          match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
+                        )
+                        .replace(/\*\*Certifications\*\*[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
+                        .replace(/Certifications[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
+                      }</ReactMarkdown>
                     </div>
                   </div>
                 ) : (
@@ -944,45 +968,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 )}
 
-                {/* Skills & Qualifications */}
-                {((job.skills && job.skills.length > 0) || (job.niceToHaveSkills && job.niceToHaveSkills.length > 0)) && (
-                  <div>
-                    <h2 className="text-base font-semibold text-gray-900 mb-4">
-                      Skills & Qualifications
-                    </h2>
-                    <div className="h-px bg-gray-200 mb-4"></div>
-
-                    {/* Required Skills */}
-                    {job.skills && job.skills.length > 0 && (
-                      <div className="mb-5">
-                        <h3 className="text-sm font-medium text-gray-900 mb-3">Required Skills</h3>
-                        <ul className="space-y-2 ml-1">
-                          {job.skills.map((skill, index) => (
-                            <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
-                              <span className="text-gray-400 mt-0.5">•</span>
-                              <span>{skill}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Preferred Skills */}
-                    {job.niceToHaveSkills && job.niceToHaveSkills.length > 0 && (
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-900 mb-3">Preferred Skills</h3>
-                        <ul className="space-y-2 ml-1">
-                          {job.niceToHaveSkills.map((skill, index) => (
-                            <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
-                              <span className="text-gray-400 mt-0.5">•</span>
-                              <span>{skill}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
+               
 
                 {/* Compensation */}
                 {(job.salaryMin || job.salaryMax) && (
@@ -1015,44 +1001,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 )}
 
-                {/* Job Details Grid */}
-                <div>
-                  <h2 className="text-base font-semibold text-gray-900 mb-4">
-                    Job Details
-                  </h2>
-                  <div className="h-px bg-gray-200 mb-4"></div>
-                  <div className="grid grid-cols-2 gap-4">
-                    {job.department && (
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <div className="text-sm text-gray-500 mb-1">Department</div>
-                        <div className="text-gray-900">{job.department}</div>
-                      </div>
-                    )}
-                    {job.experience && (
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <div className="text-sm text-gray-500 mb-1">Experience Required</div>
-                        <div className="text-gray-900">{job.experience}</div>
-                      </div>
-                    )}
-                    {job.location && (
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <div className="text-sm text-gray-500 mb-1">Location</div>
-                        <div className="text-gray-900">{job.location}</div>
-                      </div>
-                    )}
-                    {job.employmentType && (
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <div className="text-sm text-gray-500 mb-1">Employment Type</div>
-                        <div className="text-gray-900 capitalize">{job.employmentType}</div>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             </div>
           </div>
-
-        </div>
 
         {/* Right Column - Actions & Activity */}
         <div className="space-y-6">
@@ -1133,13 +1085,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <div>
                     <div className="text-sm text-gray-900">Job published</div>
                     <div className="text-xs text-gray-500">
-                      {job.postedDate
-                        ? new Date(job.postedDate).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })
-                        : `${job.daysActive} days ago`}
+                      {job.postedDate ? new Date(new Date(job.postedDate).getTime() + 19800000).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A'}
                     </div>
                   </div>
                 </div>

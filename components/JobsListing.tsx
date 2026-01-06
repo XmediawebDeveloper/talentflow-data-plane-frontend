@@ -244,6 +244,25 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
     }
   };
 
+  const getCreationMethodConfig = (method: string | undefined) => {
+    if (method === 'ai_generated') {
+      return {
+        bg: 'bg-purple-50',
+        text: 'text-purple-700',
+        border: 'border-purple-200',
+        dot: 'bg-purple-500',
+        label: 'AI'
+      };
+    }
+    return {
+      bg: 'bg-blue-50',
+      text: 'text-blue-700',
+      border: 'border-blue-200',
+      dot: 'bg-blue-500',
+      label: 'Manual'
+    };
+  };
+
   // Get unique values for filters
   const uniqueLocations = Array.from(new Set(jobs.map(job => job.location)));
   const uniqueDepartments = Array.from(new Set(jobs.map(job => job.department).filter(Boolean)));
@@ -670,6 +689,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {currentJobs.map(job => {
                 const statusConfig = getStatusConfig(job.status);
+                const creationMethodConfig = getCreationMethodConfig(job.creation_method);
 
                 return (
                   <div
@@ -683,14 +703,27 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
                           <Briefcase className="w-6 h-6 text-gray-700" />
                         </div>
-                        <span className={`px-3 py-1.5 rounded-full text-sm ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-2`}>
-                          <div className={`w-2 h-2 rounded-full ${statusConfig.dot}`}></div>
-                          {job.status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-3 py-1.5 rounded-full text-sm ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-2`}>
+                            <div className={`w-2 h-2 rounded-full ${statusConfig.dot}`}></div>
+                            {job.status}
+                          </span>
+                          <span className={`px-3 py-1.5 rounded-full text-sm ${creationMethodConfig.bg} ${creationMethodConfig.text} border ${creationMethodConfig.border} flex items-center gap-2`}>
+                            <div className={`w-2 h-2 rounded-full ${creationMethodConfig.dot}`}></div>
+                            {creationMethodConfig.label}
+                          </span>
+                        </div>
                       </div>
-                      <h3 className="text-xl font-medium text-gray-900 mb-2 line-clamp-2">
-                        {job.title}
-                      </h3>
+                      <div className="flex items-center gap-2 mb-2">
+                        {job.job_id && (
+                          <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-sm font-bold font-mono border border-blue-200">
+                            {job.job_id}
+                          </span>
+                        )}
+                        <h3 className="text-xl font-medium text-gray-900 line-clamp-2">
+                          {job.title}
+                        </h3>
+                      </div>
                     </div>
 
                     {/* Card Body */}
@@ -702,7 +735,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         </div>
                         <div className="flex items-center gap-3 text-base text-gray-600">
                           <MapPin className="w-5 h-5 text-gray-400" />
-                          <span>{job.location}</span>
+                          <span>{job.location && job.location.trim() ? job.location : '-'}</span>
                         </div>
                         {job.employmentType && (
                           <div className="flex items-center gap-3 text-base text-gray-600">
@@ -825,6 +858,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
             <div className="space-y-4">
               {currentJobs.map(job => {
                 const statusConfig = getStatusConfig(job.status);
+                const creationMethodConfig = getCreationMethodConfig(job.creation_method);
 
                 return (
                   <div
@@ -841,12 +875,21 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                       {/* Job Info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-4 mb-3">
+                          {job.job_id && (
+                            <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-sm font-bold font-mono border border-blue-200 flex-shrink-0">
+                              {job.job_id}
+                            </span>
+                          )}
                           <h3 className="text-xl font-medium text-gray-900 truncate">
                             {job.title}
                           </h3>
                           <span className={`px-3 py-1.5 rounded-full text-sm ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-2 flex-shrink-0`}>
                             <div className={`w-2 h-2 rounded-full ${statusConfig.dot}`}></div>
                             {job.status}
+                          </span>
+                          <span className={`px-3 py-1.5 rounded-full text-sm ${creationMethodConfig.bg} ${creationMethodConfig.text} border ${creationMethodConfig.border} flex items-center gap-2 flex-shrink-0`}>
+                            <div className={`w-2 h-2 rounded-full ${creationMethodConfig.dot}`}></div>
+                            {creationMethodConfig.label}
                           </span>
                         </div>
 
@@ -858,7 +901,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           </span>
                           <span className="flex items-center gap-2">
                             <MapPin className="w-5 h-5 text-gray-400" />
-                            {job.location}
+                            {job.location && job.location.trim() ? job.location : '-'}
                           </span>
                           {job.employmentType && (
                             <span className="flex items-center gap-2">
