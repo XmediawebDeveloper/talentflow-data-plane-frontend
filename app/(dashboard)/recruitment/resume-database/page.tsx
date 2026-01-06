@@ -60,7 +60,7 @@ export default function ResumeDatabasePage() {
     const params: ResumeSearchParams = {
       source: 'internal-db',
       page: 1,
-      page_size: 500, // Fetch more to allow client-side search across phone/skills
+      page_size: 100, // API max limit
     };
 
     // NOTE: Search is done client-side to include phone and skills
@@ -428,9 +428,9 @@ export default function ResumeDatabasePage() {
     return searchTerms.some(term => searchableText.includes(term));
   }, []);
 
-  // Sort and filter resumes client-side (API handles primary filtering, we add phone/skills search)
-  const sortedResumes = useMemo(() => {
-    // Apply additional client-side search filtering for phone and skills
+  // Filter and sort resumes client-side
+  const filteredAndSortedResumes = useMemo(() => {
+    // Apply client-side search filtering for all fields including phone and skills
     let filtered = resumes;
     if (appliedSearchQuery) {
       filtered = resumes.filter(resume => matchesSearch(resume, appliedSearchQuery));
@@ -463,6 +463,18 @@ export default function ResumeDatabasePage() {
     }
   }, [resumes, sortBy, appliedSearchQuery, matchesSearch]);
 
+  // Client-side pagination
+  const paginatedResumes = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredAndSortedResumes.slice(startIndex, endIndex);
+  }, [filteredAndSortedResumes, currentPage, pageSize]);
+
+  // Calculate total pages based on filtered results
+  const calculatedTotalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(filteredAndSortedResumes.length / pageSize));
+  }, [filteredAndSortedResumes.length, pageSize]);
+
   // Calculate active filter count
   const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
     if (key === 'skills' && Array.isArray(value)) return value.length > 0;
@@ -473,7 +485,7 @@ export default function ResumeDatabasePage() {
 
   // Pagination handlers
   const handlePageChange = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
+    if (page >= 1 && page <= calculatedTotalPages) {
       setCurrentPage(page);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -483,26 +495,27 @@ export default function ResumeDatabasePage() {
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
     const maxVisiblePages = 5;
+    const total = calculatedTotalPages;
 
-    if (totalPages <= maxVisiblePages) {
-      for (let i = 1; i <= totalPages; i++) {
+    if (total <= maxVisiblePages) {
+      for (let i = 1; i <= total; i++) {
         pages.push(i);
       }
     } else {
       if (currentPage <= 3) {
         for (let i = 1; i <= 4; i++) pages.push(i);
         pages.push('...');
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
+        pages.push(total);
+      } else if (currentPage >= total - 2) {
         pages.push(1);
         pages.push('...');
-        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+        for (let i = total - 3; i <= total; i++) pages.push(i);
       } else {
         pages.push(1);
         pages.push('...');
         for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
         pages.push('...');
-        pages.push(totalPages);
+        pages.push(total);
       }
     }
     return pages;
@@ -531,19 +544,19 @@ export default function ResumeDatabasePage() {
       {/* Search Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="text-3xl font-bold text-gray-900">{totalResumes.toLocaleString()}</div>
+          <div className="text-3xl font-bold text-gray-900">{resumes.length.toLocaleString()}</div>
           <div className="text-sm text-gray-600">Total Resumes</div>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="text-3xl font-bold text-blue-600">{sortedResumes.length}</div>
-          <div className="text-sm text-gray-600">Current Results</div>
+          <div className="text-3xl font-bold text-blue-600">{filteredAndSortedResumes.length}</div>
+          <div className="text-sm text-gray-600">Matching Results</div>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="text-3xl font-bold text-green-600">{activeFilterCount + (appliedSearchQuery ? 1 : 0)}</div>
           <div className="text-sm text-gray-600">Active Filters</div>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="text-3xl font-bold text-purple-600">{currentPage}/{totalPages}</div>
+          <div className="text-3xl font-bold text-purple-600">{currentPage}/{calculatedTotalPages}</div>
           <div className="text-sm text-gray-600">Page</div>
         </div>
       </div>
@@ -585,7 +598,7 @@ export default function ResumeDatabasePage() {
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-gray-500" />
               <span className="text-sm text-gray-700">
-                Found <span className="font-semibold">{sortedResumes.length.toLocaleString()}</span> matching resume{sortedResumes.length !== 1 ? 's' : ''}
+                Found <span className="font-semibold">{filteredAndSortedResumes.length.toLocaleString()}</span> matching resume{filteredAndSortedResumes.length !== 1 ? 's' : ''}
                 {appliedSearchQuery && (
                   <span> for "<span className="font-medium text-blue-600">{appliedSearchQuery}</span>"</span>
                 )}
@@ -607,7 +620,7 @@ export default function ResumeDatabasePage() {
         )}
 
         <ResumeTable
-          resumes={sortedResumes}
+          resumes={paginatedResumes}
           selectedResumes={selectedResumes}
           onSelectResume={handleSelectResume}
           onSelectAll={handleSelectAll}
@@ -619,10 +632,10 @@ export default function ResumeDatabasePage() {
         />
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {calculatedTotalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
             <div className="text-sm text-gray-600">
-              Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, totalResumes)} of {totalResumes.toLocaleString()} resumes
+              Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredAndSortedResumes.length)} of {filteredAndSortedResumes.length.toLocaleString()} resumes
             </div>
             <div className="flex items-center gap-1">
               <button
@@ -653,7 +666,7 @@ export default function ResumeDatabasePage() {
 
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
+                disabled={currentPage === calculatedTotalPages}
                 className="p-2 rounded-md border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronRight className="w-4 h-4" />

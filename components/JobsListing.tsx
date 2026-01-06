@@ -785,16 +785,16 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
                       {/* Actions - Hide for Draft status */}
                       {job.status !== 'Draft' && (
-                        <div className="flex flex-col gap-3">
+                        <div className="flex flex-wrap gap-2">
                           {/* View Button - For Published and other statuses */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               onViewJob(job);
                             }}
-                            className="w-full px-5 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-base font-medium flex items-center justify-center gap-2"
+                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center gap-2"
                           >
-                            <Eye className="w-5 h-5" />
+                            <Eye className="w-4 h-4" />
                             View
                           </button>
 
@@ -805,9 +805,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                 e.stopPropagation();
                                 onEditJob(job);
                               }}
-                              className="w-full px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-base font-medium flex items-center justify-center gap-2"
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium flex items-center gap-2"
                             >
-                              <Edit className="w-5 h-5" />
+                              <Edit className="w-4 h-4" />
                               Edit
                             </button>
                           )}
@@ -819,9 +819,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                 e.stopPropagation();
                                 onDisableJob(job);
                               }}
-                              className="w-full px-5 py-3 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-base font-medium flex items-center justify-center gap-2"
+                              className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-sm font-medium flex items-center gap-2"
                             >
-                              <Ban className="w-5 h-5" />
+                              <Ban className="w-4 h-4" />
                               Disable
                             </button>
                           )}
@@ -833,9 +833,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                 e.stopPropagation();
                                 onRepublishJob(job);
                               }}
-                              className="w-full px-5 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-base font-medium flex items-center justify-center gap-2"
+                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium flex items-center gap-2"
                             >
-                              <RefreshCw className="w-5 h-5" />
+                              <RefreshCw className="w-4 h-4" />
                               Republish
                             </button>
                           )}
@@ -948,16 +948,16 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
                       {/* Actions - Hide for Draft status */}
                       {job.status !== 'Draft' && (
-                        <div className="flex flex-col gap-3 flex-shrink-0">
+                        <div className="flex flex-wrap gap-2 flex-shrink-0">
                           {/* View Button - For Published and other statuses */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               onViewJob(job);
                             }}
-                            className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-base font-medium flex items-center justify-center gap-2"
+                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center gap-2"
                           >
-                            <Eye className="w-5 h-5" />
+                            <Eye className="w-4 h-4" />
                             View
                           </button>
 
@@ -968,9 +968,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                 e.stopPropagation();
                                 onEditJob(job);
                               }}
-                              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-base font-medium flex items-center justify-center gap-2"
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium flex items-center gap-2"
                             >
-                              <Edit className="w-5 h-5" />
+                              <Edit className="w-4 h-4" />
                               Edit
                             </button>
                           )}
@@ -982,9 +982,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                 e.stopPropagation();
                                 onDisableJob(job);
                               }}
-                              className="px-6 py-3 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-base font-medium flex items-center justify-center gap-2"
+                              className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-sm font-medium flex items-center gap-2"
                             >
-                              <Ban className="w-5 h-5" />
+                              <Ban className="w-4 h-4" />
                               Disable
                             </button>
                           )}
@@ -996,9 +996,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                 e.stopPropagation();
                                 onRepublishJob(job);
                               }}
-                              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-base font-medium flex items-center justify-center gap-2"
+                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium flex items-center gap-2"
                             >
-                              <RefreshCw className="w-5 h-5" />
+                              <RefreshCw className="w-4 h-4" />
                               Republish
                             </button>
                           )}

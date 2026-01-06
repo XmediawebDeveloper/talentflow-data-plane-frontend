@@ -168,8 +168,8 @@ export default function PricingPage() {
   const [freeTrial, setFreeTrial] = useState<FreeTrialData | null>(null);
   const [planSettings, setPlanSettings] = useState<PlanSettingsData | null>(null);
 
-  // Get discount percentage (default to 20 if not loaded)
-  const yearlyDiscountPercent = planSettings?.yearlyDiscountPercentage ?? 20;
+  // Get discount percentage (default to 10 if not loaded)
+  const yearlyDiscountPercent = planSettings?.yearlyDiscountPercentage ?? 10;
 
   useEffect(() => {
     let isCancelled = false;
@@ -183,13 +183,13 @@ export default function PricingPage() {
           const settingsData = result?.data || result;
           if (settingsData) {
             setPlanSettings(settingsData);
-            return settingsData.yearlyDiscountPercentage ?? 20;
+            return settingsData.yearlyDiscountPercentage ?? 10;
           }
         }
       } catch (err) {
         if (!isCancelled) console.error('Error fetching plan settings:', err);
       }
-      return 20;
+      return 10;
     };
 
     const fetchPlans = async (discountPercent: number) => {
@@ -563,6 +563,9 @@ export default function PricingPage() {
                         <span className="text-4xl font-bold text-gray-900 dark:text-white">
                           {formatCurrency(isYearly ? plan.yearlyPrice : plan.monthlyPrice, plan.currency)}
                         </span>
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">
+                          {isYearly ? '/year' : '/month'}
+                        </span>
                       </div>
                       {isYearly && plan.yearlyFullPrice && plan.yearlyPrice && (
                         <div className="mt-2">
@@ -574,6 +577,11 @@ export default function PricingPage() {
                           </span>
                         </div>
                       )}
+                      {!isYearly && plan.monthlyPrice && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          or {formatCurrency(Math.round(plan.monthlyPrice * 12 * (1 - yearlyDiscountPercent / 100)), plan.currency)}/year (save {yearlyDiscountPercent}%)
+                        </p>
+                      )}
                     </>
                   ) : (
                     <div className="text-4xl font-bold text-gray-900 dark:text-white">
@@ -582,43 +590,60 @@ export default function PricingPage() {
                   )}
                 </div>
 
-                {/* Quotas Section - Show values >= 1 */}
+                {/* Quotas Section - Show values >= 1, multiply by 12 for yearly */}
                 {plan.quotas && (
                   <div className="mb-6">
+                    {isYearly && (
+                      <p className="text-xs text-green-600 dark:text-green-400 mb-2 font-medium">
+                        Annual plan includes 12× monthly quotas
+                      </p>
+                    )}
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       {plan.quotas.max_seats !== undefined && plan.quotas.max_seats >= 1 && (
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900 dark:text-white">{plan.quotas.max_seats}</span>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {isYearly ? (plan.quotas.max_seats * 12).toLocaleString() : plan.quotas.max_seats}
+                          </span>
                           <span className="text-gray-600 dark:text-gray-400">Team Members</span>
                         </div>
                       )}
                       {plan.quotas.max_jobs !== undefined && plan.quotas.max_jobs >= 1 && (
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900 dark:text-white">{plan.quotas.max_jobs}</span>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {isYearly ? (plan.quotas.max_jobs * 12).toLocaleString() : plan.quotas.max_jobs}
+                          </span>
                           <span className="text-gray-600 dark:text-gray-400">Job Postings</span>
                         </div>
                       )}
                       {plan.quotas.RU !== undefined && plan.quotas.RU >= 1 && (
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900 dark:text-white">{plan.quotas.RU.toLocaleString()}</span>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {isYearly ? (plan.quotas.RU * 12).toLocaleString() : plan.quotas.RU.toLocaleString()}
+                          </span>
                           <span className="text-gray-600 dark:text-gray-400">Resume Uploads</span>
                         </div>
                       )}
                       {plan.quotas.RS !== undefined && plan.quotas.RS >= 1 && (
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900 dark:text-white">{plan.quotas.RS.toLocaleString()}</span>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {isYearly ? (plan.quotas.RS * 12).toLocaleString() : plan.quotas.RS.toLocaleString()}
+                          </span>
                           <span className="text-gray-600 dark:text-gray-400">Resume Searches</span>
                         </div>
                       )}
                       {plan.quotas.AS !== undefined && plan.quotas.AS >= 1 && (
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900 dark:text-white">{plan.quotas.AS.toLocaleString()}</span>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {isYearly ? (plan.quotas.AS * 12).toLocaleString() : plan.quotas.AS.toLocaleString()}
+                          </span>
                           <span className="text-gray-600 dark:text-gray-400">Assessments</span>
                         </div>
                       )}
                       {plan.quotas.AIU !== undefined && plan.quotas.AIU >= 1 && (
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900 dark:text-white">{plan.quotas.AIU.toLocaleString()}</span>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {isYearly ? (plan.quotas.AIU * 12).toLocaleString() : plan.quotas.AIU.toLocaleString()}
+                          </span>
                           <span className="text-gray-600 dark:text-gray-400">AI Interviews</span>
                         </div>
                       )}
@@ -630,7 +655,9 @@ export default function PricingPage() {
                       )}
                       {plan.quotas.total_resume_storage !== undefined && plan.quotas.total_resume_storage >= 1 && (
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900 dark:text-white">{plan.quotas.total_resume_storage.toLocaleString()}</span>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {isYearly ? (plan.quotas.total_resume_storage * 12).toLocaleString() : plan.quotas.total_resume_storage.toLocaleString()}
+                          </span>
                           <span className="text-gray-600 dark:text-gray-400">Resume Storage</span>
                         </div>
                       )}

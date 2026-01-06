@@ -204,18 +204,23 @@ export default function JDListPage() {
     );
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, currentVersion?: number) => {
+    // Show "Republished" if published and version > 1
+    const isRepublished = status === 'published' && currentVersion && currentVersion > 1;
+    const displayStatus = isRepublished ? 'republished' : status;
+
     const configs: Record<string, { bg: string; text: string; dot: string }> = {
       draft: { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-500' },
       published: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
+      republished: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
       archived: { bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-400' },
       disabled: { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-400' },
     };
-    const config = configs[status] || configs.draft;
+    const config = configs[displayStatus] || configs.draft;
     return (
       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
         <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`}></span>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)}
       </span>
     );
   };
@@ -449,7 +454,7 @@ export default function JDListPage() {
                           </span>
                         )}
                         <h3 className="text-lg font-semibold text-gray-900">{jd.title}</h3>
-                        {getStatusBadge(jd.status)}
+                        {getStatusBadge(jd.status, jd.current_version)}
                         {jd.creation_method && getCreationMethodBadge(jd.creation_method)}
                       </div>
                       <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">

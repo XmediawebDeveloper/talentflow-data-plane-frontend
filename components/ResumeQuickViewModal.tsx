@@ -1,4 +1,4 @@
-import { X, Download, FileText, User, History, Clock, Eye, Loader2 } from 'lucide-react';
+import { X, Download, FileText, User, History, Clock, Eye, Loader2, Mail, Phone, MapPin, Briefcase, Star, Building2, Calendar, GraduationCap, Code, ChevronRight, Award, Languages } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Resume } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
@@ -22,6 +22,61 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loadingPdf, setLoadingPdf] = useState(false);
+  const [fullResume, setFullResume] = useState<Resume>(resume);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // Fetch full resume details on mount
+  useEffect(() => {
+    fetchFullDetails();
+  }, [resume.id]);
+
+  const fetchFullDetails = async () => {
+    setLoadingDetails(true);
+    try {
+      const data = await resumeService.get(resume.id);
+      if (data) {
+        // Map API response to Resume type
+        setFullResume({
+          ...resume,
+          professionalSummary: data.professional_summary,
+          technicalSkills: data.technical_skills || [],
+          softSkills: data.soft_skills || [],
+          educationDetails: data.education?.map((edu: any) => ({
+            degree: edu.degree || '',
+            school: edu.school || edu.institution || '',
+            location: edu.location || '',
+            year: edu.year || edu.graduation_year || '',
+            gpa: edu.gpa || '',
+            honors: edu.honors || '',
+          })),
+          experienceDetails: data.experience?.map((exp: any) => ({
+            title: exp.title || exp.position || exp.job_title || '',
+            company: exp.company || '',
+            location: exp.location || '',
+            startDate: exp.start_date || '',
+            endDate: exp.end_date || 'Present',
+            duration: exp.duration || '',
+            description: exp.description || '',
+            achievements: exp.achievements || exp.responsibilities || [],
+          })),
+          certifications: data.certifications?.map((cert: any) => ({
+            name: cert.name || cert.title || '',
+            issuer: cert.issuer || cert.issuing_organization || cert.organization || '',
+            date: cert.date || cert.date_obtained || cert.issued_date || '',
+            credentialId: cert.credential_id || cert.credentialId || '',
+          })),
+          languages: data.languages?.map((lang: any) => ({
+            name: typeof lang === 'string' ? lang : (lang.name || lang.language || ''),
+            proficiency: typeof lang === 'string' ? 'Fluent' : (lang.proficiency || lang.level || 'Fluent'),
+          })),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch full resume details:', error);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
 
   // Fetch versions when history tab is selected
   useEffect(() => {
@@ -203,100 +258,300 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
 
             {activeTab === 'details' && (
               <div className="space-y-6">
-                <section>
-                  <h3 className="text-gray-900 mb-3 pb-2 border-b border-gray-200">Personal Profile</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Name</div>
-                      <div className="text-sm text-gray-900">{resume.name}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Email</div>
-                      <div className="text-sm text-gray-900">{resume.email}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Phone</div>
-                      <div className="text-sm text-gray-900">{resume.phone}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Location</div>
-                      <div className="text-sm text-gray-900">{resume.location || 'Not specified'}</div>
+                {loadingDetails ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <Loader2 className="w-8 h-8 mx-auto mb-4 text-blue-600 animate-spin" />
+                      <p className="text-gray-600">Loading resume details...</p>
                     </div>
                   </div>
-                </section>
-
-                <section>
-                  <h3 className="text-gray-900 mb-3 pb-2 border-b border-gray-200">Education</h3>
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-lg">*</span>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-900">{resume.education || 'Education information not provided'}</div>
-                    </div>
-                  </div>
-                </section>
-
-                <section>
-                  <h3 className="text-gray-900 mb-3 pb-2 border-b border-gray-200">Experience</h3>
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-lg">*</span>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-900 mb-1">{resume.title}</div>
-                      <div className="text-sm text-gray-500">{resume.experience}</div>
-                    </div>
-                  </div>
-                </section>
-
-                <section>
-                  <h3 className="text-gray-900 mb-3 pb-2 border-b border-gray-200">Skills</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {resume.skills.map((skill, index) => (
-                      <span
-                        key={index}
-                        className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm border border-gray-300"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </section>
-
-                <section>
-                  <h3 className="text-gray-900 mb-3 pb-2 border-b border-gray-200">Upload Information</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Source</div>
-                      <div className="text-sm">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded text-xs ${
-                            resume.source === 'Manual'
-                              ? 'bg-gray-100 text-gray-700'
-                              : 'bg-gray-50 text-gray-800'
-                          }`}
-                        >
-                          {resume.source}
-                        </span>
+                ) : (
+                  <>
+                    {/* Personal Info Card */}
+                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-5">
+                      <div className="flex items-start gap-4">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl flex-shrink-0">
+                          {fullResume.name.split(' ').map(n => n[0]).join('')}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-lg text-gray-900 mb-1">{fullResume.name}</h3>
+                          <p className="text-gray-700 mb-2">{fullResume.title}</p>
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 mb-3">
+                            {fullResume.location && (
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3.5 h-3.5" />
+                                {fullResume.location}
+                              </span>
+                            )}
+                            <span className="flex items-center gap-1">
+                              <Briefcase className="w-3.5 h-3.5" />
+                              {fullResume.experience}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div className="flex items-center gap-2 text-gray-700">
+                              <Mail className="w-3.5 h-3.5 text-blue-600" />
+                              <span className="truncate">{fullResume.email}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-gray-700">
+                              <Phone className="w-3.5 h-3.5 text-blue-600" />
+                              <span>{fullResume.phone}</span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Upload Date</div>
-                      <div className="text-sm text-gray-900">
-                        {new Date(resume.uploadDate).toLocaleDateString('en-US', {
-                          month: 'long',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}
+
+                    {/* Professional Summary */}
+                    {fullResume.professionalSummary && (
+                      <section className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Star className="w-4 h-4 text-yellow-600" />
+                          <h3 className="text-gray-900">Professional Summary</h3>
+                        </div>
+                        <p className="text-sm text-gray-700 leading-relaxed">{fullResume.professionalSummary}</p>
+                      </section>
+                    )}
+
+                    {/* Work Experience */}
+                    <section className="bg-white border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Briefcase className="w-4 h-4 text-blue-600" />
+                        <h3 className="text-gray-900">Work Experience</h3>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Attachments</div>
-                      <div className="text-sm text-gray-900">{resume.attachments} file(s)</div>
-                    </div>
-                  </div>
-                </section>
+                      {fullResume.experienceDetails && fullResume.experienceDetails.length > 0 ? (
+                        <div className="space-y-4">
+                          {fullResume.experienceDetails.map((exp, index) => (
+                            <div key={index} className="relative pl-5 pb-4 border-l-2 border-blue-200 last:pb-0">
+                              <div className="absolute -left-1.5 top-0 w-3 h-3 rounded-full bg-blue-600 border-2 border-white"></div>
+                              <div>
+                                <h4 className="text-sm text-gray-900 mb-1">{exp.title}</h4>
+                                <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
+                                  <Building2 className="w-3.5 h-3.5" />
+                                  <span>{exp.company}</span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mb-2">
+                                  {exp.location && (
+                                    <span className="flex items-center gap-1">
+                                      <MapPin className="w-3 h-3" />
+                                      {exp.location}
+                                    </span>
+                                  )}
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" />
+                                    {exp.startDate} - {exp.endDate}
+                                  </span>
+                                  {exp.duration && (
+                                    <span className="text-blue-600">({exp.duration})</span>
+                                  )}
+                                </div>
+                                {exp.description && (
+                                  <p className="text-xs text-gray-600 mb-2">{exp.description}</p>
+                                )}
+                                {exp.achievements && exp.achievements.length > 0 && (
+                                  <div className="space-y-1">
+                                    {exp.achievements.map((achievement, achIndex) => (
+                                      <div key={achIndex} className="flex items-start gap-1.5 text-xs text-gray-600">
+                                        <ChevronRight className="w-3 h-3 text-green-600 flex-shrink-0 mt-0.5" />
+                                        <span>{achievement}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-600">
+                          <p className="mb-1">{fullResume.title}</p>
+                          <p className="text-gray-500">{fullResume.experience}</p>
+                        </div>
+                      )}
+                    </section>
+
+                    {/* Education */}
+                    <section className="bg-white border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <GraduationCap className="w-4 h-4 text-purple-600" />
+                        <h3 className="text-gray-900">Education</h3>
+                      </div>
+                      {fullResume.educationDetails && fullResume.educationDetails.length > 0 ? (
+                        <div className="space-y-3">
+                          {fullResume.educationDetails.map((edu, index) => (
+                            <div key={index} className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                              <h4 className="text-sm text-gray-900 mb-1">{edu.degree}</h4>
+                              {edu.school && <div className="text-sm text-gray-700 mb-1">{edu.school}</div>}
+                              <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                                {edu.location && (
+                                  <span className="flex items-center gap-1">
+                                    <MapPin className="w-3 h-3" />
+                                    {edu.location}
+                                  </span>
+                                )}
+                                {edu.year && (
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" />
+                                    {edu.year}
+                                  </span>
+                                )}
+                                {edu.gpa && (
+                                  <span className="text-purple-700">GPA: {edu.gpa}</span>
+                                )}
+                                {edu.honors && (
+                                  <span className="px-2 py-0.5 bg-purple-600 text-white rounded text-xs">
+                                    {edu.honors}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-600">
+                          {fullResume.education || 'Education information not provided'}
+                        </div>
+                      )}
+                    </section>
+
+                    {/* Skills */}
+                    <section className="bg-white border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Code className="w-4 h-4 text-green-600" />
+                        <h3 className="text-gray-900">Skills</h3>
+                      </div>
+
+                      {/* Technical Skills */}
+                      <div className="mb-4">
+                        <h4 className="text-sm text-gray-800 mb-3">Technical Skills</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          {(fullResume.technicalSkills || fullResume.skills || []).map((skill, index) => {
+                            const level = 90 - (index * 5);
+                            return (
+                              <div key={index}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs text-gray-700">{skill}</span>
+                                  <span className="text-xs text-gray-500">{Math.max(60, level)}%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                  <div
+                                    className={`h-1.5 rounded-full ${
+                                      level >= 90 ? 'bg-green-600' :
+                                      level >= 75 ? 'bg-blue-600' :
+                                      level >= 60 ? 'bg-yellow-600' :
+                                      'bg-orange-600'
+                                    }`}
+                                    style={{ width: `${Math.max(60, level)}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Soft Skills */}
+                      {fullResume.softSkills && fullResume.softSkills.length > 0 && (
+                        <div>
+                          <h4 className="text-sm text-gray-800 mb-3">Soft Skills</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {fullResume.softSkills.map((skill, index) => (
+                              <span key={index} className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs border border-green-200">
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </section>
+
+                    {/* Certifications */}
+                    {fullResume.certifications && fullResume.certifications.length > 0 && (
+                      <section className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Award className="w-4 h-4 text-yellow-600" />
+                          <h3 className="text-gray-900">Certifications</h3>
+                        </div>
+                        <div className="space-y-3">
+                          {fullResume.certifications.map((cert, index) => (
+                            <div key={index} className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <h4 className="text-sm text-gray-900 mb-1">{cert.name}</h4>
+                                  <div className="text-xs text-gray-700 mb-1">{cert.issuer}</div>
+                                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                                    {cert.date && (
+                                      <span className="flex items-center gap-1">
+                                        <Calendar className="w-3 h-3" />
+                                        Issued {cert.date}
+                                      </span>
+                                    )}
+                                    {cert.credentialId && <span>ID: {cert.credentialId}</span>}
+                                  </div>
+                                </div>
+                                <Award className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Languages */}
+                    {fullResume.languages && fullResume.languages.length > 0 && (
+                      <section className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Languages className="w-4 h-4 text-indigo-600" />
+                          <h3 className="text-gray-900">Languages</h3>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          {fullResume.languages.map((lang, index) => (
+                            <div key={index} className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-center">
+                              <div className="text-sm text-gray-900 mb-1">{lang.name}</div>
+                              <div className="text-xs text-indigo-700">{lang.proficiency}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Upload Information */}
+                    <section className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <FileText className="w-4 h-4 text-gray-600" />
+                        <h3 className="text-gray-900">Upload Information</h3>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">Source</div>
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded text-xs ${
+                            fullResume.source === 'Manual' ? 'bg-gray-100 text-gray-700' : 'bg-blue-50 text-blue-700'
+                          }`}>
+                            {fullResume.source}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">Upload Date</div>
+                          <div className="text-gray-900">
+                            {new Date(fullResume.uploadDate).toLocaleDateString('en-US', {
+                              month: 'long',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">Uploaded By</div>
+                          <div className="text-gray-900">{fullResume.uploadedBy === 'current-user' ? 'You' : fullResume.uploadedBy}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">Attachments</div>
+                          <div className="text-gray-900">{fullResume.attachments} file(s)</div>
+                        </div>
+                      </div>
+                    </section>
+                  </>
+                )}
               </div>
             )}
 

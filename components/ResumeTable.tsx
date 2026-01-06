@@ -361,6 +361,13 @@ export default function ResumeTable({
                       >
                         <Download className="w-4 h-4" />
                       </button>
+                      <button
+                        onClick={() => onDelete(resume.id)}
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                        title="Delete Resume"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                       <div className="relative">
                         <button
                           onClick={() => setActiveMenu(activeMenu === resume.id ? null : resume.id)}

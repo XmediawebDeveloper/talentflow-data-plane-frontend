@@ -58,6 +58,7 @@ export interface JDResponse extends JDCreate {
   assessments_count: number;
   created_at: string;
   updated_at: string;
+  current_version?: number;  // Version number - if > 1, means republished
 }
 
 export interface JDListResponse {

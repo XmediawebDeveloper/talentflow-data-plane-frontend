@@ -1341,7 +1341,7 @@ export default function CurrentPlanPage() {
                 return (
                   <Card
                     key={plan.id}
-                    className={`relative p-8 ${
+                    className={`relative p-8 flex flex-col h-full ${
                       isSelectedPending
                         ? "border-2 border-orange-500 shadow-xl"
                         : plan.isCurrent
@@ -1445,7 +1445,7 @@ export default function CurrentPlanPage() {
 
                     {/* Features Section */}
                     {plan.features.length > 0 && (
-                      <ul className="space-y-3 mb-8">
+                      <ul className="space-y-3">
                         {plan.features.map((feature, idx) => (
                           <li key={idx} className="flex items-start gap-3">
                             <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
@@ -1455,12 +1455,13 @@ export default function CurrentPlanPage() {
                       </ul>
                     )}
 
-                    {plan.features.length === 0 && <div className="mb-8" />}
+                    {/* Spacer to push button to bottom */}
+                    <div className="flex-grow" />
 
                     <button
                       onClick={() => handleChoosePlan(plan)}
                       disabled={plan.isCurrent || isSelectingPlan || isSelectedPending || !plan.price || queuedUpgrades.length > 0}
-                      className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 ${
+                      className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 mt-auto ${
                         plan.isCurrent || isSelectedPending
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                           : queuedUpgrades.length > 0
@@ -1541,14 +1542,14 @@ export default function CurrentPlanPage() {
                         {formatCurrency(selectedPlanForPayment?.price || 0, selectedPlanForPayment?.currency || 'INR')}
                       </span>
                     </div>
-                    {isolationType === 'database' && planSettings?.databasePerTenantMonthlyPrice ? (
+                    {isolationType === 'database' && !isYearly && (
                       <div className="flex justify-between text-amber-700">
-                        <span>Dedicated Database:</span>
+                        <span>Database Isolation Fee:</span>
                         <span className="font-medium">
-                          +{formatCurrency(planSettings.databasePerTenantMonthlyPrice, selectedPlanForPayment?.currency || 'INR')}/month
+                          +{formatCurrency(planSettings?.databasePerTenantMonthlyPrice || 5000, selectedPlanForPayment?.currency || 'INR')}/month
                         </span>
                       </div>
-                    ) : null}
+                    )}
                     {isYearly && (
                       <>
                         <div className="flex justify-between pt-2 border-t border-gray-200 text-green-700">
@@ -1563,14 +1564,14 @@ export default function CurrentPlanPage() {
                             )}
                           </span>
                         </div>
-                        {isolationType === 'database' && planSettings?.databasePerTenantMonthlyPrice ? (
+                        {isolationType === 'database' && (
                           <div className="flex justify-between text-amber-700">
-                            <span>Database (12 months):</span>
+                            <span>Database Isolation Fee (12 months):</span>
                             <span className="font-medium">
-                              +{formatCurrency(planSettings.databasePerTenantMonthlyPrice * 12, selectedPlanForPayment?.currency || 'INR')}
+                              +{formatCurrency((planSettings?.databasePerTenantMonthlyPrice || 5000) * 12, selectedPlanForPayment?.currency || 'INR')}
                             </span>
                           </div>
-                        ) : null}
+                        )}
                       </>
                     )}
                   </div>
@@ -1582,17 +1583,16 @@ export default function CurrentPlanPage() {
                     <div>
                       <span className="font-semibold">Total</span>
                       <p className="text-xs text-gray-300">
-                        {isYearly ? 'Billed annually' : 'Billed monthly'}
+                        {isYearly ? 'Billed annually (12× quotas)' : 'Billed monthly'}
                       </p>
                     </div>
                     <div className="text-right">
                       <span className="font-bold text-2xl">
                         {formatCurrency(
                           isYearly
-                            ? Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) * 12 : 0)
-                            : (selectedPlanForPayment?.price || 0) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) : 0),
+                            ? Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 10) / 100)) +
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
+                            : (selectedPlanForPayment?.price || 0) + (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
                       </span>
@@ -1600,7 +1600,7 @@ export default function CurrentPlanPage() {
                         <p className="text-xs text-green-400">
                           You save {formatCurrency(
                             ((selectedPlanForPayment?.price || 0) * 12) -
-                            Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)),
+                            Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 10) / 100)),
                             selectedPlanForPayment?.currency || 'INR'
                           )}
                         </p>
@@ -1608,32 +1608,6 @@ export default function CurrentPlanPage() {
                     </div>
                   </div>
                 </div>
-
-                {/* Dedicated Database Checkbox */}
-                {planSettings?.databasePerTenantMonthlyPrice ? (
-                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
-                    isolationType === 'database' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'
-                  }`}>
-                    <input
-                      type="checkbox"
-                      checked={isolationType === 'database'}
-                      onChange={(e) => setIsolationType(e.target.checked ? 'database' : 'schema')}
-                      className="mt-1 w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <Database className="w-5 h-5 text-amber-600" />
-                        <span className="font-medium text-gray-900">Dedicated Database</span>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Get your own dedicated database for enhanced isolation and performance
-                      </p>
-                      <p className="text-sm text-amber-600 font-medium mt-1">
-                        +{formatCurrency(planSettings.databasePerTenantMonthlyPrice, selectedPlanForPayment?.currency || 'INR')}/month extra
-                      </p>
-                    </div>
-                  </label>
-                ) : null}
 
                 {/* Annual Plan Offer Checkbox */}
                 <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
@@ -1654,7 +1628,32 @@ export default function CurrentPlanPage() {
                       </Badge>
                     </div>
                     <p className="text-sm text-gray-500 mt-1">
-                      Pay for 12 months and get {planSettings?.yearlyDiscountPercentage || 20}% discount
+                      Pay for 12 months, get {planSettings?.yearlyDiscountPercentage || 20}% discount + 12× quotas
+                    </p>
+                  </div>
+                </label>
+
+                {/* Dedicated Database Checkbox - Available for both Monthly and Annual */}
+                <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
+                  isolationType === 'database' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'
+                }`}>
+                  <input
+                    type="checkbox"
+                    checked={isolationType === 'database'}
+                    onChange={(e) => setIsolationType(e.target.checked ? 'database' : 'schema')}
+                    className="mt-1 w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <Database className="w-5 h-5 text-amber-600" />
+                      <span className="font-medium text-gray-900">Dedicated Database</span>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Get your own dedicated database for enhanced isolation and performance
+                    </p>
+                    <p className="text-sm text-amber-600 font-medium mt-1">
+                      +{formatCurrency(planSettings?.databasePerTenantMonthlyPrice || 5000, selectedPlanForPayment?.currency || 'INR')}/month
+                      {isYearly && ` (${formatCurrency((planSettings?.databasePerTenantMonthlyPrice || 5000) * 12, selectedPlanForPayment?.currency || 'INR')}/year)`}
                     </p>
                   </div>
                 </label>
@@ -1675,10 +1674,9 @@ export default function CurrentPlanPage() {
                       <CreditCard className="w-5 h-5" />
                       Pay {formatCurrency(
                         isYearly
-                          ? Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)) +
-                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) * 12 : 0)
-                          : (selectedPlanForPayment?.price || 0) +
-                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) : 0),
+                          ? Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 10) / 100)) +
+                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
+                          : (selectedPlanForPayment?.price || 0) + (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0),
                         selectedPlanForPayment?.currency || 'INR'
                       )}
                     </>

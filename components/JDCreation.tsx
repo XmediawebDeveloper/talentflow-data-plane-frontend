@@ -1165,14 +1165,28 @@ Use professional language, clear formatting, and make it engaging for candidates
 
   // Check if there's unsaved data worth saving
   const hasUnsavedData = () => {
-    return (jobTitle.trim() !== '' && (generatedJD.trim() !== '' || manualJD.trim() !== ''));
+    // In AI mode: save if we have job title AND (generated JD OR ai prompt)
+    // In manual mode: save if we have job title AND manual JD
+    if (mode === 'ai') {
+      return jobTitle.trim() !== '' && (generatedJD.trim() !== '' || aiPrompt.trim() !== '');
+    }
+    return jobTitle.trim() !== '' && manualJD.trim() !== '';
   };
 
   // Handle back button click - auto save as draft if there's unsaved data
   const handleBackClick = async () => {
+    console.log('[DEBUG] handleBackClick called');
+    console.log('[DEBUG] hasUnsavedData:', hasUnsavedData());
+    console.log('[DEBUG] mode:', mode, 'jobTitle:', jobTitle, 'aiPrompt:', aiPrompt, 'generatedJD:', generatedJD?.substring(0, 50));
+    console.log('[DEBUG] isPublished:', isPublished);
+
     if (hasUnsavedData() && !isPublished) {
+      console.log('[DEBUG] Saving draft before navigating back...');
       // Auto save as draft
       await handleSaveDraft();
+      console.log('[DEBUG] Draft save completed, now navigating back');
+    } else {
+      console.log('[DEBUG] No unsaved data or already published, skipping save');
     }
     // Always navigate back after saving (or if no unsaved data)
     if (onBack) {
@@ -1205,9 +1219,13 @@ Use professional language, clear formatting, and make it engaging for candidates
       }
 
       // Build the JD data for backend
+      // For AI mode without generated JD yet, save the AI prompt as description placeholder
+      const descriptionToSave = generatedJD || manualJD || (mode === 'ai' && aiPrompt ? `[AI Prompt - Pending Generation]\n\n${aiPrompt}` : '');
+      console.log('[DEBUG] handleSaveDraft - descriptionToSave:', descriptionToSave?.substring(0, 100));
+
       const jdData = {
         title: jobTitle,
-        description: generatedJD || manualJD,
+        description: descriptionToSave,
         department: extractedData.department || '',
         location: extractedData.locations.length > 0
           ? extractedData.locations[0].city
@@ -1246,6 +1264,7 @@ Use professional language, clear formatting, and make it engaging for candidates
 
       // Update existing JD or create new one
       console.log('[DEBUG] Save draft - editingId:', editingId, 'isEditingDraft:', isEditingDraft, 'isEditingPublished:', isEditingPublished);
+      console.log('[DEBUG] jdData being saved:', { title: jdData.title, description: jdData.description?.substring(0, 100), creation_method: jdData.creation_method });
       let savedJd;
       if (editingId) {
         console.log('[DEBUG] Updating existing draft with ID:', editingId);
@@ -1264,13 +1283,10 @@ Use professional language, clear formatting, and make it engaging for candidates
         title: isEditingPublished ? 'New draft created!' : 'Draft saved!',
         description: isEditingPublished
           ? `A new draft version of "${jobTitle}" has been created. The original JD remains unchanged.`
-          : `"${jobTitle}" has been saved. You can continue editing it later.`,
+          : `"${jobTitle}" has been saved. You can continue editing.`,
       });
 
-      // Navigate back
-      if (onBack) {
-        onBack();
-      }
+      // Stay on page - don't navigate away after saving draft
     } catch (error) {
       console.error('[ERROR] Failed to save draft:', error);
       setIsSavingDraft(false);
@@ -1278,10 +1294,7 @@ Use professional language, clear formatting, and make it engaging for candidates
         title: 'Failed to save draft',
         description: error instanceof Error ? error.message : 'An unexpected error occurred',
       });
-      // Still navigate back even on error
-      if (onBack) {
-        onBack();
-      }
+      // Stay on page even on error - let user retry or fix issues
     }
   };
 
