@@ -20,14 +20,16 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
 
   if (!isOpen) return null;
 
-  const handleSave = async () => {
+  const handleSave = async (saveAsDraft: boolean = false) => {
     const newErrors: any = {};
 
     if (!editedAssessment.title?.trim()) {
       newErrors.title = 'Title is required';
     }
 
-    if (!editedAssessment.duration?.trim()) {
+    // Duration can be string like "30 min" or number like 30
+    const durationValue = editedAssessment.duration;
+    if (!durationValue && durationValue !== 0) {
       newErrors.duration = 'Duration is required';
     }
 
@@ -46,20 +48,62 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
         'Archived': 'archived'
       };
 
-      // Call the API to update assessment
-      const updateData: any = {
-        title: editedAssessment.title,
-        description: editedAssessment.description,
-      };
+      // Determine the status to save
+      const statusToSave = saveAsDraft ? 'Draft' : editedAssessment.status;
 
-      // Only include status if it changed
-      if (editedAssessment.status) {
-        updateData.status = statusMap[editedAssessment.status] || editedAssessment.status.toLowerCase();
+      // Parse duration - extract number from string like "30 min"
+      let durationMinutes = 30;
+      if (typeof durationValue === 'number') {
+        durationMinutes = durationValue;
+      } else if (typeof durationValue === 'string') {
+        const match = durationValue.match(/(\d+)/);
+        if (match) {
+          durationMinutes = parseInt(match[1], 10);
+        }
       }
 
-      await assessmentService.update(assessment.id, updateData);
+      // Build update data - only include fields that have values
+      const updateData: any = {
+        title: editedAssessment.title,
+        duration_minutes: durationMinutes,
+      };
 
-      onSave(editedAssessment);
+      // Only include optional fields if they have values
+      if (editedAssessment.description !== undefined) {
+        updateData.description = editedAssessment.description;
+      }
+      if (editedAssessment.hr_enabled !== undefined) {
+        updateData.hr_enabled = editedAssessment.hr_enabled;
+      }
+      if (editedAssessment.hr_percentage !== undefined) {
+        updateData.hr_percentage = editedAssessment.hr_percentage;
+      }
+      if (editedAssessment.technical_enabled !== undefined) {
+        updateData.technical_enabled = editedAssessment.technical_enabled;
+      }
+      if (editedAssessment.technical_percentage !== undefined) {
+        updateData.technical_percentage = editedAssessment.technical_percentage;
+      }
+      if (editedAssessment.coding_enabled !== undefined) {
+        updateData.coding_enabled = editedAssessment.coding_enabled;
+      }
+      if (editedAssessment.coding_percentage !== undefined) {
+        updateData.coding_percentage = editedAssessment.coding_percentage;
+      }
+      if (editedAssessment.proctoring_enabled !== undefined) {
+        updateData.proctoring_enabled = editedAssessment.proctoring_enabled;
+      }
+
+      // Include status
+      if (statusToSave) {
+        updateData.status = statusMap[statusToSave] || statusToSave.toLowerCase();
+      }
+
+      console.log('[AssessmentEditModal] Saving assessment:', assessment.id, updateData);
+      const result = await assessmentService.update(assessment.id, updateData);
+      console.log('[AssessmentEditModal] Save successful:', result);
+
+      onSave({ ...editedAssessment, status: statusToSave });
       onClose();
     } catch (error) {
       console.error('Failed to update assessment:', error);
@@ -347,17 +391,14 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
           </button>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => {
-                setEditedAssessment({ ...editedAssessment, status: 'Draft' });
-                handleSave();
-              }}
+              onClick={() => handleSave(true)}
               disabled={isSaving}
               className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : 'Save as Draft'}
             </button>
             <button
-              onClick={handleSave}
+              onClick={() => handleSave(false)}
               disabled={isSaving}
               className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 disabled:opacity-50"
             >

@@ -156,6 +156,7 @@ export interface QuestionEvaluation {
   question_id: string;
   question_text: string;
   round_type: string;
+  question_type: string;
   score: number;
   points_earned: number;
   points_possible: number;
@@ -163,6 +164,16 @@ export interface QuestionEvaluation {
   feedback: string;
   strengths: string[];
   areas_for_improvement: string[];
+  // Candidate's answer
+  candidate_answer_text?: string;
+  candidate_selected_options?: string[];
+  candidate_code_submission?: string;
+  // Correct answer (for MCQ)
+  correct_answer?: string[];
+  // Options (for MCQ)
+  options?: { id: string; text: string }[];
+  // Expected answer points (for text questions)
+  expected_answer_points?: string[];
 }
 
 export interface RoundScore {

@@ -1,7 +1,7 @@
 'use client';
 
 import { CurrentQuestion } from '@/lib/services/candidateService';
-import { CheckCircle, Circle } from 'lucide-react';
+import { CheckCircle, Circle, FileText } from 'lucide-react';
 
 interface TechnicalQuestionViewProps {
   question: CurrentQuestion;
@@ -23,7 +23,12 @@ interface TechnicalQuestionViewProps {
 
 export function TechnicalQuestionView({ question, answer, onAnswerChange }: TechnicalQuestionViewProps) {
   const isMultipleChoice = question.question_type === 'multiple_choice';
+  const isSingleChoice = question.question_type === 'single_choice';
+  const isTextQuestion = question.question_type === 'text' || question.question_type === 'short_answer';
+  const isMCQ = (isSingleChoice || isMultipleChoice) && question.options && question.options.length > 0;
+
   const selectedOptions = answer.selected_options || [];
+  const textResponse = answer.text_response || '';
 
   const handleOptionClick = (optionId: string) => {
     if (isMultipleChoice) {
@@ -38,8 +43,58 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange }: Tech
     }
   };
 
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    onAnswerChange({ ...answer, text_response: e.target.value });
+  };
+
   const isSelected = (optionId: string) => selectedOptions.includes(optionId);
 
+  // Render Text/Short Answer Question
+  if (isTextQuestion || !isMCQ) {
+    return (
+      <div className="space-y-6">
+        {/* Question Text */}
+        <div className="prose max-w-none">
+          <h3 className="text-lg font-medium text-gray-800 mb-4">{question.question_text}</h3>
+        </div>
+
+        {/* Instructions */}
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <FileText className="w-4 h-4" />
+          <span>Provide a detailed answer in the text area below</span>
+        </div>
+
+        {/* Text Area */}
+        <div className="space-y-2">
+          <textarea
+            value={textResponse}
+            onChange={handleTextChange}
+            placeholder="Type your answer here..."
+            className="w-full h-48 p-4 border-2 border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:border-gray-800 focus:outline-none resize-none transition-colors"
+          />
+          <div className="flex justify-between items-center text-sm text-gray-500">
+            <span>
+              {textResponse.length > 0 ? (
+                <span className="text-green-600">✓ Answer provided</span>
+              ) : (
+                <span className="text-gray-400">No answer yet</span>
+              )}
+            </span>
+            <span>{textResponse.length} characters</span>
+          </div>
+        </div>
+
+        {/* Tips */}
+        <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+          <p className="text-sm text-blue-800">
+            <strong>Tip:</strong> Be specific and provide examples where relevant. A well-structured answer with clear points will score better.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Render MCQ Question (single_choice or multiple_choice with options)
   return (
     <div className="space-y-6">
       {/* Question Text */}

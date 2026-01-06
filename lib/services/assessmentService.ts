@@ -20,6 +20,24 @@ export interface AssessmentCreate {
   coding_languages?: string[];
 }
 
+export interface AssessmentUpdate {
+  title?: string;
+  description?: string;
+  duration_minutes?: number;
+  hr_enabled?: boolean;
+  hr_percentage?: number;
+  hr_topics?: string[];
+  technical_enabled?: boolean;
+  technical_percentage?: number;
+  technical_topics?: string[];
+  coding_enabled?: boolean;
+  coding_percentage?: number;
+  coding_topics?: string[];
+  coding_languages?: string[];
+  proctoring_enabled?: boolean;
+  status?: 'draft' | 'published' | 'closed' | 'archived';
+}
+
 export interface AssessmentResponse {
   id: string;
   tenant_id: string;
@@ -268,7 +286,7 @@ export const assessmentService = {
   /**
    * Update assessment
    */
-  async update(id: string, data: Partial<AssessmentCreate>): Promise<AssessmentResponse> {
+  async update(id: string, data: AssessmentUpdate): Promise<AssessmentResponse> {
     try {
       const response = await api.put<AssessmentResponse>(`/assessments/${id}`, data);
       return response.data;

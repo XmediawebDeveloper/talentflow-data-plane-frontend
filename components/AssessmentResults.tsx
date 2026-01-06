@@ -187,7 +187,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
-              Back to Assessments
+              Back
             </button>
             <div className="flex items-center justify-between">
               <div>

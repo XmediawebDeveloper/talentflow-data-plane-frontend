@@ -372,13 +372,20 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         }
         if (attempts >= maxAttempts) {
           clearInterval(poll);
-          // Show results anyway (may have NaN values but better than error)
+          // Check one more time if results are ready
           try {
             const resultData = await candidateService.getResults(token);
-            setResults(resultData);
-            setStep('results');
+            // Only show results if they are actually ready (not processing)
+            if (resultData && resultData.overall_score !== undefined && !isNaN(resultData.overall_score)) {
+              setResults(resultData);
+              setStep('results');
+            } else {
+              // Results still processing - show error with retry option
+              setError('Scoring is taking longer than expected. Please refresh the page to check your results.');
+              setStep('error');
+            }
           } catch {
-            setError('Scoring is taking longer than expected. Please refresh the page.');
+            setError('Scoring is taking longer than expected. Please refresh the page to check your results.');
             setStep('error');
           }
         }

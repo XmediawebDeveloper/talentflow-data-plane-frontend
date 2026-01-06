@@ -233,7 +233,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
 
                   {/* Expanded Questions */}
                   {expandedRounds.includes(round.round_type) && (
-                    <div className="px-4 pb-4 space-y-3">
+                    <div className="px-4 pb-4 space-y-4">
                       {getRoundQuestions(round.round_type).map((q, idx) => (
                         <div
                           key={q.question_id}
@@ -243,7 +243,8 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
                               : 'bg-red-50 border-red-200'
                           }`}
                         >
-                          <div className="flex items-start justify-between mb-2">
+                          {/* Question Header */}
+                          <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
                               {q.is_correct ? (
                                 <CheckCircle className="w-5 h-5 text-green-600" />
@@ -253,6 +254,9 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
                               <span className="font-medium text-gray-800">
                                 Question {idx + 1}
                               </span>
+                              <span className="text-xs px-2 py-0.5 bg-gray-200 rounded text-gray-600 capitalize">
+                                {q.question_type?.replace('_', ' ') || 'text'}
+                              </span>
                             </div>
                             <span className={`text-sm font-medium ${
                               q.is_correct ? 'text-green-600' : 'text-red-600'
@@ -260,12 +264,104 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
                               {q.points_earned}/{q.points_possible} pts
                             </span>
                           </div>
-                          <p className="text-sm text-gray-700 mb-2 line-clamp-2">
-                            {q.question_text}
-                          </p>
-                          <p className="text-sm text-gray-600 italic">
-                            {q.feedback}
-                          </p>
+
+                          {/* Question Text */}
+                          <div className="mb-4">
+                            <p className="text-sm font-medium text-gray-500 mb-1">Question:</p>
+                            <p className="text-sm text-gray-800">{q.question_text}</p>
+                          </div>
+
+                          {/* Your Answer */}
+                          <div className="mb-4">
+                            <p className="text-sm font-medium text-gray-500 mb-1">Your Answer:</p>
+                            {q.question_type === 'single_choice' || q.question_type === 'multiple_choice' ? (
+                              <div className="text-sm text-gray-800">
+                                {q.candidate_selected_options && q.candidate_selected_options.length > 0 ? (
+                                  <ul className="list-disc list-inside">
+                                    {q.candidate_selected_options.map(optId => {
+                                      const option = q.options?.find(o => o.id === optId);
+                                      return (
+                                        <li key={optId} className={q.correct_answer?.includes(optId) ? 'text-green-700' : 'text-red-700'}>
+                                          {option?.text || optId}
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                ) : (
+                                  <span className="text-gray-400 italic">No answer provided</span>
+                                )}
+                              </div>
+                            ) : q.question_type === 'coding' ? (
+                              <div className="text-sm">
+                                {q.candidate_code_submission ? (
+                                  <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-xs overflow-x-auto max-h-32">
+                                    {q.candidate_code_submission}
+                                  </pre>
+                                ) : (
+                                  <span className="text-gray-400 italic">No code submitted</span>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                                {q.candidate_answer_text || <span className="text-gray-400 italic">No answer provided</span>}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Correct Answer (for MCQ) */}
+                          {(q.question_type === 'single_choice' || q.question_type === 'multiple_choice') && q.correct_answer && (
+                            <div className="mb-4">
+                              <p className="text-sm font-medium text-gray-500 mb-1">Correct Answer:</p>
+                              <ul className="list-disc list-inside text-sm text-green-700">
+                                {q.correct_answer.map(optId => {
+                                  const option = q.options?.find(o => o.id === optId);
+                                  return <li key={optId}>{option?.text || optId}</li>;
+                                })}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Expected Points (for text/behavioral) */}
+                          {q.expected_answer_points && q.expected_answer_points.length > 0 && (
+                            <div className="mb-4">
+                              <p className="text-sm font-medium text-gray-500 mb-1">Key Points Expected:</p>
+                              <ul className="list-disc list-inside text-sm text-gray-600">
+                                {q.expected_answer_points.map((point, i) => (
+                                  <li key={i}>{point}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Feedback */}
+                          {q.feedback && (
+                            <div className="pt-3 border-t border-gray-200">
+                              <p className="text-sm font-medium text-gray-500 mb-1">Feedback:</p>
+                              <p className="text-sm text-gray-700 italic">{q.feedback}</p>
+                            </div>
+                          )}
+
+                          {/* Strengths & Improvements */}
+                          {(q.strengths?.length > 0 || q.areas_for_improvement?.length > 0) && (
+                            <div className="pt-3 mt-3 border-t border-gray-200 grid grid-cols-2 gap-4">
+                              {q.strengths && q.strengths.length > 0 && (
+                                <div>
+                                  <p className="text-xs font-medium text-green-600 mb-1">Strengths:</p>
+                                  <ul className="text-xs text-green-700 space-y-1">
+                                    {q.strengths.map((s, i) => <li key={i}>• {s}</li>)}
+                                  </ul>
+                                </div>
+                              )}
+                              {q.areas_for_improvement && q.areas_for_improvement.length > 0 && (
+                                <div>
+                                  <p className="text-xs font-medium text-amber-600 mb-1">Areas to Improve:</p>
+                                  <ul className="text-xs text-amber-700 space-y-1">
+                                    {q.areas_for_improvement.map((a, i) => <li key={i}>• {a}</li>)}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
