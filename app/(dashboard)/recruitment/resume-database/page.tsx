@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Clock, Loader2 } from 'lucide-react';
+import { Plus, Clock, Loader2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import ResumeTable from '@/components/ResumeTable';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
@@ -12,9 +12,21 @@ import UploadModal from '@/components/UploadModal';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import { Resume, Folder } from '@/lib/types/types';
-import { resumeService, folderService } from '@/lib/services/resumeService';
+import { resumeService, folderService, ResumeSearchParams } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
+
+interface SearchFilters {
+  skills?: string[];
+  experienceRange?: { min?: number; max?: number };
+  education?: string;
+  location?: string;
+  currentCompany?: string;
+  previousCompany?: string;
+  noticePeriod?: string;
+  uploadDateRange?: { start?: string; end?: string };
+  sourceType?: string;
+}
 
 export default function ResumeDatabasePage() {
   const router = useRouter();
@@ -23,8 +35,18 @@ export default function ResumeDatabasePage() {
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState({});
-  const [sortBy, setSortBy] = useState('date');
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState(''); // Actual query used for API
+  const [filters, setFilters] = useState<SearchFilters>({});
+  const [sortBy, setSortBy] = useState('latest');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalResumes, setTotalResumes] = useState(0);
+  const [pageSize] = useState(25);
+
+  // Track if initial load is done
+  const initialLoadDone = useRef(false);
 
   // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -33,15 +55,80 @@ export default function ResumeDatabasePage() {
   const [viewingResume, setViewingResume] = useState<Resume | null>(null);
   const [quickViewResume, setQuickViewResume] = useState<Resume | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // Build search params from filters
+  const buildSearchParams = useCallback((): ResumeSearchParams => {
+    const params: ResumeSearchParams = {
+      source: 'internal-db',
+      page: 1,
+      page_size: 500, // Fetch more to allow client-side search across phone/skills
+    };
 
-  const fetchData = async () => {
+    // NOTE: Search is done client-side to include phone and skills
+    // The API search param is NOT used here
+
+    // Add skills filter
+    if (filters.skills && filters.skills.length > 0) {
+      params.skills = filters.skills.join(',');
+    }
+
+    // Add experience range
+    if (filters.experienceRange) {
+      if (filters.experienceRange.min !== undefined) {
+        params.experience_min = filters.experienceRange.min;
+      }
+      if (filters.experienceRange.max !== undefined) {
+        params.experience_max = filters.experienceRange.max;
+      }
+    }
+
+    // Add location
+    if (filters.location) {
+      params.location = filters.location;
+    }
+
+    // Add education
+    if (filters.education) {
+      params.education = filters.education;
+    }
+
+    // Add company filters
+    if (filters.currentCompany) {
+      params.current_company = filters.currentCompany;
+    }
+    if (filters.previousCompany) {
+      params.previous_company = filters.previousCompany;
+    }
+
+    // Add notice period
+    if (filters.noticePeriod) {
+      params.notice_period = filters.noticePeriod;
+    }
+
+    // Add upload date range
+    if (filters.uploadDateRange) {
+      if (filters.uploadDateRange.start) {
+        params.upload_date_from = filters.uploadDateRange.start;
+      }
+      if (filters.uploadDateRange.end) {
+        params.upload_date_to = filters.uploadDateRange.end;
+      }
+    }
+
+    // Add source type
+    if (filters.sourceType) {
+      params.source_type = filters.sourceType;
+    }
+
+    return params;
+  }, [filters]);
+
+  // Fetch data with filters
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      const params = buildSearchParams();
       const [resumeResponse, folderResponse] = await Promise.all([
-        resumeService.list({ source: 'internal-db', page_size: 100 }),
+        resumeService.list(params),
         folderService.list().catch(() => []),
       ]);
 
@@ -60,7 +147,7 @@ export default function ResumeDatabasePage() {
         folderId: r.folder_id || '',
         uploadDate: r.created_at,
         attachments: r.file_name ? 1 : 0,
-        uploadedBy: 'System',
+        uploadedBy: r.uploaded_by_name || 'System',
         versionCount: r.version_count || 1,
         currentCompany: r.current_company,
         previousCompany: r.previous_company,
@@ -98,6 +185,8 @@ export default function ResumeDatabasePage() {
           name: typeof lang === 'string' ? lang : (lang.name || lang.language || ''),
           proficiency: typeof lang === 'string' ? 'Fluent' : (lang.proficiency || lang.level || 'Fluent'),
         })),
+        // Store search query for highlighting
+        _searchQuery: appliedSearchQuery,
       }));
 
       // Convert API Folder to component Folder type
@@ -112,13 +201,34 @@ export default function ResumeDatabasePage() {
 
       setResumes(convertedResumes);
       setFolders(convertedFolders);
+      setTotalPages(resumeResponse.total_pages || 1);
+      setTotalResumes(resumeResponse.total || 0);
     } catch (error) {
       console.error('Failed to fetch data:', error);
       toast.error('Failed to load resume database');
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildSearchParams, appliedSearchQuery]);
+
+  // Fetch data when search params change
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Reset to page 1 when filters or search change
+  useEffect(() => {
+    if (initialLoadDone.current) {
+      setCurrentPage(1);
+    }
+  }, [appliedSearchQuery, filters]);
+
+  // Handle search change from SearchFilterBarCompact (already debounced)
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+    setAppliedSearchQuery(query);
+    initialLoadDone.current = true;
+  }, []);
 
   const handleSelectResume = (id: string) => {
     setSelectedResumes(prev =>
@@ -127,7 +237,7 @@ export default function ResumeDatabasePage() {
   };
 
   const handleSelectAll = (selected: boolean) => {
-    setSelectedResumes(selected ? filteredResumes.map(r => r.id) : []);
+    setSelectedResumes(selected ? resumes.map(r => r.id) : []);
   };
 
   const handleDelete = async (id: string) => {
@@ -238,7 +348,7 @@ export default function ResumeDatabasePage() {
     folderId: r.folder_id || '',
     uploadDate: r.created_at,
     attachments: 1,
-    uploadedBy: 'System',
+    uploadedBy: r.uploaded_by_name || 'System',
     versionCount: r.version_count || 1,
     currentCompany: r.current_company,
     previousCompany: r.previous_company,
@@ -293,24 +403,112 @@ export default function ResumeDatabasePage() {
     }
   };
 
-  // Filter resumes
-  const filteredResumes = resumes.filter(r => {
-    const matchesSearch = !searchQuery ||
-      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  // Client-side search helper - searches across all text fields including phone and skills
+  const matchesSearch = useCallback((resume: Resume, query: string): boolean => {
+    if (!query) return true;
 
-  // Stats - calculate monthly uploads (last 30 days)
-  const monthlyCount = resumes.filter(r => {
-    const uploadDate = new Date(r.uploadDate);
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    return uploadDate >= thirtyDaysAgo;
+    const searchTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 0);
+    if (searchTerms.length === 0) return true;
+
+    // Create searchable text from all relevant fields
+    const searchableFields = [
+      resume.name,
+      resume.email,
+      resume.phone,
+      resume.title,
+      resume.location,
+      resume.currentCompany,
+      resume.previousCompany,
+      ...(resume.skills || []),
+    ].filter(Boolean).map(field => field?.toLowerCase() || '');
+
+    const searchableText = searchableFields.join(' ');
+
+    // Check if any search term matches (partial matching)
+    return searchTerms.some(term => searchableText.includes(term));
+  }, []);
+
+  // Sort and filter resumes client-side (API handles primary filtering, we add phone/skills search)
+  const sortedResumes = useMemo(() => {
+    // Apply additional client-side search filtering for phone and skills
+    let filtered = resumes;
+    if (appliedSearchQuery) {
+      filtered = resumes.filter(resume => matchesSearch(resume, appliedSearchQuery));
+    }
+
+    const sorted = [...filtered];
+    switch (sortBy) {
+      case 'latest':
+        return sorted.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+      case 'lastUpdated':
+        return sorted.sort((a, b) => new Date(b.lastUpdated || b.uploadDate).getTime() - new Date(a.lastUpdated || a.uploadDate).getTime());
+      case 'name-asc':
+        return sorted.sort((a, b) => a.name.localeCompare(b.name));
+      case 'name-desc':
+        return sorted.sort((a, b) => b.name.localeCompare(a.name));
+      case 'experience-high':
+        return sorted.sort((a, b) => {
+          const aExp = parseInt(a.experience) || 0;
+          const bExp = parseInt(b.experience) || 0;
+          return bExp - aExp;
+        });
+      case 'experience-low':
+        return sorted.sort((a, b) => {
+          const aExp = parseInt(a.experience) || 0;
+          const bExp = parseInt(b.experience) || 0;
+          return aExp - bExp;
+        });
+      default:
+        return sorted;
+    }
+  }, [resumes, sortBy, appliedSearchQuery, matchesSearch]);
+
+  // Calculate active filter count
+  const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
+    if (key === 'skills' && Array.isArray(value)) return value.length > 0;
+    if (key === 'experienceRange') return value && ((value as any).min !== undefined || (value as any).max !== undefined);
+    if (key === 'uploadDateRange') return value && ((value as any).start || (value as any).end);
+    return value !== null && value !== undefined && value !== '';
   }).length;
 
-  if (loading) {
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
+
+  if (loading && resumes.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
@@ -324,42 +522,34 @@ export default function ResumeDatabasePage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 mb-2">Internal Resume Database</h1>
-          <p className="text-sm text-gray-600">All resumes across your organization</p>
+          <p className="text-sm text-gray-600">
+            Search across {totalResumes.toLocaleString()} resumes in your organization
+          </p>
         </div>
-{/* Upload buttons hidden
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowUploadHistory(true)}
-            className="flex items-center gap-2 border border-gray-300 px-4 py-2.5 rounded-md hover:bg-gray-50 transition-colors relative"
-          >
-            <Clock className="w-5 h-5" />
-            Upload History
-            {uploadHistory.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-                {uploadHistory.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-md hover:bg-gray-900 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Upload Resume
-          </button>
-        </div>
-*/}
       </div>
 
-      <StatsCards
-        cards={[
-          { type: 'total', value: resumes.length },
-          { type: 'monthly', value: monthlyCount }
-        ]}
-      />
+      {/* Search Stats */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="text-3xl font-bold text-gray-900">{totalResumes.toLocaleString()}</div>
+          <div className="text-sm text-gray-600">Total Resumes</div>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="text-3xl font-bold text-blue-600">{sortedResumes.length}</div>
+          <div className="text-sm text-gray-600">Current Results</div>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="text-3xl font-bold text-green-600">{activeFilterCount + (appliedSearchQuery ? 1 : 0)}</div>
+          <div className="text-sm text-gray-600">Active Filters</div>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="text-3xl font-bold text-purple-600">{currentPage}/{totalPages}</div>
+          <div className="text-sm text-gray-600">Page</div>
+        </div>
+      </div>
 
       {selectedResumes.length > 0 && (
-        <div className="mt-6">
+        <div className="mb-6">
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
@@ -371,18 +561,53 @@ export default function ResumeDatabasePage() {
         </div>
       )}
 
-      <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <SearchFilterBarCompact
           searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
+          onSearchChange={handleSearchChange}
           filters={filters}
           onFiltersChange={setFilters}
           sortBy={sortBy}
           onSortChange={setSortBy}
         />
 
+        {/* Loading indicator for filter changes */}
+        {loading && (
+          <div className="flex items-center justify-center py-4 border-b border-gray-200 bg-blue-50">
+            <Loader2 className="w-5 h-5 animate-spin text-blue-600 mr-2" />
+            <span className="text-sm text-blue-600">Searching...</span>
+          </div>
+        )}
+
+        {/* Search Results Summary */}
+        {(appliedSearchQuery || activeFilterCount > 0) && !loading && (
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Search className="w-4 h-4 text-gray-500" />
+              <span className="text-sm text-gray-700">
+                Found <span className="font-semibold">{sortedResumes.length.toLocaleString()}</span> matching resume{sortedResumes.length !== 1 ? 's' : ''}
+                {appliedSearchQuery && (
+                  <span> for "<span className="font-medium text-blue-600">{appliedSearchQuery}</span>"</span>
+                )}
+              </span>
+            </div>
+            {(appliedSearchQuery || activeFilterCount > 0) && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setAppliedSearchQuery('');
+                  setFilters({});
+                }}
+                className="text-sm text-red-600 hover:text-red-700 hover:underline"
+              >
+                Clear all filters
+              </button>
+            )}
+          </div>
+        )}
+
         <ResumeTable
-          resumes={filteredResumes}
+          resumes={sortedResumes}
           selectedResumes={selectedResumes}
           onSelectResume={handleSelectResume}
           onSelectAll={handleSelectAll}
@@ -390,7 +615,52 @@ export default function ResumeDatabasePage() {
           onApplyToJob={(resume) => console.log('Apply to job:', resume)}
           onDelete={(id) => handleDelete(id)}
           onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
+          highlightQuery={appliedSearchQuery}
         />
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+            <div className="text-sm text-gray-600">
+              Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, totalResumes)} of {totalResumes.toLocaleString()} resumes
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="p-2 rounded-md border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {getPageNumbers().map((page, index) => (
+                typeof page === 'number' ? (
+                  <button
+                    key={index}
+                    onClick={() => handlePageChange(page)}
+                    className={`px-3 py-1 rounded-md text-sm ${
+                      currentPage === page
+                        ? 'bg-blue-600 text-white'
+                        : 'border border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ) : (
+                  <span key={index} className="px-2 text-gray-500">...</span>
+                )
+              ))}
+
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-md border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {isUploadModalOpen && (

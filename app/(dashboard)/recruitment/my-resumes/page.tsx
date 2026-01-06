@@ -343,8 +343,21 @@ export default function MyResumesPage() {
 
       toast.loading(`Processing ${batch.total_files} resumes...`, { id: toastId });
 
-      // Refresh upload history immediately and show the panel
-      await fetchUploadHistory();
+      // Add batch to upload history immediately and show the panel
+      const newBatchRecord = {
+        id: batch.id,
+        date: new Date().toISOString(),
+        fileName: `Bulk Upload (${batch.total_files} files)`,
+        totalFiles: batch.total_files,
+        completed: 0,
+        pending: batch.total_files,
+        duplicated: 0,
+        versioned: 0,
+        errors: 0,
+        source: 'my-resumes' as const,
+        statuses: [],
+      };
+      setUploadHistory(prev => [newBatchRecord, ...prev]);
       setShowUploadHistory(true);
 
       // Poll for batch status until complete
@@ -357,7 +370,11 @@ export default function MyResumesPage() {
           const percentage = Math.round((processed / total) * 100);
 
           // Update upload history to show progress
-          fetchUploadHistory();
+          setUploadHistory(prev => prev.map(record =>
+            record.id === batch.id
+              ? { ...record, completed: status.completed, pending: status.pending, errors: status.errors }
+              : record
+          ));
 
           toast.loading(`Processing resumes: ${processed}/${total} (${percentage}%)`, { id: toastId });
 
@@ -377,9 +394,9 @@ export default function MyResumesPage() {
               );
             }
 
-            // Refresh the resume list and upload history
+            // Remove completed batch from history and refresh resume list
+            setUploadHistory(prev => prev.filter(record => record.id !== batch.id));
             fetchData();
-            fetchUploadHistory();
           }
         } catch (pollError) {
           console.error('Error polling batch status:', pollError);

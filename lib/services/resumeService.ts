@@ -81,21 +81,30 @@ export interface Folder {
   created_at: string;
 }
 
+export interface ResumeSearchParams {
+  source?: 'my-resumes' | 'internal-db';
+  folder_id?: string;
+  search?: string;
+  skills?: string;
+  experience_min?: number;
+  experience_max?: number;
+  location?: string;
+  education?: string;
+  current_company?: string;
+  previous_company?: string;
+  notice_period?: string;
+  upload_date_from?: string;
+  upload_date_to?: string;
+  source_type?: string;
+  page?: number;
+  page_size?: number;
+}
+
 export const resumeService = {
   /**
    * List resumes with filters
    */
-  async list(params?: {
-    source?: 'my-resumes' | 'internal-db';
-    folder_id?: string;
-    search?: string;
-    skills?: string;
-    experience_min?: number;
-    experience_max?: number;
-    location?: string;
-    page?: number;
-    page_size?: number;
-  }): Promise<ResumeListResponse> {
+  async list(params?: ResumeSearchParams): Promise<ResumeListResponse> {
     try {
       const response = await api.get<ResumeListResponse>('/resumes', { params });
       return response.data;
