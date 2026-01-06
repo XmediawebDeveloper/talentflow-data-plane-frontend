@@ -325,40 +325,7 @@ export default function JDDetailsPage() {
               </div>
             </div>
 
-            {/* Skills */}
-            {((jd.must_have_skills && jd.must_have_skills.length > 0) || (jd.nice_to_have_skills && jd.nice_to_have_skills.length > 0)) && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Skills & Qualifications</h2>
-
-                {jd.must_have_skills && jd.must_have_skills.length > 0 && (
-                  <div className="mb-5">
-                    <h3 className="text-sm font-medium text-gray-900 mb-3">Required Skills</h3>
-                    <ul className="space-y-2 ml-1">
-                      {jd.must_have_skills.map((skill, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                          <span className="text-gray-400 mt-0.5">•</span>
-                          <span>{skill}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {jd.nice_to_have_skills && jd.nice_to_have_skills.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-900 mb-3">Preferred Skills</h3>
-                    <ul className="space-y-2 ml-1">
-                      {jd.nice_to_have_skills.map((skill, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                          <span className="text-gray-400 mt-0.5">•</span>
-                          <span>{skill}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Skills section removed - already shown in JD description */}
 
             {/* Assessment Guidance */}
             {jd.assessment_guidance && (

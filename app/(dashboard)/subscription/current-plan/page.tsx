@@ -392,9 +392,37 @@ export default function CurrentPlanPage() {
         console.log('Could not fetch quota status');
       }
 
-      // Build trial settings from quota data
+      // Fetch free trial settings from API
       let trialSettings: FreeTrialSettings | null = null;
-      if (quotaData?.quotas) {
+      try {
+        const freeTrialResponse = await fetch(`${API_URL}/addons/free-trial`);
+        if (freeTrialResponse.ok) {
+          const freeTrialResult = await freeTrialResponse.json();
+          const ftData = freeTrialResult.data || freeTrialResult;
+          console.log('[CurrentPlan] Free trial API response:', ftData);
+
+          // Use API data for trial settings (use ?? to preserve 0 values)
+          trialSettings = {
+            id: ftData.id,
+            trial_days: ftData.trial_days ?? 14,
+            features: {
+              MAX_JOBS: ftData.features?.MAX_JOBS ?? 5,
+              MAX_SEATS: ftData.features?.MAX_SEATS ?? 2,
+              ASSESSMENTS: ftData.features?.ASSESSMENTS ?? 10,
+              AI_INTERVIEW: ftData.features?.AI_INTERVIEW ?? 10,
+              RESUME_SCORING: ftData.features?.RESUME_SCORING ?? 100,
+              RESUME_STORAGE: ftData.features?.RESUME_STORAGE ?? 100,
+            },
+            trial_includes: ftData.trial_includes || ['Resume Storage', 'Resume Scoring', 'Assessments', 'AI Interviews'],
+          };
+          setFreeTrialSettings(trialSettings);
+        }
+      } catch (ftError) {
+        console.log('[CurrentPlan] Could not fetch free trial settings:', ftError);
+      }
+
+      // Fallback: Build trial settings from quota data if API failed
+      if (!trialSettings && quotaData?.quotas) {
         const q = quotaData.quotas;
         // Get trial days remaining from API response
         const trialDaysRemaining = quotaData.trial_info?.days_remaining ?? 14;
@@ -411,6 +439,9 @@ export default function CurrentPlanPage() {
           trial_includes: ['Resume Storage', 'Resume Scoring', 'Assessments', 'AI Interviews'],
         };
         setFreeTrialSettings(trialSettings);
+      }
+
+      if (quotaData?.quotas) {
 
         // Update company settings with data from quota-status API
         const quotas = quotaData.quotas;
@@ -441,15 +472,17 @@ export default function CurrentPlanPage() {
           // Only set plan dates if it's a paid plan
           plan_start_date: !isTrial ? planStartDate : null,
           plan_expiry_date: !isTrial ? planEndDate : null,
-          // Update quota limits from quota-status API
-          max_seats: quotas?.max_seats?.subscription?.limit || prev?.max_seats || 5,
-          max_jobs: quotas?.max_jobs?.subscription?.limit || prev?.max_jobs || 10,
-          max_resume_uploads: quotas?.RU?.subscription?.limit || prev?.max_resume_uploads || 100,
-          max_resume_searches: quotas?.RS?.subscription?.limit || prev?.max_resume_searches || 100,
-          max_assessments: quotas?.AS?.subscription?.limit || prev?.max_assessments || 50,
-          max_ai_interviews: quotas?.AIU?.subscription?.limit || prev?.max_ai_interviews || 25,
+          // Update quota limits - use free trial API data for trial users, otherwise use quota-status
+          max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : (quotas?.max_seats?.subscription?.limit || prev?.max_seats || 5),
+          max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : (quotas?.max_jobs?.subscription?.limit || prev?.max_jobs || 10),
+          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : (quotas?.RU?.subscription?.limit || prev?.max_resume_uploads || 100),
+          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : (quotas?.RS?.subscription?.limit || prev?.max_resume_searches || 100),
+          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : (quotas?.AS?.subscription?.limit || prev?.max_assessments || 50),
+          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : (quotas?.AIU?.subscription?.limit || prev?.max_ai_interviews || 25),
           storage_limit_gb: quotas?.storage_gb?.subscription?.limit || prev?.storage_limit_gb || 10,
         }));
+
+        console.log('[CurrentPlan] isTrial:', isTrial, 'trialSettings:', trialSettings?.features);
 
         // Extract base_price from plan_info if available (only for paid plans)
         if (!isTrial && quotaData.plan_info?.base_price !== undefined) {

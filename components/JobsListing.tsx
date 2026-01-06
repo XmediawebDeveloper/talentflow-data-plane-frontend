@@ -696,12 +696,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                     {/* Card Body */}
                     <div className="p-6">
                       <div className="space-y-3 mb-5">
-                        {job.department && (
-                          <div className="flex items-center gap-3 text-base text-gray-600">
-                            <Building2 className="w-5 h-5 text-gray-400" />
-                            <span>{job.department}</span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-3 text-base text-gray-600">
+                          <Building2 className="w-5 h-5 text-gray-400" />
+                          <span>{job.industry_type || '-'}</span>
+                        </div>
                         <div className="flex items-center gap-3 text-base text-gray-600">
                           <MapPin className="w-5 h-5 text-gray-400" />
                           <span>{job.location}</span>
@@ -854,12 +852,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
                         {/* Primary Info Row */}
                         <div className="flex flex-wrap items-center gap-5 text-base text-gray-600 mb-3">
-                          {job.department && (
-                            <span className="flex items-center gap-2">
-                              <Building2 className="w-5 h-5 text-gray-400" />
-                              {job.department}
-                            </span>
-                          )}
+                          <span className="flex items-center gap-2">
+                            <Building2 className="w-5 h-5 text-gray-400" />
+                            {job.industry_type || '-'}
+                          </span>
                           <span className="flex items-center gap-2">
                             <MapPin className="w-5 h-5 text-gray-400" />
                             {job.location}

@@ -44,6 +44,7 @@ interface ExtractedData {
   experienceRequired: boolean;
   industryType: string;
   industryTypeRequired: boolean;
+  department: string;
   allowOverqualified: boolean;
   employmentType: 'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary';
   workModel: 'onsite' | 'remote' | 'hybrid' | 'field_based';
@@ -71,6 +72,7 @@ interface EditingJDData {
   experience_min?: number;
   experience_max?: number;
   industry_type?: string;
+  department?: string;
   salary_min?: number;
   salary_max?: number;
   compensation_type?: string;
@@ -79,8 +81,10 @@ interface EditingJDData {
   assessment_guidance?: string;
   internal_comments?: string;
   must_have_comments?: string[];
+  certifications?: string[];
+  domain_keywords?: string[];
   allow_overqualified?: boolean;
-  locations?: Array<{ city: string; radius_km?: number; is_required?: boolean }>;
+  locations?: Array<{ city: string; state?: string; radius_km?: number; is_required?: boolean }>;
 }
 
 interface JDCreationProps {
@@ -309,6 +313,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     experienceRequired: false,
     industryType: '',
     industryTypeRequired: false,
+    department: '',
     allowOverqualified: false,
     employmentType: 'full_time',
     workModel: 'onsite',
@@ -1011,7 +1016,7 @@ Use professional language, clear formatting, and make it engaging for candidates
       const jdData = {
         title: jobTitle,
         description: generatedJD || manualJD,
-        department: 'Engineering',
+        department: extractedData.department || '',
         location: extractedData.locations.length > 0
           ? extractedData.locations[0].city
           : 'Remote',
@@ -1032,10 +1037,16 @@ Use professional language, clear formatting, and make it engaging for candidates
         // JD11: Include certifications and domain_keywords in data sync
         certifications: extractedData.certifications,
         domain_keywords: extractedData.domainKeywords,
-        locations: extractedData.locations.map(loc => ({
-          city: loc.city,
-          is_required: extractedData.locationsRequired,
-        })),
+        locations: extractedData.locations.map(loc => {
+          // Parse "City, State" format
+          const parts = loc.city.split(', ');
+          return {
+            city: parts[0],
+            state: parts[1] || null,
+            radius_km: parseInt(loc.radius) || 50,
+            is_required: extractedData.locationsRequired,
+          };
+        }),
       };
 
       console.log('[DEBUG] handleConfirmPublish - editingId:', editingId, 'isEditingDraft:', isEditingDraft);
@@ -1071,7 +1082,7 @@ Use professional language, clear formatting, and make it engaging for candidates
         const newJob: Job = {
           id: publishedJd.id,
           title: jobTitle,
-          department: 'Engineering',
+          department: extractedData.department || '',
           location: extractedData.locations.length > 0
             ? extractedData.locations[0].city
             : 'Remote',
@@ -1146,7 +1157,7 @@ Use professional language, clear formatting, and make it engaging for candidates
       const jdData = {
         title: jobTitle,
         description: generatedJD || manualJD,
-        department: 'Engineering',
+        department: extractedData.department || '',
         location: extractedData.locations.length > 0
           ? extractedData.locations[0].city
           : 'Remote',
@@ -1168,10 +1179,16 @@ Use professional language, clear formatting, and make it engaging for candidates
         certifications: extractedData.certifications,
         domain_keywords: extractedData.domainKeywords,
         creation_stage: step,  // Save the current step so user can continue from here
-        locations: extractedData.locations.map(loc => ({
-          city: loc.city,
-          is_required: extractedData.locationsRequired,
-        })),
+        locations: extractedData.locations.map(loc => {
+          // Parse "City, State" format
+          const parts = loc.city.split(', ');
+          return {
+            city: parts[0],
+            state: parts[1] || null,
+            radius_km: parseInt(loc.radius) || 50,
+            is_required: extractedData.locationsRequired,
+          };
+        }),
       };
 
       // Update existing JD or create new one
@@ -1288,17 +1305,21 @@ Use professional language, clear formatting, and make it engaging for candidates
             ? `${editingJD.experience_min}${editingJD.experience_max ? `-${editingJD.experience_max}` : '+'}`
             : '',
           industryType: editingJD.industry_type || '',
+          department: editingJD.department || '',
           salaryFrom: editingJD.salary_min?.toString() || '',
           salaryTo: editingJD.salary_max?.toString() || '',
           compensationType: (editingJD.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
           assessmentGuidance: editingJD.assessment_guidance || '',
           internalRecruiterComments: editingJD.internal_comments ? editingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
           mustHaveComments: editingJD.must_have_comments || [],
+          certifications: editingJD.certifications || [],
+          domainKeywords: editingJD.domain_keywords || [],
           allowOverqualified: editingJD.allow_overqualified ?? false,
           employmentType: (editingJD.employment_type as ExtractedData['employmentType']) || 'full_time',
           workModel: (editingJD.remote_type as ExtractedData['workModel']) || 'onsite',
           locations: editingJD.locations?.map(loc => ({
-            city: loc.city,
+            // Reconstruct "City, State" format for UI dropdown matching
+            city: loc.state ? `${loc.city}, ${loc.state}` : loc.city,
             radius: loc.radius_km?.toString() || '50',
           })) || [],
           locationsRequired: editingJD.locations?.some(loc => loc.is_required) || false,
@@ -2116,7 +2137,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                     />
                     <button
                       onClick={(e) => {
-                        const input = (e.target as HTMLElement).previousElementSibling as HTMLInputElement;
+                        const input = (e.currentTarget as HTMLElement).previousElementSibling as HTMLInputElement;
                         if (input?.value.trim()) {
                           setExtractedData(prev => ({
                             ...prev,
@@ -2174,7 +2195,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                     />
                     <button
                       onClick={(e) => {
-                        const input = (e.target as HTMLElement).previousElementSibling as HTMLInputElement;
+                        const input = (e.currentTarget as HTMLElement).previousElementSibling as HTMLInputElement;
                         if (input?.value.trim()) {
                           setExtractedData(prev => ({
                             ...prev,
@@ -3084,6 +3105,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                     experienceRequired: false,
                     industryType: '',
                     industryTypeRequired: false,
+                    department: '',
                     allowOverqualified: false,
                     employmentType: 'full_time',
                     workModel: 'onsite',

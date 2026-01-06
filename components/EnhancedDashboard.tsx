@@ -7,28 +7,32 @@ import {
   Briefcase,
   Users,
   FileText,
-  TrendingUp,
   ArrowUpRight,
-  Clock,
   Target,
   CheckCircle,
   AlertCircle,
   Calendar,
-  Activity,
   Loader2,
   Sparkles,
-  Video,
   MapPin,
   Building2,
   Edit2,
   Archive,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
 import { User, Tenant } from '@/lib/types/tenant';
+
+// Module-level cache to prevent duplicate API calls across remounts
+const dashboardCache = {
+  dashboardFetched: false,
+  quotaFetched: false,
+  dashboardData: null as any,
+  quotaData: null as any,
+};
 
 interface EnhancedDashboardProps {
   user?: User;
@@ -49,7 +53,27 @@ interface JDStatusCounts {
   archived: number;
 }
 
-export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardProps) {
+interface QuotaInfo {
+  quota_type: string;
+  name: string;
+  limit: number;
+  used: number;
+  remaining: number;
+  percentage_used: number;
+  is_low: boolean;
+  is_exhausted: boolean;
+}
+
+interface QuotaStatusData {
+  plan_name: string;
+  billing_period?: {
+    start: string;
+    end: string;
+  };
+  quotas: QuotaInfo[];
+}
+
+export default function EnhancedDashboard({ user }: EnhancedDashboardProps) {
   const router = useRouter();
   const [publishedJDs, setPublishedJDs] = useState<JDResponse[]>([]);
   const [draftJDs, setDraftJDs] = useState<JDResponse[]>([]);
@@ -66,6 +90,12 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
     disabled: 0,
     archived: 0,
   });
+  const [quotaStatusData, setQuotaStatusData] = useState<QuotaStatusData | null>(null);
+  const [loadingQuota, setLoadingQuota] = useState(true);
+
+  // Refs to prevent duplicate API calls
+  const hasFetchedDashboardData = useRef(false);
+  const hasFetchedQuotaStatus = useRef(false);
 
   // Permission checks
   const isTenantAdmin = user?.role === 'tenant_admin';
@@ -73,14 +103,30 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   const canUploadResumes = isTenantAdmin || user?.permissions?.canUploadResumes;
   const canViewResumes = isTenantAdmin || user?.permissions?.canViewResumes;
 
-  // Get usage data from tenant
-  const subscription = tenant?.subscription;
-  const usage = subscription?.usage;
-  const limits = subscription?.limits;
 
   // Fetch JDs and calculate stats
   useEffect(() => {
+    // Skip if already fetched (check both ref and module cache)
+    if (hasFetchedDashboardData.current || dashboardCache.dashboardFetched) {
+      // Restore from cache if available
+      if (dashboardCache.dashboardData) {
+        setPublishedJDs(dashboardCache.dashboardData.publishedJDs || []);
+        setDraftJDs(dashboardCache.dashboardData.draftJDs || []);
+        setJdStatusCounts(dashboardCache.dashboardData.jdStatusCounts || { published: 0, draft: 0, disabled: 0, archived: 0 });
+        setStats(dashboardCache.dashboardData.stats || { activeJobs: 0, totalCandidates: 0, resumesScored: 0, assessmentsCompleted: 0 });
+        setLoadingJDs(false);
+      }
+      return;
+    }
+
+    const controller = new AbortController();
+
     const fetchDashboardData = async () => {
+      // Double-check before making API calls
+      if (hasFetchedDashboardData.current || dashboardCache.dashboardFetched) return;
+      hasFetchedDashboardData.current = true;
+      dashboardCache.dashboardFetched = true;
+
       setLoadingJDs(true);
       try {
         // Fetch published JDs
@@ -89,6 +135,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           page_size: 5,
           page: 1,
         });
+        if (controller.signal.aborted) return;
         setPublishedJDs(publishedResponse.items || []);
 
         // Fetch draft JDs
@@ -97,6 +144,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           page_size: 5,
           page: 1,
         });
+        if (controller.signal.aborted) return;
         setDraftJDs(draftResponse.items || []);
 
         // Fetch all JDs for stats and status counts (fetch multiple pages if needed)
@@ -109,6 +157,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             page_size: 100,
             page: currentPage,
           });
+          if (controller.signal.aborted) return;
 
           allJDs = [...allJDs, ...response.items];
 
@@ -157,55 +206,203 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             page_size: 1,
             page: 1,
           });
+          if (controller.signal.aborted) return;
           totalResumes = resumeResponse.total || 0;
         } catch (resumeError) {
           console.error('Failed to fetch resume count:', resumeError);
         }
 
-        setStats({
+        const newStats = {
           activeJobs: statusCounts.published,
           totalCandidates: totalResumes,
           resumesScored: totalScored,
           assessmentsCompleted: totalAssessments,
-        });
+        };
+        setStats(newStats);
+
+        // Save to cache
+        dashboardCache.dashboardData = {
+          publishedJDs: publishedResponse.items || [],
+          draftJDs: draftResponse.items || [],
+          jdStatusCounts: statusCounts,
+          stats: newStats,
+        };
       } catch (error) {
-        console.error('Failed to fetch dashboard data:', error);
-        toast.error('Failed to load dashboard data');
+        if (!controller.signal.aborted) {
+          console.error('Failed to fetch dashboard data:', error);
+          toast.error('Failed to load dashboard data');
+        }
       } finally {
-        setLoadingJDs(false);
+        if (!controller.signal.aborted) {
+          setLoadingJDs(false);
+        }
       }
     };
 
     fetchDashboardData();
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
+  // Fetch quota status from API
+  useEffect(() => {
+    // Skip if already fetched (check both ref and module cache)
+    if (hasFetchedQuotaStatus.current || dashboardCache.quotaFetched) {
+      // Restore from cache if available
+      if (dashboardCache.quotaData) {
+        setQuotaStatusData(dashboardCache.quotaData);
+        setLoadingQuota(false);
+      }
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const fetchQuotaStatus = async () => {
+      // Double-check before making API calls
+      if (hasFetchedQuotaStatus.current || dashboardCache.quotaFetched) return;
+      hasFetchedQuotaStatus.current = true;
+      dashboardCache.quotaFetched = true;
+
+      setLoadingQuota(true);
+      try {
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+          console.warn('[EnhancedDashboard] No access token found');
+          setLoadingQuota(false);
+          return;
+        }
+
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+
+        const quotaStatusResponse = await fetch(`${API_BASE}/usage/quota-status`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+
+        if (controller.signal.aborted) return;
+
+        if (quotaStatusResponse.ok) {
+          const responseData = await quotaStatusResponse.json();
+          console.log('[EnhancedDashboard] Quota status from API:', responseData);
+
+          const data = responseData.data || responseData;
+          const quotasMap = data.quotas || {};
+
+          // Map quota_type to display names
+          const quotaTypeToModule: Record<string, string> = {
+            'RU': 'Resume Uploads',
+            'RS': 'Resume Scoring',
+            'AS': 'Assessments',
+            'AIU': 'AI Interviews',
+            'storage_gb': 'Storage',
+            'max_jobs': 'Job Postings',
+            'max_seats': 'Max Users',
+          };
+
+          // Preferred order for display
+          const preferredOrder = ['max_jobs', 'RU', 'AS', 'AIU'];
+
+          // Get all quota types from API response
+          const allQuotaTypes = Object.keys(quotasMap);
+
+          // Sort: preferred order first, then any remaining
+          const sortedQuotaTypes = [
+            ...preferredOrder.filter(qt => allQuotaTypes.includes(qt)),
+            ...allQuotaTypes.filter(qt => !preferredOrder.includes(qt))
+          ];
+
+          const quotasList: QuotaInfo[] = [];
+
+          for (const quotaType of sortedQuotaTypes) {
+            const q = quotasMap[quotaType];
+            if (q) {
+              const sub = q.subscription || {};
+              const addon = q.addon || {};
+              const isUnlimited = sub.limit === 'unlimited' || sub.limit === -1;
+              const addonRemaining = addon.remaining || 0;
+              const baseLimit = isUnlimited ? -1 : (sub.limit || 0);
+              const limit = isUnlimited ? -1 : (baseLimit + addonRemaining);
+              const used = sub.used || 0;
+              const remaining = isUnlimited ? -1 : (q.total_remaining !== undefined ? q.total_remaining : (sub.remaining || 0));
+              const usagePercentage = isUnlimited ? 0 : (limit > 0 ? (used / limit) * 100 : 0);
+
+              const status = q.status || 'OK';
+              // Only consider low/exhausted if the quota has a limit > 0 (i.e., it's enabled for this plan)
+              const hasQuota = limit > 0;
+              const isLow = hasQuota && (status === 'WARNING' || status === 'CRITICAL' || usagePercentage >= 80);
+              const isExhausted = hasQuota && (status === 'EXCEEDED' || (remaining <= 0 && !isUnlimited));
+
+              quotasList.push({
+                quota_type: quotaType,
+                name: quotaTypeToModule[quotaType] || quotaType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                limit: limit,
+                used: used,
+                remaining: remaining,
+                percentage_used: usagePercentage,
+                is_low: isLow,
+                is_exhausted: isExhausted,
+              });
+            }
+          }
+
+          if (!controller.signal.aborted) {
+            const quotaData = {
+              plan_name: data.plan_name || 'Current Plan',
+              billing_period: data.billing_period,
+              quotas: quotasList,
+            };
+            setQuotaStatusData(quotaData);
+            // Save to cache
+            dashboardCache.quotaData = quotaData;
+          }
+        } else {
+          console.error('[EnhancedDashboard] Failed to fetch quota status:', quotaStatusResponse.status);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error('[EnhancedDashboard] Error fetching quota status:', error);
+          toast.error('Failed to load quota data');
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoadingQuota(false);
+        }
+      }
+    };
+
+    fetchQuotaStatus();
+
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   const statsCards = [
     {
       name: 'Active Jobs',
       value: stats.activeJobs.toString(),
-      change: '+12%',
-      changeType: 'positive' as const,
       icon: Briefcase,
     },
     {
       name: 'Total Candidates',
       value: stats.totalCandidates.toLocaleString(),
-      change: '+18%',
-      changeType: 'positive' as const,
       icon: Users,
     },
     {
       name: 'Resumes Scored',
       value: stats.resumesScored.toLocaleString(),
-      change: '+8%',
-      changeType: 'positive' as const,
       icon: Target,
     },
     {
       name: 'Assessments Completed',
       value: stats.assessmentsCompleted.toString(),
-      change: '+23%',
-      changeType: 'positive' as const,
       icon: CheckCircle,
     },
   ];
@@ -259,18 +456,14 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
+              {/* TODO: Show percentage change when analytics API is available
               <div className="flex items-center text-xs text-gray-600">
-                <span
-                  className={
-                    stat.changeType === 'positive'
-                      ? 'text-green-600'
-                      : 'text-red-600'
-                  }
-                >
+                <span className={stat.changeType === 'positive' ? 'text-green-600' : 'text-red-600'}>
                   {stat.change}
                 </span>
                 <span className="ml-1">from last month</span>
               </div>
+              */}
             </CardContent>
           </Card>
         ))}
@@ -358,137 +551,73 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
       </Card>
 
       {/* Plan Quotas & Usage */}
-      {tenant && (
-        <Card className="border-gray-200">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg font-semibold text-gray-900">
-                  {subscription?.planName || 'Current Plan'} - Quotas & Usage
-                </CardTitle>
-                <CardDescription className="text-gray-600">
-                  Monitor your plan limits and current usage
-                </CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push('/subscription/current-plan')}
-              >
-                Upgrade Plan
-              </Button>
+      <Card className="border-gray-200">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg font-semibold text-gray-900">
+                {quotaStatusData?.plan_name || 'Current Plan'} - Quotas & Usage
+              </CardTitle>
+              <CardDescription className="text-gray-600">
+                Monitor your plan limits and current usage
+              </CardDescription>
             </div>
-          </CardHeader>
-          <CardContent>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push('/subscription/current-plan')}
+            >
+              Upgrade Plan
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingQuota ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+              <span className="ml-2 text-gray-600">Loading quota data...</span>
+            </div>
+          ) : quotaStatusData?.quotas && quotaStatusData.quotas.length > 0 ? (
             <div className="grid grid-cols-4 gap-4">
-              {/* Job Postings */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Job Postings</span>
-                  <span className="font-medium text-gray-900">
-                    {usage?.jobPostings || 0} / {limits?.jobPostings || 100}
-                  </span>
-                </div>
-                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-green-600 transition-all"
-                    style={{
-                      width: `${
-                        limits?.jobPostings
-                          ? Math.min(
-                              ((usage?.jobPostings || 0) / limits.jobPostings) * 100,
-                              100
-                            )
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
+              {quotaStatusData.quotas.slice(0, 4).map((quota) => {
+                const isUnlimited = quota.limit === -1;
+                const progressColor = quota.is_exhausted
+                  ? 'bg-red-600'
+                  : quota.is_low
+                  ? 'bg-yellow-600'
+                  : 'bg-green-600';
 
-              {/* Resume Uploads */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Resume Uploads</span>
-                  <span className="font-medium text-gray-900">
-                    {usage?.resumeUploads || 0} / {limits?.resumeUploads || 2450}
-                  </span>
-                </div>
-                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gray-800 transition-all"
-                    style={{
-                      width: `${
-                        limits?.resumeUploads
-                          ? Math.min(
-                              ((usage?.resumeUploads || 0) / limits.resumeUploads) * 100,
-                              100
-                            )
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Assessments */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Assessments</span>
-                  <span className="font-medium text-gray-900">
-                    {usage?.assessments || 0} / {limits?.assessments || 500}
-                  </span>
-                </div>
-                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-yellow-600 transition-all"
-                    style={{
-                      width: `${
-                        limits?.assessments
-                          ? Math.min(
-                              ((usage?.assessments || 0) / limits.assessments) * 100,
-                              100
-                            )
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* AI Interviews */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">AI Interviews</span>
-                  <span className="font-medium text-gray-900">
-                    {limits?.aiInterviews === 'unlimited'
-                      ? 'Unlimited'
-                      : `${usage?.aiInterviews || 0} / ${limits?.aiInterviews || '∞'}`}
-                  </span>
-                </div>
-                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gray-800 transition-all"
-                    style={{
-                      width:
-                        limits?.aiInterviews === 'unlimited'
-                          ? '100%'
-                          : `${
-                              typeof limits?.aiInterviews === 'number'
-                                ? Math.min(
-                                    ((usage?.aiInterviews || 0) / limits.aiInterviews) * 100,
-                                    100
-                                  )
-                                : 100
-                            }%`,
-                    }}
-                  />
-                </div>
-              </div>
+                return (
+                  <div key={quota.quota_type} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">{quota.name}</span>
+                      <span className="font-medium text-gray-900">
+                        {isUnlimited
+                          ? 'Unlimited'
+                          : `${quota.used} / ${quota.limit}`}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${progressColor} transition-all`}
+                        style={{
+                          width: isUnlimited
+                            ? '100%'
+                            : `${Math.min(quota.percentage_used, 100)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <div className="text-center py-8 text-gray-600">
+              No quota data available
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -694,7 +823,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               <Button
                 variant="outline"
                 className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
-                onClick={() => router.push('/resume-management/my-resumes')}
+                onClick={() => router.push('/recruitment/my-resumes')}
               >
                 <FileText className="h-6 w-6 text-gray-600" />
                 <span className="text-sm text-gray-900">Upload Resumes</span>

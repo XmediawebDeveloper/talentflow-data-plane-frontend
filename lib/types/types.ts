@@ -111,6 +111,7 @@ export interface Job {
   daysActive: number;
   requiredMatch: number;
   department?: string;
+  industry_type?: string;
   experience?: string;
   applicants?: number;
   description?: string;
