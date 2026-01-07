@@ -71,38 +71,31 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     };
   }, [step]);
 
-  // Poll for scoring results
+  // Poll for scoring results - keeps polling until results are ready
   const pollForScoringResults = useCallback(() => {
-    let attempts = 0;
-    const maxAttempts = 30;
-    const pollInterval = 2000;
+    const pollInterval = 2000; // Poll every 2 seconds
 
     const poll = setInterval(async () => {
-      attempts++;
       try {
         const resultData = await candidateService.getResults(token);
-        if (resultData && resultData.overall_score !== undefined && !isNaN(resultData.overall_score)) {
+        // Only show results when they are complete and valid
+        if (resultData &&
+            resultData.overall_score !== undefined &&
+            !isNaN(resultData.overall_score) &&
+            resultData.candidate_name) {
           clearInterval(poll);
           setResults(resultData);
           setStep('results');
           return;
         }
       } catch {
-        // Not ready yet
+        // Not ready yet - continue polling
       }
-      if (attempts >= maxAttempts) {
-        clearInterval(poll);
-        // Show whatever we have
-        try {
-          const resultData = await candidateService.getResults(token);
-          setResults(resultData);
-          setStep('results');
-        } catch {
-          setError('Scoring is taking longer than expected. Please refresh the page.');
-          setStep('error');
-        }
-      }
+      // Keep polling - never show error, candidate waits until evaluation completes
     }, pollInterval);
+
+    // Return cleanup function
+    return () => clearInterval(poll);
   }, [token]);
 
   const loadAssessmentInfo = async () => {
@@ -340,22 +333,23 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       // Show scoring in progress
       setStep('scoring');
 
-      // Poll for results (scoring happens in background)
-      let attempts = 0;
-      const maxAttempts = 30; // 30 attempts * 2 seconds = 60 seconds max wait
+      // Poll for results (scoring happens in background) - keeps polling until ready
       const pollInterval = 2000; // 2 seconds
 
       const pollForResults = async (): Promise<boolean> => {
         try {
           const resultData = await candidateService.getResults(token);
-          // Check if results are ready (not just "processing" status)
-          if (resultData && resultData.overall_score !== undefined && !isNaN(resultData.overall_score)) {
+          // Only show results when they are complete and valid
+          if (resultData &&
+              resultData.overall_score !== undefined &&
+              !isNaN(resultData.overall_score) &&
+              resultData.candidate_name) {
             setResults(resultData);
             setStep('results');
             return true;
           }
         } catch {
-          // Results not ready yet
+          // Results not ready yet - continue polling
         }
         return false;
       };
@@ -363,35 +357,16 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       // First attempt
       if (await pollForResults()) return;
 
-      // Poll with interval
+      // Poll continuously until results are ready - no timeout, candidate waits
       const poll = setInterval(async () => {
-        attempts++;
         if (await pollForResults()) {
           clearInterval(poll);
-          return;
         }
-        if (attempts >= maxAttempts) {
-          clearInterval(poll);
-          // Check one more time if results are ready
-          try {
-            const resultData = await candidateService.getResults(token);
-            // Only show results if they are actually ready (not processing)
-            if (resultData && resultData.overall_score !== undefined && !isNaN(resultData.overall_score)) {
-              setResults(resultData);
-              setStep('results');
-            } else {
-              // Results still processing - show error with retry option
-              setError('Scoring is taking longer than expected. Please refresh the page to check your results.');
-              setStep('error');
-            }
-          } catch {
-            setError('Scoring is taking longer than expected. Please refresh the page to check your results.');
-            setStep('error');
-          }
-        }
+        // Keep polling - never show error, candidate waits until evaluation completes
       }, pollInterval);
 
     } catch (err) {
+      // Only show error for actual submission failures, not scoring delays
       setError(err instanceof Error ? err.message : 'Failed to complete assessment');
       setStep('error');
     }

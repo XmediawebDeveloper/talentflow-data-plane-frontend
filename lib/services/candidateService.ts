@@ -430,12 +430,23 @@ export const candidateService = {
 
   /**
    * Get assessment results
+   * Returns null if results are still processing (overall_score is null)
    */
   async getResults(token: string): Promise<AssessmentResult> {
     try {
-      const response = await candidateApi.get<AssessmentResult>(
+      const response = await candidateApi.get<AssessmentResult & { status?: string }>(
         `/candidate/assessment/${token}/result`
       );
+
+      // Check if results are still processing
+      if (response.data.status === 'processing' || response.data.overall_score === null) {
+        // Return a partial result that frontend can detect
+        return {
+          ...response.data,
+          overall_score: NaN,  // Frontend checks for NaN to detect incomplete results
+        } as AssessmentResult;
+      }
+
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {

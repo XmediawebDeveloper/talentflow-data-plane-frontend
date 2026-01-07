@@ -74,7 +74,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
       // Process assessments
       if (assessmentsResult.status === 'fulfilled' && assessmentsResult.value?.items?.length > 0) {
-        const mapped = assessmentsResult.value.items.map((a: any) => ({
+        const mapped = assessmentsResult.value.items.map((a: any) => {
+          // Normalize status to lowercase for consistent comparison
+          const rawStatus = (a.status || 'draft').toLowerCase();
+          return {
           id: a.id,
           title: a.title,
           description: a.description,
@@ -88,7 +91,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           passed_count: a.passed_count || 0,
           average_score: a.average_score,
           pass_rate: a.pass_rate,
-          status: a.status === 'published' ? 'Active' : a.status === 'closed' ? 'Completed' : a.status === 'archived' ? 'Archived' : 'Draft',
+          status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
           passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
           created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
           job: { title: a.jd_title || 'General Assessment', department: 'Engineering' },
@@ -109,7 +112,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           hr_score: a.hr_score,
           technical_score: a.technical_score,
           coding_score: a.coding_score,
-        }));
+        };
+        });
         setApiAssessments(mapped);
         console.log('[TalentFlow] Loaded', mapped.length, 'assessments from API');
       } else if (assessmentsResult.status === 'rejected') {
@@ -233,7 +237,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     try {
       const response = await assessmentService.list({ page_size: 100 });
       if (response?.items?.length >= 0) {
-        const mapped = response.items.map((a: any) => ({
+        const mapped = response.items.map((a: any) => {
+          // Normalize status to lowercase for consistent comparison
+          const rawStatus = (a.status || 'draft').toLowerCase();
+          return {
           id: a.id,
           title: a.title,
           description: a.description,
@@ -247,7 +254,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           passed_count: a.passed_count || 0,
           average_score: a.average_score,
           pass_rate: a.pass_rate,
-          status: a.status === 'published' ? 'Active' : a.status === 'closed' ? 'Completed' : a.status === 'archived' ? 'Archived' : 'Draft',
+          status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
           passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
           created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
           job: { title: a.jd_title || 'General Assessment', department: 'Engineering' },
@@ -268,7 +275,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           hr_score: a.hr_score,
           technical_score: a.technical_score,
           coding_score: a.coding_score,
-        }));
+        };
+        });
         setApiAssessments(mapped);
       } else {
         setApiAssessments([]);
@@ -456,9 +464,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               const freshAssessments = await assessmentService.list({ page_size: 100 });
               const updated = freshAssessments.items.find((a: any) => a.id === selectedAssessmentForDetails.id);
               if (updated) {
+                const rawStatus = (updated.status || 'draft').toLowerCase();
                 setSelectedAssessmentForDetails({
                   ...updated,
-                  status: updated.status === 'published' ? 'Active' : updated.status === 'closed' ? 'Completed' : updated.status === 'archived' ? 'Archived' : 'Draft',
+                  status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
                 });
               }
             }}

@@ -24,10 +24,20 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
   const [expandedRounds, setExpandedRounds] = useState<string[]>([]);
   const passed = results.pass_status === 'passed';
 
+  // Safe accessors with defaults to prevent NaN/undefined display
+  const overallScore = results.overall_score ?? 0;
+  const passingThreshold = results.passing_threshold ?? 60;
+  const timeSpentSeconds = results.time_spent_seconds ?? 0;
+  const candidateName = results.candidate_name || 'Candidate';
+  const assessmentTitle = results.assessment_title || 'Assessment';
+  const jdTitle = results.jd_title || 'Position';
+  const completedAt = results.completed_at ? new Date(results.completed_at) : new Date();
+
   const formatDuration = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
+    const safeSeconds = seconds ?? 0;
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    const secs = Math.floor(safeSeconds % 60);
 
     if (hours > 0) {
       return `${hours}h ${minutes}m`;
@@ -120,9 +130,9 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-5xl font-bold">{Math.round(results.overall_score)}%</div>
+                <div className="text-5xl font-bold">{Math.round(overallScore)}%</div>
                 <p className="text-white/80 text-sm mt-1">
-                  Passing score: {results.passing_threshold}%
+                  Passing score: {passingThreshold}%
                 </p>
               </div>
             </div>
@@ -133,20 +143,20 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Candidate</p>
-                <p className="font-semibold text-gray-800">{results.candidate_name}</p>
+                <p className="font-semibold text-gray-800">{candidateName}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500 mb-1">Assessment</p>
-                <p className="font-semibold text-gray-800">{results.assessment_title}</p>
+                <p className="font-semibold text-gray-800">{assessmentTitle}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500 mb-1">Position</p>
-                <p className="font-semibold text-gray-800">{results.jd_title}</p>
+                <p className="font-semibold text-gray-800">{jdTitle}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500 mb-1">Completed At</p>
                 <p className="font-semibold text-gray-800">
-                  {new Date(results.completed_at).toLocaleDateString('en-US', {
+                  {completedAt.toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',
@@ -162,13 +172,13 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
           <div className="px-8 py-6 grid grid-cols-2 md:grid-cols-4 gap-4 border-b border-gray-100">
             <div className="text-center p-4 bg-gray-50 rounded-xl">
               <Award className="w-6 h-6 text-yellow-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-800">{Math.round(results.overall_score)}%</p>
+              <p className="text-2xl font-bold text-gray-800">{Math.round(overallScore)}%</p>
               <p className="text-sm text-gray-500">Overall Score</p>
             </div>
             <div className="text-center p-4 bg-gray-50 rounded-xl">
               <Clock className="w-6 h-6 text-blue-500 mx-auto mb-2" />
               <p className="text-2xl font-bold text-gray-800">
-                {formatDuration(results.time_spent_seconds)}
+                {formatDuration(timeSpentSeconds)}
               </p>
               <p className="text-sm text-gray-500">Time Taken</p>
             </div>
