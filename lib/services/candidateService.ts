@@ -156,6 +156,7 @@ export interface QuestionEvaluation {
   question_id: string;
   question_text: string;
   round_type: string;
+  question_type: string;
   score: number;
   points_earned: number;
   points_possible: number;
@@ -163,6 +164,16 @@ export interface QuestionEvaluation {
   feedback: string;
   strengths: string[];
   areas_for_improvement: string[];
+  // Candidate's answer
+  candidate_answer_text?: string;
+  candidate_selected_options?: string[];
+  candidate_code_submission?: string;
+  // Correct answer (for MCQ)
+  correct_answer?: string[];
+  // Options (for MCQ)
+  options?: { id: string; text: string }[];
+  // Expected answer points (for text questions)
+  expected_answer_points?: string[];
 }
 
 export interface RoundScore {
@@ -419,12 +430,23 @@ export const candidateService = {
 
   /**
    * Get assessment results
+   * Returns null if results are still processing (overall_score is null)
    */
   async getResults(token: string): Promise<AssessmentResult> {
     try {
-      const response = await candidateApi.get<AssessmentResult>(
+      const response = await candidateApi.get<AssessmentResult & { status?: string }>(
         `/candidate/assessment/${token}/result`
       );
+
+      // Check if results are still processing
+      if (response.data.status === 'processing' || response.data.overall_score === null) {
+        // Return a partial result that frontend can detect
+        return {
+          ...response.data,
+          overall_score: NaN,  // Frontend checks for NaN to detect incomplete results
+        } as AssessmentResult;
+      }
+
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {

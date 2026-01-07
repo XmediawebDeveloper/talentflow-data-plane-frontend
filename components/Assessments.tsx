@@ -74,18 +74,46 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
       // Process assessments
       if (assessmentsResult.status === 'fulfilled' && assessmentsResult.value?.items?.length > 0) {
-        const mapped = assessmentsResult.value.items.map((a: any) => ({
+        const mapped = assessmentsResult.value.items.map((a: any) => {
+          // Normalize status to lowercase for consistent comparison
+          const rawStatus = (a.status || 'draft').toLowerCase();
+          return {
           id: a.id,
           title: a.title,
+          description: a.description,
           type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
           duration: `${a.duration_minutes} min`,
+          duration_minutes: a.duration_minutes,
           questions: (a.hr_enabled ? 10 : 0) + (a.technical_enabled ? 10 : 0) + (a.coding_enabled ? 5 : 0),
           candidates: a.invitations_count || 0,
-          status: a.status === 'published' ? 'Active' : a.status === 'closed' ? 'Completed' : a.status === 'archived' ? 'Archived' : 'Draft',
+          invitations_count: a.invitations_count || 0,
+          completed_count: a.completed_count || 0,
+          passed_count: a.passed_count || 0,
+          average_score: a.average_score,
+          pass_rate: a.pass_rate,
+          status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
           passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
           created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-          job: { title: a.jd_title || 'General Assessment', department: 'Engineering' }
-        }));
+          job: { title: a.jd_title || 'General Assessment', department: 'Engineering' },
+          // Section configuration for detail view
+          hr_enabled: a.hr_enabled,
+          hr_percentage: a.hr_percentage,
+          hr_topics: a.hr_topics,
+          technical_enabled: a.technical_enabled,
+          technical_percentage: a.technical_percentage,
+          technical_topics: a.technical_topics,
+          coding_enabled: a.coding_enabled,
+          coding_percentage: a.coding_percentage,
+          coding_topics: a.coding_topics,
+          coding_languages: a.coding_languages,
+          proctoring_enabled: a.proctoring_enabled,
+          // Analytics data
+          average_time_seconds: a.average_time_seconds,
+          hr_score: a.hr_score,
+          technical_score: a.technical_score,
+          coding_score: a.coding_score,
+        };
+        });
         setApiAssessments(mapped);
         console.log('[TalentFlow] Loaded', mapped.length, 'assessments from API');
       } else if (assessmentsResult.status === 'rejected') {
@@ -209,18 +237,46 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     try {
       const response = await assessmentService.list({ page_size: 100 });
       if (response?.items?.length >= 0) {
-        const mapped = response.items.map((a: any) => ({
+        const mapped = response.items.map((a: any) => {
+          // Normalize status to lowercase for consistent comparison
+          const rawStatus = (a.status || 'draft').toLowerCase();
+          return {
           id: a.id,
           title: a.title,
+          description: a.description,
           type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
           duration: `${a.duration_minutes} min`,
+          duration_minutes: a.duration_minutes,
           questions: (a.hr_enabled ? 10 : 0) + (a.technical_enabled ? 10 : 0) + (a.coding_enabled ? 5 : 0),
           candidates: a.invitations_count || 0,
-          status: a.status === 'published' ? 'Active' : a.status === 'closed' ? 'Completed' : a.status === 'archived' ? 'Archived' : 'Draft',
+          invitations_count: a.invitations_count || 0,
+          completed_count: a.completed_count || 0,
+          passed_count: a.passed_count || 0,
+          average_score: a.average_score,
+          pass_rate: a.pass_rate,
+          status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
           passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
           created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-          job: { title: a.jd_title || 'General Assessment', department: 'Engineering' }
-        }));
+          job: { title: a.jd_title || 'General Assessment', department: 'Engineering' },
+          // Section configuration for detail view
+          hr_enabled: a.hr_enabled,
+          hr_percentage: a.hr_percentage,
+          hr_topics: a.hr_topics,
+          technical_enabled: a.technical_enabled,
+          technical_percentage: a.technical_percentage,
+          technical_topics: a.technical_topics,
+          coding_enabled: a.coding_enabled,
+          coding_percentage: a.coding_percentage,
+          coding_topics: a.coding_topics,
+          coding_languages: a.coding_languages,
+          proctoring_enabled: a.proctoring_enabled,
+          // Analytics data
+          average_time_seconds: a.average_time_seconds,
+          hr_score: a.hr_score,
+          technical_score: a.technical_score,
+          coding_score: a.coding_score,
+        };
+        });
         setApiAssessments(mapped);
       } else {
         setApiAssessments([]);
@@ -326,6 +382,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       <AssessmentResults
         onBack={() => {
           setShowResults(false);
+          // If we came from the details view, go back to it
+          if (selectedAssessmentForDetails) {
+            setShowDetailsView(true);
+          }
           setSelectedAssessmentForResults(null);
         }}
         assessmentId={selectedAssessmentForResults.id}
@@ -337,33 +397,83 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   if (showDetailsView && selectedAssessmentForDetails) {
     return (
-      <AssessmentDetailsView
-        assessment={selectedAssessmentForDetails}
-        onBack={() => {
-          setShowDetailsView(false);
-          setSelectedAssessmentForDetails(null);
-        }}
-        onEdit={() => {
-          setShowDetailsView(false);
-          setSelectedAssessmentForEdit(selectedAssessmentForDetails);
-          setShowEditModal(true);
-        }}
-        onPreview={() => {
-          setShowDetailsView(false);
-          setSelectedAssessmentForPreview(selectedAssessmentForDetails);
-          setShowPreviewModal(true);
-        }}
-        onShare={() => {
-          setShowDetailsView(false);
-          setSelectedAssessmentForShare(selectedAssessmentForDetails);
-          setShowShareModal(true);
-        }}
-        onViewResults={() => {
-          setShowDetailsView(false);
-          setSelectedAssessmentForResults(selectedAssessmentForDetails);
-          setShowResults(true);
-        }}
-      />
+      <>
+        <AssessmentDetailsView
+          assessment={selectedAssessmentForDetails}
+          onBack={() => {
+            setShowDetailsView(false);
+            setSelectedAssessmentForDetails(null);
+          }}
+          onEdit={() => {
+            // Keep details view open, modal will overlay on top
+            setSelectedAssessmentForEdit(selectedAssessmentForDetails);
+            setShowEditModal(true);
+          }}
+          onPreview={() => {
+            // Keep details view open, modal will overlay on top
+            setSelectedAssessmentForPreview(selectedAssessmentForDetails);
+            setShowPreviewModal(true);
+          }}
+          onShare={() => {
+            // Keep details view open, modal will overlay on top
+            setSelectedAssessmentForShare(selectedAssessmentForDetails);
+            setShowShareModal(true);
+          }}
+          onViewResults={() => {
+            setShowDetailsView(false);
+            setSelectedAssessmentForResults(selectedAssessmentForDetails);
+            setShowResults(true);
+          }}
+          onRefresh={reloadAssessments}
+        />
+
+        {/* Modals - rendered as overlays on top of details view */}
+        {showShareModal && selectedAssessmentForShare && (
+          <ShareAssessmentModal
+            isOpen={showShareModal}
+            onClose={() => {
+              setShowShareModal(false);
+              setSelectedAssessmentForShare(null);
+            }}
+            assessment={selectedAssessmentForShare}
+          />
+        )}
+
+        {showPreviewModal && selectedAssessmentForPreview && (
+          <AssessmentPreviewModal
+            isOpen={showPreviewModal}
+            onClose={() => {
+              setShowPreviewModal(false);
+              setSelectedAssessmentForPreview(null);
+            }}
+            assessment={selectedAssessmentForPreview}
+          />
+        )}
+
+        {showEditModal && selectedAssessmentForEdit && (
+          <AssessmentEditModal
+            isOpen={showEditModal}
+            onClose={() => {
+              setShowEditModal(false);
+              setSelectedAssessmentForEdit(null);
+            }}
+            assessment={selectedAssessmentForEdit}
+            onSave={async (updatedAssessment) => {
+              await reloadAssessments();
+              // Update the selected assessment for details view with fresh data
+              const freshAssessments = await assessmentService.list({ page_size: 100 });
+              const updated = freshAssessments.items.find((a: any) => a.id === selectedAssessmentForDetails.id);
+              if (updated) {
+                const rawStatus = (updated.status || 'draft').toLowerCase();
+                setSelectedAssessmentForDetails({
+                  ...updated,
+                  status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
+                });
+              }
+            }}
+          />
+        )}
+      </>
     );
   }
 
@@ -1032,10 +1142,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 // Create a generic invitation to get a shareable link
                                 const invitation = await assessmentService.invite(assessment.id, {
                                   candidate_name: 'Anonymous Candidate',
-                                  candidate_email: `anonymous-${Date.now()}@placeholder.local`,
+                                  candidate_email: `anonymous-${Date.now()}@example.com`,
                                 });
                                 const shareableLink = `${window.location.origin}/assessment/take/${invitation.token}`;
-                                navigator.clipboard.writeText(shareableLink);
+
+                                // Copy to clipboard with fallback
+                                try {
+                                  await navigator.clipboard.writeText(shareableLink);
+                                } catch (clipboardError) {
+                                  // Fallback for when document is not focused
+                                  const textArea = document.createElement('textarea');
+                                  textArea.value = shareableLink;
+                                  textArea.style.position = 'fixed';
+                                  textArea.style.left = '-9999px';
+                                  document.body.appendChild(textArea);
+                                  textArea.select();
+                                  document.execCommand('copy');
+                                  document.body.removeChild(textArea);
+                                }
                                 alert('Shareable link copied! This link can be used by one candidate.');
                               } catch (error) {
                                 console.error('Failed to generate link:', error);
@@ -1219,10 +1343,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       // Create a generic invitation to get a shareable link
                                       const invitation = await assessmentService.invite(assessment.id, {
                                         candidate_name: 'Anonymous Candidate',
-                                        candidate_email: `anonymous-${Date.now()}@placeholder.local`,
+                                        candidate_email: `anonymous-${Date.now()}@example.com`,
                                       });
                                       const shareableLink = `${window.location.origin}/assessment/take/${invitation.token}`;
-                                      navigator.clipboard.writeText(shareableLink);
+
+                                      // Copy to clipboard with fallback
+                                      try {
+                                        await navigator.clipboard.writeText(shareableLink);
+                                      } catch (clipboardError) {
+                                        // Fallback for when document is not focused
+                                        const textArea = document.createElement('textarea');
+                                        textArea.value = shareableLink;
+                                        textArea.style.position = 'fixed';
+                                        textArea.style.left = '-9999px';
+                                        document.body.appendChild(textArea);
+                                        textArea.select();
+                                        document.execCommand('copy');
+                                        document.body.removeChild(textArea);
+                                      }
                                       alert('Shareable link copied! This link can be used by one candidate.');
                                     } catch (error) {
                                       console.error('Failed to generate link:', error);
@@ -1245,22 +1383,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     try {
                                       const response = await assessmentService.clone(assessment.id);
                                       // Reload assessments to show the new clone
-                                      const listResponse = await assessmentService.list({ page_size: 100 });
-                                      if (listResponse?.items?.length > 0) {
-                                        const mapped = listResponse.items.map((a: any) => ({
-                                          id: a.id,
-                                          title: a.title,
-                                          type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
-                                          duration: `${a.duration_minutes} min`,
-                                          questions: (a.hr_enabled ? 10 : 0) + (a.technical_enabled ? 10 : 0) + (a.coding_enabled ? 5 : 0),
-                                          candidates: a.invitations_count || 0,
-                                          status: a.status === 'published' ? 'Active' : a.status === 'closed' ? 'Completed' : a.status === 'archived' ? 'Archived' : 'Draft',
-                                          passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
-                                          created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-                                          job: { title: a.jd_title || 'General Assessment', department: 'Engineering' }
-                                        }));
-                                        setApiAssessments(mapped);
-                                      }
+                                      // Reload assessments after cloning
+                                      await reloadAssessments();
                                       alert(`Assessment duplicated: "${response.cloned_title}"`);
                                     } catch (error) {
                                       console.error('Failed to duplicate assessment:', error);

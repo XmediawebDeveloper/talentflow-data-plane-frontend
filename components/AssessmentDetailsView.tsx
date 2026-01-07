@@ -1,5 +1,5 @@
-import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
 import { assessmentService } from '@/lib/services';
 
 interface AssessmentDetailsViewProps {
@@ -9,6 +9,7 @@ interface AssessmentDetailsViewProps {
   onPreview: () => void;
   onShare: () => void;
   onViewResults: () => void;
+  onRefresh?: () => void;
 }
 
 interface Section {
@@ -27,9 +28,38 @@ export default function AssessmentDetailsView({
   onEdit,
   onPreview,
   onShare,
-  onViewResults
+  onViewResults,
+  onRefresh
 }: AssessmentDetailsViewProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity'>('overview');
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Fetch recent activity when assessment changes
+  useEffect(() => {
+    const fetchActivity = async () => {
+      if (!assessment?.id) return;
+      setActivityLoading(true);
+      try {
+        const response = await assessmentService.listInvitations(assessment.id, { page_size: 10 });
+        if (response?.items) {
+          // Sort by most recent activity (completed or created)
+          const sorted = [...response.items].sort((a: any, b: any) => {
+            const dateA = new Date(a.completed_at || a.started_at || a.created_at);
+            const dateB = new Date(b.completed_at || b.started_at || b.created_at);
+            return dateB.getTime() - dateA.getTime();
+          });
+          setRecentActivity(sorted.slice(0, 10)); // Latest 10 activities
+        }
+      } catch (error) {
+        console.error('Failed to fetch activity:', error);
+      } finally {
+        setActivityLoading(false);
+      }
+    };
+    fetchActivity();
+  }, [assessment?.id]);
 
   // Construct sections array from individual assessment fields
   const sections = useMemo<Section[]>(() => {
@@ -84,16 +114,31 @@ export default function AssessmentDetailsView({
   }, [assessment.duration_minutes]);
 
   // Analytics data derived from assessment - uses correct API field names
+  const formatTime = (seconds: number | null | undefined): string => {
+    if (seconds == null) return 'N/A';
+    const mins = Math.floor(seconds / 60);
+    if (mins >= 60) {
+      const hrs = Math.floor(mins / 60);
+      const remainingMins = mins % 60;
+      return `${hrs}h ${remainingMins}m`;
+    }
+    return `${mins} min`;
+  };
+
   const analyticsData = {
     totalInvites: assessment.candidates || assessment.invitations_count || 0,
     completed: assessment.completed_count || 0,
     inProgress: 0,  // Not tracked currently
     notStarted: (assessment.candidates || assessment.invitations_count || 0) - (assessment.completed_count || 0),
     averageScore: assessment.average_score as number | null,
-    averageTime: 'N/A',
+    averageTime: formatTime(assessment.average_time_seconds),
     passRate: assessment.pass_rate !== null && assessment.pass_rate !== undefined
       ? `${assessment.pass_rate}%`
-      : 'N/A'
+      : 'N/A',
+    // Section scores
+    hrScore: assessment.hr_score as number | null,
+    technicalScore: assessment.technical_score as number | null,
+    codingScore: assessment.coding_score as number | null,
   };
 
   return (
@@ -351,10 +396,24 @@ export default function AssessmentDetailsView({
                       // Create a generic invitation to get a shareable link
                       const invitation = await assessmentService.invite(assessment.id, {
                         candidate_name: 'Anonymous Candidate',
-                        candidate_email: `anonymous-${Date.now()}@placeholder.local`,
+                        candidate_email: `anonymous-${Date.now()}@example.com`,
                       });
                       const shareableLink = `${window.location.origin}/assessment/take/${invitation.invitation_token}`;
-                      navigator.clipboard.writeText(shareableLink);
+
+                      // Copy to clipboard with fallback
+                      try {
+                        await navigator.clipboard.writeText(shareableLink);
+                      } catch (clipboardError) {
+                        // Fallback for when document is not focused
+                        const textArea = document.createElement('textarea');
+                        textArea.value = shareableLink;
+                        textArea.style.position = 'fixed';
+                        textArea.style.left = '-9999px';
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                      }
                       alert('Shareable link copied! This link can be used by one candidate.');
                     } catch (error) {
                       console.error('Failed to generate link:', error);
@@ -376,23 +435,53 @@ export default function AssessmentDetailsView({
                 </button>
 
                 <button
-                  onClick={() => alert('Downloading PDF...')}
-                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
+                  onClick={async () => {
+                    setActionLoading('export');
+                    try {
+                      const blob = await assessmentService.exportResults(assessment.id, 'csv');
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${assessment.title.replace(/[^a-z0-9]/gi, '_')}_results.csv`;
+                      document.body.appendChild(a);
+                      a.click();
+                      window.URL.revokeObjectURL(url);
+                      document.body.removeChild(a);
+                      alert('Results exported successfully!');
+                    } catch (error) {
+                      console.error('Export failed:', error);
+                      alert('Failed to export results. Make sure there are completed assessments to export.');
+                    } finally {
+                      setActionLoading(null);
+                    }
+                  }}
+                  disabled={actionLoading === 'export'}
+                  className={`p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left ${actionLoading === 'export' ? 'opacity-50 cursor-wait' : ''}`}
                 >
-                  <Download className="w-6 h-6 text-gray-800 mb-2" />
-                  <div className="text-sm font-medium text-gray-900">Export PDF</div>
-                  <div className="text-xs text-gray-600 mt-1">Download template</div>
+                  <Download className={`w-6 h-6 text-gray-800 mb-2 ${actionLoading === 'export' ? 'animate-pulse' : ''}`} />
+                  <div className="text-sm font-medium text-gray-900">{actionLoading === 'export' ? 'Exporting...' : 'Export Results'}</div>
+                  <div className="text-xs text-gray-600 mt-1">Download as CSV</div>
                 </button>
 
                 <button
-                  onClick={() => {
-                    const newAssessment = { ...assessment, id: Date.now().toString(), title: `${assessment.title} (Copy)` };
-                    alert('Assessment duplicated!');
+                  onClick={async () => {
+                    setActionLoading('duplicate');
+                    try {
+                      const result = await assessmentService.clone(assessment.id, `${assessment.title} (Copy)`);
+                      alert(`Assessment duplicated successfully! New assessment: "${result.cloned_title}"`);
+                      onRefresh?.();
+                    } catch (error) {
+                      console.error('Duplicate failed:', error);
+                      alert('Failed to duplicate assessment. Please try again.');
+                    } finally {
+                      setActionLoading(null);
+                    }
                   }}
-                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition-all text-left"
+                  disabled={actionLoading === 'duplicate'}
+                  className={`p-4 border-2 border-gray-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition-all text-left ${actionLoading === 'duplicate' ? 'opacity-50 cursor-wait' : ''}`}
                 >
-                  <Copy className="w-6 h-6 text-green-600 mb-2" />
-                  <div className="text-sm font-medium text-gray-900">Duplicate</div>
+                  <Copy className={`w-6 h-6 text-green-600 mb-2 ${actionLoading === 'duplicate' ? 'animate-pulse' : ''}`} />
+                  <div className="text-sm font-medium text-gray-900">{actionLoading === 'duplicate' ? 'Duplicating...' : 'Duplicate'}</div>
                   <div className="text-xs text-gray-600 mt-1">Create a copy</div>
                 </button>
 
@@ -408,29 +497,50 @@ export default function AssessmentDetailsView({
                 )}
 
                 <button
-                  onClick={() => {
-                    if (confirm('Archive this assessment?')) {
-                      alert('Assessment archived');
+                  onClick={async () => {
+                    if (!confirm('Archive this assessment? It will be moved to the archived section.')) return;
+                    setActionLoading('archive');
+                    try {
+                      await assessmentService.update(assessment.id, { status: 'archived' });
+                      alert('Assessment archived successfully!');
+                      onRefresh?.();
+                      onBack();
+                    } catch (error) {
+                      console.error('Archive failed:', error);
+                      alert('Failed to archive assessment. Please try again.');
+                    } finally {
+                      setActionLoading(null);
                     }
                   }}
-                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
+                  disabled={actionLoading === 'archive' || assessment.status === 'Archived'}
+                  className={`p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left ${actionLoading === 'archive' || assessment.status === 'Archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <Archive className="w-6 h-6 text-gray-600 mb-2" />
-                  <div className="text-sm font-medium text-gray-900">Archive</div>
-                  <div className="text-xs text-gray-600 mt-1">Move to archive</div>
+                  <Archive className={`w-6 h-6 text-gray-600 mb-2 ${actionLoading === 'archive' ? 'animate-pulse' : ''}`} />
+                  <div className="text-sm font-medium text-gray-900">{actionLoading === 'archive' ? 'Archiving...' : 'Archive'}</div>
+                  <div className="text-xs text-gray-600 mt-1">{assessment.status === 'Archived' ? 'Already archived' : 'Move to archive'}</div>
                 </button>
 
                 <button
-                  onClick={() => {
-                    if (confirm('Delete this assessment permanently?')) {
-                      alert('Assessment deleted');
+                  onClick={async () => {
+                    if (!confirm('Delete this assessment permanently? This action cannot be undone.')) return;
+                    setActionLoading('delete');
+                    try {
+                      await assessmentService.delete(assessment.id);
+                      alert('Assessment deleted successfully!');
+                      onRefresh?.();
                       onBack();
+                    } catch (error) {
+                      console.error('Delete failed:', error);
+                      alert('Failed to delete assessment. Only draft assessments can be deleted.');
+                    } finally {
+                      setActionLoading(null);
                     }
                   }}
-                  className="p-4 border-2 border-red-200 rounded-lg hover:border-red-300 hover:bg-red-50 transition-all text-left"
+                  disabled={actionLoading === 'delete'}
+                  className={`p-4 border-2 border-red-200 rounded-lg hover:border-red-300 hover:bg-red-50 transition-all text-left ${actionLoading === 'delete' ? 'opacity-50 cursor-wait' : ''}`}
                 >
-                  <Trash2 className="w-6 h-6 text-red-600 mb-2" />
-                  <div className="text-sm font-medium text-gray-900">Delete</div>
+                  <Trash2 className={`w-6 h-6 text-red-600 mb-2 ${actionLoading === 'delete' ? 'animate-pulse' : ''}`} />
+                  <div className="text-sm font-medium text-gray-900">{actionLoading === 'delete' ? 'Deleting...' : 'Delete'}</div>
                   <div className="text-xs text-gray-600 mt-1">Permanent removal</div>
                 </button>
               </div>
@@ -661,11 +771,70 @@ export default function AssessmentDetailsView({
               <h3 className="text-lg text-gray-900">Recent Activity</h3>
             </div>
 
-            <div className="px-6 py-12 text-center">
-              <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-600 mb-1">No activity recorded yet</p>
-              <p className="text-sm text-gray-500">Activity will appear here as candidates take the assessment</p>
-            </div>
+            {activityLoading ? (
+              <div className="px-6 py-12 text-center">
+                <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
+                <p className="text-gray-600">Loading activity...</p>
+              </div>
+            ) : recentActivity.length === 0 ? (
+              <div className="px-6 py-12 text-center">
+                <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-600 mb-1">No activity recorded yet</p>
+                <p className="text-sm text-gray-500">Activity will appear here as candidates take the assessment</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {recentActivity.map((activity: any) => {
+                  const getActivityInfo = () => {
+                    if (activity.status === 'completed') {
+                      return { icon: CheckCircle, color: 'text-green-600 bg-green-100', label: 'Completed assessment' };
+                    } else if (activity.status === 'in_progress') {
+                      return { icon: Play, color: 'text-blue-600 bg-blue-100', label: 'Started assessment' };
+                    } else if (activity.status === 'expired') {
+                      return { icon: XCircle, color: 'text-red-600 bg-red-100', label: 'Assessment expired' };
+                    }
+                    return { icon: Mail, color: 'text-gray-600 bg-gray-100', label: 'Invited to assessment' };
+                  };
+
+                  const info = getActivityInfo();
+                  const ActivityIcon = info.icon;
+                  const activityDate = activity.completed_at || activity.started_at || activity.created_at;
+                  const formattedDate = activityDate ? new Date(activityDate).toLocaleDateString('en-US', {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                  }) : 'N/A';
+
+                  return (
+                    <div key={activity.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${info.color}`}>
+                          <ActivityIcon className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-medium text-gray-900">{activity.candidate_name || 'Unknown'}</span>
+                              <span className="text-gray-500 ml-2">{info.label}</span>
+                            </div>
+                            <span className="text-sm text-gray-500">{formattedDate}</span>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-0.5">{activity.candidate_email}</p>
+                          {activity.status === 'completed' && activity.overall_score != null && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`text-sm font-medium ${activity.passed ? 'text-green-600' : 'text-red-600'}`}>
+                                Score: {Math.round(activity.overall_score)}%
+                              </span>
+                              <span className={`px-2 py-0.5 rounded text-xs ${activity.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {activity.passed ? 'Passed' : 'Failed'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
