@@ -33,6 +33,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const [trialDays, setTrialDays] = useState<number>(14);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -43,6 +44,24 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     setIsDark(document.documentElement.classList.contains('dark'));
 
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Fetch trial days from API
+  useEffect(() => {
+    const fetchTrialDays = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+        const response = await fetch(`${API_URL}/addons/free-trial`);
+        if (response.ok) {
+          const result = await response.json();
+          const days = result?.data?.trial_days || 14;
+          setTrialDays(days);
+        }
+      } catch (err) {
+        console.error('Error fetching trial days:', err);
+      }
+    };
+    fetchTrialDays();
   }, []);
 
   // Styles
@@ -527,7 +546,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             <div style={trustIndicatorsStyle}>
               <div style={trustItemStyle}>
                 <CheckCircle2 style={{ width: 20, height: 20, color: '#22C55E' }} />
-                <span>14-day free trial</span>
+                <span>{trialDays}-day free trial</span>
               </div>
               <div style={trustItemStyle}>
                 <CheckCircle2 style={{ width: 20, height: 20, color: '#22C55E' }} />

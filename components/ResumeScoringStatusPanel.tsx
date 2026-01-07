@@ -2,7 +2,9 @@
 
 import { CheckCircle2, Loader2, XCircle, Target, TrendingUp, Clock, AlertCircle, RefreshCw, History, Minus } from 'lucide-react';
 import { useState, useEffect, useRef, Fragment } from 'react';
+import { useRouter } from 'next/navigation';
 import { scoringService } from '@/lib/services';
+import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 
 interface AttemptHistory {
   attemptNumber: number;
@@ -74,6 +76,7 @@ export default function ResumeScoringStatusPanel({
   jobId,
   onMinimize
 }: ResumeScoringStatusPanelProps) {
+  const router = useRouter();
   const [scoringResumes, setScoringResumes] = useState<ScoringResume[]>(
     resumes.map(r => ({
       ...r,
@@ -171,6 +174,19 @@ export default function ResumeScoringStatusPanel({
           ));
         } catch (error: any) {
           console.error(`[Scoring] Error scoring ${resume.name}:`, error);
+
+          // Check if this is a quota error first
+          const isQuotaError = error?.response?.data?.detail &&
+            typeof error.response.data.detail === 'object' &&
+            (error.response.data.detail.error === 'QUOTA_EXHAUSTED' ||
+             error.response.data.detail.error === 'QUOTA_INSUFFICIENT');
+
+          if (isQuotaError) {
+            // Handle quota error with UI prompts
+            handleQuotaError(error, router, 'Resume scoring quota exceeded');
+            // Don't continue processing other resumes
+            break;
+          }
 
           // Check if this is a duplicate score error
           let errorReason = error.message || 'Failed to score resume';

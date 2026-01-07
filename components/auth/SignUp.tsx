@@ -56,6 +56,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const [emailError, setEmailError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [trialDays, setTrialDays] = useState<number>(14);
 
   // OTP state (inline, not popup)
   const [otpSent, setOtpSent] = useState(false);
@@ -75,6 +76,23 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Fetch trial days from API
+  useEffect(() => {
+    const fetchTrialDays = async () => {
+      try {
+        const response = await fetch(`${API_URL}/addons/free-trial`);
+        if (response.ok) {
+          const result = await response.json();
+          const days = result?.data?.trial_days || 14;
+          setTrialDays(days);
+        }
+      } catch (err) {
+        console.error('Error fetching trial days:', err);
+      }
+    };
+    fetchTrialDays();
   }, []);
 
   // Resend timer countdown
@@ -608,7 +626,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                 <CheckCircle style={{ width: 20, height: 20, color: '#16A34A' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>14-Day Free Trial</div>
+                <div style={{ color: '#111827', fontWeight: 500 }}>{trialDays}-Day Free Trial</div>
                 <div style={{ fontSize: 14, color: '#6B7280' }}>No credit card required</div>
               </div>
             </div>

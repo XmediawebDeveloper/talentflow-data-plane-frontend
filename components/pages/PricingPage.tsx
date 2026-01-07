@@ -84,6 +84,24 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
   const [plans, setPlans] = useState<DisplayPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [trialDays, setTrialDays] = useState<number>(14);
+
+  // Fetch trial days from API
+  useEffect(() => {
+    const fetchTrialDays = async () => {
+      try {
+        const response = await fetch(`${ADMIN_API_URL}/public/settings/free-trial`);
+        if (response.ok) {
+          const result = await response.json();
+          const days = result?.data?.trial_days || 14;
+          setTrialDays(days);
+        }
+      } catch (err) {
+        console.error('Error fetching trial days:', err);
+      }
+    };
+    fetchTrialDays();
+  }, []);
 
   // Fetch plans from API
   useEffect(() => {
@@ -428,7 +446,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
           </div>
           <h1 style={titleStyle}>Choose the right plan for your team</h1>
           <p style={subtitleStyle}>
-            Start with a 14-day free trial. No credit card required.
+            Start with a {trialDays}-day free trial. No credit card required.
           </p>
 
           {/* Billing Toggle */}
