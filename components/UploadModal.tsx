@@ -1,8 +1,8 @@
-import { X, Upload, File, Trash2, FolderPlus, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { X, Upload, File, Trash2, FolderPlus, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, CreditCard } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
-import { recordResumeUpload } from '@/lib/services/usageTrackingService';
+import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
 
 // Default constants for fallback
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -55,7 +55,27 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const [validationErrors, setValidationErrors] = useState<FileValidationError[]>([]);
   const [isValidating, setIsValidating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isCheckingQuota, setIsCheckingQuota] = useState(false);
+  const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check quota status on mount
+  useEffect(() => {
+    const fetchQuotaStatus = async () => {
+      setIsCheckingQuota(true);
+      try {
+        const result = await checkQuotaStatus();
+        if (result.status === 'success' && result.data?.quotas?.RU) {
+          setQuotaInfo(result.data.quotas.RU);
+        }
+      } catch (error) {
+        console.error('Failed to check quota status:', error);
+      } finally {
+        setIsCheckingQuota(false);
+      }
+    };
+    fetchQuotaStatus();
+  }, []);
 
   // Get tenant-specific limits or use defaults
   const maxFileSizeMB = tenant?.subscription.limits.maxFileSizeMB || 10;
@@ -249,6 +269,19 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     const totalSizeMB = selectedFiles.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024);
     const availableStorageMB = storageLimitMB - storageUsedMB;
 
+    // Check RU quota before upload
+    setIsCheckingQuota(true);
+    const quotaCheck = await hasAvailableQuota('RU', selectedFiles.length);
+    setIsCheckingQuota(false);
+
+    if (!quotaCheck.hasQuota) {
+      errors.push({
+        fileName: '',
+        error: quotaCheck.error || `Insufficient Resume Upload (RU) units. You need ${selectedFiles.length} units but only have ${quotaCheck.remaining} remaining. Please upgrade your plan or purchase additional units.`,
+        type: 'limit'
+      });
+    }
+
     if (totalSizeMB > availableStorageMB) {
       errors.push({
         fileName: '',
@@ -300,8 +333,8 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const storagePercentage = (storageUsedMB / storageLimitMB) * 100;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto relative">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-xl text-gray-900">Upload Resume</h2>
@@ -350,6 +383,56 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                     </span>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RU Quota Indicator */}
+          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <CreditCard className="w-5 h-5 text-blue-800 mt-0.5" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-900">Resume Upload Units (RU)</span>
+                  {isCheckingQuota ? (
+                    <span className="text-sm text-gray-500">Checking...</span>
+                  ) : quotaInfo ? (
+                    <span className="text-sm text-gray-700">
+                      {quotaInfo.total_remaining.toLocaleString()} / {quotaInfo.subscription.limit.toLocaleString()} available
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-500">Unable to check quota</span>
+                  )}
+                </div>
+                {quotaInfo && (
+                  <>
+                    <div className="w-full bg-blue-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all ${
+                          quotaInfo.subscription.percentage >= 90 ? 'bg-red-600' :
+                          quotaInfo.subscription.percentage >= 70 ? 'bg-yellow-500' :
+                          'bg-blue-600'
+                        }`}
+                        style={{ width: `${Math.min(100, quotaInfo.subscription.percentage)}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-xs text-gray-600">
+                        {quotaInfo.subscription.used.toLocaleString()} used
+                      </span>
+                      {quotaInfo.status === 'LOW' && (
+                        <span className="text-xs text-amber-600 font-medium">
+                          Low quota - consider upgrading
+                        </span>
+                      )}
+                      {quotaInfo.status === 'EXHAUSTED' && (
+                        <span className="text-xs text-red-600 font-medium">
+                          Quota exhausted - upgrade required
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -646,10 +729,18 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           </button>
           <button
             onClick={handleValidateAndUpload}
-            disabled={selectedFiles.length === 0 || isUploading}
+            disabled={selectedFiles.length === 0 || isUploading || isCheckingQuota || (quotaInfo?.status === 'EXHAUSTED')}
             className="px-8 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {isUploading ? (
+            {isCheckingQuota ? (
+              <>
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Checking Quota...
+              </>
+            ) : isUploading ? (
               <>
                 <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
@@ -657,6 +748,8 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 </svg>
                 Uploading...
               </>
+            ) : quotaInfo?.status === 'EXHAUSTED' ? (
+              'Quota Exhausted - Upgrade Plan'
             ) : selectedFiles.length === 0
               ? 'Upload'
               : `Upload ${selectedFiles.length} Resume${selectedFiles.length !== 1 ? 's' : ''}`

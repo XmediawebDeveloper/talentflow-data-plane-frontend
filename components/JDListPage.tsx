@@ -474,12 +474,6 @@ export default function JDListPage() {
                             <span className="capitalize">{jd.remote_type.replace('_', ' ')}</span>
                           </span>
                         )}
-                        {jd.created_by_name && (
-                          <span className="flex items-center gap-1">
-                            <User className="w-4 h-4" />
-                            Posted by {jd.created_by_name}
-                          </span>
-                        )}
                         <span className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
                           Created {formatDate(jd.created_at)}
@@ -492,7 +486,13 @@ export default function JDListPage() {
                         {jd.published_at && (
                           <span className="flex items-center gap-1">
                             <CheckCircle2 className="w-4 h-4 text-green-500" />
-                            Published {formatDate(jd.published_at)}
+                            Posted {formatDate(jd.published_at)}
+                          </span>
+                        )}
+                        {jd.created_by_name && (
+                          <span className="flex items-center gap-1">
+                            <User className="w-4 h-4" />
+                            Created by {jd.created_by_name}
                           </span>
                         )}
                       </div>

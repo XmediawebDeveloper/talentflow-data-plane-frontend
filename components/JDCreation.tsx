@@ -17,7 +17,7 @@ type Step = 'create' | 'extract' | 'review';
 
 // Validation constants
 const VALIDATION = {
-  JOB_TITLE: { min: 1, max: 75 },
+  JOB_TITLE: { min: 2, max: 75 },
   AI_PROMPT: { min: 30, max: 1500 },
   MANUAL_JD: { min: 100, max: 10000 },
   ASSESSMENT_GUIDANCE: { min: 10, max: 100 },

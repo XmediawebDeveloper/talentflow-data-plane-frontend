@@ -207,6 +207,121 @@ export async function recordStorageUsage(amountGb: number, resourceId?: string, 
   });
 }
 
+// Quota status response interface
+export interface QuotaInfo {
+  subscription: {
+    limit: number;
+    used: number;
+    remaining: number;
+    percentage: number;
+  };
+  addon: {
+    total_purchased: number;
+    total_consumed: number;
+    remaining: number;
+  };
+  total_remaining: number;
+  status: 'OK' | 'LOW' | 'EXHAUSTED';
+}
+
+export interface QuotaStatusResponse {
+  status: 'success' | 'error';
+  data?: {
+    tenant_id: string;
+    is_trial: boolean;
+    quota_source: string;
+    plan_name: string;
+    quotas: {
+      RU?: QuotaInfo;
+      RS?: QuotaInfo;
+      AS?: QuotaInfo;
+      AIU?: QuotaInfo;
+      storage_gb?: QuotaInfo;
+      max_jobs?: QuotaInfo;
+      max_seats?: QuotaInfo;
+    };
+    subscription_status: string;
+  };
+  error?: string;
+}
+
+/**
+ * Check quota status for the current tenant
+ * Calls GET /api/v1/usage/quota-status
+ */
+export async function checkQuotaStatus(): Promise<QuotaStatusResponse> {
+  if (typeof window === 'undefined') {
+    return { status: 'error', error: 'Not in browser context' };
+  }
+
+  const accessToken = localStorage.getItem('accessToken');
+  if (!accessToken) {
+    return { status: 'error', error: 'No access token available' };
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/usage/quota-status`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      return {
+        status: 'success',
+        data: data.data || data,
+      };
+    } else if (response.status === 402) {
+      return {
+        status: 'error',
+        error: 'Quota exhausted. Please upgrade your plan or purchase additional units.',
+      };
+    } else {
+      return {
+        status: 'error',
+        error: data.detail || data.message || 'Failed to check quota status',
+      };
+    }
+  } catch (error) {
+    console.error('Error checking quota status:', error);
+    return {
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
+
+/**
+ * Check if there are sufficient units for a specific quota type
+ * @param quotaType - The quota type to check (RU, RS, AS, AIU)
+ * @param requiredUnits - Number of units required (default: 1)
+ * @returns Object with hasQuota boolean and remaining units
+ */
+export async function hasAvailableQuota(
+  quotaType: QuotaType,
+  requiredUnits: number = 1
+): Promise<{ hasQuota: boolean; remaining: number; error?: string }> {
+  const result = await checkQuotaStatus();
+
+  if (result.status === 'error') {
+    return { hasQuota: false, remaining: 0, error: result.error };
+  }
+
+  const quotaInfo = result.data?.quotas?.[quotaType];
+  if (!quotaInfo) {
+    return { hasQuota: false, remaining: 0, error: `Quota type ${quotaType} not found` };
+  }
+
+  const remaining = quotaInfo.total_remaining;
+  const hasQuota = remaining >= requiredUnits;
+
+  return { hasQuota, remaining };
+}
+
 export default {
   recordUsage,
   recordResumeUpload,
@@ -214,5 +329,7 @@ export default {
   recordAssessment,
   recordAIInterview,
   recordStorageUsage,
+  checkQuotaStatus,
+  hasAvailableQuota,
   QUOTA_TYPE_LABELS,
 };
