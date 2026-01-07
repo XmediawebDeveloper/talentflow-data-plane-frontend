@@ -7,6 +7,7 @@ import AITalentMatchPageJobsList from './AITalentMatchPageJobsList';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import { recordUsage } from '@/lib/services/usageTrackingService';
 import { MatchedCandidate } from '@/lib/services/aiMatchService';
+import api from '@/lib/services/api';
 
 interface Job {
   id: string;
@@ -74,6 +75,9 @@ export default function AITalentMatchPage({
   // Versions modal
   const [selectedVersionsCandidate, setSelectedVersionsCandidate] = useState<MatchedCandidateWithVersions | null>(null);
 
+  // Available units from quota API
+  const [availableUnits, setAvailableUnits] = useState<number | null>(null);
+
   // Handle preselected job from JD view page
   useEffect(() => {
     const preselectedJobId = sessionStorage.getItem('preselectedJobId');
@@ -112,6 +116,23 @@ export default function AITalentMatchPage({
       }, 500);
     }
   }, [jobs, matchHistory]);
+
+  // Fetch available units on mount
+  useEffect(() => {
+    const fetchQuota = async () => {
+      try {
+        const response = await api.get('/usage/quota-status');
+        const quotas = response.data?.data?.quotas;
+        // AI Talent Match uses Resume Scoring (RS) quota
+        if (quotas?.RS) {
+          setAvailableUnits(quotas.RS.total_remaining || 0);
+        }
+      } catch (error) {
+        console.log('[AITalentMatchPage] Failed to load quota:', error);
+      }
+    };
+    fetchQuota();
+  }, []);
 
   const publishedJobs = jobs.filter(j => j.status === 'Published' || j.status === 'Active');
   const selectedJobData = jobs.find(j => j.id === selectedJob);
@@ -517,20 +538,22 @@ export default function AITalentMatchPage({
             </div>
             
             {/* Units Display */}
-            <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-gray-300">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-100 mb-0.5">Available Units</div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-bold text-white">250</span>
-                    <span className="text-xs text-gray-100">units</span>
+            {availableUnits !== null && (
+              <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-gray-300">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                    <DollarSign className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-100 mb-0.5">Available Units</div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xl font-bold text-white">{availableUnits.toLocaleString()}</span>
+                      <span className="text-xs text-gray-100">units</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
             
             <button
               onClick={() => {

@@ -1,7 +1,9 @@
 import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, FileText, Users, Upload, Database } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
 import api from '@/lib/services/api';
+import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 
 interface ShareAssessmentModalProps {
   isOpen: boolean;
@@ -34,6 +36,7 @@ interface Resume {
 }
 
 export default function ShareAssessmentModal({ isOpen, onClose, assessment }: ShareAssessmentModalProps) {
+  const router = useRouter();
   const [inputMode, setInputMode] = useState<'manual' | 'database'>('manual');
   const [candidates, setCandidates] = useState<CandidateEmail[]>([
     { id: '1', name: '', email: '', source: 'manual' }
@@ -180,7 +183,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
     } catch (error) {
       console.error('Failed to send invitations:', error);
       setIsSubmitting(false);
-      alert(`Failed to send invitations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      handleQuotaError(error, router, `Failed to send invitations: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

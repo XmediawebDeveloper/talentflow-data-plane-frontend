@@ -2,9 +2,11 @@
 
 import { X, Users, Database, Search, CheckSquare, Square, Loader2, Mail, Phone, Briefcase, MapPin, Calendar, Target, ArrowLeft, FolderOpen, ChevronRight, ChevronDown, Folder } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { resumeService, folderService, Resume, Folder as FolderType } from '@/lib/services/resumeService';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
+import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 
 interface SelectSourceModalProps {
   onClose: () => void;
@@ -19,6 +21,8 @@ export default function SelectSourceModal({
   jobId,
   onScoringComplete
 }: SelectSourceModalProps) {
+  const router = useRouter();
+
   // State
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
   const [resumes, setResumes] = useState<Resume[]>([]);
@@ -144,7 +148,7 @@ export default function SelectSourceModal({
       onClose();
     } catch (error) {
       console.error('Failed to submit for scoring:', error);
-      toast.error('Failed to submit resumes for scoring');
+      handleQuotaError(error, router, 'Failed to submit resumes for scoring');
     } finally {
       setSubmitting(false);
     }

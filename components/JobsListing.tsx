@@ -783,71 +783,117 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         </span>
                       </div>
 
-                      {/* Actions - Hide for Draft status */}
-                      {job.status !== 'Draft' && (
-                        <div className="flex flex-wrap gap-2">
-                          {/* View Button - For Published and other statuses */}
+                      {/* Actions */}
+                      <div className="flex flex-wrap gap-2 items-center">
+                        {/* Edit Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onEditJob) onEditJob(job);
+                          }}
+                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center gap-2"
+                        >
+                          <Edit className="w-4 h-4" />
+                          Edit
+                        </button>
+
+                        {/* View Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onViewJob(job);
+                          }}
+                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center gap-2"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </button>
+
+                        {/* Three-dot Menu */}
+                        <div className="relative">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onViewJob(job);
+                              setActiveDropdown(activeDropdown === job.id ? null : job.id);
                             }}
-                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center gap-2"
+                            className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
                           >
-                            <Eye className="w-4 h-4" />
-                            View
+                            <MoreVertical className="w-4 h-4 text-gray-600" />
                           </button>
-
-                          {/* Edit Button - For Published */}
-                          {job.status === 'Published' && onEditJob && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onEditJob(job);
-                              }}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium flex items-center gap-2"
-                            >
-                              <Edit className="w-4 h-4" />
-                              Edit
-                            </button>
-                          )}
-
-                          {/* Disable Button - Only for Published */}
-                          {job.status === 'Published' && onDisableJob && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDisableJob(job);
-                              }}
-                              className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-sm font-medium flex items-center gap-2"
-                            >
-                              <Ban className="w-4 h-4" />
-                              Disable
-                            </button>
-                          )}
-
-                          {/* Republish Button - Only for Closed/Disabled */}
-                          {(job.status === 'Closed' || job.status === 'Disabled') && onRepublishJob && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onRepublishJob(job);
-                              }}
-                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium flex items-center gap-2"
-                            >
-                              <RefreshCw className="w-4 h-4" />
-                              Republish
-                            </button>
+                          {activeDropdown === job.id && (
+                            <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                              {/* View Applicants */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onViewJob(job);
+                                  setActiveDropdown(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                              >
+                                <Users className="w-4 h-4" />
+                                View Applicants
+                              </button>
+                              {/* Publish for Draft */}
+                              {job.status === 'Draft' && onPublishJob && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onPublishJob(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                                >
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  Publish
+                                </button>
+                              )}
+                              {/* Disable Job for Published */}
+                              {job.status === 'Published' && onDisableJob && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDisableJob(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
+                                >
+                                  <Ban className="w-4 h-4" />
+                                  Disable Job
+                                </button>
+                              )}
+                              {/* Republish for Disabled */}
+                              {job.status === 'Disabled' && onRepublishJob && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRepublishJob(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <RefreshCw className="w-4 h-4" />
+                                  Republish
+                                </button>
+                              )}
+                              {/* Archive Job */}
+                              {job.status !== 'Archived' && onArchiveJob && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onArchiveJob(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Archive className="w-4 h-4" />
+                                  Archive Job
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
-                      )}
-
-                      {/* Draft - Show "Continue" hint */}
-                      {job.status === 'Draft' && (
-                        <div className="text-center text-base text-yellow-600 py-3">
-                          Click to continue editing
-                        </div>
-                      )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -946,71 +992,117 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         </div>
                       </div>
 
-                      {/* Actions - Hide for Draft status */}
-                      {job.status !== 'Draft' && (
-                        <div className="flex flex-wrap gap-2 flex-shrink-0">
-                          {/* View Button - For Published and other statuses */}
+                      {/* Actions */}
+                      <div className="flex flex-wrap gap-2 flex-shrink-0 items-center">
+                        {/* Edit Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onEditJob) onEditJob(job);
+                          }}
+                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center gap-2"
+                        >
+                          <Edit className="w-4 h-4" />
+                          Edit
+                        </button>
+
+                        {/* View Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onViewJob(job);
+                          }}
+                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center gap-2"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </button>
+
+                        {/* Three-dot Menu */}
+                        <div className="relative">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onViewJob(job);
+                              setActiveDropdown(activeDropdown === job.id ? null : job.id);
                             }}
-                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center gap-2"
+                            className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
                           >
-                            <Eye className="w-4 h-4" />
-                            View
+                            <MoreVertical className="w-4 h-4 text-gray-600" />
                           </button>
-
-                          {/* Edit Button - For Published */}
-                          {job.status === 'Published' && onEditJob && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onEditJob(job);
-                              }}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium flex items-center gap-2"
-                            >
-                              <Edit className="w-4 h-4" />
-                              Edit
-                            </button>
-                          )}
-
-                          {/* Disable Button - Only for Published */}
-                          {job.status === 'Published' && onDisableJob && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDisableJob(job);
-                              }}
-                              className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-sm font-medium flex items-center gap-2"
-                            >
-                              <Ban className="w-4 h-4" />
-                              Disable
-                            </button>
-                          )}
-
-                          {/* Republish Button - Only for Closed/Disabled */}
-                          {(job.status === 'Closed' || job.status === 'Disabled') && onRepublishJob && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onRepublishJob(job);
-                              }}
-                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium flex items-center gap-2"
-                            >
-                              <RefreshCw className="w-4 h-4" />
-                              Republish
-                            </button>
+                          {activeDropdown === job.id && (
+                            <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                              {/* View Applicants */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onViewJob(job);
+                                  setActiveDropdown(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                              >
+                                <Users className="w-4 h-4" />
+                                View Applicants
+                              </button>
+                              {/* Publish for Draft */}
+                              {job.status === 'Draft' && onPublishJob && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onPublishJob(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                                >
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  Publish
+                                </button>
+                              )}
+                              {/* Disable Job for Published */}
+                              {job.status === 'Published' && onDisableJob && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDisableJob(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
+                                >
+                                  <Ban className="w-4 h-4" />
+                                  Disable Job
+                                </button>
+                              )}
+                              {/* Republish for Disabled */}
+                              {job.status === 'Disabled' && onRepublishJob && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRepublishJob(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <RefreshCw className="w-4 h-4" />
+                                  Republish
+                                </button>
+                              )}
+                              {/* Archive Job */}
+                              {job.status !== 'Archived' && onArchiveJob && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onArchiveJob(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Archive className="w-4 h-4" />
+                                  Archive Job
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
-                      )}
-
-                      {/* Draft - Show "Continue" hint */}
-                      {job.status === 'Draft' && (
-                        <div className="flex items-center text-base text-yellow-600 px-5">
-                          <span>Click to continue editing →</span>
-                        </div>
-                      )}
+                      </div>
                     </div>
                   </div>
                 );

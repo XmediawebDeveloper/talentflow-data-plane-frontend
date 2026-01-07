@@ -1,8 +1,9 @@
 import { Bell, Search, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User as UserType } from '@/lib/types/tenant';
 import NotificationCenter from './NotificationCenter';
 import QuickActions from './QuickActions';
+import api from '@/lib/services/api';
 
 interface HeaderProps {
   onLogout: () => void;
@@ -19,13 +20,60 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
+  const [quotaData, setQuotaData] = useState<any>(null);
+  const [loadingQuota, setLoadingQuota] = useState(true);
+
+  // Fetch quota status from API
+  useEffect(() => {
+    const fetchQuotaStatus = async () => {
+      try {
+        const response = await api.get('/usage/quota-status');
+        if (response.data?.status === 'success') {
+          setQuotaData(response.data.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch quota status:', error);
+      } finally {
+        setLoadingQuota(false);
+      }
+    };
+
+    fetchQuotaStatus();
+  }, []);
   
+  // Calculate total units (RU + RS + AS + AIU + max_jobs + max_seats)
+  const calculateTotalUnits = () => {
+    if (!quotaData?.quotas) return { remaining: 0, limit: 0, used: 0 };
+
+    const quotas = quotaData.quotas;
+    // Include ALL quota types - both consumable units and limits
+    const allQuotaTypes = ['RU', 'RS', 'AS', 'AIU', 'max_jobs', 'max_seats'];
+
+    let totalRemaining = 0;
+    let totalLimit = 0;
+    let totalUsed = 0;
+
+    allQuotaTypes.forEach(quotaType => {
+      if (quotas[quotaType]) {
+        totalRemaining += quotas[quotaType].total_remaining || 0;
+        totalLimit += (quotas[quotaType].subscription?.limit || 0) + (quotas[quotaType].addon?.total_purchased || 0);
+        totalUsed += quotas[quotaType].subscription?.used || 0;
+      }
+    });
+
+    return { remaining: totalRemaining, limit: totalLimit, used: totalUsed };
+  };
+
+  const totalUnits = calculateTotalUnits();
+  const planName = quotaData?.plan_name || 'Professional Plan';
+  const usagePercentage = totalUnits.limit > 0 ? ((totalUnits.used / totalUnits.limit) * 100) : 0;
+
   const roleLabels = {
     tenant_admin: 'Tenant Admin',
     recruiter: 'Recruiter',
     viewer: 'Viewer',
   };
-  
+
   const roleBadgeColors = {
     tenant_admin: 'bg-gray-200 text-gray-700 border-gray-300',
     recruiter: 'bg-gray-100 text-gray-600 border-gray-200',
@@ -81,8 +129,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           >
             <CreditCard className="w-4 h-4" />
             <div className="text-left">
-              <div className="text-xs leading-tight">Professional Plan</div>
-              <div className="text-sm font-medium leading-tight">850 Units</div>
+              <div className="text-xs leading-tight">{loadingQuota ? 'Loading...' : planName}</div>
+              <div className="text-sm font-medium leading-tight">
+                {loadingQuota ? '...' : `${totalUnits.remaining.toLocaleString()} Units`}
+              </div>
             </div>
             <ChevronDown className="w-4 h-4" />
           </button>
@@ -97,8 +147,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 <div className="px-4 py-3 bg-gray-800 text-white">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-medium">Professional Plan</h3>
-                      <p className="text-sm text-gray-300 mt-1">Active until Dec 31, 2025</p>
+                      <h3 className="font-medium">{planName}</h3>
+                      <p className="text-sm text-gray-300 mt-1">
+                        {quotaData?.billing_period?.end_date
+                          ? `Active until ${new Date(quotaData.billing_period.end_date).toLocaleDateString()}`
+                          : 'Active'
+                        }
+                      </p>
                     </div>
                     <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
                       <Users className="w-5 h-5 text-white" />
@@ -124,131 +179,170 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-gray-600">Unit Balance</span>
-                      <span className="text-lg font-medium text-gray-900">850 / 1,000</span>
+                      <span className="text-lg font-medium text-gray-900">
+                        {loadingQuota ? 'Loading...' : `${totalUnits.remaining.toLocaleString()} / ${totalUnits.limit.toLocaleString()}`}
+                      </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-gray-700 h-2 rounded-full" style={{ width: '85%' }}></div>
+                      <div
+                        className="bg-gray-700 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                      ></div>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">150 units consumed this month</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {loadingQuota ? 'Calculating...' : `${totalUnits.used.toLocaleString()} units consumed`}
+                    </p>
                   </div>
 
-                  {/* Team Usage Stats */}
+                  {/* Quota Breakdown by Type */}
                   <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-sm text-gray-900 flex items-center gap-1.5">
                         <Activity className="w-4 h-4 text-gray-600" />
-                        Team Activity
-                      </h4>
-                      <span className="text-xs text-gray-500">Last 7 days</span>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-gray-700 text-white flex items-center justify-center text-xs">
-                            SM
-                          </div>
-                          <span className="text-gray-900">Sarah Mitchell</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-600">42 units</span>
-                          <div className="w-12 bg-gray-200 rounded-full h-1">
-                            <div className="bg-gray-700 h-1 rounded-full" style={{ width: '70%' }}></div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-gray-600 text-white flex items-center justify-center text-xs">
-                            JD
-                          </div>
-                          <span className="text-gray-900">John Davis</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-600">38 units</span>
-                          <div className="w-12 bg-gray-200 rounded-full h-1">
-                            <div className="bg-gray-600 h-1 rounded-full" style={{ width: '63%' }}></div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-gray-500 text-white flex items-center justify-center text-xs">
-                            EP
-                          </div>
-                          <span className="text-gray-900">Emma Parker</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-600">31 units</span>
-                          <div className="w-12 bg-gray-200 rounded-full h-1">
-                            <div className="bg-gray-500 h-1 rounded-full" style={{ width: '52%' }}></div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>+5 other members</span>
-                        <span>39 units</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Usage Breakdown */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm text-gray-900 flex items-center gap-1.5">
-                        <TrendingUp className="w-4 h-4 text-gray-600" />
-                        Usage Breakdown
+                        Quota Overview
                       </h4>
                     </div>
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-gray-700 rounded-full"></div>
-                          <span className="text-gray-600">Resume Parsing</span>
+                      {/* Resume Upload */}
+                      {quotaData?.quotas?.RU && (
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                            <span className="text-gray-900">Resume Upload</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-600">
+                              {quotaData.quotas.RU.total_remaining || 0} / {((quotaData.quotas.RU.subscription?.limit || 0) + (quotaData.quotas.RU.addon?.total_purchased || 0)).toLocaleString()}
+                            </span>
+                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className="bg-blue-600 h-1.5 rounded-full"
+                                style={{ width: `${Math.min((quotaData.quotas.RU.subscription?.used || 0) / ((quotaData.quotas.RU.subscription?.limit || 0) + (quotaData.quotas.RU.addon?.total_purchased || 0)) * 100, 100)}%` }}
+                              ></div>
+                            </div>
+                          </div>
                         </div>
-                        <span className="text-gray-900">78 units</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                          <span className="text-gray-600">AI Interviews</span>
+                      )}
+                      {/* Resume Scoring */}
+                      {quotaData?.quotas?.RS && (
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-purple-600 rounded-full"></div>
+                            <span className="text-gray-900">Resume Scoring</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-600">
+                              {quotaData.quotas.RS.total_remaining || 0} / {((quotaData.quotas.RS.subscription?.limit || 0) + (quotaData.quotas.RS.addon?.total_purchased || 0)).toLocaleString()}
+                            </span>
+                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className="bg-purple-600 h-1.5 rounded-full"
+                                style={{ width: `${Math.min((quotaData.quotas.RS.subscription?.used || 0) / ((quotaData.quotas.RS.subscription?.limit || 0) + (quotaData.quotas.RS.addon?.total_purchased || 0)) * 100, 100)}%` }}
+                              ></div>
+                            </div>
+                          </div>
                         </div>
-                        <span className="text-gray-900">45 units</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                          <span className="text-gray-600">Assessments</span>
+                      )}
+                      {/* Assessments */}
+                      {quotaData?.quotas?.AS && (
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                            <span className="text-gray-900">Assessments</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-600">
+                              {quotaData.quotas.AS.total_remaining || 0} / {((quotaData.quotas.AS.subscription?.limit || 0) + (quotaData.quotas.AS.addon?.total_purchased || 0)).toLocaleString()}
+                            </span>
+                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className="bg-green-600 h-1.5 rounded-full"
+                                style={{ width: `${Math.min((quotaData.quotas.AS.subscription?.used || 0) / ((quotaData.quotas.AS.subscription?.limit || 0) + (quotaData.quotas.AS.addon?.total_purchased || 0)) * 100, 100)}%` }}
+                              ></div>
+                            </div>
+                          </div>
                         </div>
-                        <span className="text-gray-900">27 units</span>
-                      </div>
+                      )}
+                      {/* AI Interviews */}
+                      {quotaData?.quotas?.AIU && (
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+                            <span className="text-gray-900">AI Interviews</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-600">
+                              {quotaData.quotas.AIU.total_remaining || 0} / {((quotaData.quotas.AIU.subscription?.limit || 0) + (quotaData.quotas.AIU.addon?.total_purchased || 0)).toLocaleString()}
+                            </span>
+                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className="bg-orange-600 h-1.5 rounded-full"
+                                style={{ width: `${Math.min((quotaData.quotas.AIU.subscription?.used || 0) / ((quotaData.quotas.AIU.subscription?.limit || 0) + (quotaData.quotas.AIU.addon?.total_purchased || 0)) * 100, 100)}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {/* Job Slots */}
+                      {quotaData?.quotas?.max_jobs && (
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-indigo-600 rounded-full"></div>
+                            <span className="text-gray-900">Job Slots</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-600">
+                              {quotaData.quotas.max_jobs.total_remaining || 0} / {((quotaData.quotas.max_jobs.subscription?.limit || 0) + (quotaData.quotas.max_jobs.addon?.total_purchased || 0)).toLocaleString()}
+                            </span>
+                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className="bg-indigo-600 h-1.5 rounded-full"
+                                style={{ width: `${Math.min((quotaData.quotas.max_jobs.subscription?.used || 0) / ((quotaData.quotas.max_jobs.subscription?.limit || 0) + (quotaData.quotas.max_jobs.addon?.total_purchased || 0)) * 100, 100)}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {/* Team Seats */}
+                      {quotaData?.quotas?.max_seats && (
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-pink-600 rounded-full"></div>
+                            <span className="text-gray-900">Team Seats</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-600">
+                              {quotaData.quotas.max_seats.total_remaining || 0} / {((quotaData.quotas.max_seats.subscription?.limit || 0) + (quotaData.quotas.max_seats.addon?.total_purchased || 0)).toLocaleString()}
+                            </span>
+                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className="bg-pink-600 h-1.5 rounded-full"
+                                style={{ width: `${Math.min((quotaData.quotas.max_seats.subscription?.used || 0) / ((quotaData.quotas.max_seats.subscription?.limit || 0) + (quotaData.quotas.max_seats.addon?.total_purchased || 0)) * 100, 100)}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Unit Costs */}
-                  <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <h4 className="text-xs text-gray-600 mb-2">Unit Costs</h4>
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Resume Parsing</span>
-                        <span className="text-gray-900">1 unit/resume</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">AI Interview</span>
-                        <span className="text-gray-900">5 units/session</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Assessment Creation</span>
-                        <span className="text-gray-900">3 units/assessment</span>
-                      </div>
-                    </div>
-                  </div>
 
                   {/* Action Buttons */}
                   <div className="flex gap-2">
-                    <button className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium">
-                      Buy More Units
+                    <button
+                      onClick={() => {
+                        window.location.href = '/subscription/addons';
+                      }}
+                      className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+                    >
+                      Buy Addons
                     </button>
-                    <button className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
+                    <button
+                      onClick={() => {
+                        window.location.href = '/subscription/current-plan';
+                      }}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                    >
                       View Details
                     </button>
                   </div>

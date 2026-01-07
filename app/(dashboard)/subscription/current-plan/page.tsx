@@ -1,7 +1,7 @@
 'use client';
 
 import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, Crown, FileText } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/services/api';
 import { Card } from '@/components/ui/card';
@@ -250,7 +250,7 @@ const formatDate = (dateString: string): string => {
   });
 };
 
-const getStatusBadge = (status: string, paymentStatus?: string) => {
+const getStatusBadge = (status: string, paymentStatus?: string, trialDays: number = 14) => {
   if (paymentStatus === 'pending') {
     return { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Pending Payment', icon: Clock };
   }
@@ -259,7 +259,7 @@ const getStatusBadge = (status: string, paymentStatus?: string) => {
     case 'active':
       return { bg: 'bg-green-100', text: 'text-green-700', label: 'Active', icon: CheckCircle };
     case 'trial':
-      return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Free Trial (14 days)', icon: Clock };
+      return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: `Free Trial (${trialDays} days)`, icon: Clock };
     case 'pending_payment':
       return { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Pending Payment', icon: Clock };
     case 'suspended':
@@ -353,6 +353,9 @@ export default function CurrentPlanPage() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
 
+  // Use ref to track if data has been fetched to prevent duplicate calls
+  const hasFetchedRef = useRef(false);
+
   // Get tenant ID from token on mount
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -365,6 +368,20 @@ export default function CurrentPlanPage() {
       }
     }
   }, []);
+
+  // Debug: Log company settings whenever it changes
+  useEffect(() => {
+    if (companySettings) {
+      console.log('[CurrentPlan] Company settings state updated:', {
+        plan_name: companySettings.current_plan_name,
+        status: companySettings.status,
+        trial_start_date: companySettings.trial_start_date,
+        trial_end_date: companySettings.trial_end_date,
+        plan_start_date: companySettings.plan_start_date,
+        plan_expiry_date: companySettings.plan_expiry_date,
+      });
+    }
+  }, [companySettings]);
 
   const fetchData = async () => {
     try {
@@ -451,14 +468,15 @@ export default function CurrentPlanPage() {
         const trialStartDate = quotaData.trial_info?.trial_start_date || null;
         const trialEndDate = quotaData.trial_info?.trial_end_date || null;
 
-        // For PAID PLAN: Get dates from plan_info
-        const planStartDate = quotaData.plan_info?.plan_start_date || quotaData.plan_info?.start_date || null;
-        const planEndDate = quotaData.plan_info?.plan_expiry_date || quotaData.plan_info?.expiry_date || quotaData.plan_info?.end_date || null;
+        // For PAID PLAN: Get dates from root level (plan_start_date, plan_expiry_date) or billing_period
+        const planStartDate = quotaData.plan_start_date || quotaData.billing_period?.start || null;
+        const planEndDate = quotaData.plan_expiry_date || quotaData.billing_period?.end || null;
 
         console.log('[CurrentPlan] is_trial:', isTrial);
         console.log('[CurrentPlan] trial_info:', quotaData.trial_info);
         console.log('[CurrentPlan] plan_info:', quotaData.plan_info);
         console.log('[CurrentPlan] Dates - trial:', { trialStartDate, trialEndDate }, 'plan:', { planStartDate, planEndDate });
+        console.log('[CurrentPlan] Setting dates in state - trial_start:', trialStartDate, 'trial_end:', trialEndDate, 'plan_start:', planStartDate, 'plan_expiry:', planEndDate);
 
         setCompanySettings(prev => ({
           ...prev!,
@@ -466,12 +484,12 @@ export default function CurrentPlanPage() {
           current_plan_id: quotaData.plan_info?.plan_id || prev?.current_plan_id,
           subscription_status: isTrial ? 'trial' : (quotaData.subscription_status || 'active'),
           status: isTrial ? 'trial' : (quotaData.subscription_status || 'active'),
-          // Only set trial dates if it's actually a trial
-          trial_start_date: isTrial ? trialStartDate : null,
-          trial_end_date: isTrial ? trialEndDate : null,
-          // Only set plan dates if it's a paid plan
-          plan_start_date: !isTrial ? planStartDate : null,
-          plan_expiry_date: !isTrial ? planEndDate : null,
+          // Set trial dates if available
+          trial_start_date: trialStartDate || prev?.trial_start_date,
+          trial_end_date: trialEndDate || prev?.trial_end_date,
+          // Set plan dates if available (keep existing if API doesn't return new ones)
+          plan_start_date: planStartDate || prev?.plan_start_date,
+          plan_expiry_date: planEndDate || prev?.plan_expiry_date,
           // Update quota limits - use free trial API data for trial users, otherwise use quota-status
           max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : (quotas?.max_seats?.subscription?.limit || prev?.max_seats || 5),
           max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : (quotas?.max_jobs?.subscription?.limit || prev?.max_jobs || 10),
@@ -531,27 +549,34 @@ export default function CurrentPlanPage() {
       try {
         const settingsResponse = await api.get<CompanySettings>('/settings/company-settings');
         settings = settingsResponse.data;
-        // Merge company-settings with quota data (quota data takes priority for dates and quotas)
-        setCompanySettings(prev => ({
-          ...settings!,
-          // Keep quota data for these fields (from quota-status API)
-          current_plan_name: prev?.current_plan_name || settings?.current_plan_name,
-          trial_start_date: prev?.trial_start_date || settings?.trial_start_date,
-          trial_end_date: prev?.trial_end_date || settings?.trial_end_date,
-          plan_start_date: prev?.plan_start_date || settings?.plan_start_date,
-          plan_expiry_date: prev?.plan_expiry_date || settings?.plan_expiry_date,
-          subscription_status: prev?.subscription_status || settings?.subscription_status,
-          status: prev?.status || settings?.status,
-          max_seats: prev?.max_seats || settings?.max_seats,
-          max_jobs: prev?.max_jobs || settings?.max_jobs,
-          max_resume_uploads: prev?.max_resume_uploads || settings?.max_resume_uploads,
-          max_resume_searches: prev?.max_resume_searches || settings?.max_resume_searches,
-          max_assessments: prev?.max_assessments || settings?.max_assessments,
-          max_ai_interviews: prev?.max_ai_interviews || settings?.max_ai_interviews,
-          storage_limit_gb: prev?.storage_limit_gb || settings?.storage_limit_gb,
-        }));
+        // Merge company-settings with quota data (quota data takes priority)
+        setCompanySettings(prev => {
+          if (!prev) return settings!;
+
+          // Quota-status data takes priority, fall back to company-settings only if quota data is missing
+          return {
+            ...settings!,
+            // Prioritize quota-status data over company-settings
+            current_plan_name: prev.current_plan_name || settings?.current_plan_name,
+            current_plan_id: prev.current_plan_id || settings?.current_plan_id,
+            trial_start_date: prev.trial_start_date || settings?.trial_start_date,
+            trial_end_date: prev.trial_end_date || settings?.trial_end_date,
+            plan_start_date: prev.plan_start_date || settings?.plan_start_date,
+            plan_expiry_date: prev.plan_expiry_date || settings?.plan_expiry_date,
+            subscription_status: prev.subscription_status || settings?.subscription_status,
+            status: prev.status || settings?.status,
+            max_seats: prev.max_seats || settings?.max_seats,
+            max_jobs: prev.max_jobs || settings?.max_jobs,
+            max_resume_uploads: prev.max_resume_uploads || settings?.max_resume_uploads,
+            max_resume_searches: prev.max_resume_searches || settings?.max_resume_searches,
+            max_assessments: prev.max_assessments || settings?.max_assessments,
+            max_ai_interviews: prev.max_ai_interviews || settings?.max_ai_interviews,
+            storage_limit_gb: prev.storage_limit_gb || settings?.storage_limit_gb,
+          };
+        });
+        console.log('[CurrentPlan] Merged company settings with quota data');
       } catch (settingsError) {
-        console.log('Could not fetch company settings, using quota data');
+        console.log('Could not fetch company settings, using quota data only');
         // Company settings API failed - quota data already set, no need to overwrite
       }
 
@@ -735,6 +760,10 @@ export default function CurrentPlanPage() {
   };
 
   useEffect(() => {
+    // Prevent duplicate calls on re-renders or React Strict Mode
+    if (hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
+
     fetchData();
     fetchQueuedUpgrades();
   }, []);
@@ -971,7 +1000,7 @@ export default function CurrentPlanPage() {
                            companySettings?.payment_status === 'pending';
   const isLocked = companySettings?.status?.toLowerCase() === 'locked';
   const isActive = companySettings?.status?.toLowerCase() === 'active';
-  const statusBadge = getStatusBadge(companySettings?.status || 'trial', companySettings?.payment_status);
+  const statusBadge = getStatusBadge(companySettings?.status || 'trial', companySettings?.payment_status, freeTrialSettings?.trial_days || 14);
   const StatusIcon = statusBadge.icon;
 
   // For trial users, use days_remaining from API (via freeTrialSettings)

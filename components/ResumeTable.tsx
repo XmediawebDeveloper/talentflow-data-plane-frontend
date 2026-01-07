@@ -10,6 +10,7 @@ import { usePagination } from '@/lib/hooks/usePagination';
 import VersionHistoryModal from './VersionHistoryModal';
 import ResumeVersionSelector from './ResumeVersionSelector';
 import { toast } from 'sonner';
+import { resumeService } from '@/lib/services/resumeService';
 
 interface ResumeTableProps {
   resumes: Resume[];
@@ -78,6 +79,7 @@ export default function ResumeTable({
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [versionHistoryResume, setVersionHistoryResume] = useState<Resume | null>(null);
   const [versionSelectorResume, setVersionSelectorResume] = useState<Resume | null>(null);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
 
   // NEW: Modal states for complete workflows
   const [showEditModal, setShowEditModal] = useState(false);
@@ -115,6 +117,36 @@ export default function ResumeTable({
     if (diffHours < 48) return 'Yesterday';
     
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  // Handle showing version history - fetch versions from backend
+  const handleShowVersionHistory = async (resume: Resume) => {
+    if (resume.versions && resume.versions.length > 0) {
+      // Already have versions loaded
+      setVersionHistoryResume(resume);
+      return;
+    }
+
+    // Fetch versions from backend
+    setIsLoadingVersions(true);
+    try {
+      const versions = await resumeService.getVersions(resume.id);
+      const resumeWithVersions = {
+        ...resume,
+        versions: versions.map((v: any) => ({
+          id: v.id,
+          name: v.file_name || v.candidate_name || 'Resume',
+          uploadDate: v.created_at,
+          size: v.file_size ? `${Math.round(v.file_size / 1024)} KB` : 'N/A',
+        })),
+      };
+      setVersionHistoryResume(resumeWithVersions);
+    } catch (error) {
+      console.error('Failed to fetch versions:', error);
+      toast.error('Failed to load version history');
+    } finally {
+      setIsLoadingVersions(false);
+    }
   };
 
   // Handle apply to job with version detection
@@ -301,8 +333,9 @@ export default function ResumeTable({
               <td className="px-4 py-4">
                 {(resume.versionCount && resume.versionCount > 1) || (resume.versions && resume.versions.length > 1) ? (
                   <button
-                    onClick={() => setVersionHistoryResume(resume)}
-                    className="flex items-center gap-2 text-sm text-gray-700 hover:text-blue-600 transition-colors group"
+                    onClick={() => handleShowVersionHistory(resume)}
+                    disabled={isLoadingVersions}
+                    className="flex items-center gap-2 text-sm text-gray-700 hover:text-blue-600 transition-colors group disabled:opacity-50"
                   >
                     <div className="flex items-center gap-1">
                       <Paperclip className="w-4 h-4" />
