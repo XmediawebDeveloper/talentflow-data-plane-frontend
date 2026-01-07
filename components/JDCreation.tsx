@@ -16,7 +16,7 @@ type Step = 'create' | 'extract' | 'review';
 
 // Validation constants
 const VALIDATION = {
-  JOB_TITLE: { min: 2, max: 75 },
+  JOB_TITLE: { min: 1, max: 75 },
   AI_PROMPT: { min: 30, max: 1500 },
   MANUAL_JD: { min: 100, max: 10000 },
   ASSESSMENT_GUIDANCE: { min: 10, max: 100 },
@@ -404,12 +404,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   useEffect(() => {
     if (step !== 'create') return;
 
-    // Need job title with at least 2 characters (backend requirement)
-    if (jobTitle.trim().length < 2) return;
+    // Need at least 1 non-space character in job title
+    if (!jobTitle.trim()) return;
 
     const autosaveTimer = setTimeout(async () => {
-      // Don't autosave if currently saving via another action
-      if (isSavingDraft || isPublishing) return;
+      // Don't autosave if currently saving via another action or already published
+      if (isSavingDraft || isPublishing || isPublished) return;
 
       setAutosaveStatus('saving');
 
@@ -421,7 +421,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           : manualJD;
 
         const jdData = {
-          title: jobTitle,
+          title: jobTitle.trim(),  // Trim spaces before saving
           description: description,
           creation_stage: 'create' as const,
           creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
@@ -455,7 +455,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(autosaveTimer);
-  }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing]);
+  }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing, isPublished]);
 
   const handleGenerateJD = async () => {
     // Check quota before generating
@@ -1046,7 +1046,7 @@ Use professional language, clear formatting, and make it engaging for candidates
 
       // Build the JD data for backend
       const jdData = {
-        title: jobTitle,
+        title: jobTitle.trim(),  // Trim spaces before saving
         description: generatedJD || manualJD,
         department: extractedData.department || '',
         location: extractedData.locations.length > 0
@@ -1115,7 +1115,7 @@ Use professional language, clear formatting, and make it engaging for candidates
       if (onPublish) {
         const newJob: Job = {
           id: publishedJd.id,
-          title: jobTitle,
+          title: jobTitle.trim(),
           department: extractedData.department || '',
           location: extractedData.locations.length > 0
             ? extractedData.locations[0].city
@@ -1165,8 +1165,8 @@ Use professional language, clear formatting, and make it engaging for candidates
 
   // Check if there's unsaved data worth saving
   const hasUnsavedData = () => {
-    // Need job title with at least 2 characters (backend requirement)
-    return jobTitle.trim().length >= 2;
+    // Need at least 1 non-space character in job title
+    return jobTitle.trim().length > 0;
   };
 
   // Handle back button click - auto save as draft if there's unsaved data
@@ -1192,11 +1192,11 @@ Use professional language, clear formatting, and make it engaging for candidates
 
   // Save JD as draft
   const handleSaveDraft = async () => {
-    // Validate job title has at least 2 characters (backend requirement)
-    if (jobTitle.trim().length < 2) {
+    // Validate job title has at least 1 non-space character
+    if (!jobTitle.trim()) {
       toast.warning({
         title: 'Cannot save draft',
-        description: 'Job title must have at least 2 characters',
+        description: 'Please enter a job title',
       });
       return;
     }
@@ -1232,7 +1232,7 @@ Use professional language, clear formatting, and make it engaging for candidates
       console.log('[DEBUG] handleSaveDraft - descriptionToSave:', descriptionToSave?.substring(0, 100));
 
       const jdData = {
-        title: jobTitle,
+        title: jobTitle.trim(),  // Trim spaces before saving
         description: descriptionToSave,
         department: extractedData.department || '',
         location: extractedData.locations.length > 0

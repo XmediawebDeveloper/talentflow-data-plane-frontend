@@ -437,9 +437,9 @@ export default function JDListPage() {
                 key={jd.id}
                 className={`bg-white rounded-xl border ${selectedJds.includes(jd.id) ? 'border-gray-400 ring-1 ring-gray-400' : 'border-gray-200'} p-6 hover:shadow-md transition-shadow`}
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-start gap-4">
                   {/* Checkbox */}
-                  <div className="flex items-start gap-4">
+                  <div className="flex items-start gap-4 flex-1 min-w-0 overflow-hidden">
                     <input
                       type="checkbox"
                       checked={selectedJds.includes(jd.id)}
@@ -517,48 +517,52 @@ export default function JDListPage() {
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-3 ml-4">
-                    {/* Delete Button */}
+                  {/* Actions - View, Edit buttons and 3-dot menu */}
+                  <div className="flex items-center gap-2 flex-shrink-0" style={{ border: '2px solid red', padding: '4px' }}>
+                    {/* View Button */}
                     <button
-                      onClick={() => handleDelete(jd.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+                      onClick={() => router.push(`/recruitment/jd-details?id=${jd.id}`)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 whitespace-nowrap"
                     >
-                      <Trash2 className="w-4 h-4" />
-                      <span className="text-sm">Delete</span>
+                      <Eye className="w-4 h-4" />
+                      <span className="text-sm">View</span>
                     </button>
 
-                    {/* More Actions Dropdown */}
-                    <div className="relative">
+                    {/* Edit Button */}
+                    <button
+                      onClick={() => router.push(`/recruitment/jd-creation?id=${jd.id}`)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 whitespace-nowrap"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      <span className="text-sm">Edit</span>
+                    </button>
+
+                    {/* More Actions Dropdown (3-dot menu) */}
+                    <div className="relative flex-shrink-0">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveDropdown(activeDropdown === jd.id ? null : jd.id);
                         }}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-300 bg-white"
+                        title="More actions"
                       >
-                        <MoreVertical className="w-5 h-5 text-gray-400" />
+                        <MoreVertical className="w-5 h-5 text-gray-700" />
                       </button>
                       {activeDropdown === jd.id && (
                         <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                          {/* View Applicants */}
                           <button
-                            onClick={() => { router.push(`/recruitment/jd-details?id=${jd.id}`); setActiveDropdown(null); }}
+                            onClick={() => { router.push(`/recruitment/jd-details?id=${jd.id}&tab=applicants`); setActiveDropdown(null); }}
                             className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           >
-                            <Eye className="w-4 h-4" />
-                            View Details
-                          </button>
-                          <button
-                            onClick={() => { router.push(`/recruitment/jd-creation?id=${jd.id}&edit=true`); setActiveDropdown(null); }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                            Edit
+                            <Users className="w-4 h-4" />
+                            View Applicants
                           </button>
                           {/* JD04: Publish action for draft JDs */}
                           {jd.status === 'draft' && (
                             <button
-                              onClick={() => handlePublish(jd.id)}
+                              onClick={() => { handlePublish(jd.id); setActiveDropdown(null); }}
                               className="w-full flex items-center gap-2 px-4 py-2 text-sm text-green-700 hover:bg-green-50"
                             >
                               <CheckCircle2 className="w-4 h-4" />
@@ -568,22 +572,31 @@ export default function JDListPage() {
                           {/* JD04: Disable action for published JDs */}
                           {jd.status === 'published' && (
                             <button
-                              onClick={() => handleDisable(jd.id)}
+                              onClick={() => { handleDisable(jd.id); setActiveDropdown(null); }}
                               className="w-full flex items-center gap-2 px-4 py-2 text-sm text-orange-700 hover:bg-orange-50"
                             >
                               <Power className="w-4 h-4" />
-                              Disable
+                              Disable Job
                             </button>
                           )}
+                          {/* Archive action */}
                           {jd.status !== 'archived' && (
                             <button
-                              onClick={() => handleArchive(jd.id)}
+                              onClick={() => { handleArchive(jd.id); setActiveDropdown(null); }}
                               className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
                               <Archive className="w-4 h-4" />
-                              Archive
+                              Archive Job
                             </button>
                           )}
+                          {/* Delete action */}
+                          <button
+                            onClick={() => { handleDelete(jd.id); setActiveDropdown(null); }}
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                          </button>
                         </div>
                       )}
                     </div>
