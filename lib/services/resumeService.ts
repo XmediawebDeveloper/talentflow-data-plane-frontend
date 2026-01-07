@@ -81,21 +81,30 @@ export interface Folder {
   created_at: string;
 }
 
+export interface ResumeSearchParams {
+  source?: 'my-resumes' | 'internal-db';
+  folder_id?: string;
+  search?: string;
+  skills?: string;
+  experience_min?: number;
+  experience_max?: number;
+  location?: string;
+  education?: string;
+  current_company?: string;
+  previous_company?: string;
+  notice_period?: string;
+  upload_date_from?: string;
+  upload_date_to?: string;
+  source_type?: string;
+  page?: number;
+  page_size?: number;
+}
+
 export const resumeService = {
   /**
    * List resumes with filters
    */
-  async list(params?: {
-    source?: 'my-resumes' | 'internal-db';
-    folder_id?: string;
-    search?: string;
-    skills?: string;
-    experience_min?: number;
-    experience_max?: number;
-    location?: string;
-    page?: number;
-    page_size?: number;
-  }): Promise<ResumeListResponse> {
+  async list(params?: ResumeSearchParams): Promise<ResumeListResponse> {
     try {
       const response = await api.get<ResumeListResponse>('/resumes', { params });
       return response.data;
@@ -122,7 +131,8 @@ export const resumeService = {
   async upload(file: File, folderId?: string): Promise<Resume> {
     const formData = new FormData();
     formData.append('file', file);
-    if (folderId) {
+    // Only append folder_id if it's provided and not an empty string
+    if (folderId && folderId.trim() !== '') {
       formData.append('folder_id', folderId);
     }
 
@@ -141,7 +151,8 @@ export const resumeService = {
       files.forEach((file) => {
         formData.append('files', file);
       });
-      if (folderId) {
+      // Only append folder_id if it's provided and not an empty string
+      if (folderId && folderId.trim() !== '') {
         formData.append('folder_id', folderId);
       }
 
@@ -160,6 +171,18 @@ export const resumeService = {
   async getBatchStatus(batchId: string): Promise<UploadBatchResponse> {
     try {
       const response = await api.get<UploadBatchResponse>(`/resumes/upload/batch/${batchId}`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * List all upload batches
+   */
+  async listUploadBatches(limit: number = 20): Promise<any> {
+    try {
+      const response = await api.get(`/resumes/upload/batches?limit=${limit}`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -194,7 +217,8 @@ export const resumeService = {
     formData.append('file', file);
     formData.append('existing_resume_id', existingResumeId);
     formData.append('action', action);
-    if (folderId) {
+    // Only append folder_id if it's provided and not an empty string
+    if (folderId && folderId.trim() !== '') {
       formData.append('folder_id', folderId);
     }
 

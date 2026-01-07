@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, Award, User, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, Award, User, History, ChevronDown, ChevronUp, Monitor } from 'lucide-react';
 import { useState, useEffect, ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDVersion } from '@/lib/services/jdService';
@@ -186,12 +186,20 @@ export default function JDDetailsPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'long',
+    if (!dateString) return 'N/A';
+
+    const date = new Date(dateString);
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) return 'Invalid Date';
+
+    return date.toLocaleString('en-US', {
+      month: 'short',
       day: 'numeric',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      hour12: true,
     });
   };
 
@@ -235,7 +243,12 @@ export default function JDDetailsPage() {
 
           <div className="flex items-start justify-between">
             <div>
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-3 mb-3">
+                {jd.job_id && (
+                  <span className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold border border-blue-200">
+                    {jd.job_id}
+                  </span>
+                )}
                 <h1 className="text-2xl font-semibold text-gray-900">{jd.title}</h1>
                 {getStatusBadge(jd.status)}
               </div>
@@ -250,6 +263,18 @@ export default function JDDetailsPage() {
                   <span className="flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
                     {jd.location}
+                  </span>
+                )}
+                {jd.employment_type && (
+                  <span className="flex items-center gap-1">
+                    <Briefcase className="w-4 h-4" />
+                    <span className="capitalize">{jd.employment_type.replace('_', ' ')}</span>
+                  </span>
+                )}
+                {jd.remote_type && (
+                  <span className="flex items-center gap-1">
+                    <Monitor className="w-4 h-4" />
+                    <span className="capitalize">{jd.remote_type.replace('_', ' ')}</span>
                   </span>
                 )}
                 <span className="flex items-center gap-1">
@@ -300,40 +325,7 @@ export default function JDDetailsPage() {
               </div>
             </div>
 
-            {/* Skills */}
-            {((jd.must_have_skills && jd.must_have_skills.length > 0) || (jd.nice_to_have_skills && jd.nice_to_have_skills.length > 0)) && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Skills & Qualifications</h2>
-
-                {jd.must_have_skills && jd.must_have_skills.length > 0 && (
-                  <div className="mb-5">
-                    <h3 className="text-sm font-medium text-gray-900 mb-3">Required Skills</h3>
-                    <ul className="space-y-2 ml-1">
-                      {jd.must_have_skills.map((skill, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                          <span className="text-gray-400 mt-0.5">•</span>
-                          <span>{skill}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {jd.nice_to_have_skills && jd.nice_to_have_skills.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-900 mb-3">Preferred Skills</h3>
-                    <ul className="space-y-2 ml-1">
-                      {jd.nice_to_have_skills.map((skill, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                          <span className="text-gray-400 mt-0.5">•</span>
-                          <span>{skill}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Skills section removed - already shown in JD description */}
 
             {/* Assessment Guidance */}
             {jd.assessment_guidance && (
@@ -398,7 +390,7 @@ export default function JDDetailsPage() {
                 {jd.remote_type && (
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-gray-600">
-                      <MapPin className="w-4 h-4" />
+                      <Monitor className="w-4 h-4" />
                       Work Mode
                     </span>
                     <span className="text-gray-900 capitalize">{jd.remote_type.replace('_', ' ')}</span>
@@ -459,25 +451,59 @@ export default function JDDetailsPage() {
             {/* Metadata */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Metadata</h2>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Posted By</span>
-                  <span className="text-gray-900 flex items-center gap-1">
-                    <User className="w-3 h-3" />
-                    {jd.created_by_name || 'Unknown'}
+              <div className="space-y-4 text-sm">
+                <div>
+                  <span className="text-gray-500 block mb-1">Posted By</span>
+                  <span className="text-gray-900 flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    <span className="font-medium">{jd.created_by_name || 'Unknown'}</span>
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Created</span>
-                  <span className="text-gray-900">{formatDate(jd.created_at)}</span>
+                <div>
+                  <span className="text-gray-500 block mb-1">Created On</span>
+                  <div className="text-gray-900 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-gray-400" />
+                      <span>{new Date(jd.created_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-gray-400" />
+                      <span>{new Date(jd.created_at).toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                      })}</span>
+                    </div>
+                  </div>
                 </div>
                 {jd.published_at && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Published</span>
-                    <span className="text-gray-900">{formatDate(jd.published_at)}</span>
+                  <div>
+                    <span className="text-gray-500 block mb-1">Published On</span>
+                    <div className="text-gray-900 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <span>{new Date(jd.published_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-gray-400" />
+                        <span>{new Date(jd.published_at).toLocaleTimeString('en-US', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true
+                        })}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
-                <div className="flex justify-between">
+                <div className="flex justify-between pt-2 border-t border-gray-100">
                   <span className="text-gray-500">Method</span>
                   <span className="text-gray-900 capitalize">{jd.creation_method?.replace('_', ' ') || 'Manual'}</span>
                 </div>

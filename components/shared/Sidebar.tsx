@@ -245,7 +245,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
     <aside className="w-64 bg-gray-200 border-r border-gray-300 flex flex-col shadow-sm h-screen">
       {/* Logo */}
       <div className="p-4 border-b border-gray-200 bg-white">
-        <Link href="/dashboard" className="flex items-center justify-center">
+        <Link href="/dashboard" prefetch={false} className="flex items-center justify-center">
          <img
               src="/logos/talent_flow_logo.png"
               alt="TalentFlow"
@@ -271,6 +271,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
                 <Link
                   key={item.id}
                   href={item.href || '#'}
+                  prefetch={false}
                   className={`w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm transition-colors ${
                     isActive(item.href)
                       ? 'bg-gray-800 text-white font-medium shadow-sm'

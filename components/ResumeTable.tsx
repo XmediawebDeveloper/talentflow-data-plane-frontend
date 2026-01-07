@@ -27,7 +27,34 @@ interface ResumeTableProps {
   hideCheckboxes?: boolean;
   showTeamMemberBadge?: boolean;
   onVersion?: (resume: Resume) => void;
+  highlightQuery?: string;
 }
+
+// Helper function to highlight matching text
+const highlightText = (text: string, query: string): React.ReactNode => {
+  if (!query || !text) return text;
+
+  // Split query into words for multi-keyword matching
+  const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 0);
+  if (keywords.length === 0) return text;
+
+  // Create regex pattern for all keywords
+  const escapedKeywords = keywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`(${escapedKeywords.join('|')})`, 'gi');
+
+  const parts = text.split(pattern);
+
+  return parts.map((part, index) => {
+    const isMatch = keywords.some(k => part.toLowerCase() === k);
+    return isMatch ? (
+      <mark key={index} className="bg-yellow-200 text-gray-900 px-0.5 rounded">
+        {part}
+      </mark>
+    ) : (
+      part
+    );
+  });
+};
 
 export default function ResumeTable({
   resumes,
@@ -45,6 +72,7 @@ export default function ResumeTable({
   hideCheckboxes = false,
   showTeamMemberBadge = false,
   onVersion,
+  highlightQuery,
 }: ResumeTableProps) {
   const router = useRouter();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -206,17 +234,25 @@ export default function ResumeTable({
                         onClick={() => onViewDetails(resume)}
                         className="text-sm text-gray-900 hover:text-blue-600 hover:underline text-left transition-colors"
                       >
-                        {resume.name}
+                        {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
                       </button>
                     ) : (
-                      <div className="text-sm text-gray-900">{resume.name}</div>
+                      <div className="text-sm text-gray-900">
+                        {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
+                      </div>
                     )}
-                    <div className="text-xs text-gray-500">{resume.title}</div>
+                    <div className="text-xs text-gray-500">
+                      {highlightQuery ? highlightText(resume.title, highlightQuery) : resume.title}
+                    </div>
                   </div>
                 </div>
               </td>
-              <td className="px-4 py-4 text-sm text-gray-700">{resume.email}</td>
-              <td className="px-4 py-4 text-sm text-gray-700">{resume.phone}</td>
+              <td className="px-4 py-4 text-sm text-gray-700">
+                {highlightQuery ? highlightText(resume.email, highlightQuery) : resume.email}
+              </td>
+              <td className="px-4 py-4 text-sm text-gray-700">
+                {highlightQuery ? highlightText(resume.phone, highlightQuery) : resume.phone}
+              </td>
               <td className="px-4 py-4">
                 <div className="flex flex-wrap gap-1">
                   {resume.skills.slice(0, 4).map((skill, i) => (
@@ -224,7 +260,7 @@ export default function ResumeTable({
                       key={i}
                       className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700 border border-gray-300"
                     >
-                      {skill}
+                      {highlightQuery ? highlightText(skill, highlightQuery) : skill}
                     </span>
                   ))}
                   {resume.skills.length > 4 && (
@@ -324,6 +360,13 @@ export default function ResumeTable({
                         title="Preview Resume"
                       >
                         <Download className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => onDelete(resume.id)}
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                        title="Delete Resume"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                       <div className="relative">
                         <button

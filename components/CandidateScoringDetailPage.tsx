@@ -1,8 +1,9 @@
 'use client';
 
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronRight, Code, Languages, ArrowLeft, BarChart3, CheckSquare, MessageSquare } from 'lucide-react';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronRight, Code, Languages, ArrowLeft, BarChart3, CheckSquare, MessageSquare, Minus } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 
 interface ScoredResume {
   id: string;
@@ -40,11 +41,75 @@ interface ScoredResume {
 interface CandidateScoringDetailPageProps {
   resume: ScoredResume;
   jobTitle: string;
+  jobId: string;
   onBack: () => void;
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onBack }: CandidateScoringDetailPageProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'comparison' | 'scoretable' | 'personalinfo'>('overview');
+  const [isDataReady, setIsDataReady] = useState(false);
+  const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
+
+  // Debug: Check props
+  console.log('[CandidateScoringDetailPage] Props:', {
+    hasResume: !!resume,
+    jobTitle,
+    jobId,
+    resumeId: resume?.id,
+    scorePercentage: resume?.scorePercentage,
+    criteriaScores: resume?.criteriaScores
+  });
+
+  // Always fetch complete scoring data from API to ensure fresh data
+  useEffect(() => {
+    const fetchCompleteData = async () => {
+      console.log('[CandidateScoringDetailPage] Fetching complete data from API');
+
+      // Always fetch from API when jobId is available to get latest data
+      if (jobId && resume?.id) {
+        console.log('[CandidateScoringDetailPage] Fetching from API for jobId:', jobId, 'resumeId:', resume.id);
+        try {
+          const { jdService } = await import('@/lib/services/jdService');
+          const scoredResumes = await jdService.getScoredResumes(jobId, { page_size: 100 });
+          const completeResumeData = scoredResumes.items.find((r: any) => r.id === resume.id);
+
+          if (completeResumeData) {
+            console.log('[CandidateScoringDetailPage] Complete data fetched successfully:', {
+              overall_score: completeResumeData.overall_score,
+              has_criteria_scores: !!completeResumeData.criteria_scores,
+              criteria_count: Object.keys(completeResumeData.criteria_scores || {}).length
+            });
+            setFullResumeData({
+              ...resume,
+              scorePercentage: Math.round(completeResumeData.overall_score || 0),
+              criteriaScores: completeResumeData.criteria_scores || {},
+              scoreBreakdown: completeResumeData.score_breakdown || [],
+              aiSummary: completeResumeData.ai_summary,
+              strengths: completeResumeData.strengths || [],
+              gaps: completeResumeData.gaps || [],
+              scoredDate: completeResumeData.created_at,
+              matchStatus: completeResumeData.match_status,
+            });
+            setIsDataReady(true);
+          } else {
+            console.log('[CandidateScoringDetailPage] Resume not found in API response, using existing data');
+            setFullResumeData(resume);
+            setIsDataReady(true);
+          }
+        } catch (error) {
+          console.error('[CandidateScoringDetailPage] Error fetching complete data:', error);
+          setFullResumeData(resume);
+          setIsDataReady(true);
+        }
+      } else {
+        console.log('[CandidateScoringDetailPage] No jobId provided, using existing data');
+        setFullResumeData(resume);
+        setIsDataReady(true);
+      }
+    };
+
+    fetchCompleteData();
+  }, [resume?.id, jobId]);
 
   // Generate enriched data from resume with varied fallback scores
   const generateVariedScore = (base: number, variance: number) => {
@@ -55,37 +120,37 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
   };
 
   const detailedScores = {
-    titleMatch: resume.scoreBreakdown?.overallFit || resume.scorePercentage,
-    experienceMatch: resume.scoreBreakdown?.experienceMatch || generateVariedScore(resume.scorePercentage, 20),
-    skillsMatch: resume.scoreBreakdown?.skillsMatch || generateVariedScore(resume.scorePercentage, 16),
-    educationMatch: resume.scoreBreakdown?.educationMatch || generateVariedScore(resume.scorePercentage, 24),
-    locationMatch: generateVariedScore(resume.scorePercentage, 12),
+    titleMatch: fullResumeData.scoreBreakdown?.overallFit || fullResumeData.scorePercentage,
+    experienceMatch: fullResumeData.scoreBreakdown?.experienceMatch || generateVariedScore(fullResumeData.scorePercentage, 20),
+    skillsMatch: fullResumeData.scoreBreakdown?.skillsMatch || generateVariedScore(fullResumeData.scorePercentage, 16),
+    educationMatch: fullResumeData.scoreBreakdown?.educationMatch || generateVariedScore(fullResumeData.scorePercentage, 24),
+    locationMatch: generateVariedScore(fullResumeData.scorePercentage, 12),
   };
 
   // matchedSkills should be from the explicit matchedSkills field, or fall back to skills arrays
   // strengths are AI-generated descriptions, not skills
-  const matchedSkills = resume.matchedSkills || resume.technicalSkills || resume.skills || [];
+  const matchedSkills = fullResumeData.matchedSkills || fullResumeData.technicalSkills || fullResumeData.skills || [];
   // missingSkills should be from the explicit missingSkills field
-  const missingSkills = resume.missingSkills || [];
+  const missingSkills = fullResumeData.missingSkills || [];
 
   // Use strengths directly from API without template prefixes
-  const keyStrengths = resume.strengths && resume.strengths.length > 0
-    ? resume.strengths
-    : resume.scorePercentage >= 85
+  const keyStrengths = fullResumeData.strengths && fullResumeData.strengths.length > 0
+    ? fullResumeData.strengths
+    : fullResumeData.scorePercentage >= 85
       ? ['Strong alignment with job requirements', 'Excellent technical profile']
-      : resume.scorePercentage >= 70
+      : fullResumeData.scorePercentage >= 70
         ? ['Good technical foundation', 'Relevant experience']
         : ['Shows potential for growth'];
 
   // Use gaps directly from API without template prefixes
-  const improvementAreas = resume.gaps && resume.gaps.length > 0
-    ? resume.gaps
+  const improvementAreas = fullResumeData.gaps && fullResumeData.gaps.length > 0
+    ? fullResumeData.gaps
     : [];
 
-  const aiReasoning = resume.aiSummary || resume.matchReason || (
-    (resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Excellent Match')
+  const aiReasoning = fullResumeData.aiSummary || fullResumeData.matchReason || (
+    (fullResumeData.matchStatus === 'Exact Match' || fullResumeData.matchStatus === 'Excellent Match')
       ? 'Outstanding candidate with exceptional alignment to job requirements. Strong technical skills, relevant experience, and proven track record in similar roles.'
-      : resume.matchStatus === 'Partial Match'
+      : fullResumeData.matchStatus === 'Partial Match'
         ? 'Solid candidate with good alignment to most job requirements. Possesses core technical skills and relevant experience with minor gaps in specialized areas.'
         : 'Limited alignment with current job requirements. While the candidate shows promise in certain areas, there are significant gaps in required technical skills and experience.'
   );
@@ -119,9 +184,81 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
     return 'bg-red-100 text-red-700 border-red-300';
   };
 
-  const handleDownloadScorecard = () => {
-    alert(`Downloading scorecard for ${resume.candidateName}\n\nIncludes:\n- Overall match score: ${resume.scorePercentage}%\n- Detailed scoring breakdown\n- Skills analysis\n- AI recommendations\n\nFile will be downloaded as PDF.`);
+  const handleDownloadScorecard = async () => {
+    const toastId = toast.loading('Generating scorecard PDF...');
+
+    try {
+      console.log('[Download] Starting PDF download for score_id:', fullResumeData.id);
+
+      // Get token from localStorage
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        toast.error('Please login to download scorecard', { id: toastId });
+        return;
+      }
+
+      // Call the backend API to get PDF
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+      const response = await fetch(`${API_URL}/scoring/scores/${fullResumeData.id}/download-pdf`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error('[Download] Failed:', response.status, errorData);
+
+        // Provide user-friendly error message
+        let errorMessage = 'Failed to download scorecard. Please try again later.';
+
+        if (response.status === 404) {
+          errorMessage = 'Scorecard not found. The score may have been deleted.';
+        } else if (response.status === 500) {
+          errorMessage = 'Server error while generating scorecard. Our team has been notified.';
+        } else if (response.status === 401 || response.status === 403) {
+          errorMessage = 'You do not have permission to download this scorecard.';
+        }
+
+        toast.error(errorMessage, { id: toastId, duration: 5000 });
+        return;
+      }
+
+      // Get the PDF blob
+      const blob = await response.blob();
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${fullResumeData.candidateName.replace(/\s+/g, '_')}_Scorecard.pdf`;
+      document.body.appendChild(a);
+      a.click();
+
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success('Scorecard downloaded successfully', { id: toastId });
+      console.log('[Download] PDF downloaded successfully');
+    } catch (error) {
+      console.error('[Download] Error:', error);
+      toast.error('Failed to download scorecard. Please try again.', { id: toastId });
+    }
   };
+
+  // Show loading state while waiting for complete data
+  if (!isDataReady) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading candidate details...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-white">
@@ -165,13 +302,15 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
                 </div>
               </div>
             </div>
-            <button
-              onClick={handleDownloadScorecard}
-              className="px-4 py-2 text-sm text-gray-700 border-2 border-gray-300 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Download Scorecard
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleDownloadScorecard}
+                className="px-4 py-2 text-sm text-gray-700 border-2 border-gray-300 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Download Scorecard
+              </button>
+            </div>
           </div>
 
           {/* Score Display */}
@@ -205,7 +344,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
           <div className="flex gap-1 px-6 pt-2">
             {[
               { id: 'overview', label: 'Overview' },
-              { id: 'comparison', label: 'JD Comparison' },
+              // { id: 'comparison', label: 'JD Comparison' },
               { id: 'scoretable', label: 'Score Table' },
               { id: 'personalinfo', label: 'Personal Info' },
             ].map((tab) => (
@@ -332,7 +471,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
             </div>
           )}
 
-          {activeTab === 'comparison' && (
+          {/* {activeTab === 'comparison' && (
             <div className="space-y-6">
               <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-6">Candidate vs Job Requirements - {jobTitle}</h3>
@@ -391,25 +530,21 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
                 </div>
               </div>
 
-              {/* Gaps Analysis */}
-              {improvementAreas.length > 0 && (
-                <div className="bg-white border-2 border-orange-200 rounded-xl p-6">
-                  <h4 className="font-medium text-orange-700 mb-4 text-lg flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5" />
-                    Areas for Development
-                  </h4>
-                  <ul className="space-y-3 text-gray-600">
-                    {improvementAreas.map((area, idx) => (
-                      <li key={idx} className="flex items-start gap-3">
-                        <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
-                        <span>{area}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <div className="bg-white border-2 border-orange-200 rounded-xl p-6">
+                <h4 className="font-medium text-orange-700 mb-4 text-lg flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5" />
+                  Areas for Development
+                </h4>
+                <ul className="space-y-3 text-gray-600">
+                  {improvementAreas.map((area, idx) => (
+                    <li key={idx} className="flex items-start gap-3">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
+                      <span>{area}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-              {/* Overall Recommendation */}
               <div className={`rounded-xl p-6 border-2 ${
                 resume.scorePercentage >= 85
                   ? 'bg-green-50 border-green-300'
@@ -434,22 +569,22 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, onBack }:
                 </p>
               </div>
             </div>
-          )}
+          )} */}
 
           {activeTab === 'scoretable' && (
             <DetailedScorecardTab
               resume={{
-                scorePercentage: resume.scorePercentage,
-                scoredDate: resume.scoredDate,
-                scoredBy: resume.scoredBy,
+                scorePercentage: fullResumeData.scorePercentage,
+                scoredDate: fullResumeData.scoredDate,
+                scoredBy: fullResumeData.scoredBy,
                 detailedScores: detailedScores,
                 certifications: resume.certifications,
                 education: resume.education,
                 location: resume.location,
                 title: resume.title,
                 // Pass API data for accurate scoring display
-                scoreBreakdown: resume.scoreBreakdown,
-                criteriaScores: resume.criteriaScores,
+                scoreBreakdown: fullResumeData.scoreBreakdown,
+                criteriaScores: fullResumeData.criteriaScores,
               }}
               jobTitle={jobTitle}
               getScoreColor={getScoreColor}

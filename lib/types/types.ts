@@ -105,12 +105,14 @@ export interface JobSnapshot {
 
 export interface Job {
   id: string;
+  job_id?: string;  // Human-readable ID like JD-001
   title: string;
   status: 'Published' | 'Draft' | 'Closed' | 'Archived' | 'Disabled';
   location: string;
   daysActive: number;
   requiredMatch: number;
   department?: string;
+  industry_type?: string;
   experience?: string;
   applicants?: number;
   description?: string;
@@ -124,4 +126,5 @@ export interface Job {
   versionHistory?: JobSnapshot[];
   assignedTo?: string; // Team member ID
   created_at?: string; // ISO timestamp for sorting
+  creation_method?: 'manual' | 'ai_generated'; // JD creation method
 }

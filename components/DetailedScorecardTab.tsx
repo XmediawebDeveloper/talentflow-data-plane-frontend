@@ -136,7 +136,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
       const rating = rawScore <= 10 ? Math.round(rawScore) : convertToRating(rawScore);
       const displayName = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
       // Determine if essential based on key or is_essential flag
-      const isEssential = value.is_essential === true || ['job_title', 'experience', 'must_have_skills', 'education'].includes(key);
+      const isEssential = value.is_essential === true || ['job_title', 'experience', 'must_have_skills', 'education', 'must_have_comments'].includes(key);
       return {
         name: displayName,
         rating: rating,
@@ -146,45 +146,9 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
       };
     });
   }
-  // Fallback to detailedScores
+  // Fallback to detailedScores - REMOVED static data, only show if real API data exists
   else {
-    criteriaScores = [
-      {
-        name: 'Title',
-        rating: convertToRating(resume.detailedScores?.titleMatch || 75),
-        icon: Briefcase,
-        criteriaType: 'Required',
-        aiReasoning: generateReasoning('Title', resume.detailedScores?.titleMatch || 75)
-      },
-      {
-        name: 'Experience Level',
-        rating: convertToRating(resume.detailedScores?.experienceMatch || 80),
-        icon: Award,
-        criteriaType: 'Required',
-        aiReasoning: generateReasoning('Experience Level', resume.detailedScores?.experienceMatch || 80)
-      },
-      {
-        name: 'Education Level',
-        rating: convertToRating(resume.detailedScores?.educationMatch || 70),
-        icon: GraduationCap,
-        criteriaType: 'Preferred',
-        aiReasoning: generateReasoning('Education Level', resume.detailedScores?.educationMatch || 70)
-      },
-      {
-        name: 'Skills',
-        rating: convertToRating(resume.detailedScores?.skillsMatch || 85),
-        icon: Target,
-        criteriaType: 'Required',
-        aiReasoning: generateReasoning('Skills', resume.detailedScores?.skillsMatch || 85)
-      },
-      {
-        name: 'Location',
-        rating: convertToRating(resume.detailedScores?.locationMatch || 90),
-        icon: MapPin,
-        criteriaType: 'Preferred',
-        aiReasoning: generateReasoning('Location', resume.detailedScores?.locationMatch || 90)
-      }
-    ];
+    criteriaScores = [];
   }
 
   const getRatingRange = (rating: number): string => {
@@ -253,11 +217,13 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
             <div>
               <div className="text-xs text-gray-600">Scored On</div>
               <div className="text-sm font-medium text-gray-900">
-                {new Date(resume.scoredDate).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric'
-                })}
+                {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
+                  ? new Date(resume.scoredDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })
+                  : 'N/A'}
               </div>
             </div>
           </div>
@@ -266,10 +232,12 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
             <div>
               <div className="text-xs text-gray-600">Time</div>
               <div className="text-sm font-medium text-gray-900">
-                {new Date(resume.scoredDate).toLocaleTimeString('en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
+                {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
+                  ? new Date(resume.scoredDate).toLocaleTimeString('en-US', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })
+                  : 'N/A'}
               </div>
             </div>
           </div>
@@ -277,122 +245,126 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
             <User className="w-4 h-4 text-green-600" />
             <div>
               <div className="text-xs text-gray-600">Scored By</div>
-              <div className="text-sm font-medium text-gray-900">{resume.scoredBy}</div>
+              <div className="text-sm font-medium text-gray-900">{resume.scoredBy || 'System'}</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Detailed Scoring Table */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
-          <h4 className="text-gray-900 flex items-center gap-2">
-            <CheckSquare className="w-5 h-5 text-gray-800" />
-            Scoring Rubric & Evaluation
-          </h4>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                  Evaluation Category
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                  Rating (out of 10)
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                  Rating Range
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                  Eligible Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                  Criteria
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                  AI Reasoning
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {criteriaScores.map((criteria, index) => {
-                const Icon = criteria.icon;
-                const eligibility = getEligibleStatus(criteria.rating);
-                return (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Icon className="w-4 h-4 text-gray-500" />
-                        <span className="text-sm font-medium text-gray-900">{criteria.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`inline-flex items-center justify-center w-14 h-14 rounded-lg font-bold border ${getRatingBgColor(criteria.rating)}`}>
-                        {criteria.rating}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`text-sm ${getRatingRangeColor(criteria.rating)}`}>
-                        {getRatingRange(criteria.rating)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        {eligibility.icon}
-                        <span className={`text-sm font-medium ${eligibility.color}`}>
-                          {eligibility.status}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
-                        criteria.criteriaType === 'Required' 
-                          ? 'bg-red-100 text-red-700 border border-red-300' 
-                          : 'bg-gray-100 text-gray-900 border border-gray-300'
-                      }`}>
-                        {criteria.criteriaType}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-gray-600 leading-relaxed">{criteria.aiReasoning}</p>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Detailed Scoring Table - Only show if real API data exists */}
+      {criteriaScores.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
+            <h4 className="text-gray-900 flex items-center gap-2">
+              <CheckSquare className="w-5 h-5 text-gray-800" />
+              Scoring Rubric & Evaluation
+            </h4>
+          </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-green-700">
-            {criteriaScores.filter(c => c.rating > 7).length}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                    Evaluation Category
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
+                    Rating (out of 10)
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
+                    Rating Range
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                    Eligible Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                    Criteria
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                    AI Reasoning
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {criteriaScores.map((criteria, index) => {
+                  const Icon = criteria.icon;
+                  const eligibility = getEligibleStatus(criteria.rating);
+                  return (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <Icon className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-900">{criteria.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`inline-flex items-center justify-center w-14 h-14 rounded-lg font-bold border ${getRatingBgColor(criteria.rating)}`}>
+                          {criteria.rating}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`text-sm ${getRatingRangeColor(criteria.rating)}`}>
+                          {getRatingRange(criteria.rating)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          {eligibility.icon}
+                          <span className={`text-sm font-medium ${eligibility.color}`}>
+                            {eligibility.status}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
+                          criteria.criteriaType === 'Required'
+                            ? 'bg-red-100 text-red-700 border border-red-300'
+                            : 'bg-gray-100 text-gray-900 border border-gray-300'
+                        }`}>
+                          {criteria.criteriaType}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-sm text-gray-600 leading-relaxed">{criteria.aiReasoning}</p>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <div className="text-sm text-gray-700 mt-1">Eligible Criteria</div>
         </div>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-red-700">
-            {criteriaScores.filter(c => c.rating <= 7).length}
+      )}
+
+      {/* Summary Stats - Only show if real API data exists */}
+      {criteriaScores.length > 0 && (
+        <div className="grid grid-cols-4 gap-4">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="text-2xl font-bold text-green-700">
+              {criteriaScores.filter(c => c.rating > 7).length}
+            </div>
+            <div className="text-sm text-gray-700 mt-1">Eligible Criteria</div>
           </div>
-          <div className="text-sm text-gray-700 mt-1">Not Eligible Criteria</div>
-        </div>
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-gray-900">
-            {criteriaScores.filter(c => c.criteriaType === 'Required').length}
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="text-2xl font-bold text-red-700">
+              {criteriaScores.filter(c => c.rating <= 7).length}
+            </div>
+            <div className="text-sm text-gray-700 mt-1">Not Eligible Criteria</div>
           </div>
-          <div className="text-sm text-gray-700 mt-1">Required Criteria</div>
-        </div>
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-gray-900">
-            {(criteriaScores.reduce((sum, c) => sum + c.rating, 0) / criteriaScores.length).toFixed(1)}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="text-2xl font-bold text-gray-900">
+              {criteriaScores.filter(c => c.criteriaType === 'Required').length}
+            </div>
+            <div className="text-sm text-gray-700 mt-1">Required Criteria</div>
           </div>
-          <div className="text-sm text-gray-700 mt-1">Average Rating</div>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="text-2xl font-bold text-gray-900">
+              {(criteriaScores.reduce((sum, c) => sum + c.rating, 0) / criteriaScores.length).toFixed(1)}
+            </div>
+            <div className="text-sm text-gray-700 mt-1">Average Rating</div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

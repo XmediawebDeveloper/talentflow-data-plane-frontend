@@ -392,9 +392,37 @@ export default function CurrentPlanPage() {
         console.log('Could not fetch quota status');
       }
 
-      // Build trial settings from quota data
+      // Fetch free trial settings from API
       let trialSettings: FreeTrialSettings | null = null;
-      if (quotaData?.quotas) {
+      try {
+        const freeTrialResponse = await fetch(`${API_URL}/addons/free-trial`);
+        if (freeTrialResponse.ok) {
+          const freeTrialResult = await freeTrialResponse.json();
+          const ftData = freeTrialResult.data || freeTrialResult;
+          console.log('[CurrentPlan] Free trial API response:', ftData);
+
+          // Use API data for trial settings (use ?? to preserve 0 values)
+          trialSettings = {
+            id: ftData.id,
+            trial_days: ftData.trial_days ?? 14,
+            features: {
+              MAX_JOBS: ftData.features?.MAX_JOBS ?? 5,
+              MAX_SEATS: ftData.features?.MAX_SEATS ?? 2,
+              ASSESSMENTS: ftData.features?.ASSESSMENTS ?? 10,
+              AI_INTERVIEW: ftData.features?.AI_INTERVIEW ?? 10,
+              RESUME_SCORING: ftData.features?.RESUME_SCORING ?? 100,
+              RESUME_STORAGE: ftData.features?.RESUME_STORAGE ?? 100,
+            },
+            trial_includes: ftData.trial_includes || ['Resume Storage', 'Resume Scoring', 'Assessments', 'AI Interviews'],
+          };
+          setFreeTrialSettings(trialSettings);
+        }
+      } catch (ftError) {
+        console.log('[CurrentPlan] Could not fetch free trial settings:', ftError);
+      }
+
+      // Fallback: Build trial settings from quota data if API failed
+      if (!trialSettings && quotaData?.quotas) {
         const q = quotaData.quotas;
         // Get trial days remaining from API response
         const trialDaysRemaining = quotaData.trial_info?.days_remaining ?? 14;
@@ -411,6 +439,9 @@ export default function CurrentPlanPage() {
           trial_includes: ['Resume Storage', 'Resume Scoring', 'Assessments', 'AI Interviews'],
         };
         setFreeTrialSettings(trialSettings);
+      }
+
+      if (quotaData?.quotas) {
 
         // Update company settings with data from quota-status API
         const quotas = quotaData.quotas;
@@ -441,15 +472,17 @@ export default function CurrentPlanPage() {
           // Only set plan dates if it's a paid plan
           plan_start_date: !isTrial ? planStartDate : null,
           plan_expiry_date: !isTrial ? planEndDate : null,
-          // Update quota limits from quota-status API
-          max_seats: quotas?.max_seats?.subscription?.limit || prev?.max_seats || 5,
-          max_jobs: quotas?.max_jobs?.subscription?.limit || prev?.max_jobs || 10,
-          max_resume_uploads: quotas?.RU?.subscription?.limit || prev?.max_resume_uploads || 100,
-          max_resume_searches: quotas?.RS?.subscription?.limit || prev?.max_resume_searches || 100,
-          max_assessments: quotas?.AS?.subscription?.limit || prev?.max_assessments || 50,
-          max_ai_interviews: quotas?.AIU?.subscription?.limit || prev?.max_ai_interviews || 25,
+          // Update quota limits - use free trial API data for trial users, otherwise use quota-status
+          max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : (quotas?.max_seats?.subscription?.limit || prev?.max_seats || 5),
+          max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : (quotas?.max_jobs?.subscription?.limit || prev?.max_jobs || 10),
+          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : (quotas?.RU?.subscription?.limit || prev?.max_resume_uploads || 100),
+          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : (quotas?.RS?.subscription?.limit || prev?.max_resume_searches || 100),
+          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : (quotas?.AS?.subscription?.limit || prev?.max_assessments || 50),
+          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : (quotas?.AIU?.subscription?.limit || prev?.max_ai_interviews || 25),
           storage_limit_gb: quotas?.storage_gb?.subscription?.limit || prev?.storage_limit_gb || 10,
         }));
+
+        console.log('[CurrentPlan] isTrial:', isTrial, 'trialSettings:', trialSettings?.features);
 
         // Extract base_price from plan_info if available (only for paid plans)
         if (!isTrial && quotaData.plan_info?.base_price !== undefined) {
@@ -1308,7 +1341,7 @@ export default function CurrentPlanPage() {
                 return (
                   <Card
                     key={plan.id}
-                    className={`relative p-8 ${
+                    className={`relative p-8 flex flex-col h-full ${
                       isSelectedPending
                         ? "border-2 border-orange-500 shadow-xl"
                         : plan.isCurrent
@@ -1412,7 +1445,7 @@ export default function CurrentPlanPage() {
 
                     {/* Features Section */}
                     {plan.features.length > 0 && (
-                      <ul className="space-y-3 mb-8">
+                      <ul className="space-y-3">
                         {plan.features.map((feature, idx) => (
                           <li key={idx} className="flex items-start gap-3">
                             <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
@@ -1422,12 +1455,13 @@ export default function CurrentPlanPage() {
                       </ul>
                     )}
 
-                    {plan.features.length === 0 && <div className="mb-8" />}
+                    {/* Spacer to push button to bottom */}
+                    <div className="flex-grow" />
 
                     <button
                       onClick={() => handleChoosePlan(plan)}
                       disabled={plan.isCurrent || isSelectingPlan || isSelectedPending || !plan.price || queuedUpgrades.length > 0}
-                      className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 ${
+                      className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 mt-auto ${
                         plan.isCurrent || isSelectedPending
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                           : queuedUpgrades.length > 0
@@ -1508,14 +1542,14 @@ export default function CurrentPlanPage() {
                         {formatCurrency(selectedPlanForPayment?.price || 0, selectedPlanForPayment?.currency || 'INR')}
                       </span>
                     </div>
-                    {isolationType === 'database' && planSettings?.databasePerTenantMonthlyPrice ? (
+                    {isolationType === 'database' && !isYearly && (
                       <div className="flex justify-between text-amber-700">
-                        <span>Dedicated Database:</span>
+                        <span>Database Isolation Fee:</span>
                         <span className="font-medium">
-                          +{formatCurrency(planSettings.databasePerTenantMonthlyPrice, selectedPlanForPayment?.currency || 'INR')}/month
+                          +{formatCurrency(planSettings?.databasePerTenantMonthlyPrice || 5000, selectedPlanForPayment?.currency || 'INR')}/month
                         </span>
                       </div>
-                    ) : null}
+                    )}
                     {isYearly && (
                       <>
                         <div className="flex justify-between pt-2 border-t border-gray-200 text-green-700">
@@ -1530,14 +1564,14 @@ export default function CurrentPlanPage() {
                             )}
                           </span>
                         </div>
-                        {isolationType === 'database' && planSettings?.databasePerTenantMonthlyPrice ? (
+                        {isolationType === 'database' && (
                           <div className="flex justify-between text-amber-700">
-                            <span>Database (12 months):</span>
+                            <span>Database Isolation Fee (12 months):</span>
                             <span className="font-medium">
-                              +{formatCurrency(planSettings.databasePerTenantMonthlyPrice * 12, selectedPlanForPayment?.currency || 'INR')}
+                              +{formatCurrency((planSettings?.databasePerTenantMonthlyPrice || 5000) * 12, selectedPlanForPayment?.currency || 'INR')}
                             </span>
                           </div>
-                        ) : null}
+                        )}
                       </>
                     )}
                   </div>
@@ -1549,17 +1583,16 @@ export default function CurrentPlanPage() {
                     <div>
                       <span className="font-semibold">Total</span>
                       <p className="text-xs text-gray-300">
-                        {isYearly ? 'Billed annually' : 'Billed monthly'}
+                        {isYearly ? 'Billed annually (12× quotas)' : 'Billed monthly'}
                       </p>
                     </div>
                     <div className="text-right">
                       <span className="font-bold text-2xl">
                         {formatCurrency(
                           isYearly
-                            ? Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) * 12 : 0)
-                            : (selectedPlanForPayment?.price || 0) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) : 0),
+                            ? Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 10) / 100)) +
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
+                            : (selectedPlanForPayment?.price || 0) + (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
                       </span>
@@ -1567,7 +1600,7 @@ export default function CurrentPlanPage() {
                         <p className="text-xs text-green-400">
                           You save {formatCurrency(
                             ((selectedPlanForPayment?.price || 0) * 12) -
-                            Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)),
+                            Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 10) / 100)),
                             selectedPlanForPayment?.currency || 'INR'
                           )}
                         </p>
@@ -1575,32 +1608,6 @@ export default function CurrentPlanPage() {
                     </div>
                   </div>
                 </div>
-
-                {/* Dedicated Database Checkbox */}
-                {planSettings?.databasePerTenantMonthlyPrice ? (
-                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
-                    isolationType === 'database' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'
-                  }`}>
-                    <input
-                      type="checkbox"
-                      checked={isolationType === 'database'}
-                      onChange={(e) => setIsolationType(e.target.checked ? 'database' : 'schema')}
-                      className="mt-1 w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <Database className="w-5 h-5 text-amber-600" />
-                        <span className="font-medium text-gray-900">Dedicated Database</span>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Get your own dedicated database for enhanced isolation and performance
-                      </p>
-                      <p className="text-sm text-amber-600 font-medium mt-1">
-                        +{formatCurrency(planSettings.databasePerTenantMonthlyPrice, selectedPlanForPayment?.currency || 'INR')}/month extra
-                      </p>
-                    </div>
-                  </label>
-                ) : null}
 
                 {/* Annual Plan Offer Checkbox */}
                 <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
@@ -1621,7 +1628,32 @@ export default function CurrentPlanPage() {
                       </Badge>
                     </div>
                     <p className="text-sm text-gray-500 mt-1">
-                      Pay for 12 months and get {planSettings?.yearlyDiscountPercentage || 20}% discount
+                      Pay for 12 months, get {planSettings?.yearlyDiscountPercentage || 20}% discount + 12× quotas
+                    </p>
+                  </div>
+                </label>
+
+                {/* Dedicated Database Checkbox - Available for both Monthly and Annual */}
+                <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
+                  isolationType === 'database' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'
+                }`}>
+                  <input
+                    type="checkbox"
+                    checked={isolationType === 'database'}
+                    onChange={(e) => setIsolationType(e.target.checked ? 'database' : 'schema')}
+                    className="mt-1 w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <Database className="w-5 h-5 text-amber-600" />
+                      <span className="font-medium text-gray-900">Dedicated Database</span>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Get your own dedicated database for enhanced isolation and performance
+                    </p>
+                    <p className="text-sm text-amber-600 font-medium mt-1">
+                      +{formatCurrency(planSettings?.databasePerTenantMonthlyPrice || 5000, selectedPlanForPayment?.currency || 'INR')}/month
+                      {isYearly && ` (${formatCurrency((planSettings?.databasePerTenantMonthlyPrice || 5000) * 12, selectedPlanForPayment?.currency || 'INR')}/year)`}
                     </p>
                   </div>
                 </label>
@@ -1642,10 +1674,9 @@ export default function CurrentPlanPage() {
                       <CreditCard className="w-5 h-5" />
                       Pay {formatCurrency(
                         isYearly
-                          ? Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)) +
-                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) * 12 : 0)
-                          : (selectedPlanForPayment?.price || 0) +
-                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) : 0),
+                          ? Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 10) / 100)) +
+                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
+                          : (selectedPlanForPayment?.price || 0) + (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0),
                         selectedPlanForPayment?.currency || 'INR'
                       )}
                     </>

@@ -330,7 +330,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             const limit = isUnlimited ? -1 : (baseLimit + addonRemaining);
             const used = sub.used || 0;
             const remaining = isUnlimited ? -1 : (q.total_remaining !== undefined ? q.total_remaining : (sub.remaining || 0));
-            const usagePercentage = isUnlimited ? 0 : (sub.percentage || (limit > 0 ? (used / limit) * 100 : 0));
+            // Calculate percentage based on TOTAL limit (subscription + addon), not just subscription
+            const usagePercentage = isUnlimited ? 0 : (limit > 0 ? (used / limit) * 100 : 0);
 
             // Log addon credits for debugging
             if (addonRemaining > 0) {
@@ -339,8 +340,10 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
             // Status: OK, WARNING, CRITICAL, EXCEEDED
             const status = q.status || 'OK';
-            const isLow = status === 'WARNING' || status === 'CRITICAL' || usagePercentage >= 80;
-            const isExhausted = status === 'EXCEEDED' || (remaining <= 0 && !isUnlimited);
+            // Only consider low/exhausted if the quota has a limit > 0 (i.e., it's enabled for this plan)
+            const hasQuota = limit > 0;
+            const isLow = hasQuota && (status === 'WARNING' || status === 'CRITICAL' || usagePercentage >= 80);
+            const isExhausted = hasQuota && (status === 'EXCEEDED' || (remaining <= 0 && !isUnlimited));
 
             quotasList.push({
               quota_type: quotaType,
@@ -938,7 +941,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       )}
                     </div>
                     <div className={`text-3xl font-bold ${c.text}`}>
-                      {isUnlimited ? '∞' : quota.remaining}
+                      {isUnlimited ? '∞' : quota.used}
                       <span className="text-sm font-normal text-gray-500">
                         /{isUnlimited ? '∞' : quota.limit}
                       </span>
@@ -952,7 +955,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       />
                     </div>
                     <div className="mt-1 text-xs text-gray-500">
-                      {quota.used} used {isUnlimited ? '' : `(${quota.percentage_used?.toFixed(1)}%)`}
+                      {quota.remaining} remaining {isUnlimited ? '' : `(${(100 - quota.percentage_used).toFixed(1)}% left)`}
                     </div>
                   </div>
                 );

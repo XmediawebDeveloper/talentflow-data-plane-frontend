@@ -6,8 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import JobDetailView from '@/components/JobDetailView';
 import { Job } from '@/lib/types/types';
-import { jdService, JDResponse } from '@/lib/services/jdService';
+import { jdService, JDResponse, JDUsageStatus } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import { usePermissions } from '@/lib/hooks/usePermissions';
 
 // Extended Job type with additional fields for JD view
 interface ExtendedJob extends Job {
@@ -20,12 +21,17 @@ interface ExtendedJob extends Job {
   hasAiMatchResults?: boolean;
   rawDescription?: string;
   mustHaveComments?: string[];
+  // JD13: Usage status for edit/republish logic
+  usageStatus?: JDUsageStatus;
 }
 
 function JobDetailsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const jobId = searchParams.get('id');
+
+  // JD15: Get user role for disable/enable button visibility
+  const { isTenantAdmin } = usePermissions();
 
   const [job, setJob] = useState<ExtendedJob | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,6 +66,7 @@ function JobDetailsContent() {
         daysActive: calculateDaysActive(data.created_at),
         requiredMatch: 70,
         department: data.department,
+        industry_type: data.industry_type,
         experience: data.experience_min && data.experience_max
           ? `${data.experience_min}-${data.experience_max} years`
           : data.experience_min
@@ -101,6 +108,15 @@ function JobDetailsContent() {
         // Ignore error
       }
 
+      // JD13: Fetch usage status for edit/republish logic
+      try {
+        const usageStatus = await jdService.getUsageStatus(jobId);
+        convertedJob.usageStatus = usageStatus;
+      } catch (e) {
+        // Usage status not available
+        console.warn('Could not fetch usage status:', e);
+      }
+
       setJob(convertedJob);
     } catch (error) {
       console.error('Failed to fetch job details:', error);
@@ -134,18 +150,68 @@ function JobDetailsContent() {
     router.push('/recruitment/job-openings');
   };
 
-  const handleEdit = (job: Job) => {
+  const handleEdit = (editJob: Job) => {
+    // JD13: Check usage status before allowing edit
+    const extendedJob = editJob as ExtendedJob;
+    if (extendedJob.usageStatus && !extendedJob.usageStatus.can_edit) {
+      toast.error(extendedJob.usageStatus.edit_restriction_reason ||
+        'This JD cannot be edited because it has been used in scoring, assessments, or AI matching.');
+      return;
+    }
     // Navigate to first stage (create) for editing
-    router.push(`/recruitment/jd-creation?id=${job.id}&stage=create`);
+    router.push(`/recruitment/jd-creation?id=${editJob.id}&stage=create`);
   };
 
-  const handleDisable = async (job: Job) => {
+  // JD13: Handle republish for edited JDs
+  const handleRepublish = async (republishJob: Job) => {
     try {
-      await jdService.updateStatus(job.id, 'disabled');
-      toast.info(`"${job.title}" has been disabled`);
+      await jdService.publish(republishJob.id);
+      toast.success(`"${republishJob.title}" has been republished`);
       fetchJobDetails();
     } catch (error) {
-      toast.error('Failed to disable job');
+      toast.error('Failed to republish job');
+    }
+  };
+
+  // JD15: Disable JD with confirmation dialog
+  const handleDisable = async (disableJob: Job) => {
+    // Show confirmation dialog before disabling
+    const confirmed = window.confirm(
+      `Are you sure you want to disable "${disableJob.title}"?\n\n` +
+      `This will:\n` +
+      `• Remove the JD from Resume Scoring, AI Talent Match, and Assessment modules\n` +
+      `• The JD will no longer be available for new scoring or assessments\n` +
+      `• Existing results will be preserved for reference\n\n` +
+      `You can re-enable this JD later if needed.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await jdService.disable(disableJob.id);
+      toast.info(`"${disableJob.title}" has been disabled`);
+      fetchJobDetails();
+    } catch (error: any) {
+      if (error.message?.includes('403') || error.message?.includes('Tenant Admin')) {
+        toast.error('Only Tenant Admins can disable job descriptions');
+      } else {
+        toast.error('Failed to disable job');
+      }
+    }
+  };
+
+  // JD15: Enable a disabled JD
+  const handleEnable = async (enableJob: Job) => {
+    try {
+      await jdService.enable(enableJob.id);
+      toast.success(`"${enableJob.title}" has been re-enabled`);
+      fetchJobDetails();
+    } catch (error: any) {
+      if (error.message?.includes('403') || error.message?.includes('Tenant Admin')) {
+        toast.error('Only Tenant Admins can enable job descriptions');
+      } else {
+        toast.error('Failed to enable job');
+      }
     }
   };
 
@@ -205,9 +271,12 @@ function JobDetailsContent() {
       onBack={handleBack}
       onEdit={handleEdit}
       onDisable={handleDisable}
+      onEnable={handleEnable}  // JD15: Enable handler
       onArchive={handleArchive}
       onDelete={handleDelete}
       onNavigateToAITalentMatch={handleNavigateToAITalentMatch}
+      onRepublish={handleRepublish}  // JD13: Republish handler
+      isTenantAdmin={isTenantAdmin}  // JD15: Pass role for disable/enable button visibility
     />
   );
 }
