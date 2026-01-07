@@ -103,38 +103,146 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
   }, [resendTimer]);
 
-  // Validate business email
-  const validateBusinessEmail = (email: string): boolean => {
-    const domain = email.split('@')[1]?.toLowerCase();
-    if (!domain) return false;
-    return !BLOCKED_EMAIL_DOMAINS.includes(domain);
+  // Comprehensive email validation
+  const validateEmail = (email: string): { isValid: boolean; error: string } => {
+    // Check if email is empty
+    if (!email || !email.trim()) {
+      return { isValid: false, error: 'Email is required' };
+    }
+
+    // Convert to lowercase for validation
+    const lowerEmail = email.toLowerCase().trim();
+
+    // Check basic email format
+    const emailRegex = /^[a-z0-9._+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
+    if (!emailRegex.test(lowerEmail)) {
+      return { isValid: false, error: 'Invalid email format. Email must be lowercase and follow standard format (e.g., name@company.com)' };
+    }
+
+    // Check for uppercase letters (not allowed)
+    if (email !== lowerEmail) {
+      return { isValid: false, error: 'Email must be in lowercase only' };
+    }
+
+    // Extract domain
+    const domain = lowerEmail.split('@')[1];
+    if (!domain) {
+      return { isValid: false, error: 'Invalid email domain' };
+    }
+
+    // Check if it's a personal email domain
+    if (BLOCKED_EMAIL_DOMAINS.includes(domain)) {
+      return { isValid: false, error: `Personal email domains (${domain}) are not allowed. Please use your company email address.` };
+    }
+
+    // Additional validation checks
+    if (lowerEmail.length > 254) {
+      return { isValid: false, error: 'Email address is too long' };
+    }
+
+    const localPart = lowerEmail.split('@')[0];
+    if (localPart.length > 64) {
+      return { isValid: false, error: 'Email username is too long' };
+    }
+
+    // Check for consecutive dots
+    if (lowerEmail.includes('..')) {
+      return { isValid: false, error: 'Email cannot contain consecutive dots' };
+    }
+
+    // Check if starts or ends with dot
+    if (localPart.startsWith('.') || localPart.endsWith('.')) {
+      return { isValid: false, error: 'Email cannot start or end with a dot' };
+    }
+
+    return { isValid: true, error: '' };
   };
 
   const handleChange = (field: keyof SignUpForm) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    let value = e.target.value;
+
+    // Auto-convert email to lowercase
+    if (field === 'adminEmail') {
+      value = value.toLowerCase().trim();
+    }
+
     setForm(prev => ({ ...prev, [field]: value }));
     setError('');
 
     // Validate email in real-time
-    if (field === 'adminEmail') {
-      if (value && !validateBusinessEmail(value)) {
-        setEmailError('Please use a business email address. Personal emails (Gmail, Yahoo, etc.) are not allowed.');
-      } else {
-        setEmailError('');
-      }
+    if (field === 'adminEmail' && value) {
+      const validation = validateEmail(value);
+      setEmailError(validation.error);
+    } else if (field === 'adminEmail') {
+      setEmailError('');
     }
   };
 
   const validateForm = (): string | null => {
-    if (!form.companyName.trim()) return 'Company name is required';
-    if (!form.adminEmail.trim()) return 'Email is required';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.adminEmail)) return 'Invalid email format';
-    if (!validateBusinessEmail(form.adminEmail)) return 'Please use a business email address';
-    if (!otpVerified) return 'Please verify your email with OTP first';
-    if (!form.adminName.trim()) return 'Your name is required';
-    if (!form.phoneNumber.trim()) return 'Phone number is required';
-    if (form.password.length < 8) return 'Password must be at least 8 characters';
-    if (form.password !== form.confirmPassword) return 'Passwords do not match';
+    // Company name validation
+    if (!form.companyName.trim()) {
+      return 'Company name is required';
+    }
+    if (form.companyName.trim().length < 2) {
+      return 'Company name must be at least 2 characters';
+    }
+
+    // Email validation
+    const emailValidation = validateEmail(form.adminEmail);
+    if (!emailValidation.isValid) {
+      return emailValidation.error;
+    }
+
+    // OTP verification
+    if (!otpVerified) {
+      return 'Please verify your email with OTP first';
+    }
+
+    // Admin name validation
+    if (!form.adminName.trim()) {
+      return 'Your name is required';
+    }
+    if (form.adminName.trim().length < 2) {
+      return 'Name must be at least 2 characters';
+    }
+
+    // Phone number validation
+    if (!form.phoneNumber.trim()) {
+      return 'Phone number is required';
+    }
+    const phoneRegex = /^[0-9+\-\s()]{10,}$/;
+    if (!phoneRegex.test(form.phoneNumber.trim())) {
+      return 'Please enter a valid phone number (at least 10 digits)';
+    }
+
+    // Password validation
+    if (!form.password) {
+      return 'Password is required';
+    }
+    if (form.password.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+    if (!/[A-Z]/.test(form.password)) {
+      return 'Password must contain at least one uppercase letter';
+    }
+    if (!/[a-z]/.test(form.password)) {
+      return 'Password must contain at least one lowercase letter';
+    }
+    if (!/[0-9]/.test(form.password)) {
+      return 'Password must contain at least one number';
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(form.password)) {
+      return 'Password must contain at least one special character';
+    }
+
+    // Confirm password validation
+    if (!form.confirmPassword) {
+      return 'Please confirm your password';
+    }
+    if (form.password !== form.confirmPassword) {
+      return 'Passwords do not match';
+    }
+
     return null;
   };
 

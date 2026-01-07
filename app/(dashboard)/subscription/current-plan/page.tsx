@@ -468,9 +468,9 @@ export default function CurrentPlanPage() {
         const trialStartDate = quotaData.trial_info?.trial_start_date || null;
         const trialEndDate = quotaData.trial_info?.trial_end_date || null;
 
-        // For PAID PLAN: Get dates from plan_info
-        const planStartDate = quotaData.plan_info?.plan_start_date || quotaData.plan_info?.start_date || null;
-        const planEndDate = quotaData.plan_info?.plan_expiry_date || quotaData.plan_info?.expiry_date || quotaData.plan_info?.end_date || null;
+        // For PAID PLAN: Get dates from root level (plan_start_date, plan_expiry_date) or billing_period
+        const planStartDate = quotaData.plan_start_date || quotaData.billing_period?.start || null;
+        const planEndDate = quotaData.plan_expiry_date || quotaData.billing_period?.end || null;
 
         console.log('[CurrentPlan] is_trial:', isTrial);
         console.log('[CurrentPlan] trial_info:', quotaData.trial_info);
