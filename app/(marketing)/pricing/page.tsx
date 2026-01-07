@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Check, Sparkles, Building2, Users, Zap, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -171,12 +171,22 @@ export default function PricingPage() {
   // Get discount percentage (default to 10 if not loaded)
   const yearlyDiscountPercent = planSettings?.yearlyDiscountPercentage ?? 10;
 
+  // Use ref to track if data has been fetched to prevent duplicate calls
+  const hasFetchedRef = useRef(false);
+
   useEffect(() => {
+    // Prevent duplicate calls on re-renders or React Strict Mode
+    if (hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
+
     let isCancelled = false;
+    const abortController = new AbortController();
 
     const fetchPlanSettings = async (): Promise<number> => {
       try {
-        const response = await fetch(`${API_URL}/addons/plan-settings`);
+        const response = await fetch(`${API_URL}/addons/plan-settings`, {
+          signal: abortController.signal
+        });
 
         if (response.ok && !isCancelled) {
           const result = await response.json();
@@ -187,7 +197,9 @@ export default function PricingPage() {
           }
         }
       } catch (err) {
-        if (!isCancelled) console.error('Error fetching plan settings:', err);
+        if (!isCancelled && err.name !== 'AbortError') {
+          console.error('Error fetching plan settings:', err);
+        }
       }
       return 10;
     };
@@ -198,7 +210,9 @@ export default function PricingPage() {
         setIsLoading(true);
         setError(null);
 
-        const response = await fetch(`${API_URL}/subscription/public/plans`);
+        const response = await fetch(`${API_URL}/subscription/public/plans`, {
+          signal: abortController.signal
+        });
 
         if (!response.ok) {
           throw new Error(`Failed to fetch plans: ${response.status}`);
@@ -249,7 +263,7 @@ export default function PricingPage() {
 
         setPlans(transformedPlans);
       } catch (err) {
-        if (!isCancelled) {
+        if (!isCancelled && err.name !== 'AbortError') {
           console.error('Error fetching plans:', err);
           setError(err instanceof Error ? err.message : 'Failed to load plans');
         }
@@ -264,7 +278,9 @@ export default function PricingPage() {
         setAddonsLoading(true);
         setAddonsError(null);
 
-        const response = await fetch(`${API_URL}/addons?active_only=false&public_only=false`);
+        const response = await fetch(`${API_URL}/addons?active_only=false&public_only=false`, {
+          signal: abortController.signal
+        });
 
         if (!response.ok) {
           throw new Error(`Failed to fetch addons: ${response.status}`);
@@ -280,7 +296,7 @@ export default function PricingPage() {
 
         setAddons(sortedAddons);
       } catch (err) {
-        if (!isCancelled) {
+        if (!isCancelled && err.name !== 'AbortError') {
           console.error('Error fetching addons:', err);
           setAddonsError(err instanceof Error ? err.message : 'Failed to load addons');
         }
@@ -291,7 +307,9 @@ export default function PricingPage() {
 
     const fetchFreeTrial = async () => {
       try {
-        const response = await fetch(`${API_URL}/addons/free-trial`);
+        const response = await fetch(`${API_URL}/addons/free-trial`, {
+          signal: abortController.signal
+        });
 
         if (response.ok && !isCancelled) {
           const result = await response.json();
@@ -302,7 +320,9 @@ export default function PricingPage() {
           }
         }
       } catch (err) {
-        if (!isCancelled) console.error('Error fetching free trial settings:', err);
+        if (!isCancelled && err.name !== 'AbortError') {
+          console.error('Error fetching free trial settings:', err);
+        }
       }
     };
 
@@ -318,9 +338,10 @@ export default function PricingPage() {
     fetchAddons();
     fetchFreeTrial();
 
-    // Cleanup function - prevents state updates after unmount
+    // Cleanup function - prevents state updates after unmount and aborts ongoing requests
     return () => {
       isCancelled = true;
+      abortController.abort();
     };
   }, []);
 

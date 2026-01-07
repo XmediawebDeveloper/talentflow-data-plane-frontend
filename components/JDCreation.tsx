@@ -10,6 +10,7 @@ import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
+import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -1156,10 +1157,22 @@ Use professional language, clear formatting, and make it engaging for candidates
     } catch (error) {
       console.error('[ERROR] Failed to publish JD:', error);
       setIsPublishing(false);
-      toast.error({
-        title: 'Failed to publish job description',
-        description: error instanceof Error ? error.message : 'An unexpected error occurred',
-      });
+
+      // Check if this is a quota exceeded error
+      const quotaError = error && typeof error === 'object' && 'response' in error
+        ? error.response?.data?.detail
+        : null;
+
+      if (quotaError && (quotaError.error === 'QUOTA_EXHAUSTED' || quotaError.error === 'QUOTA_INSUFFICIENT')) {
+        // Use handleQuotaError for quota errors
+        handleQuotaError(error, router, 'Failed to publish job description');
+      } else {
+        // Use regular toast for non-quota errors
+        toast.error({
+          title: 'Failed to publish job description',
+          description: error instanceof Error ? error.message : 'An unexpected error occurred',
+        });
+      }
     }
   };
 

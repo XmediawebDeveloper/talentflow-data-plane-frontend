@@ -15,6 +15,7 @@ import { Resume, Folder } from '@/lib/types/types';
 import { resumeService, folderService, ResumeSearchParams } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
+import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 
 interface SearchFilters {
   skills?: string[];
@@ -273,7 +274,7 @@ export default function ResumeDatabasePage() {
         setResumes(prev => [converted, ...prev]);
         toast.success('Resume uploaded successfully');
       } catch (error) {
-        toast.error(`Failed to upload ${files[0].name}`);
+        handleQuotaError(error, router, `Failed to upload ${files[0].name}`);
       }
       return;
     }
@@ -328,7 +329,7 @@ export default function ResumeDatabasePage() {
       }, 600000);
 
     } catch (error) {
-      toast.error('Failed to start bulk upload');
+      handleQuotaError(error, router, 'Failed to start bulk upload');
       console.error('Bulk upload error:', error);
     }
   };
