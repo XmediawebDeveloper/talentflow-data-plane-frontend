@@ -400,18 +400,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   }, [checkQuota]);
 
   // JD06: Autosave as draft when user types (debounced)
+  // Works in both AI mode and manual mode during create step
   useEffect(() => {
-    // Only autosave in manual mode during create step, when we have content
-    if (step !== 'create' || mode !== 'manual') return;
-    if (!jobTitle.trim() && !manualJD.trim()) return;
+    if (step !== 'create') return;
 
-    // Need minimum content to autosave (Job Title must have at least 2 chars)
+    // Need job title with at least 2 characters (backend requirement)
     if (jobTitle.trim().length < 2) return;
-
-    // Skip if already editing an existing JD (to avoid duplicate saves on load)
-    // Only skip on initial load - allow autosave after user makes changes
-    const hasMinimumContent = jobTitle.trim().length >= 2;
-    if (!hasMinimumContent) return;
 
     const autosaveTimer = setTimeout(async () => {
       // Don't autosave if currently saving via another action
@@ -420,9 +414,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       setAutosaveStatus('saving');
 
       try {
+        // Build description based on mode
+        // For AI mode: use generated JD, or AI prompt as placeholder, or empty string
+        const description = mode === 'ai'
+          ? (generatedJD || (aiPrompt ? `[AI Prompt - Pending Generation]\n\n${aiPrompt}` : ''))
+          : manualJD;
+
         const jdData = {
           title: jobTitle,
-          description: manualJD,
+          description: description,
           creation_stage: 'create' as const,
           creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
         };
@@ -455,7 +455,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(autosaveTimer);
-  }, [jobTitle, manualJD, step, mode, editingId, isSavingDraft, isPublishing]);
+  }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing]);
 
   const handleGenerateJD = async () => {
     // Check quota before generating
@@ -1165,12 +1165,8 @@ Use professional language, clear formatting, and make it engaging for candidates
 
   // Check if there's unsaved data worth saving
   const hasUnsavedData = () => {
-    // In AI mode: save if we have job title AND (generated JD OR ai prompt)
-    // In manual mode: save if we have job title AND manual JD
-    if (mode === 'ai') {
-      return jobTitle.trim() !== '' && (generatedJD.trim() !== '' || aiPrompt.trim() !== '');
-    }
-    return jobTitle.trim() !== '' && manualJD.trim() !== '';
+    // Need job title with at least 2 characters (backend requirement)
+    return jobTitle.trim().length >= 2;
   };
 
   // Handle back button click - auto save as draft if there's unsaved data
@@ -1196,6 +1192,15 @@ Use professional language, clear formatting, and make it engaging for candidates
 
   // Save JD as draft
   const handleSaveDraft = async () => {
+    // Validate job title has at least 2 characters (backend requirement)
+    if (jobTitle.trim().length < 2) {
+      toast.warning({
+        title: 'Cannot save draft',
+        description: 'Job title must have at least 2 characters',
+      });
+      return;
+    }
+
     setIsSavingDraft(true);
 
     try {
@@ -1219,8 +1224,11 @@ Use professional language, clear formatting, and make it engaging for candidates
       }
 
       // Build the JD data for backend
-      // For AI mode without generated JD yet, save the AI prompt as description placeholder
-      const descriptionToSave = generatedJD || manualJD || (mode === 'ai' && aiPrompt ? `[AI Prompt - Pending Generation]\n\n${aiPrompt}` : '');
+      // For AI mode: use generated JD, or AI prompt as placeholder, or empty string
+      // For manual mode: use manual JD
+      const descriptionToSave = mode === 'ai'
+        ? (generatedJD || (aiPrompt ? `[AI Prompt - Pending Generation]\n\n${aiPrompt}` : ''))
+        : manualJD;
       console.log('[DEBUG] handleSaveDraft - descriptionToSave:', descriptionToSave?.substring(0, 100));
 
       const jdData = {
@@ -1483,7 +1491,30 @@ Use professional language, clear formatting, and make it engaging for candidates
               {/* Input Form - AI Mode */}
               {mode === 'ai' && (
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                  <h2 className="text-gray-900 mb-6">Job Details</h2>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-gray-900">Job Details</h2>
+                    {/* JD06: Autosave status indicator for AI mode */}
+                    <div className="flex items-center gap-2 text-sm">
+                      {autosaveStatus === 'saving' && (
+                        <span className="flex items-center gap-1.5 text-gray-500">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Saving...
+                        </span>
+                      )}
+                      {autosaveStatus === 'saved' && (
+                        <span className="flex items-center gap-1.5 text-green-600">
+                          <Cloud className="w-4 h-4" />
+                          Draft saved
+                        </span>
+                      )}
+                      {autosaveStatus === 'error' && (
+                        <span className="flex items-center gap-1.5 text-red-500">
+                          <CloudOff className="w-4 h-4" />
+                          Save failed
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
                   <div className="space-y-5">
                     <div>
