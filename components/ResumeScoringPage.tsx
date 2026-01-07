@@ -8,6 +8,7 @@ import ResumeSelectionModal from './ResumeSelectionModal';
 import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
+import api from '@/lib/services/api';
 
 // Types
 interface Job {
@@ -132,6 +133,9 @@ export default function ResumeScoringPage({
   const [selectedScoredResumes, setSelectedScoredResumes] = useState<string[]>([]);
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
 
+  // Available units from quota API
+  const [availableUnits, setAvailableUnits] = useState<number | null>(null);
+
   // Handle initial JD ID from URL - auto-open scored resumes view
   useEffect(() => {
     if (initialJdId && scoredHistory.length > 0) {
@@ -146,6 +150,22 @@ export default function ResumeScoringPage({
       }
     }
   }, [initialJdId, scoredHistory]);
+
+  // Fetch available units on mount
+  useEffect(() => {
+    const fetchQuota = async () => {
+      try {
+        const response = await api.get('/usage/quota-status');
+        const quotas = response.data?.data?.quotas;
+        if (quotas?.RS) {
+          setAvailableUnits(quotas.RS.total_remaining || 0);
+        }
+      } catch (error) {
+        console.log('[ResumeScoringPage] Failed to load quota:', error);
+      }
+    };
+    fetchQuota();
+  }, []);
 
   // Split resumes - myResumes are all user-uploaded resumes, databaseResumes are all resumes
   const myResumes = resumes; // All resumes belong to the user (My Resumes)
@@ -512,7 +532,7 @@ export default function ResumeScoringPage({
           resumes={scoredResumesData}
           jobTitle={selectedHistoryItem.jobTitle}
           jobId={selectedHistoryItem.jobId}
-          availableUnits={10}
+          availableUnits={availableUnits || 0}
           onViewCandidate={(resume) => {
             setSelectedCandidateForView(resume);
             setViewMode('candidateView');
@@ -598,30 +618,24 @@ export default function ResumeScoringPage({
             </div>
 
             {/* Available Units Display */}
-            <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-gray-300 mr-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-100 mb-0.5">Available Units</div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-bold text-white">
-                      {tenant ? (tenant.subscription.limits.resumeScoring - tenant.subscription.usage.resumeScoring).toLocaleString() : '250'}
-                    </span>
-                    <span className="text-xs text-gray-100">units</span>
+            {availableUnits !== null && (
+              <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-gray-300 mr-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                    <DollarSign className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-100 mb-0.5">Available Units</div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xl font-bold text-white">
+                        {availableUnits.toLocaleString()}
+                      </span>
+                      <span className="text-xs text-gray-100">units</span>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="mt-2 pt-2 border-t border-white border-opacity-20">
-                <div className="flex items-center justify-between text-xs text-gray-100">
-                  <span>Used / Limit:</span>
-                  <span className="font-medium text-white">
-                    {tenant ? `${tenant.subscription.usage.resumeScoring.toLocaleString()} / ${tenant.subscription.limits.resumeScoring.toLocaleString()}` : '3,247 / 5,000'}
-                  </span>
-                </div>
-              </div>
-            </div>
+            )}
 
             {/* Progress Tables Button */}
             {scoredHistory.length > 0 && (
@@ -1201,30 +1215,24 @@ export default function ResumeScoringPage({
           </div>
 
           {/* Available Units Display */}
-          <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-gray-300">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-100 mb-0.5">Available Units</div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-bold text-white">
-                    {tenant ? (tenant.subscription.limits.resumeScoring - tenant.subscription.usage.resumeScoring).toLocaleString() : '250'}
-                  </span>
-                  <span className="text-sm text-gray-100">units</span>
+          {availableUnits !== null && (
+            <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-gray-300">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                  <DollarSign className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-100 mb-0.5">Available Units</div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-white">
+                      {availableUnits.toLocaleString()}
+                    </span>
+                    <span className="text-sm text-gray-100">units</span>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-white border-opacity-20">
-              <div className="flex items-center justify-between text-xs text-gray-100">
-                <span>Used / Limit:</span>
-                <span className="font-medium text-white">
-                  {tenant ? `${tenant.subscription.usage.resumeScoring.toLocaleString()} / ${tenant.subscription.limits.resumeScoring.toLocaleString()}` : '3,247 / 5,000'}
-                </span>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Progress Indicator */}
