@@ -488,50 +488,72 @@ export default function JobOpeningsPage() {
                       {formatDate(job.created_at)}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="relative inline-block">
+                      <div className="flex items-center justify-end gap-2">
+                        {/* Edit Button */}
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveDropdown(activeDropdown === job.id ? null : job.id);
-                          }}
-                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                          onClick={() => router.push(`/recruitment/jd-creation?id=${job.id}`)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
                         >
-                          <MoreVertical className="w-4 h-4 text-gray-400" />
+                          <Edit2 className="w-4 h-4" />
+                          Edit
                         </button>
-                        {activeDropdown === job.id && (
-                          <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                            <button
-                              onClick={() => { router.push(`/recruitment/job-details?id=${job.id}`); setActiveDropdown(null); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              <Eye className="w-4 h-4" />
-                              View Details
-                            </button>
-                            {job.status === 'draft' && (
+                        {/* View Button */}
+                        <button
+                          onClick={() => router.push(`/recruitment/job-details?id=${job.id}`)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </button>
+                        {/* More Actions Dropdown */}
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDropdown(activeDropdown === job.id ? null : job.id);
+                            }}
+                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                          >
+                            <MoreVertical className="w-4 h-4 text-gray-500" />
+                          </button>
+                          {activeDropdown === job.id && (
+                            <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                              {/* View Applicants */}
                               <button
-                                onClick={() => handleStatusChange(job.id, 'published')}
+                                onClick={() => { router.push(`/recruitment/job-details?id=${job.id}&tab=applicants`); setActiveDropdown(null); }}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                               >
-                                <CheckCircle className="w-4 h-4" />
-                                Publish
+                                <Users className="w-4 h-4" />
+                                View Applicants
                               </button>
-                            )}
-                            {job.status === 'published' && (
-                              <button
-                                onClick={() => handleStatusChange(job.id, 'disabled')}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                              >
-                                <Ban className="w-4 h-4" />
-                                Disable
-                              </button>
-                            )}
-                            {job.status === 'disabled' && (
-                              <button
-                                onClick={() => handleStatusChange(job.id, 'published')}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                              >
-                                <RefreshCw className="w-4 h-4" />
-                                Republish
+                              {/* Publish for drafts */}
+                              {job.status === 'draft' && (
+                                <button
+                                  onClick={() => handleStatusChange(job.id, 'published')}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                  Publish
+                                </button>
+                              )}
+                              {/* Disable Job for published */}
+                              {job.status === 'published' && (
+                                <button
+                                  onClick={() => handleStatusChange(job.id, 'disabled')}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
+                                >
+                                  <Power className="w-4 h-4" />
+                                  Disable Job
+                                </button>
+                              )}
+                              {/* Republish for disabled */}
+                              {job.status === 'disabled' && (
+                                <button
+                                  onClick={() => handleStatusChange(job.id, 'published')}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <RefreshCw className="w-4 h-4" />
+                                  Republish
                               </button>
                             )}
                           </div>
