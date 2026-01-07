@@ -554,10 +554,21 @@ export default function JobOpeningsPage() {
                                 >
                                   <RefreshCw className="w-4 h-4" />
                                   Republish
-                              </button>
-                            )}
-                          </div>
-                        )}
+                                </button>
+                              )}
+                              {/* Archive Job */}
+                              {job.status !== 'archived' && (
+                                <button
+                                  onClick={() => handleStatusChange(job.id, 'archived')}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Archive className="w-4 h-4" />
+                                  Archive Job
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>

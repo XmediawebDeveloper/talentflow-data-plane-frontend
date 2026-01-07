@@ -518,7 +518,7 @@ export default function JDListPage() {
                   </div>
 
                   {/* Actions - View, Edit buttons and 3-dot menu */}
-                  <div className="flex items-center gap-2 flex-shrink-0" style={{ border: '2px solid red', padding: '4px' }}>
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     {/* View Button */}
                     <button
                       onClick={() => router.push(`/recruitment/jd-details?id=${jd.id}`)}
