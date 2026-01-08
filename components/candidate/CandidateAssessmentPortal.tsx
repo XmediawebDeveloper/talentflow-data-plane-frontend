@@ -17,6 +17,7 @@ import { ResultsScreen } from './ResultsScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { ErrorScreen } from './ErrorScreen';
 import { ScoringScreen } from './ScoringScreen';
+import { useRefreshPrevention } from '@/hooks/useRefreshPrevention';
 
 type AssessmentStep =
   | 'loading'
@@ -48,6 +49,16 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Enable refresh prevention during active assessment
+  const isAssessmentActive = step === 'assessment' || step === 'scoring' || step === 'completing';
+  useRefreshPrevention({
+    enabled: isAssessmentActive,
+    message: 'You have an ongoing assessment. Leaving this page will end your session.',
+    onAttempt: (type) => {
+      console.log(`[PROCTORING] Blocked ${type} attempt during assessment`);
+    },
+  });
 
   // Load assessment info on mount
   useEffect(() => {

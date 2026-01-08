@@ -23,7 +23,8 @@ interface AssessmentsProps {
 }
 
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation }: AssessmentsProps) {
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'archived' | 'audit-trail' | 'proctoring'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'archived' | 'settings'>('all');
+  const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
   const [showCreation, setShowCreation] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [selectedAssessmentForResults, setSelectedAssessmentForResults] = useState<any>(null);
@@ -50,6 +51,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [proctoringEventsTotal, setProctoringEventsTotal] = useState(0);
   const [flaggedCount, setFlaggedCount] = useState(0);
 
+  // Topic settings state
+  interface TopicSettings {
+    hr_enabled: boolean;
+    hr_scoring_type: 'informational' | 'scored';
+    technical_enabled: boolean;
+    technical_scoring_type: 'informational' | 'scored';
+    coding_enabled: boolean;
+    coding_scoring_type: 'informational' | 'scored';
+  }
+  const [topicSettings, setTopicSettings] = useState<TopicSettings>({
+    hr_enabled: true,
+    hr_scoring_type: 'informational',
+    technical_enabled: true,
+    technical_scoring_type: 'scored',
+    coding_enabled: true,
+    coding_scoring_type: 'scored',
+  });
+  const [isLoadingTopics, setIsLoadingTopics] = useState(false);
+  const [isSavingTopics, setIsSavingTopics] = useState(false);
+  const [topicsError, setTopicsError] = useState<string | null>(null);
+
   // Stats from API
   const [stats, setStats] = useState({
     total_assessments: 0,
@@ -66,10 +88,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setIsLoadingStats(true);
 
       // Run all API calls in parallel for faster loading
-      const [assessmentsResult, statsResult, quotaResult] = await Promise.allSettled([
+      const [assessmentsResult, statsResult, quotaResult, topicsResult] = await Promise.allSettled([
         assessmentService.list({ page_size: 100 }),
         assessmentService.getStats(),
         api.get('/usage/quota-status'),
+        api.get('/assessments/settings/topics'),
       ]);
 
       // Process assessments
@@ -144,6 +167,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         console.log('[TalentFlow] Failed to load quota:', quotaResult.reason);
       }
 
+      // Process topic settings (for assessment creation)
+      if (topicsResult.status === 'fulfilled') {
+        const topicsData = topicsResult.value.data;
+        if (topicsData) {
+          setTopicSettings(topicsData);
+          console.log('[TalentFlow] Loaded topic settings from API');
+        }
+      } else {
+        console.log('[TalentFlow] Failed to load topic settings:', topicsResult.reason);
+      }
+
       setIsLoading(false);
       setIsLoadingStats(false);
     };
@@ -151,12 +185,60 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     loadAllData();
   }, []);
 
-  // Load proctoring settings when proctoring tab is active
+  // Load settings data when settings tab is active
   useEffect(() => {
-    if (activeTab === 'proctoring') {
-      loadProctoringData();
+    if (activeTab === 'settings') {
+      if (settingsSubTab === 'proctoring') {
+        loadProctoringData();
+      } else if (settingsSubTab === 'topics') {
+        loadTopicSettings();
+      }
     }
-  }, [activeTab]);
+  }, [activeTab, settingsSubTab]);
+
+  // Load topic settings from API
+  const loadTopicSettings = async () => {
+    setIsLoadingTopics(true);
+    setTopicsError(null);
+    try {
+      const response = await api.get('/assessments/settings/topics');
+      if (response.data) {
+        setTopicSettings(response.data);
+      }
+    } catch (error: any) {
+      console.error('Failed to load topic settings:', error);
+      // Use defaults if API fails (settings might not exist yet)
+      if (error.response?.status !== 404) {
+        setTopicsError('Failed to load topic settings');
+      }
+    } finally {
+      setIsLoadingTopics(false);
+    }
+  };
+
+  // Update topic settings
+  const updateTopicSettings = async (updates: Partial<TopicSettings>) => {
+    setIsSavingTopics(true);
+    setTopicsError(null);
+
+    // Optimistically update local state
+    const previousSettings = topicSettings;
+    setTopicSettings({ ...topicSettings, ...updates });
+
+    try {
+      const response = await api.put('/assessments/settings/topics', { ...topicSettings, ...updates });
+      if (response.data) {
+        setTopicSettings(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to update topic settings:', error);
+      setTopicsError('Failed to save settings');
+      // Rollback on error
+      setTopicSettings(previousSettings);
+    } finally {
+      setIsSavingTopics(false);
+    }
+  };
 
   // Load proctoring settings and events from API
   const loadProctoringData = async () => {
@@ -373,6 +455,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         jobs={jobs}
         onCreateAssessment={handleCreateAssessment}
         onCreateNewJD={onNavigateToJDCreation}
+        topicSettings={topicSettings}
       />
     );
   }
@@ -646,25 +729,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   Archived
                 </button>
                 <button
-                  onClick={() => setActiveTab('audit-trail')}
-                  className={`py-4 text-sm border-b-2 transition-colors ${
-                    activeTab === 'audit-trail'
-                      ? 'border-gray-800 text-gray-800'
-                      : 'border-transparent text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Audit Trail
-                </button>
-                <button
-                  onClick={() => setActiveTab('proctoring')}
+                  onClick={() => setActiveTab('settings')}
                   className={`py-4 text-sm border-b-2 transition-colors flex items-center gap-1.5 ${
-                    activeTab === 'proctoring'
+                    activeTab === 'settings'
                       ? 'border-gray-800 text-gray-800'
                       : 'border-transparent text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   <Shield className="w-4 h-4" />
-                  Proctoring Mode
+                  Settings
                 </button>
               </div>
               {/* Grid/List View Toggle */}
@@ -697,9 +770,270 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
           {/* Assessment List */}
           <div className="p-6">
-            {activeTab === 'proctoring' ? (
-              /* Proctoring Mode Settings Tab */
+            {activeTab === 'settings' ? (
+              /* Settings Tab with Sub-tabs */
               <div className="space-y-6">
+                {/* Settings Sub-tabs */}
+                <div className="flex gap-4 border-b border-gray-200">
+                  <button
+                    onClick={() => setSettingsSubTab('proctoring')}
+                    className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                      settingsSubTab === 'proctoring'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <Shield className="w-4 h-4" />
+                    Proctoring & Security
+                  </button>
+                  <button
+                    onClick={() => setSettingsSubTab('topics')}
+                    className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                      settingsSubTab === 'topics'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <ClipboardList className="w-4 h-4" />
+                    Assessment Topics
+                  </button>
+                </div>
+
+                {/* Assessment Topics Settings Content */}
+                {settingsSubTab === 'topics' ? (
+                  <div className="space-y-6">
+                    {/* Header */}
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                        <ClipboardList className="w-5 h-5" />
+                        Assessment Topics Settings
+                      </h2>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Enable or disable topics for all assessments. Disabled topics will not appear in the section distribution during assessment configuration.
+                      </p>
+                    </div>
+
+                    {/* Loading State */}
+                    {isLoadingTopics ? (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="text-center">
+                          <div className="w-10 h-10 border-4 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
+                          <p className="text-gray-600">Loading topic settings...</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Error Message */}
+                        {topicsError && (
+                          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <AlertTriangle className="w-4 h-4 text-red-500" />
+                            <p className="text-sm text-red-700">{topicsError}</p>
+                          </div>
+                        )}
+
+                        {/* Topic Availability Header */}
+                        <div className="bg-gradient-to-r from-blue-600 to-cyan-500 rounded-lg p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                                <ClipboardList className="w-5 h-5 text-white" />
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-medium text-white">Topic Availability</h3>
+                                <p className="text-xs text-white/80">
+                                  Control which topics are available during assessment creation
+                                </p>
+                              </div>
+                            </div>
+                            {isSavingTopics && (
+                              <span className="text-xs text-white/80 flex items-center gap-1">
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                                Saving...
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* HR Section */}
+                        <div className="bg-white border border-gray-200 rounded-lg p-5">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                                <Users className="w-5 h-5 text-purple-600" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="text-sm font-medium text-gray-900">HR Section</h4>
+                                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                    topicSettings.hr_enabled
+                                      ? 'bg-green-100 text-green-700'
+                                      : 'bg-gray-200 text-gray-600'
+                                  }`}>
+                                    {topicSettings.hr_enabled ? 'Enabled' : 'Disabled'}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
+                                    {topicSettings.hr_scoring_type === 'informational' ? 'Informational Only' : 'Scored (0-10)'}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                  HR topics are available for assessments. Includes behavioral questions, cultural fit, and soft skills evaluation.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-center gap-1">
+                              <button
+                                onClick={() => updateTopicSettings({ hr_enabled: !topicSettings.hr_enabled })}
+                                disabled={isSavingTopics}
+                                className={`relative w-14 h-7 rounded-full transition-colors ${
+                                  topicSettings.hr_enabled
+                                    ? 'bg-purple-500'
+                                    : 'bg-gray-300'
+                                } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                                  topicSettings.hr_enabled
+                                    ? 'translate-x-8'
+                                    : 'translate-x-1'
+                                }`}>
+                                  {topicSettings.hr_enabled ? (
+                                    <CheckCircle2 className="w-5 h-5 text-purple-500" />
+                                  ) : (
+                                    <X className="w-5 h-5 text-gray-400" />
+                                  )}
+                                </div>
+                              </button>
+                              <span className="text-xs text-gray-500 font-medium">
+                                {topicSettings.hr_enabled ? 'ON' : 'OFF'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Technical Section */}
+                        <div className="bg-white border border-gray-200 rounded-lg p-5">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                                <Brain className="w-5 h-5 text-green-600" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="text-sm font-medium text-gray-900">Technical Section</h4>
+                                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                    topicSettings.technical_enabled
+                                      ? 'bg-green-100 text-green-700'
+                                      : 'bg-gray-200 text-gray-600'
+                                  }`}>
+                                    {topicSettings.technical_enabled ? 'Enabled' : 'Disabled'}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                                    {topicSettings.technical_scoring_type === 'informational' ? 'Informational Only' : 'Scored (0-10)'}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                  Technical topics are available for assessments. Includes domain knowledge, tools, regulations, and technical workflows.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-center gap-1">
+                              <button
+                                onClick={() => updateTopicSettings({ technical_enabled: !topicSettings.technical_enabled })}
+                                disabled={isSavingTopics}
+                                className={`relative w-14 h-7 rounded-full transition-colors ${
+                                  topicSettings.technical_enabled
+                                    ? 'bg-green-500'
+                                    : 'bg-gray-300'
+                                } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                                  topicSettings.technical_enabled
+                                    ? 'translate-x-8'
+                                    : 'translate-x-1'
+                                }`}>
+                                  {topicSettings.technical_enabled ? (
+                                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                                  ) : (
+                                    <X className="w-5 h-5 text-gray-400" />
+                                  )}
+                                </div>
+                              </button>
+                              <span className="text-xs text-gray-500 font-medium">
+                                {topicSettings.technical_enabled ? 'ON' : 'OFF'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Coding Section */}
+                        <div className="bg-white border border-gray-200 rounded-lg p-5">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                <Code className="w-5 h-5 text-blue-600" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="text-sm font-medium text-gray-900">Coding Section</h4>
+                                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                    topicSettings.coding_enabled
+                                      ? 'bg-green-100 text-green-700'
+                                      : 'bg-gray-200 text-gray-600'
+                                  }`}>
+                                    {topicSettings.coding_enabled ? 'Enabled' : 'Disabled'}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                                    {topicSettings.coding_scoring_type === 'informational' ? 'Informational Only' : 'Scored (0-10)'}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                  Coding topics are available for assessments. Includes algorithms, data structures, frameworks, and coding patterns.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-center gap-1">
+                              <button
+                                onClick={() => updateTopicSettings({ coding_enabled: !topicSettings.coding_enabled })}
+                                disabled={isSavingTopics}
+                                className={`relative w-14 h-7 rounded-full transition-colors ${
+                                  topicSettings.coding_enabled
+                                    ? 'bg-blue-500'
+                                    : 'bg-gray-300'
+                                } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                                  topicSettings.coding_enabled
+                                    ? 'translate-x-8'
+                                    : 'translate-x-1'
+                                }`}>
+                                  {topicSettings.coding_enabled ? (
+                                    <CheckCircle2 className="w-5 h-5 text-blue-500" />
+                                  ) : (
+                                    <X className="w-5 h-5 text-gray-400" />
+                                  )}
+                                </div>
+                              </button>
+                              <span className="text-xs text-gray-500 font-medium">
+                                {topicSettings.coding_enabled ? 'ON' : 'OFF'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Important Notice */}
+                        <div className="flex items-start gap-2 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                          <Info className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm text-amber-800">
+                              <span className="font-medium">Important:</span> When a topic is disabled here, it will not be available in the section distribution when creating or configuring assessments. Existing assessments with disabled topics will remain unchanged but cannot be edited to add those topics.
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  /* Proctoring Settings Content */
+                  <div className="space-y-6">
                 {/* Loading State */}
                 {isLoadingProctoring ? (
                   <div className="flex items-center justify-center py-12">
@@ -969,9 +1303,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
                   </>
                 )}
+                  </div>
+                )}
               </div>
-            ) : activeTab === 'audit-trail' ? (
-              <AssessmentAuditTrail />
             ) : isLoading ? (
               /* Loading State */
               <div className="flex items-center justify-center py-12">
