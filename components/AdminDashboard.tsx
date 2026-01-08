@@ -191,7 +191,7 @@ export default function AdminDashboard({
                   <Zap className="w-5 h-5 text-blue-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm text-gray-600">Resume Scoring</p>
+                  <p className="text-sm text-gray-600">Scoring Units</p>
                   <p className="text-xl font-semibold text-gray-900">
                     {subscriptionUnits.RS.is_unlimited ? 'Unlimited' : subscriptionUnits.RS.available}
                   </p>
@@ -200,8 +200,8 @@ export default function AdminDashboard({
               {!subscriptionUnits.RS.is_unlimited && (
                 <div className="mt-3">
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>Used: {subscriptionUnits.RS.used}</span>
-                    <span>Limit: {subscriptionUnits.RS.limit}</span>
+                    <span>{subscriptionUnits.RS.used} / {subscriptionUnits.RS.limit} used</span>
+                    <span className="font-medium text-gray-700">{subscriptionUnits.RS.available} remaining</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-1.5">
                     <div
@@ -220,7 +220,7 @@ export default function AdminDashboard({
                   <ClipboardCheck className="w-5 h-5 text-orange-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm text-gray-600">Assessments</p>
+                  <p className="text-sm text-gray-600">Assessment Units</p>
                   <p className="text-xl font-semibold text-gray-900">
                     {subscriptionUnits.AS.is_unlimited ? 'Unlimited' : subscriptionUnits.AS.available}
                   </p>
@@ -229,8 +229,8 @@ export default function AdminDashboard({
               {!subscriptionUnits.AS.is_unlimited && (
                 <div className="mt-3">
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>Used: {subscriptionUnits.AS.used}</span>
-                    <span>Limit: {subscriptionUnits.AS.limit}</span>
+                    <span>{subscriptionUnits.AS.used} / {subscriptionUnits.AS.limit} used</span>
+                    <span className="font-medium text-gray-700">{subscriptionUnits.AS.available} remaining</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-1.5">
                     <div
@@ -249,7 +249,7 @@ export default function AdminDashboard({
                   <Video className="w-5 h-5 text-purple-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm text-gray-600">AI Interviews</p>
+                  <p className="text-sm text-gray-600">Interview Units</p>
                   <p className="text-xl font-semibold text-gray-900">
                     {subscriptionUnits.AIU.is_unlimited ? 'Unlimited' : subscriptionUnits.AIU.available}
                   </p>
@@ -258,8 +258,8 @@ export default function AdminDashboard({
               {!subscriptionUnits.AIU.is_unlimited && (
                 <div className="mt-3">
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>Used: {subscriptionUnits.AIU.used}</span>
-                    <span>Limit: {subscriptionUnits.AIU.limit}</span>
+                    <span>{subscriptionUnits.AIU.used} / {subscriptionUnits.AIU.limit} used</span>
+                    <span className="font-medium text-gray-700">{subscriptionUnits.AIU.available} remaining</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-1.5">
                     <div

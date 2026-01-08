@@ -6,6 +6,7 @@ import {
   Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft,
   Building2, User, CheckCircle, Loader2, Phone, ShieldCheck
 } from 'lucide-react';
+import { decodePlanId } from '@/lib/utils/planEncoder';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -46,8 +47,8 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Get plan_id from URL query params (e.g., /signup?plan_id=21)
-  const planIdFromUrl = searchParams.get('plan_id');
+  // Get encoded plan from URL query params (e.g., /signup?plan=ENCODED_ID)
+  const encodedPlanFromUrl = searchParams.get('plan');
 
   const [form, setForm] = useState<SignUpForm>({
     companyName: '',
@@ -313,9 +314,13 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
       setStep('success');
 
-      // Redirect to login page after brief success message
+      // Redirect to login page with plan parameter after brief success message
       setTimeout(() => {
-        router.push('/login');
+        if (encodedPlanFromUrl) {
+          router.push(`/login?plan=${encodedPlanFromUrl}&email=${encodeURIComponent(form.adminEmail)}`);
+        } else {
+          router.push('/login');
+        }
       }, 2000);
 
     } catch (err: any) {
@@ -331,7 +336,8 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const isEmailValidForOtp = () => {
     if (!form.adminEmail.trim()) return false;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.adminEmail)) return false;
-    if (!validateBusinessEmail(form.adminEmail)) return false;
+    const emailValidation = validateEmail(form.adminEmail);
+    if (!emailValidation.isValid) return false;
     return true;
   };
 
@@ -382,7 +388,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           password: 'PLACEHOLDER_PENDING',  // Actual password sent in complete-registration
           terms_accepted: true,
           privacy_accepted: true,
-          plan_id: planIdFromUrl ? parseInt(planIdFromUrl) : null,
+          plan_id: encodedPlanFromUrl ? parseInt(decodePlanId(encodedPlanFromUrl) || '0') : null,
         }),
       });
 
@@ -588,6 +594,23 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     } finally {
       setIsSendingOtp(false);
     }
+  };
+
+  const handleChangeEmail = () => {
+    // Reset OTP-related states to allow email change
+    setOtpSent(false);
+    setOtpVerified(false);
+    setOtpCode(['', '', '', '', '', '']);
+    setResendTimer(0);
+    setError('');
+    setEmailError('');
+    // Clear the email field focus
+    setTimeout(() => {
+      const emailInput = document.querySelector('input[type="email"]') as HTMLInputElement;
+      if (emailInput) {
+        emailInput.focus();
+      }
+    }, 100);
   };
 
   // Styles
@@ -848,11 +871,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                       onChange={handleChange('adminEmail')}
                       placeholder="john@acme.com"
                       required
-                      disabled={otpVerified}
+                      disabled={otpSent}
                       style={{
                         ...inputStyle,
                         borderColor: otpVerified ? '#10B981' : emailError ? '#EF4444' : '#D1D5DB',
-                        backgroundColor: otpVerified ? '#F0FDF4' : '#F9FAFB',
+                        backgroundColor: otpSent ? (otpVerified ? '#F0FDF4' : '#F9FAFB') : '#F9FAFB',
                       }}
                     />
                     {otpVerified && (
@@ -944,7 +967,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                         Verifying...
                       </div>
                     )}
-                    <div style={{ textAlign: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16 }}>
                       <button
                         type="button"
                         onClick={handleResendOtp}
@@ -959,6 +982,21 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                         }}
                       >
                         {isSendingOtp ? 'Sending...' : resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend Code'}
+                      </button>
+                      <span style={{ color: '#D1D5DB' }}>|</span>
+                      <button
+                        type="button"
+                        onClick={handleChangeEmail}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#DC2626',
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          fontSize: 13,
+                        }}
+                      >
+                        Change Email
                       </button>
                     </div>
                   </div>
