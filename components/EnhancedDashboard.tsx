@@ -431,7 +431,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {/* Published JDs */}
             <div
               className="p-4 rounded-lg border-2 border-green-200 bg-green-50 hover:border-green-300 transition-all cursor-pointer"
-              onClick={() => router.push('/recruitment/jd-list?status=published')}
+              onClick={() => router.push('/recruitment/job-openings?status=published')}
             >
               <div className="text-4xl font-bold text-green-600 mb-2">
                 {jdStatusCounts.published}
@@ -450,7 +450,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {/* Draft JDs */}
             <div
               className="p-4 rounded-lg border-2 border-yellow-200 bg-yellow-50 hover:border-yellow-300 transition-all cursor-pointer"
-              onClick={() => router.push('/recruitment/jd-list?status=draft')}
+              onClick={() => router.push('/recruitment/job-openings?status=draft')}
             >
               <div className="text-4xl font-bold text-yellow-600 mb-2">
                 {jdStatusCounts.draft}
@@ -469,7 +469,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {/* Disabled JDs */}
             <div
               className="p-4 rounded-lg border-2 border-red-200 bg-red-50 hover:border-red-300 transition-all cursor-pointer"
-              onClick={() => router.push('/recruitment/jd-list?status=disabled')}
+              onClick={() => router.push('/recruitment/job-openings?status=disabled')}
             >
               <div className="text-4xl font-bold text-red-600 mb-2">
                 {jdStatusCounts.disabled}
@@ -488,7 +488,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {/* Archived JDs */}
             <div
               className="p-4 rounded-lg border-2 border-gray-200 bg-gray-50 hover:border-gray-300 transition-all cursor-pointer"
-              onClick={() => router.push('/recruitment/jd-list?status=archived')}
+              onClick={() => router.push('/recruitment/job-openings?status=archived')}
             >
               <div className="text-4xl font-bold text-gray-600 mb-2">
                 {jdStatusCounts.archived}
@@ -669,7 +669,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               <Button
                 variant="ghost"
                 className="mt-4 w-full"
-                onClick={() => router.push('/recruitment/jd-list?status=published')}
+                onClick={() => router.push('/recruitment/job-openings?status=published')}
               >
                 View all published jobs
                 <ArrowUpRight className="ml-2 h-4 w-4" />
@@ -748,7 +748,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               <Button
                 variant="ghost"
                 className="mt-4 w-full"
-                onClick={() => router.push('/recruitment/jd-list?status=draft')}
+                onClick={() => router.push('/recruitment/job-openings?status=draft')}
               >
                 View all drafts
                 <ArrowUpRight className="ml-2 h-4 w-4" />

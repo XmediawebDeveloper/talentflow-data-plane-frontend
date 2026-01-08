@@ -127,4 +127,5 @@ export interface Job {
   assignedTo?: string; // Team member ID
   created_at?: string; // ISO timestamp for sorting
   creation_method?: 'manual' | 'ai_generated'; // JD creation method
+  creation_stage?: string; // Stage where draft JD was left off (create, skills, assessment, review)
 }

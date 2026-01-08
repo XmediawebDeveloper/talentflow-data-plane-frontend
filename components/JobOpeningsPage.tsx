@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search,
   Plus,
@@ -29,12 +29,15 @@ import {
 } from 'lucide-react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import api from '@/lib/services/api';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
 type ViewMode = 'grid' | 'list';
 
 export default function JobOpeningsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [jobs, setJobs] = useState<JDResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,6 +47,10 @@ export default function JobOpeningsPage() {
   const [total, setTotal] = useState(0);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [refetchKey, setRefetchKey] = useState(0);
+
+  // Quota info for job publishing limit
+  const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | null>(null);
 
   // Stats
   const [stats, setStats] = useState({
@@ -62,60 +69,90 @@ export default function JobOpeningsPage() {
     { key: 'archived', label: 'Archived' },
   ];
 
-  const fetchJobs = async () => {
-    setLoading(true);
-    try {
-      const response = await jdService.list({
-        status: activeFilter !== 'all' ? activeFilter : undefined,
-        search: searchQuery || undefined,
-        page: currentPage,
-        page_size: 12,
-      });
-      setJobs(response.items);
-      setTotalPages(response.total_pages);
-      setTotal(response.total);
-
-      // Calculate stats from multiple API calls
-      const [allRes, publishedRes, draftRes] = await Promise.all([
-        jdService.list({ page_size: 1 }),
-        jdService.list({ status: 'published', page_size: 1 }),
-        jdService.list({ status: 'draft', page_size: 1 }),
-      ]);
-
-      // Get applicants count from current page items
-      const totalApplicants = response.items.reduce((sum, j) => sum + (j.applicants_count || 0), 0);
-
-      setStats({
-        totalJobs: allRes.total,
-        activeJobs: publishedRes.total,
-        draftJobs: draftRes.total,
-        totalApplicants: totalApplicants
-      });
-    } catch (error) {
-      console.error('Failed to fetch jobs:', error);
-      toast.error('Failed to load job openings');
-    } finally {
-      setLoading(false);
+  // Sync activeFilter with URL on mount and URL changes
+  useEffect(() => {
+    const statusFromUrl = searchParams.get('status') as FilterStatus | null;
+    if (statusFromUrl && ['published', 'draft', 'closed', 'disabled', 'archived'].includes(statusFromUrl)) {
+      setActiveFilter(statusFromUrl);
     }
-  };
+  }, [searchParams]);
 
+  // Fetch jobs when filter changes
   useEffect(() => {
+    const fetchJobs = async () => {
+      setLoading(true);
+      try {
+        // Build params - only include status if not 'all'
+        const params: { status?: string; search?: string; page: number; page_size: number } = {
+          page: currentPage,
+          page_size: 12,
+        };
+
+        if (activeFilter !== 'all') {
+          params.status = activeFilter;
+        }
+
+        if (searchQuery) {
+          params.search = searchQuery;
+        }
+
+        const response = await jdService.list(params);
+        setJobs(response.items);
+        setTotalPages(response.total_pages);
+        setTotal(response.total);
+
+        // Calculate stats from multiple API calls
+        const [allRes, publishedRes, draftRes] = await Promise.all([
+          jdService.list({ page_size: 1 }),
+          jdService.list({ status: 'published', page_size: 1 }),
+          jdService.list({ status: 'draft', page_size: 1 }),
+        ]);
+
+        const totalApplicants = response.items.reduce((sum, j) => sum + (j.applicants_count || 0), 0);
+
+        setStats({
+          totalJobs: allRes.total,
+          activeJobs: publishedRes.total,
+          draftJobs: draftRes.total,
+          totalApplicants: totalApplicants
+        });
+      } catch (error) {
+        console.error('Failed to fetch jobs:', error);
+        toast.error('Failed to load job openings');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchJobs();
-  }, [activeFilter, currentPage]);
+  }, [activeFilter, currentPage, searchQuery, refetchKey]);
 
+  // Fetch quota status for job publishing limit
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setCurrentPage(1);
-      fetchJobs();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    const fetchQuota = async () => {
+      try {
+        const response = await api.get('/usage/quota-status');
+        if (response.data?.status === 'success' && response.data.data?.quotas?.max_jobs) {
+          const maxJobs = response.data.data.quotas.max_jobs;
+          setQuotaInfo({
+            remaining: maxJobs.total_remaining || 0,
+            limit: (maxJobs.subscription?.limit || 0) + (maxJobs.addon?.total_purchased || 0),
+            used: maxJobs.subscription?.used || 0,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch quota:', error);
+      }
+    };
+    fetchQuota();
+  }, []);
 
   const handleStatusChange = async (jobId: string, newStatus: string) => {
     try {
       await jdService.updateStatus(jobId, newStatus);
       toast.success(`Job status updated to ${newStatus}`);
-      fetchJobs();
+      // Trigger refetch
+      setRefetchKey(prev => prev + 1);
     } catch (error) {
       toast.error('Failed to update status');
     }
@@ -163,7 +200,13 @@ export default function JobOpeningsPage() {
             <p className="text-sm text-gray-500 mt-1">Manage and track all your job postings</p>
           </div>
           <button
-            onClick={() => router.push('/recruitment/jd-creation')}
+            onClick={() => {
+              if (quotaInfo && quotaInfo.remaining <= 0) {
+                alert(`Job publishing limit reached (${quotaInfo.used}/${quotaInfo.limit}). Please upgrade your plan to create more jobs.`);
+                return;
+              }
+              router.push('/recruitment/jd-creation');
+            }}
             className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium shadow-sm"
           >
             <Plus className="w-4 h-4" />
@@ -299,7 +342,13 @@ export default function JobOpeningsPage() {
             </p>
             {!searchQuery && activeFilter === 'all' && (
               <button
-                onClick={() => router.push('/recruitment/jd-creation')}
+                onClick={() => {
+                  if (quotaInfo && quotaInfo.remaining <= 0) {
+                    alert(`Job publishing limit reached (${quotaInfo.used}/${quotaInfo.limit}). Please upgrade your plan to create more jobs.`);
+                    return;
+                  }
+                  router.push('/recruitment/jd-creation');
+                }}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
               >
                 <Plus className="w-4 h-4" />

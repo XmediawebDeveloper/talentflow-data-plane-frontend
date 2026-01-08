@@ -112,11 +112,17 @@ export default function ResumeTable({
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
-    
+
     if (diffHours < 24) return `${diffHours} hours ago`;
     if (diffHours < 48) return 'Yesterday';
-    
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    // Display in IST timezone
+    return date.toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
   };
 
   // Handle showing version history - fetch versions from backend
@@ -384,22 +390,28 @@ export default function ResumeTable({
                         <Briefcase className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => {
-                          // Open resume file in new tab for preview
-                          const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-                          window.open(`${apiUrl}/resumes/${resume.id}/download`, '_blank');
+                        onClick={async () => {
+                          try {
+                            toast.loading('Downloading resume...', { id: 'download' });
+                            const blob = await resumeService.download(resume.id);
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${resume.name || 'resume'}.pdf`;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+                            toast.success('Resume downloaded', { id: 'download' });
+                          } catch (error) {
+                            console.error('Download failed:', error);
+                            toast.error('Failed to download resume', { id: 'download' });
+                          }
                         }}
                         className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                        title="Preview Resume"
+                        title="Download Resume"
                       >
                         <Download className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => onDelete(resume.id)}
-                        className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
-                        title="Delete Resume"
-                      >
-                        <Trash2 className="w-4 h-4" />
                       </button>
                       <div className="relative">
                         <button
@@ -416,18 +428,6 @@ export default function ResumeTable({
                               onClick={() => setActiveMenu(null)}
                             />
                             <div className="absolute right-0 mt-1 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedResumeForAction(resume);
-                                  setShowEditModal(true);
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                              >
-                                <Edit3 className="w-4 h-4 text-blue-600" />
-                                Edit Details
-                              </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -876,68 +876,41 @@ export default function ResumeTable({
 
       {/* Delete Resume Modal */}
       {showDeleteModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                  <Trash2 className="w-5 h-5 text-red-600" />
-                </div>
-                <h2 className="text-gray-900">Delete Resume</h2>
-              </div>
-              <p className="text-sm text-gray-600">
-                Permanently delete {selectedResumeForAction.name}'s resume?
-              </p>
-            </div>
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full">
             <div className="p-6">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-                <p className="text-sm text-red-800">
-                  <strong>⚠️ Warning: This action cannot be undone!</strong>
-                </p>
-                <ul className="text-sm text-red-700 mt-2 space-y-1 ml-4 list-disc">
-                  <li>Resume will be permanently deleted</li>
-                  <li>All candidate data will be removed</li>
-                  <li>Associated files will be deleted</li>
-                  <li>This cannot be recovered</li>
-                </ul>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Delete Resume?</h2>
+                  <p className="text-sm text-gray-500">This action cannot be undone</p>
+                </div>
               </div>
-              <div className="mb-4">
-                <label className="block text-sm text-gray-700 mb-2">
-                  Type <strong>DELETE</strong> to confirm
-                </label>
-                <input
-                  type="text"
-                  placeholder="DELETE"
-                  id="delete-resume-confirm"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                />
-              </div>
+              <p className="text-gray-700 mb-6">
+                Are you sure you want to delete <strong>{selectedResumeForAction.name}</strong>'s resume permanently?
+              </p>
               <div className="flex gap-3">
                 <button
                   onClick={() => {
                     setShowDeleteModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                 >
-                  Cancel
+                  No, Cancel
                 </button>
                 <button
                   onClick={() => {
-                    const input = document.getElementById('delete-resume-confirm') as HTMLInputElement;
-                    if (input?.value === 'DELETE') {
-                      onDelete(selectedResumeForAction.id);
-                      toast.success('Resume deleted permanently');
-                      setShowDeleteModal(false);
-                      setSelectedResumeForAction(null);
-                    } else {
-                      toast.error('Please type DELETE to confirm');
-                    }
+                    onDelete(selectedResumeForAction.id);
+                    toast.success('Resume deleted successfully');
+                    setShowDeleteModal(false);
+                    setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
                 >
-                  <Trash2 className="w-4 h-4" />
-                  Delete Permanently
+                  Yes, Delete
                 </button>
               </div>
             </div>

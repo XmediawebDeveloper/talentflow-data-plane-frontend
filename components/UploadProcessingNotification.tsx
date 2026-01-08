@@ -1,3 +1,5 @@
+'use client'
+
 import { CheckCircle, Clock, Sparkles } from 'lucide-react';
 
 interface UploadProcessingNotificationProps {
@@ -32,16 +34,16 @@ export default function UploadProcessingNotification({ totalFiles, onClose }: Up
               Resume{totalFiles !== 1 ? 's' : ''} processed successfully
             </p>
           </div>
-          
-          <div className="flex items-center justify-center gap-2 text-sm text-gray-500 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-100">
-            <Clock className="w-4 h-4 text-gray-800" />
-            <span className="text-gray-700">View detailed status in <span className="text-gray-800">Upload History</span></span>
+
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-500 mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+            <Clock className="w-4 h-4 text-blue-600" />
+            <span className="text-gray-700">View detailed status in <span className="text-blue-600">Upload History</span></span>
           </div>
 
           {/* Action Button */}
           <button
             onClick={onClose}
-            className="w-full px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-md hover:shadow-lg"
+            className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-md hover:shadow-lg"
           >
             Got it, thanks!
           </button>

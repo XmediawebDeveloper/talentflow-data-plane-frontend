@@ -1898,29 +1898,19 @@ Use professional language, clear formatting, and make it engaging for candidates
               </div>
             )}
 
-            {/* Regeneration Notice */}
+            {/* Regeneration Notice - Removed Regenerate JD button as per requirement */}
             {extractedDataModified && mode === 'ai' && (
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
-                      <Wand2 className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h4 className="text-blue-800 font-medium">Skills Modified</h4>
-                      <p className="text-sm text-blue-600">
-                        You&apos;ve made changes. Regenerate the JD to update the description with your modifications.
-                      </p>
-                    </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
+                    <Wand2 className="w-5 h-5 text-white" />
                   </div>
-                  <button
-                    onClick={handleRegenerateFromExtractedData}
-                    disabled={isRegenerating}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Wand2 className="w-4 h-4" />
-                    {isRegenerating ? 'Regenerating...' : 'Regenerate JD'}
-                  </button>
+                  <div>
+                    <h4 className="text-blue-800 font-medium">Skills Modified</h4>
+                    <p className="text-sm text-blue-600">
+                      You&apos;ve made changes to the extracted skills.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -2215,125 +2205,6 @@ Use professional language, clear formatting, and make it engaging for candidates
                     />
                     <span className="text-sm text-gray-700">Required</span>
                   </label>
-                </div>
-              </div>
-
-              {/* JD09: Certifications and Domain Keywords - 2 Column Layout */}
-              <div className="grid grid-cols-2 gap-6 mb-8">
-                {/* Certifications */}
-                <div>
-                  <h3 className="text-gray-900 mb-4">Certifications</h3>
-                  <div className="space-y-2 mb-3">
-                    {extractedData.certifications.map((cert, index) => (
-                      <div key={index} className="flex items-center justify-between p-2.5 bg-white border border-gray-200 rounded-lg group">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                          <span className="text-sm text-gray-700">{cert}</span>
-                        </div>
-                        <button
-                          onClick={() => setExtractedData(prev => ({
-                            ...prev,
-                            certifications: prev.certifications.filter((_, i) => i !== index)
-                          }))}
-                          className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Add certification..."
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
-                          setExtractedData(prev => ({
-                            ...prev,
-                            certifications: [...prev.certifications, (e.target as HTMLInputElement).value.trim()]
-                          }));
-                          (e.target as HTMLInputElement).value = '';
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={(e) => {
-                        const input = (e.currentTarget as HTMLElement).previousElementSibling as HTMLInputElement;
-                        if (input?.value.trim()) {
-                          setExtractedData(prev => ({
-                            ...prev,
-                            certifications: [...prev.certifications, input.value.trim()]
-                          }));
-                          input.value = '';
-                        }
-                      }}
-                      className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {extractedData.certifications.length === 0 && (
-                    <p className="text-xs text-gray-500 mt-2">No certifications extracted. Add manually if needed.</p>
-                  )}
-                </div>
-
-                {/* Domain Keywords */}
-                <div>
-                  <h3 className="text-gray-900 mb-4">Domain Keywords</h3>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {extractedData.domainKeywords.map((keyword, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm group"
-                      >
-                        {keyword}
-                        <button
-                          onClick={() => setExtractedData(prev => ({
-                            ...prev,
-                            domainKeywords: prev.domainKeywords.filter((_, i) => i !== index)
-                          }))}
-                          className="text-gray-400 hover:text-red-500 transition-colors"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Add domain keyword..."
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
-                          setExtractedData(prev => ({
-                            ...prev,
-                            domainKeywords: [...prev.domainKeywords, (e.target as HTMLInputElement).value.trim()]
-                          }));
-                          (e.target as HTMLInputElement).value = '';
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={(e) => {
-                        const input = (e.currentTarget as HTMLElement).previousElementSibling as HTMLInputElement;
-                        if (input?.value.trim()) {
-                          setExtractedData(prev => ({
-                            ...prev,
-                            domainKeywords: [...prev.domainKeywords, input.value.trim()]
-                          }));
-                          input.value = '';
-                        }
-                      }}
-                      className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {extractedData.domainKeywords.length === 0 && (
-                    <p className="text-xs text-gray-500 mt-2">No domain keywords extracted. Add manually if needed.</p>
-                  )}
                 </div>
               </div>
 
@@ -2934,52 +2805,6 @@ Use professional language, clear formatting, and make it engaging for candidates
                   </div>
                 </div>
               </div>
-
-              {/* JD12: Certifications */}
-              {extractedData.certifications.length > 0 && (
-                <div className="p-6 border-b border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-gray-900">Certifications ({extractedData.certifications.length})</h3>
-                    <button
-                      onClick={() => setStep('extract')}
-                      className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      Edit
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {extractedData.certifications.map((cert, index) => (
-                      <div key={index} className="bg-purple-50 text-purple-800 px-3 py-2 rounded-lg text-sm border border-purple-200">
-                        {cert}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* JD12: Domain Keywords */}
-              {extractedData.domainKeywords.length > 0 && (
-                <div className="p-6 border-b border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-gray-900">Domain Keywords ({extractedData.domainKeywords.length})</h3>
-                    <button
-                      onClick={() => setStep('extract')}
-                      className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      Edit
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {extractedData.domainKeywords.map((keyword, index) => (
-                      <div key={index} className="bg-blue-50 text-blue-800 px-3 py-2 rounded-lg text-sm border border-blue-200">
-                        {keyword}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Compensation */}
               <div className="p-6 border-b border-gray-200">

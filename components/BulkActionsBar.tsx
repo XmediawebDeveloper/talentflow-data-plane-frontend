@@ -11,6 +11,7 @@ interface BulkActionsBarProps {
   onMoveToFolder?: (folderId: string) => void;
   onApplyToJob: () => void;
   onDelete: () => void;
+  onDownload?: () => void;
   folders?: Folder[];
   onResumeScoring?: () => void;
   onAssessment?: () => void;
@@ -22,6 +23,7 @@ export default function BulkActionsBar({
   onMoveToFolder,
   onApplyToJob,
   onDelete,
+  onDownload,
   folders,
   onResumeScoring,
   onAssessment,
@@ -123,26 +125,15 @@ export default function BulkActionsBar({
             </button>
           )}
           
-          <button 
-            onClick={() => {
-              // ✅ EXPORT SUCCESS FEEDBACK
-              toast.success({
-                title: 'Export completed successfully!',
-                description: `${selectedCount} resume${selectedCount > 1 ? 's' : ''} exported to CSV file.`,
-                action: {
-                  label: 'Download Again',
-                  onClick: () => {
-                    // Re-trigger download
-                    toast.info('Download started...');
-                  }
-                }
-              });
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 text-white bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-all text-sm shadow-sm border border-white/20"
-          >
-            <Download className="w-4 h-4" />
-            Download
-          </button>
+          {onDownload && (
+            <button
+              onClick={onDownload}
+              className="flex items-center gap-2 px-4 py-2.5 text-white bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-all text-sm shadow-sm border border-white/20"
+            >
+              <Download className="w-4 h-4" />
+              Download
+            </button>
+          )}
           
           <div className="w-px h-8 bg-white/30 mx-1" />
           
