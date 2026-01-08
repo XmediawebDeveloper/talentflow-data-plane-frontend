@@ -356,6 +356,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
   // Save to draft state
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isNavigatingBack, setIsNavigatingBack] = useState(false);
 
   // JD06: Autosave state
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -459,15 +460,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing, isPublished]);
 
   const handleGenerateJD = async () => {
-    // Check quota before generating
-    if (!hasQuota) {
-      toast.error({
-        title: 'Quota Exhausted',
-        description: 'You have reached your job posting limit. Please upgrade your plan.',
-      });
-      return;
-    }
-
+    // Note: Quota check moved to publish action - generation doesn't consume quota
     setIsGenerating(true);
 
     try {
@@ -1184,10 +1177,18 @@ Use professional language, clear formatting, and make it engaging for candidates
 
   // Handle back button click - auto save as draft if there's unsaved data
   const handleBackClick = async () => {
+    // Prevent multiple clicks from creating multiple JDs
+    if (isNavigatingBack || isSavingDraft) {
+      console.log('[DEBUG] handleBackClick - already navigating or saving, ignoring click');
+      return;
+    }
+
     console.log('[DEBUG] handleBackClick called');
     console.log('[DEBUG] hasUnsavedData:', hasUnsavedData());
     console.log('[DEBUG] mode:', mode, 'jobTitle:', jobTitle, 'aiPrompt:', aiPrompt, 'generatedJD:', generatedJD?.substring(0, 50));
     console.log('[DEBUG] isPublished:', isPublished);
+
+    setIsNavigatingBack(true);
 
     if (hasUnsavedData() && !isPublished) {
       console.log('[DEBUG] Saving draft before navigating back...');
@@ -1442,10 +1443,15 @@ Use professional language, clear formatting, and make it engaging for candidates
               {onBack && (
                 <button
                   onClick={handleBackClick}
-                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  disabled={isNavigatingBack || isSavingDraft}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <ArrowLeft className="w-4 h-4" />
-                  Back to Jobs
+                  {isNavigatingBack ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ArrowLeft className="w-4 h-4" />
+                  )}
+                  {isNavigatingBack ? 'Saving...' : 'Back to Jobs'}
                 </button>
               )}
             </div>
@@ -1607,20 +1613,15 @@ Use professional language, clear formatting, and make it engaging for candidates
                       onClick={handleGenerateJD}
                       disabled={
                         !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
+                        !aiPrompt.trim() ||
                         aiPrompt.length > VALIDATION.AI_PROMPT.max ||
-                        isGenerating ||
-                        !hasQuota ||
-                        isCheckingQuota
+                        isGenerating
                       }
                       className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white px-6 py-3 rounded-md hover:from-gray-700 hover:to-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Wand2 className="w-5 h-5" />
-                      {isCheckingQuota ? (
-                        <span className="animate-pulse">Checking quota...</span>
-                      ) : isGenerating ? (
+                      {isGenerating ? (
                         <span className="animate-pulse">Generating with AI...</span>
-                      ) : !hasQuota ? (
-                        'Quota Exceeded - Upgrade Plan'
                       ) : generatedJD ? (
                         'Regenerate Job Description'
                       ) : (

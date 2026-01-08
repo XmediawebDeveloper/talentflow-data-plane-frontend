@@ -17,9 +17,15 @@ interface JobsListingProps {
   onRepublishJob?: (job: Job) => void;
   onArchiveJob?: (job: Job) => void;
   onDeleteJob?: (job: Job) => void;
+  // Quota information for showing limit reached message
+  quotaInfo?: {
+    remaining: number;
+    limit: number;
+    used: number;
+  };
 }
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onDeleteJob }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onDeleteJob, quotaInfo }: JobsListingProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [locationFilter, setLocationFilter] = useState<string>('all');
@@ -362,13 +368,22 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
               <h1 className="text-2xl font-semibold text-gray-900 mb-2">Job Openings</h1>
               <p className="text-base text-gray-600">Create and manage your job postings</p>
             </div>
-            <button
-              onClick={onCreateNew}
-              className="px-6 py-3.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-base font-medium"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Create New Job</span>
-            </button>
+            <div className="flex flex-col items-end gap-2">
+              {/* Quota limit warning */}
+              {quotaInfo && quotaInfo.remaining <= 0 && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Job publishing limit reached ({quotaInfo.used}/{quotaInfo.limit}). <a href="/subscription/current-plan" className="underline font-medium">Upgrade your plan</a></span>
+                </div>
+              )}
+              <button
+                onClick={onCreateNew}
+                className="px-6 py-3.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-base font-medium"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Create New Job</span>
+              </button>
+            </div>
           </div>
 
           {/* Simple Stats Cards */}
@@ -694,7 +709,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 return (
                   <div
                     key={job.id}
-                    className="bg-white rounded-xl border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer overflow-hidden"
+                    className="bg-white rounded-xl border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer"
                     onClick={() => onViewJob(job)}
                   >
                     {/* Card Header */}
@@ -809,7 +824,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           View
                         </button>
 
-                        {/* Three-dot Menu */}
+                        {/* Three-dot Menu - Grid View */}
                         <div className="relative">
                           <button
                             onClick={(e) => {
@@ -821,7 +836,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                             <MoreVertical className="w-4 h-4 text-gray-600" />
                           </button>
                           {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                            <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[100]">
                               {/* View Applicants */}
                               <button
                                 onClick={(e) => {
@@ -829,7 +844,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                   onViewJob(job);
                                   setActiveDropdown(null);
                                 }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                               >
                                 <Users className="w-4 h-4" />
                                 View Applicants
@@ -842,7 +857,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                     onPublishJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
                                 >
                                   <CheckCircle2 className="w-4 h-4" />
                                   Publish
@@ -856,7 +871,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                     onDisableJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-orange-700 hover:bg-orange-50"
                                 >
                                   <Ban className="w-4 h-4" />
                                   Disable Job
@@ -870,7 +885,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                     onRepublishJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <RefreshCw className="w-4 h-4" />
                                   Republish
@@ -884,7 +899,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                     onArchiveJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Archive className="w-4 h-4" />
                                   Archive Job

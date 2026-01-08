@@ -23,9 +23,16 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [quotaData, setQuotaData] = useState<any>(null);
   const [loadingQuota, setLoadingQuota] = useState(true);
 
-  // Fetch quota status from API
+  // Fetch quota status from API - re-fetch when user changes
   useEffect(() => {
     const fetchQuotaStatus = async () => {
+      if (!user) {
+        setQuotaData(null);
+        setLoadingQuota(false);
+        return;
+      }
+
+      setLoadingQuota(true);
       try {
         const response = await api.get('/usage/quota-status');
         if (response.data?.status === 'success') {
@@ -39,7 +46,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     };
 
     fetchQuotaStatus();
-  }, []);
+  }, [user?.id]);
   
   // Calculate total units (RU + RS + AS + AIU + max_jobs + max_seats)
   const calculateTotalUnits = () => {
@@ -283,12 +290,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                           </div>
                         </div>
                       )}
-                      {/* Job Slots */}
+                      {/* Job Publishing Units */}
                       {quotaData?.quotas?.max_jobs && (
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 bg-indigo-600 rounded-full"></div>
-                            <span className="text-gray-900">Job Slots</span>
+                            <span className="text-gray-900">Job Publishing Units</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-gray-600">

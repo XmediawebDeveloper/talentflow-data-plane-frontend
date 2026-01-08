@@ -246,23 +246,18 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
     };
   }, []);
 
-  // Fetch quota status from API
+  // Fetch quota status from API - refetch when user changes
   useEffect(() => {
-    // Skip if already fetched (check both ref and module cache)
-    if (hasFetchedQuotaStatus.current || dashboardCache.quotaFetched) {
-      // Restore from cache if available
-      if (dashboardCache.quotaData) {
-        setQuotaStatusData(dashboardCache.quotaData);
-        setLoadingQuota(false);
-      }
-      return;
+    // Clear cache when user changes to ensure fresh data
+    if (user?.id) {
+      dashboardCache.quotaFetched = false;
+      dashboardCache.quotaData = null;
+      hasFetchedQuotaStatus.current = false;
     }
 
     const controller = new AbortController();
 
     const fetchQuotaStatus = async () => {
-      // Double-check before making API calls
-      if (hasFetchedQuotaStatus.current || dashboardCache.quotaFetched) return;
       hasFetchedQuotaStatus.current = true;
       dashboardCache.quotaFetched = true;
 
@@ -302,7 +297,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             'AS': 'Assessments',
             'AIU': 'AI Interviews',
             'storage_gb': 'Storage',
-            'max_jobs': 'Job Postings',
+            'max_jobs': 'Job Publishing Units',
             'max_seats': 'Max Users',
           };
 
@@ -382,7 +377,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [user?.id]);
 
   const handleViewJobDetails = (jd: JDResponse) => {
     if (jd.status === 'draft') {
@@ -518,7 +513,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-lg font-semibold text-gray-900">
-                {tenant?.subscription?.planName || quotaStatusData?.plan_name || 'Current Plan'} - Quotas & Usage
+                {quotaStatusData?.plan_name || 'Current Plan'} - Quotas & Usage
               </CardTitle>
               <CardDescription className="text-gray-600">
                 Monitor your plan limits and current usage

@@ -7,15 +7,39 @@ import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/hooks/useAuth';
+import api from '@/lib/services/api';
 
 export default function JobOpeningsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | undefined>();
   const router = useRouter();
+  const { user } = useAuth();
 
+  // Re-fetch jobs and quota when user changes (fixes caching issue when switching users)
   useEffect(() => {
-    fetchJobs();
-  }, []);
+    if (user) {
+      fetchJobs();
+      fetchQuotaInfo();
+    }
+  }, [user?.id]);
+
+  const fetchQuotaInfo = async () => {
+    try {
+      const response = await api.get('/usage/quota-status');
+      if (response.data?.status === 'success' && response.data.data?.quotas?.max_jobs) {
+        const maxJobs = response.data.data.quotas.max_jobs;
+        setQuotaInfo({
+          remaining: maxJobs.total_remaining || 0,
+          limit: (maxJobs.subscription?.limit || 0) + (maxJobs.addon?.total_purchased || 0),
+          used: maxJobs.subscription?.used || 0,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch quota info:', error);
+    }
+  };
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -112,13 +136,20 @@ export default function JobOpeningsPage() {
 
   const handlePublishJob = async (job: Job) => {
     try {
-      await jdService.updateStatus(job.id, 'published');
+      // Use publish endpoint which tracks quota/units
+      await jdService.publish(job.id);
       setJobs(prev => prev.map(j =>
         j.id === job.id ? { ...j, status: 'Published', postedDate: new Date().toISOString() } : j
       ));
       toast.success(`"${job.title}" is now live!`);
-    } catch (error) {
-      toast.error('Failed to publish job');
+    } catch (error: any) {
+      // Check if this is a quota exceeded error
+      const quotaError = error?.response?.data?.detail;
+      if (quotaError && (quotaError.error === 'QUOTA_EXHAUSTED' || quotaError.error === 'QUOTA_INSUFFICIENT')) {
+        toast.error('Job publishing quota exhausted. Please upgrade your plan.');
+      } else {
+        toast.error('Failed to publish job');
+      }
     }
   };
 
@@ -191,6 +222,7 @@ export default function JobOpeningsPage() {
       onRepublishJob={handleRepublishJob}
       onArchiveJob={handleArchiveJob}
       onDeleteJob={handleDeleteJob}
+      quotaInfo={quotaInfo}
     />
   );
 }
