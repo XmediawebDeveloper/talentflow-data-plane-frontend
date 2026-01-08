@@ -6,18 +6,32 @@ import JobsListing from '@/components/JobsListing';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
+
+type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
 
 export default function JobOpeningsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | undefined>();
+  const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
 
-  // Re-fetch jobs and quota when user changes (fixes caching issue when switching users)
+  // Sync filter with URL parameter
+  useEffect(() => {
+    const statusFromUrl = searchParams.get('status') as FilterStatus | null;
+    if (statusFromUrl && ['published', 'draft', 'closed', 'disabled', 'archived'].includes(statusFromUrl)) {
+      setActiveFilter(statusFromUrl);
+    } else {
+      setActiveFilter('all');
+    }
+  }, [searchParams]);
+
+  // Re-fetch jobs and quota when user changes
   useEffect(() => {
     if (user) {
       fetchJobs();
@@ -44,6 +58,7 @@ export default function JobOpeningsPage() {
   const fetchJobs = async () => {
     setLoading(true);
     try {
+      // Fetch all jobs - filtering is done client-side in JobsListing
       const response = await jdService.list({ page_size: 100 });
 
       // Convert API JD to component Job type
@@ -62,7 +77,7 @@ export default function JobOpeningsPage() {
         description: jd.description,
         skills: jd.skills || [],
         postedDate: jd.created_at,
-        postedBy: jd.created_by,
+        postedBy: jd.created_by_name || jd.created_by,
         employmentType: jd.employment_type,
         created_at: jd.created_at, // For accurate sorting
         creation_stage: jd.creation_stage, // For draft JDs
@@ -130,8 +145,10 @@ export default function JobOpeningsPage() {
   };
 
   const handleEditJob = (job: Job) => {
+    // For Draft JDs, open at the stage where they left off
     // For Published JDs, go to first stage (create) for editing
-    router.push(`/recruitment/jd-creation?id=${job.id}&stage=create`);
+    const stage = job.status === 'Draft' ? (job.creation_stage || 'create') : 'create';
+    router.push(`/recruitment/jd-creation?id=${job.id}&stage=${stage}`);
   };
 
   const handlePublishJob = async (job: Job) => {
@@ -223,6 +240,7 @@ export default function JobOpeningsPage() {
       onArchiveJob={handleArchiveJob}
       onDeleteJob={handleDeleteJob}
       quotaInfo={quotaInfo}
+      initialStatusFilter={activeFilter}
     />
   );
 }

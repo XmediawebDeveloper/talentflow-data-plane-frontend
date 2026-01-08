@@ -8,8 +8,11 @@ import {
   ChevronRight, ExternalLink, Linkedin, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2
 } from 'lucide-react';
-import { Resume } from '@/lib/types/types';
+import { Resume, Job } from '@/lib/types/types';
 import { resumeService, Resume as ApiResume } from '@/lib/services/resumeService';
+import { jdService } from '@/lib/services/jdService';
+import { scoringService } from '@/lib/services/scoringService';
+import ApplyToJobModal from '@/components/ApplyToJobModal';
 import { toast } from 'sonner';
 
 export default function ResumeViewPage() {
@@ -20,6 +23,10 @@ export default function ResumeViewPage() {
   const [resume, setResume] = useState<Resume | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Apply to Job modal state
+  const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
+  const [publishedJobs, setPublishedJobs] = useState<Job[]>([]);
 
   useEffect(() => {
     if (resumeId) {
@@ -131,8 +138,62 @@ export default function ResumeViewPage() {
     }
   };
 
-  const handleApplyToJob = () => {
-    toast.info('Apply to job functionality');
+  // Fetch published jobs for the Apply to Job modal
+  const fetchPublishedJobs = async () => {
+    try {
+      const response = await jdService.list({ status: 'published', page_size: 100 });
+      const convertedJobs: Job[] = response.items.map((jd: any) => ({
+        id: jd.id,
+        job_id: jd.job_id,
+        title: jd.title || 'Untitled',
+        status: 'Published' as const,
+        location: jd.location || '',
+        daysActive: jd.created_at ? Math.ceil((new Date().getTime() - new Date(jd.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0,
+        requiredMatch: jd.required_match || 70,
+        department: jd.department,
+        applicants: jd.applicants_count || 0,
+        description: jd.description,
+        skills: jd.skills || jd.must_have_skills || [],
+        postedDate: jd.created_at,
+      }));
+      setPublishedJobs(convertedJobs);
+    } catch (error) {
+      console.error('Failed to fetch jobs:', error);
+      toast.error('Failed to load jobs');
+    }
+  };
+
+  const handleApplyToJob = async () => {
+    await fetchPublishedJobs();
+    setIsApplyToJobModalOpen(true);
+  };
+
+  // Handle applying resume to selected job (scoring)
+  const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[]) => {
+    if (jobIds.length === 0 || resumeIds.length === 0) return;
+
+    setIsApplyToJobModalOpen(false);
+
+    const jobId = jobIds[0];
+    const toastId = toast.loading('Scoring resume against job...');
+
+    try {
+      await scoringService.scoreResume(jobId, resumeId);
+
+      toast.success('Resume scored successfully!', { id: toastId });
+
+      // Navigate to the job's scored resumes page
+      router.push(`/recruitment/job-details?id=${jobId}&tab=scored`);
+
+    } catch (error: any) {
+      console.error('Scoring error:', error);
+
+      if (error?.message?.includes('QUOTA') || error?.response?.status === 403) {
+        toast.error('Resume scoring quota exhausted. Please upgrade your plan.', { id: toastId });
+      } else {
+        toast.error('Failed to score resume. Please try again.', { id: toastId });
+      }
+    }
   };
 
   if (loading) {
@@ -716,6 +777,16 @@ export default function ResumeViewPage() {
           </div>
         </div>
       </div>
+
+      {/* Apply to Job Modal */}
+      {isApplyToJobModalOpen && resume && (
+        <ApplyToJobModal
+          resumes={[resume]}
+          jobs={publishedJobs}
+          onClose={() => setIsApplyToJobModalOpen(false)}
+          onApply={handleApplyToJobSubmit}
+        />
+      )}
     </div>
   );
 }

@@ -19,6 +19,14 @@ const BLOCKED_EMAIL_DOMAINS = [
   'rediffmail.com', 'yahoo.co.in', 'yahoo.co.uk', 'googlemail.com'
 ];
 
+// Validate that email is a business email (not personal)
+const validateBusinessEmail = (email: string): boolean => {
+  if (!email) return false;
+  const domain = email.split('@')[1]?.toLowerCase();
+  if (!domain) return false;
+  return !BLOCKED_EMAIL_DOMAINS.includes(domain);
+};
+
 interface SignUpProps {
   onSwitchToLogin: () => void;
   onBackToPublic?: () => void;

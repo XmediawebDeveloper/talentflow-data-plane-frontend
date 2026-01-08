@@ -1,6 +1,9 @@
-import { CheckCircle, RefreshCw, Copy, AlertCircle, X, Download, Eye, ArrowLeft, FileText, GitBranch, Clock } from 'lucide-react';
+'use client'
+
+import { CheckCircle, RefreshCw, Copy, AlertCircle, X, Download, Eye, ArrowLeft, FileText, GitBranch, Clock, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import DuplicateResolutionModal from './DuplicateResolutionModal';
+import { toast } from '@/components/ui/enhanced-toast';
 
 interface UploadStatus {
   fileName: string;
@@ -17,15 +20,18 @@ interface UploadStatusDashboardProps {
   uploadDate: string;
   onClose: () => void;
   onBack: () => void;
+  onRetryUpload?: (fileNames: string[]) => Promise<void>;
 }
 
-export default function UploadStatusDashboard({ statuses, fileName, uploadDate, onClose, onBack }: UploadStatusDashboardProps) {
+export default function UploadStatusDashboard({ statuses, fileName, uploadDate, onClose, onBack, onRetryUpload }: UploadStatusDashboardProps) {
   const [selectedCompleted, setSelectedCompleted] = useState<string[]>([]);
   const [selectedDuplicated, setSelectedDuplicated] = useState<string[]>([]);
   const [selectedVersioned, setSelectedVersioned] = useState<string[]>([]);
   const [selectedErrors, setSelectedErrors] = useState<string[]>([]);
   const [selectedPending, setSelectedPending] = useState<string[]>([]);
   const [showResolutionModal, setShowResolutionModal] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retryingFiles, setRetryingFiles] = useState<Set<string>>(new Set());
 
   const completed = statuses.filter(s => s.status === 'completed');
   const updated = statuses.filter(s => s.status === 'updated');
@@ -38,40 +44,40 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
   const successRate = Math.round(((completed.length + updated.length) / totalProcessed) * 100);
 
   const handleCompletedSelect = (fileName: string) => {
-    setSelectedCompleted(prev => 
-      prev.includes(fileName) 
+    setSelectedCompleted(prev =>
+      prev.includes(fileName)
         ? prev.filter(f => f !== fileName)
         : [...prev, fileName]
     );
   };
 
   const handleDuplicatedSelect = (fileName: string) => {
-    setSelectedDuplicated(prev => 
-      prev.includes(fileName) 
+    setSelectedDuplicated(prev =>
+      prev.includes(fileName)
         ? prev.filter(f => f !== fileName)
         : [...prev, fileName]
     );
   };
 
   const handleVersionedSelect = (fileName: string) => {
-    setSelectedVersioned(prev => 
-      prev.includes(fileName) 
+    setSelectedVersioned(prev =>
+      prev.includes(fileName)
         ? prev.filter(f => f !== fileName)
         : [...prev, fileName]
     );
   };
 
   const handleErrorSelect = (fileName: string) => {
-    setSelectedErrors(prev => 
-      prev.includes(fileName) 
+    setSelectedErrors(prev =>
+      prev.includes(fileName)
         ? prev.filter(f => f !== fileName)
         : [...prev, fileName]
     );
   };
 
   const handlePendingSelect = (fileName: string) => {
-    setSelectedPending(prev => 
-      prev.includes(fileName) 
+    setSelectedPending(prev =>
+      prev.includes(fileName)
         ? prev.filter(f => f !== fileName)
         : [...prev, fileName]
     );
@@ -87,12 +93,12 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
@@ -101,11 +107,11 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
       case 'completed':
         return <CheckCircle className="w-5 h-5 text-green-600" />;
       case 'updated':
-        return <RefreshCw className="w-5 h-5 text-gray-800" />;
+        return <RefreshCw className="w-5 h-5 text-blue-600" />;
       case 'duplicated':
         return <Copy className="w-5 h-5 text-yellow-600" />;
       case 'version':
-        return <GitBranch className="w-5 h-5 text-gray-800" />;
+        return <GitBranch className="w-5 h-5 text-purple-600" />;
       case 'error':
         return <AlertCircle className="w-5 h-5 text-red-600" />;
       case 'pending':
@@ -120,11 +126,11 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
       case 'completed':
         return 'bg-gradient-to-br from-green-50 to-green-100/50 border-green-200';
       case 'updated':
-        return 'bg-gradient-to-br from-gray-50 to-gray-100/50 border-gray-200';
+        return 'bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200';
       case 'duplicated':
         return 'bg-gradient-to-br from-yellow-50 to-yellow-100/50 border-yellow-200';
       case 'version':
-        return 'bg-gradient-to-br from-gray-50 to-gray-100/50 border-gray-200';
+        return 'bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200';
       case 'error':
         return 'bg-gradient-to-br from-red-50 to-red-100/50 border-red-200';
       case 'pending':
@@ -160,12 +166,12 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
       candidateName: s.candidateName || 'N/A',
       errorMessage: s.errorMessage || 'N/A',
     }));
-    
+
     const csvContent = [
       ['File Name', 'Status', 'Candidate Name', 'Error Message'].join(','),
       ...report.map(r => [r.fileName, r.status, r.candidateName, r.errorMessage].join(','))
     ].join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -174,11 +180,31 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
     a.click();
   };
 
+  const handleRetryUpload = async () => {
+    if (!onRetryUpload) return;
+    const filesToRetry = [...selectedPending];
+    if (filesToRetry.length === 0) {
+      toast.error('No pending files selected to retry.');
+      return;
+    }
+    setIsRetrying(true);
+    setRetryingFiles(new Set(filesToRetry));
+    try {
+      await onRetryUpload(filesToRetry);
+      toast.success('Selected files are being retried.');
+    } catch (error) {
+      toast.error('Failed to retry selected files.');
+    } finally {
+      setIsRetrying(false);
+      setRetryingFiles(new Set());
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 px-8 py-6">
+        <div className="bg-gradient-to-r from-blue-50 to-white border-b border-gray-200 px-8 py-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
               <button
@@ -224,14 +250,14 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div className="text-3xl text-yellow-700">{duplicated.length}</div>
             </div>
 
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200 rounded-lg p-4">
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200 rounded-lg p-4">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-8 h-8 bg-gray-700 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
                   <GitBranch className="w-5 h-5 text-white" />
                 </div>
                 <span className="text-sm text-gray-700">Versioned</span>
               </div>
-              <div className="text-3xl text-gray-900">{versioned.length}</div>
+              <div className="text-3xl text-purple-700">{versioned.length}</div>
             </div>
 
             <div className="bg-gradient-to-br from-red-50 to-red-100/50 border border-red-200 rounded-lg p-4">
@@ -254,14 +280,14 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div className="text-3xl text-gray-700">{pending.length}</div>
             </div>
 
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200 rounded-lg p-4">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-8 h-8 bg-gray-700 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
                   <FileText className="w-5 h-5 text-white" />
                 </div>
                 <span className="text-sm text-gray-700">Success Rate</span>
               </div>
-              <div className="text-3xl text-gray-900">{successRate}%</div>
+              <div className="text-3xl text-blue-700">{successRate}%</div>
             </div>
           </div>
         </div>
@@ -372,7 +398,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           )}
                           {item.existingLocation && (
                             <div className="text-xs text-yellow-700 mt-1">
-                              📁 Existing location: {item.existingLocation}
+                              Existing location: {item.existingLocation}
                             </div>
                           )}
                         </div>
@@ -396,17 +422,17 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-gray-700 rounded-md flex items-center justify-center">
+                    <div className="w-6 h-6 bg-purple-500 rounded-md flex items-center justify-center">
                       <GitBranch className="w-4 h-4 text-white" />
                     </div>
-                    <h4 className="text-gray-900">
+                    <h4 className="text-purple-700">
                       Version Detected ({versioned.length})
                     </h4>
                   </div>
                   {selectedVersioned.length > 0 && (
                     <button
                       onClick={handleResolveVersioned}
-                      className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-sm text-sm"
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm text-sm"
                     >
                       Resolve Selected ({selectedVersioned.length})
                     </button>
@@ -417,7 +443,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                     <div
                       key={index}
                       className={`flex items-center justify-between p-4 border rounded-lg ${getStatusBg(item.status)} hover:shadow-md transition-shadow ${
-                        selectedVersioned.includes(item.fileName) ? 'ring-2 ring-gray-500' : ''
+                        selectedVersioned.includes(item.fileName) ? 'ring-2 ring-purple-500' : ''
                       }`}
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -425,7 +451,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           type="checkbox"
                           checked={selectedVersioned.includes(item.fileName)}
                           onChange={() => handleVersionedSelect(item.fileName)}
-                          className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-500 cursor-pointer"
+                          className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 cursor-pointer"
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
@@ -434,19 +460,19 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                             <div className="text-xs text-gray-600 mt-0.5">{item.candidateName}</div>
                           )}
                           {item.existingLocation && (
-                            <div className="text-xs text-gray-900 mt-1">
-                              📁 Existing location: {item.existingLocation}
+                            <div className="text-xs text-purple-700 mt-1">
+                              Existing location: {item.existingLocation}
                             </div>
                           )}
                           {item.versionInfo && (
-                            <div className="text-xs text-gray-900 mt-1">
-                              🔄 {item.versionInfo}
+                            <div className="text-xs text-purple-700 mt-1">
+                              {item.versionInfo}
                             </div>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-900 px-3 py-1 bg-gray-100 rounded-full">
+                        <span className="text-xs text-purple-700 px-3 py-1 bg-purple-100 rounded-full">
                           {getStatusText(item.status)}
                         </span>
                         <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-white rounded-lg transition-colors">
@@ -489,7 +515,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         <div className="flex-1 min-w-0">
                           <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.errorMessage && (
-                            <div className="text-xs text-red-600 mt-1">⚠️ {item.errorMessage}</div>
+                            <div className="text-xs text-red-600 mt-1">{item.errorMessage}</div>
                           )}
                         </div>
                       </div>
@@ -544,6 +570,157 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 </div>
               </div>
             )}
+
+            {/* Retry Failed/Pending Uploads Section */}
+            {(errors.length > 0 || pending.length > 0) && onRetryUpload && (
+              <div className="mt-6 p-5 bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-200 rounded-xl">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
+                      <AlertCircle className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="text-gray-900 font-medium">Retry Failed or Pending Uploads</h4>
+                      <p className="text-sm text-gray-600 mt-0.5">
+                        {errors.length > 0 && pending.length > 0
+                          ? `${errors.length} failed and ${pending.length} pending upload${pending.length > 1 ? 's' : ''}`
+                          : errors.length > 0
+                          ? `${errors.length} failed upload${errors.length > 1 ? 's' : ''}`
+                          : `${pending.length} pending upload${pending.length > 1 ? 's' : ''}`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Select All Failed */}
+                  {errors.length > 0 && (
+                    <button
+                      onClick={() => setSelectedErrors(errors.map(e => e.fileName))}
+                      disabled={selectedErrors.length === errors.length}
+                      className="px-4 py-2.5 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Select All Failed ({errors.length})
+                    </button>
+                  )}
+
+                  {/* Select All Pending */}
+                  {pending.length > 0 && (
+                    <button
+                      onClick={() => setSelectedPending(pending.map(p => p.fileName))}
+                      disabled={selectedPending.length === pending.length}
+                      className="px-4 py-2.5 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Select All Pending ({pending.length})
+                    </button>
+                  )}
+
+                  {/* Retry Selected Errors */}
+                  {selectedErrors.length > 0 && (
+                    <button
+                      onClick={async () => {
+                        setIsRetrying(true);
+                        setRetryingFiles(new Set(selectedErrors));
+                        try {
+                          await onRetryUpload(selectedErrors);
+                          toast.success(`Retrying ${selectedErrors.length} failed upload${selectedErrors.length > 1 ? 's' : ''}.`);
+                          setSelectedErrors([]);
+                        } catch (error) {
+                          toast.error('Unable to retry failed uploads. Please try again.');
+                        } finally {
+                          setIsRetrying(false);
+                          setRetryingFiles(new Set());
+                        }
+                      }}
+                      disabled={isRetrying}
+                      className="px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+                    >
+                      {isRetrying ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Retrying...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4" />
+                          Retry Selected Errors ({selectedErrors.length})
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Retry Selected Pending */}
+                  {selectedPending.length > 0 && (
+                    <button
+                      onClick={async () => {
+                        setIsRetrying(true);
+                        setRetryingFiles(new Set(selectedPending));
+                        try {
+                          await onRetryUpload(selectedPending);
+                          toast.success(`Retrying ${selectedPending.length} pending upload${selectedPending.length > 1 ? 's' : ''}.`);
+                          setSelectedPending([]);
+                        } catch (error) {
+                          toast.error('Unable to retry pending uploads. Please try again.');
+                        } finally {
+                          setIsRetrying(false);
+                          setRetryingFiles(new Set());
+                        }
+                      }}
+                      disabled={isRetrying}
+                      className="px-4 py-2.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+                    >
+                      {isRetrying ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Retrying...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4" />
+                          Retry Selected Pending ({selectedPending.length})
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {/* Retry All Button */}
+                {(errors.length > 0 || pending.length > 0) && (
+                  <button
+                    onClick={async () => {
+                      const allFailed = [...errors.map(e => e.fileName), ...pending.map(p => p.fileName)];
+                      setIsRetrying(true);
+                      setRetryingFiles(new Set(allFailed));
+                      try {
+                        await onRetryUpload(allFailed);
+                        toast.success(`Retrying ${allFailed.length} upload${allFailed.length > 1 ? 's' : ''}.`);
+                        setSelectedErrors([]);
+                        setSelectedPending([]);
+                      } catch (error) {
+                        toast.error('Unable to retry uploads. Please try again.');
+                      } finally {
+                        setIsRetrying(false);
+                        setRetryingFiles(new Set());
+                      }
+                    }}
+                    disabled={isRetrying}
+                    className="w-full mt-3 px-4 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-lg hover:from-red-700 hover:to-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 font-medium"
+                  >
+                    {isRetrying ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Retrying All Files...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-5 h-5" />
+                        Retry All Failed & Pending ({errors.length + pending.length})
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -555,7 +732,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             </p>
             <button
               onClick={onClose}
-              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-sm"
+              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >
               Close
             </button>
@@ -604,7 +781,6 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
           }}
           onResolve={(resolutions) => {
             console.log('Resolution Actions:', resolutions);
-            // Handle the resolution actions here
             setShowResolutionModal(false);
             setSelectedVersioned([]);
             setSelectedDuplicated([]);

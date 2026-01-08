@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Upload, Edit2, Trash2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Upload, Edit2, Trash2, LayoutGrid } from 'lucide-react';
 import { useState } from 'react';
 import { Folder as FolderType, Resume } from '@/lib/types/types';
 
@@ -128,7 +128,9 @@ export default function FolderTree({
               </span>
             )}
             {!hasChildren && <div className="w-5" />}
-            {isExpanded && hasChildren ? (
+            {folder.id === 'all' ? (
+              <LayoutGrid className="w-4 h-4 text-blue-600" />
+            ) : isExpanded && hasChildren ? (
               <FolderOpen className="w-4 h-4" />
             ) : (
               <Folder className="w-4 h-4" />

@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, Filter, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, SlidersHorizontal, LayoutGrid, List, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Heart, Star, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, Filter, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, SlidersHorizontal, LayoutGrid, List, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Heart, Star, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -23,11 +23,21 @@ interface JobsListingProps {
     limit: number;
     used: number;
   };
+  // Initial status filter from URL
+  initialStatusFilter?: string;
 }
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onDeleteJob, quotaInfo }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onDeleteJob, quotaInfo, initialStatusFilter }: JobsListingProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'all');
+
+  // Sync status filter with URL parameter changes
+  useEffect(() => {
+    if (initialStatusFilter) {
+      setStatusFilter(initialStatusFilter);
+    }
+  }, [initialStatusFilter]);
+
   const [locationFilter, setLocationFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
@@ -55,7 +65,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || job.status.toLowerCase() === statusFilter.toLowerCase();
     const matchesLocation = locationFilter === 'all' || job.location === locationFilter;
     const matchesDepartment = departmentFilter === 'all' || job.department === departmentFilter;
     const matchesEmploymentType = employmentTypeFilter === 'all' || job.employmentType === employmentTypeFilter;
@@ -377,7 +387,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 </div>
               )}
               <button
-                onClick={onCreateNew}
+                onClick={() => {
+                  if (quotaInfo && quotaInfo.remaining <= 0) {
+                    alert(`Job publishing limit reached (${quotaInfo.used}/${quotaInfo.limit}). Please upgrade your plan to create more jobs.`);
+                    return;
+                  }
+                  onCreateNew();
+                }}
                 className="px-6 py-3.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-base font-medium"
               >
                 <Plus className="w-5 h-5" />
@@ -493,9 +509,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
               {['all', 'Published', 'Draft', 'Closed', 'Disabled', 'Archived'].map((status) => (
                 <button
                   key={status}
-                  onClick={() => setStatusFilter(status)}
+                  onClick={() => setStatusFilter(status.toLowerCase())}
                   className={`px-4 py-2 rounded-lg text-base transition-all ${
-                    statusFilter === status
+                    statusFilter.toLowerCase() === status.toLowerCase()
                       ? 'bg-gray-800 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
@@ -710,7 +726,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   <div
                     key={job.id}
                     className="bg-white rounded-xl border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer"
-                    onClick={() => onViewJob(job)}
+                    onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     {/* Card Header */}
                     <div className="p-6 border-b border-gray-100">
@@ -770,6 +786,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                             <span>Posted {new Date(job.postedDate).toLocaleDateString()}</span>
                           </div>
                         )}
+                        {job.postedBy && (
+                          <div className="flex items-center gap-3 text-base text-gray-600">
+                            <User className="w-5 h-5 text-gray-400" />
+                            <span>By {job.postedBy}</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Salary & Skills Info */}
@@ -812,17 +834,19 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           Edit
                         </button>
 
-                        {/* View Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onViewJob(job);
-                          }}
-                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center gap-2"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View
-                        </button>
+                        {/* View Button - Hide for Draft */}
+                        {job.status.toLowerCase() !== 'draft' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onViewJob(job);
+                            }}
+                            className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center gap-2"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View
+                          </button>
+                        )}
 
                         {/* Three-dot Menu - Grid View */}
                         <div className="relative">
@@ -837,30 +861,18 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           </button>
                           {activeDropdown === job.id && (
                             <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[100]">
-                              {/* View Applicants */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onViewJob(job);
-                                  setActiveDropdown(null);
-                                }}
-                                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                              >
-                                <Users className="w-4 h-4" />
-                                View Applicants
-                              </button>
-                              {/* Publish for Draft */}
-                              {job.status === 'Draft' && onPublishJob && (
+                              {/* View Applicants - Hide for Draft */}
+                              {job.status.toLowerCase() !== 'draft' && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onPublishJob(job);
+                                    onViewJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <CheckCircle2 className="w-4 h-4" />
-                                  Publish
+                                  <Users className="w-4 h-4" />
+                                  View Applicants
                                 </button>
                               )}
                               {/* Disable Job for Published */}
@@ -925,7 +937,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   <div
                     key={job.id}
                     className="bg-white rounded-xl border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer p-6"
-                    onClick={() => onViewJob(job)}
+                    onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     <div className="flex items-center gap-5">
                       {/* Job Icon */}
@@ -982,6 +994,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                               Posted {new Date(job.postedDate).toLocaleDateString()}
                             </span>
                           )}
+                          {job.postedBy && (
+                            <span className="flex items-center gap-2">
+                              <User className="w-5 h-5 text-gray-400" />
+                              By {job.postedBy}
+                            </span>
+                          )}
                           <span className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
                             <Users className="w-5 h-5 text-gray-400" />
                             {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
@@ -1021,17 +1039,19 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           Edit
                         </button>
 
-                        {/* View Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onViewJob(job);
-                          }}
-                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center gap-2"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View
-                        </button>
+                        {/* View Button - Hide for Draft */}
+                        {job.status.toLowerCase() !== 'draft' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onViewJob(job);
+                            }}
+                            className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center gap-2"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View
+                          </button>
+                        )}
 
                         {/* Three-dot Menu */}
                         <div className="relative">
@@ -1046,30 +1066,18 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           </button>
                           {activeDropdown === job.id && (
                             <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-                              {/* View Applicants */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onViewJob(job);
-                                  setActiveDropdown(null);
-                                }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                              >
-                                <Users className="w-4 h-4" />
-                                View Applicants
-                              </button>
-                              {/* Publish for Draft */}
-                              {job.status === 'Draft' && onPublishJob && (
+                              {/* View Applicants - Hide for Draft */}
+                              {job.status.toLowerCase() !== 'draft' && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onPublishJob(job);
+                                    onViewJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <CheckCircle2 className="w-4 h-4" />
-                                  Publish
+                                  <Users className="w-4 h-4" />
+                                  View Applicants
                                 </button>
                               )}
                               {/* Disable Job for Published */}
@@ -1164,7 +1172,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 </button>
               ) : (
                 <button
-                  onClick={onCreateNew}
+                  onClick={() => {
+                    if (quotaInfo && quotaInfo.remaining <= 0) {
+                      alert(`Job publishing limit reached (${quotaInfo.used}/${quotaInfo.limit}). Please upgrade your plan to create more jobs.`);
+                      return;
+                    }
+                    onCreateNew();
+                  }}
                   className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all inline-flex items-center gap-2 text-base font-medium"
                 >
                   <Plus className="w-5 h-5" />
