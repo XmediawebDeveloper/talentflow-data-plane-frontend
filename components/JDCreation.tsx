@@ -1,6 +1,6 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -354,6 +354,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showExtractedSummary, setShowExtractedSummary] = useState(false);
 
+  // Validation errors for inline display
+  const [validationErrors, setValidationErrors] = useState<{
+    mustHaveSkills?: string;
+    mustHaveComments?: string;
+  }>({});
+
   // Save to draft state
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isNavigatingBack, setIsNavigatingBack] = useState(false);
@@ -641,6 +647,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       setNewSkill('');
       setEditingCategory(null);
       setExtractedDataModified(true);
+      // Clear validation error when skill is added
+      if (category === 'mustHaveSkills') {
+        setValidationErrors(prev => ({ ...prev, mustHaveSkills: undefined }));
+      }
     }
   };
 
@@ -669,6 +679,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       }));
       setNewComment('');
       setEditingCategory(null);
+      // Clear validation error when comment is added
+      setValidationErrors(prev => ({ ...prev, mustHaveComments: undefined }));
     }
   };
 
@@ -797,11 +809,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const handlePublish = async () => {
     // Validate mandatory fields
     const missingFields: string[] = [];
+    const errors: { mustHaveSkills?: string; mustHaveComments?: string } = {};
 
     // Must have at least one must-have skill
     if (extractedData.mustHaveSkills.length === 0) {
       missingFields.push('At least one Must-Have Skill');
+      errors.mustHaveSkills = 'At least one Must-Have Skill is required';
     }
+
+    // Must have at least one must-have comment
+    if (extractedData.mustHaveComments.length === 0) {
+      missingFields.push('At least one Must-Have Comment');
+      errors.mustHaveComments = 'At least one Must-Have Comment is required';
+    }
+
     if (!extractedData.experience) {
       missingFields.push('Experience');
     }
@@ -811,6 +832,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     if (!extractedData.industryType) {
       missingFields.push('Industry Type');
     }
+
+    // Set validation errors for inline display
+    setValidationErrors(errors);
 
     if (missingFields.length > 0) {
       toast({
@@ -1926,7 +1950,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                 {/* Must-Have Skills */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-gray-900">Must-Have Skills</h3>
+                    <h3 className="text-gray-900">Must-Have Skills <span className="text-red-500">*</span></h3>
                     <button
                       onClick={() => setEditingCategory('mustHave')}
                       className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
@@ -1975,6 +1999,12 @@ Use professional language, clear formatting, and make it engaging for candidates
                       />
                     ))}
                   </DroppableSkillsContainer>
+                  {validationErrors.mustHaveSkills && (
+                    <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {validationErrors.mustHaveSkills}
+                    </p>
+                  )}
                 </div>
 
                 {/* Nice-to-Have Skills */}
@@ -2035,7 +2065,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-gray-900">Must-Have Comments</h3>
+                      <h3 className="text-gray-900">Must-Have Comments <span className="text-red-500">*</span></h3>
                     </div>
                     <button
                       onClick={() => setEditingCategory('comments')}
@@ -2127,6 +2157,12 @@ Use professional language, clear formatting, and make it engaging for candidates
                       </div>
                     ))}
                   </div>
+                  {validationErrors.mustHaveComments && (
+                    <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {validationErrors.mustHaveComments}
+                    </p>
+                  )}
                 </div>
               </div>
 
