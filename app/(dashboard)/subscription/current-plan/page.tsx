@@ -1,11 +1,12 @@
 'use client';
 
 import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, Crown, FileText } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/services/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { decodePlanId } from '@/lib/utils/planEncoder';
 
 const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://localhost:8001/api/v1';
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -291,8 +292,13 @@ const formatCardNumber = (value: string): string => {
   return parts.length ? parts.join(' ') : value;
 };
 
-export default function CurrentPlanPage() {
+function CurrentPlanContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Get encoded plan from URL (from login redirect after signup)
+  const encodedPlanFromUrl = searchParams.get('plan');
+
   const [plans, setPlans] = useState<DisplayPlan[]>([]);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -767,6 +773,28 @@ export default function CurrentPlanPage() {
     fetchData();
     fetchQueuedUpgrades();
   }, []);
+
+  // Auto-select plan from URL parameter (from pricing page flow)
+  useEffect(() => {
+    if (encodedPlanFromUrl && plans.length > 0 && !selectedPlanForPayment) {
+      try {
+        const decodedPlanId = decodePlanId(encodedPlanFromUrl);
+        if (decodedPlanId) {
+          const planToSelect = plans.find(p => p.id === decodedPlanId || p.numericId === parseInt(decodedPlanId));
+          if (planToSelect && planToSelect.price) {
+            console.log('[CurrentPlan] Auto-selecting plan from URL:', planToSelect.name);
+            // Auto-trigger the Choose Plan flow
+            handleChoosePlan(planToSelect);
+            // Remove plan parameter from URL to prevent re-triggering
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+          }
+        }
+      } catch (err) {
+        console.error('[CurrentPlan] Error auto-selecting plan:', err);
+      }
+    }
+  }, [encodedPlanFromUrl, plans, selectedPlanForPayment]);
 
   const validatePaymentForm = (): boolean => {
     const errors: Partial<PaymentFormData> = {};
@@ -2101,5 +2129,17 @@ export default function CurrentPlanPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function CurrentPlanPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
+      </div>
+    }>
+      <CurrentPlanContent />
+    </Suspense>
   );
 }

@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft } from 'lucide-react';
 import { User } from '@/lib/types/tenant';
 import { authService } from '@/lib/services';
 import { useAuth } from '@/lib/hooks/useAuth';
+import ForgotPasswordModal from './ForgotPasswordModal';
 
 interface LoginProps {
   onSwitchToSignUp?: () => void;
@@ -16,13 +17,20 @@ interface LoginProps {
 export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) {
   const router = useRouter();
   const { login } = useAuth();
+  const searchParams = useSearchParams();
 
-  const [email, setEmail] = useState('');
+  // Get plan and email from URL params (from signup redirect)
+  const encodedPlanFromUrl = searchParams.get('plan');
+  const emailFromUrl = searchParams.get('email');
+
+  const [email, setEmail] = useState(emailFromUrl || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -30,6 +38,21 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Load saved email from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedEmail = localStorage.getItem('rememberedEmail');
+      const savedRememberMe = localStorage.getItem('rememberMe') === 'true';
+
+      if (savedEmail && savedRememberMe && !emailFromUrl) {
+        setEmail(savedEmail);
+        setRememberMe(true);
+      }
+    } catch (error) {
+      console.error('Error loading saved credentials:', error);
+    }
+  }, [emailFromUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,7 +87,26 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       };
 
       login(user);
-      router.push('/dashboard');
+
+      // Save or clear email based on "Remember me" checkbox
+      try {
+        if (rememberMe) {
+          localStorage.setItem('rememberedEmail', email);
+          localStorage.setItem('rememberMe', 'true');
+        } else {
+          localStorage.removeItem('rememberedEmail');
+          localStorage.removeItem('rememberMe');
+        }
+      } catch (error) {
+        console.error('Error saving remember me preference:', error);
+      }
+
+      // Redirect to current-plan page with selected plan if coming from pricing
+      if (encodedPlanFromUrl) {
+        router.push(`/subscription/current-plan?plan=${encodedPlanFromUrl}`);
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Invalid email or password. Please check your credentials.');
@@ -479,10 +521,21 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
               {/* Remember & Forgot */}
               <div style={rememberRowStyle}>
                 <label style={checkboxLabelStyle}>
-                  <input type="checkbox" style={{ borderRadius: 4 }} />
-                  <span>Remember me</span>
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    style={{ borderRadius: 4, cursor: 'pointer' }}
+                  />
+                  <span style={{ cursor: 'pointer' }}>Remember me</span>
                 </label>
-                <button type="button" style={forgotLinkStyle}>Forgot password?</button>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPasswordModal(true)}
+                  style={forgotLinkStyle}
+                >
+                  Forgot password?
+                </button>
               </div>
 
               {/* Submit */}
@@ -519,10 +572,6 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                   </button>
                 </p>
               )}
-              <p style={footerTextStyle}>
-                Need help accessing your account?{' '}
-                <button type="button" style={switchLinkStyle}>Contact Support</button>
-              </p>
             </div>
           </div>
 
@@ -538,6 +587,12 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
           to { transform: rotate(360deg); }
         }
       `}</style>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        isOpen={showForgotPasswordModal}
+        onClose={() => setShowForgotPasswordModal(false)}
+      />
     </div>
   );
 }
