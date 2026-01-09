@@ -96,6 +96,41 @@ export interface BulkScoringResponse {
   completed_at?: string;
 }
 
+// Async Bulk Scoring (Celery)
+export interface AsyncBulkScoringResponse {
+  batch_id: string;
+  jd_id: string;
+  jd_title: string;
+  total_resumes: number;
+  status: string;
+  message: string;
+}
+
+export interface BatchScoringItem {
+  resume_id: string;
+  candidate_name?: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  score_id?: string;
+  overall_score?: number;
+  error_message?: string;
+}
+
+export interface BatchScoringStatus {
+  batch_id: string;
+  jd_id: string;
+  jd_title: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  total: number;
+  queued: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  created_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  items: BatchScoringItem[];
+}
+
 export const scoringService = {
   /**
    * Score single resume
@@ -215,6 +250,35 @@ export const scoringService = {
         { score_ids: scoreIds },
         { responseType: 'blob' }
       );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Start async bulk scoring via Celery
+   * Returns a batch_id to poll for status
+   */
+  async startBulkScoringAsync(jdId: string, resumeIds: string[]): Promise<AsyncBulkScoringResponse> {
+    try {
+      const response = await api.post<AsyncBulkScoringResponse>('/scoring/bulk-async', {
+        jd_id: jdId,
+        resume_ids: resumeIds,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Get async batch scoring status
+   * Poll this to track progress
+   */
+  async getBatchStatus(batchId: string): Promise<BatchScoringStatus> {
+    try {
+      const response = await api.get<BatchScoringStatus>(`/scoring/batch/${batchId}/status`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

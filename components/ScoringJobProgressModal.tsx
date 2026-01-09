@@ -1,7 +1,15 @@
 'use client';
 
-import { X, Target, Clock, Loader, CheckCircle2, XCircle, Briefcase, ChevronRight, Eye } from 'lucide-react';
+import { X, Target, Clock, Loader, CheckCircle2, XCircle, Minus, Maximize2, User, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
+
+export interface ResumeProgressItem {
+  resumeId: string;
+  candidateName: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  score?: number;
+  errorMessage?: string;
+}
 
 export interface JobScoringProgress {
   jobId: string;
@@ -11,11 +19,14 @@ export interface JobScoringProgress {
   inProgress: number;
   completed: number;
   failed: number;
+  items?: ResumeProgressItem[];
 }
 
 interface ScoringJobProgressModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onMinimize?: () => void;
+  isMinimized?: boolean;
   jobProgressData: JobScoringProgress[];
   onViewJobDetails?: (jobId: string) => void;
 }
@@ -23,6 +34,8 @@ interface ScoringJobProgressModalProps {
 export default function ScoringJobProgressModal({
   isOpen,
   onClose,
+  onMinimize,
+  isMinimized = false,
   jobProgressData,
   onViewJobDetails,
 }: ScoringJobProgressModalProps) {
@@ -45,235 +58,234 @@ export default function ScoringJobProgressModal({
   const overallInProgress = jobProgressData.reduce((sum, job) => sum + job.inProgress, 0);
   const overallCompleted = jobProgressData.reduce((sum, job) => sum + job.completed, 0);
   const overallFailed = jobProgressData.reduce((sum, job) => sum + job.failed, 0);
+  const overallPercentage = overallTotal > 0 ? Math.round(((overallCompleted + overallFailed) / overallTotal) * 100) : 0;
+  const isAllComplete = overallQueued === 0 && overallInProgress === 0;
 
-  const getProgressPercentage = (job: JobScoringProgress) => {
-    if (job.total === 0) return 0;
-    return Math.round(((job.completed + job.failed) / job.total) * 100);
+  // Get all resume items from all jobs
+  const allItems: ResumeProgressItem[] = jobProgressData.flatMap(job => job.items || []);
+  const jobTitle = jobProgressData[0]?.jobTitle || 'Job';
+
+  // Minimized floating indicator
+  if (isMinimized) {
+    return (
+      <div
+        onClick={onMinimize}
+        className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-5 py-4 rounded-2xl shadow-2xl hover:bg-gray-800 transition-all cursor-pointer flex items-center gap-4 animate-in slide-in-from-bottom duration-300 border border-gray-700"
+      >
+        <div className="relative">
+          <Target className="w-6 h-6" />
+          {overallInProgress > 0 && (
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
+          )}
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold">Scoring Progress</p>
+          <p className="text-xs text-gray-400">
+            {isAllComplete
+              ? `Complete: ${overallCompleted} scored`
+              : `${overallCompleted}/${overallTotal} (${overallPercentage}%)`
+            }
+          </p>
+        </div>
+        {/* Mini progress bar */}
+        <div className="w-16 h-2 bg-gray-700 rounded-full overflow-hidden">
+          <div
+            className={`h-full transition-all duration-300 ${isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+            style={{ width: `${overallPercentage}%` }}
+          />
+        </div>
+        <Maximize2 className="w-5 h-5 text-gray-400" />
+      </div>
+    );
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'queued':
+        return <Clock className="w-4 h-4 text-gray-400" />;
+      case 'processing':
+        return <Loader className="w-4 h-4 text-blue-500 animate-spin" />;
+      case 'completed':
+        return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+      case 'failed':
+        return <XCircle className="w-4 h-4 text-red-500" />;
+      default:
+        return <Clock className="w-4 h-4 text-gray-400" />;
+    }
   };
 
-  const isJobComplete = (job: JobScoringProgress) => {
-    return job.queued === 0 && job.inProgress === 0;
+  const getStatusBg = (status: string) => {
+    switch (status) {
+      case 'queued':
+        return 'bg-gray-50 border-gray-200';
+      case 'processing':
+        return 'bg-blue-50 border-blue-200';
+      case 'completed':
+        return 'bg-green-50 border-green-200';
+      case 'failed':
+        return 'bg-red-50 border-red-200';
+      default:
+        return 'bg-gray-50 border-gray-200';
+    }
   };
 
-  const hasActiveScoring = (job: JobScoringProgress) => {
-    return job.inProgress > 0;
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'queued':
+        return 'Queued';
+      case 'processing':
+        return 'Processing...';
+      case 'completed':
+        return 'Scored';
+      case 'failed':
+        return 'Failed';
+      default:
+        return status;
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-gray-900 to-gray-800 text-white">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-md">
-              <Target className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+              <Target className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Scoring Progress</h2>
-              <p className="text-sm text-gray-600 mt-0.5">Track scoring progress per job</p>
+              <h2 className="text-lg font-bold">Scoring: {jobTitle}</h2>
+              <p className="text-sm text-gray-300">{overallCompleted}/{overallTotal} resumes scored</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            aria-label="Close modal"
-          >
-            <X className="w-6 h-6 text-gray-600" />
-          </button>
-        </div>
 
-        {/* Overall Summary Stats */}
-        <div className="p-6 border-b border-gray-200 bg-gray-50">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wider">Overall Summary</h3>
-          <div className="grid grid-cols-5 gap-4">
-            <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-600">Total</span>
-                <Target className="w-5 h-5 text-gray-500" />
-              </div>
-              <div className="text-3xl font-bold text-gray-900">{overallTotal}</div>
-              <div className="text-xs text-gray-500 mt-1">Resumes</div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-600">In Queue</span>
-                <Clock className="w-5 h-5 text-gray-500" />
-              </div>
-              <div className="text-3xl font-bold text-gray-700">{overallQueued}</div>
-              <div className="text-xs text-gray-500 mt-1">Waiting</div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-900">In Progress</span>
-                <Loader className="w-5 h-5 text-gray-800 animate-spin" />
-              </div>
-              <div className="text-3xl font-bold text-gray-900">{overallInProgress}</div>
-              <div className="text-xs text-gray-600 mt-1">Processing</div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-green-200 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-green-700">Completed</span>
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
-              </div>
-              <div className="text-3xl font-bold text-green-700">{overallCompleted}</div>
-              <div className="text-xs text-green-600 mt-1">Success</div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-red-200 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-red-700">Failed</span>
-                <XCircle className="w-5 h-5 text-red-600" />
-              </div>
-              <div className="text-3xl font-bold text-red-700">{overallFailed}</div>
-              <div className="text-xs text-red-600 mt-1">Errors</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Job Cards */}
-        <div className="flex-1 overflow-auto p-6">
-          {jobProgressData.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {jobProgressData.map((job) => (
+          {/* Progress indicator */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-32 h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div
-                  key={job.jobId}
-                  className={`bg-white rounded-xl border-2 p-5 shadow-sm transition-all hover:shadow-md ${
-                    hasActiveScoring(job)
-                      ? 'border-gray-400'
-                      : isJobComplete(job)
-                        ? 'border-green-300'
-                        : 'border-gray-200'
+                  className={`h-full transition-all duration-500 ${isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+                  style={{ width: `${overallPercentage}%` }}
+                />
+              </div>
+              <span className="text-sm font-semibold">{overallPercentage}%</span>
+            </div>
+
+            <div className="flex items-center gap-1 ml-4">
+              {onMinimize && (
+                <button
+                  onClick={onMinimize}
+                  className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                  title="Minimize"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Row */}
+        <div className="flex items-center gap-6 px-6 py-3 bg-gray-50 border-b border-gray-200">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-600">Queue: <span className="font-semibold text-gray-900">{overallQueued}</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Loader className={`w-4 h-4 text-blue-500 ${overallInProgress > 0 ? 'animate-spin' : ''}`} />
+            <span className="text-sm text-gray-600">Processing: <span className="font-semibold text-blue-600">{overallInProgress}</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-green-500" />
+            <span className="text-sm text-gray-600">Done: <span className="font-semibold text-green-600">{overallCompleted}</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <XCircle className="w-4 h-4 text-red-500" />
+            <span className="text-sm text-gray-600">Failed: <span className="font-semibold text-red-600">{overallFailed}</span></span>
+          </div>
+
+          {isAllComplete && (
+            <div className="ml-auto flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+              <CheckCircle2 className="w-4 h-4" />
+              Complete
+            </div>
+          )}
+        </div>
+
+        {/* Resume List */}
+        <div className="max-h-64 overflow-y-auto">
+          {allItems.length > 0 ? (
+            <div className="divide-y divide-gray-100">
+              {allItems.map((item, index) => (
+                <div
+                  key={item.resumeId || index}
+                  className={`flex items-center gap-4 px-6 py-3 ${getStatusBg(item.status)} border-l-4 ${
+                    item.status === 'processing' ? 'border-l-blue-500' :
+                    item.status === 'completed' ? 'border-l-green-500' :
+                    item.status === 'failed' ? 'border-l-red-500' :
+                    'border-l-gray-300'
                   }`}
                 >
-                  {/* Job Header */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        hasActiveScoring(job)
-                          ? 'bg-gray-100'
-                          : isJobComplete(job)
-                            ? 'bg-green-100'
-                            : 'bg-gray-100'
-                      }`}>
-                        <Briefcase className={`w-5 h-5 ${
-                          hasActiveScoring(job)
-                            ? 'text-gray-700'
-                            : isJobComplete(job)
-                              ? 'text-green-600'
-                              : 'text-gray-600'
-                        }`} />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900 line-clamp-1">{job.jobTitle}</h4>
-                        <p className="text-sm text-gray-500">{job.total} resume{job.total !== 1 ? 's' : ''}</p>
-                      </div>
-                    </div>
-                    {hasActiveScoring(job) && (
-                      <span className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">
-                        <Loader className="w-3 h-3 animate-spin" />
-                        Scoring
-                      </span>
-                    )}
-                    {isJobComplete(job) && job.total > 0 && (
-                      <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Complete
-                      </span>
+                  {/* Resume Icon */}
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    item.status === 'processing' ? 'bg-blue-100' :
+                    item.status === 'completed' ? 'bg-green-100' :
+                    item.status === 'failed' ? 'bg-red-100' :
+                    'bg-gray-100'
+                  }`}>
+                    <User className={`w-5 h-5 ${
+                      item.status === 'processing' ? 'text-blue-600' :
+                      item.status === 'completed' ? 'text-green-600' :
+                      item.status === 'failed' ? 'text-red-600' :
+                      'text-gray-500'
+                    }`} />
+                  </div>
+
+                  {/* Candidate Name */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {item.candidateName || 'Unknown Candidate'}
+                    </p>
+                    {item.status === 'failed' && item.errorMessage && (
+                      <p className="text-xs text-red-500 truncate">{item.errorMessage}</p>
                     )}
                   </div>
 
-                  {/* Progress Bar */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-1.5 text-xs">
-                      <span className="text-gray-600">Progress</span>
-                      <span className="font-medium text-gray-900">{getProgressPercentage(job)}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full flex">
-                        <div
-                          className="bg-green-500 transition-all duration-500"
-                          style={{ width: `${job.total > 0 ? (job.completed / job.total) * 100 : 0}%` }}
-                        />
-                        <div
-                          className="bg-red-500 transition-all duration-500"
-                          style={{ width: `${job.total > 0 ? (job.failed / job.total) * 100 : 0}%` }}
-                        />
-                        <div
-                          className="bg-gray-600 animate-pulse transition-all duration-500"
-                          style={{ width: `${job.total > 0 ? (job.inProgress / job.total) * 100 : 0}%` }}
-                        />
-                      </div>
-                    </div>
+                  {/* Status */}
+                  <div className="flex items-center gap-2">
+                    {getStatusIcon(item.status)}
+                    <span className={`text-sm font-medium ${
+                      item.status === 'processing' ? 'text-blue-600' :
+                      item.status === 'completed' ? 'text-green-600' :
+                      item.status === 'failed' ? 'text-red-600' :
+                      'text-gray-500'
+                    }`}>
+                      {getStatusText(item.status)}
+                    </span>
                   </div>
 
-                  {/* Status Counts */}
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="text-center p-2 bg-gray-50 rounded-lg">
-                      <div className="flex items-center justify-center gap-1 mb-1">
-                        <Clock className="w-3.5 h-3.5 text-gray-500" />
-                      </div>
-                      <div className="text-lg font-bold text-gray-700">{job.queued}</div>
-                      <div className="text-xs text-gray-500">Queue</div>
+                  {/* Score if completed */}
+                  {item.status === 'completed' && item.score !== undefined && (
+                    <div className="flex items-center gap-1 px-3 py-1 bg-green-100 rounded-full">
+                      <span className="text-sm font-bold text-green-700">{item.score}%</span>
                     </div>
-                    <div className="text-center p-2 bg-gray-50 rounded-lg">
-                      <div className="flex items-center justify-center gap-1 mb-1">
-                        <Loader className={`w-3.5 h-3.5 text-gray-700 ${job.inProgress > 0 ? 'animate-spin' : ''}`} />
-                      </div>
-                      <div className="text-lg font-bold text-gray-900">{job.inProgress}</div>
-                      <div className="text-xs text-gray-600">Progress</div>
-                    </div>
-                    <div className="text-center p-2 bg-green-50 rounded-lg">
-                      <div className="flex items-center justify-center gap-1 mb-1">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                      </div>
-                      <div className="text-lg font-bold text-green-700">{job.completed}</div>
-                      <div className="text-xs text-green-600">Done</div>
-                    </div>
-                    <div className="text-center p-2 bg-red-50 rounded-lg">
-                      <div className="flex items-center justify-center gap-1 mb-1">
-                        <XCircle className="w-3.5 h-3.5 text-red-600" />
-                      </div>
-                      <div className="text-lg font-bold text-red-700">{job.failed}</div>
-                      <div className="text-xs text-red-600">Failed</div>
-                    </div>
-                  </div>
-
-                  {/* View Details Button */}
-                  {onViewJobDetails && (
-                    <button
-                      onClick={() => onViewJobDetails(job.jobId)}
-                      className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                    >
-                      <Eye className="w-4 h-4" />
-                      View Details
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
                   )}
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-16">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                <Target className="w-8 h-8 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Scoring Jobs</h3>
-              <p className="text-gray-600">No scoring operations in progress.</p>
+            <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+              <FileText className="w-12 h-12 mb-3 text-gray-300" />
+              <p className="text-sm">Preparing resumes for scoring...</p>
             </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>
