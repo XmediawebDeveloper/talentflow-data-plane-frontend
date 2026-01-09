@@ -20,6 +20,12 @@ function JDCreationContent() {
       const fetchJD = async () => {
         try {
           const jd = await jdService.get(jdId);
+          console.log('[TalentFlow] Loaded JD from database:', {
+            id: jd.id,
+            title: jd.title,
+            creation_stage: jd.creation_stage,
+            status: jd.status
+          });
           setEditingJD(jd);
         } catch (error) {
           console.error('Failed to fetch JD:', error);

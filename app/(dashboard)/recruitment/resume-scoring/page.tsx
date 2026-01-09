@@ -41,13 +41,19 @@ export default function ResumeScoringRoute() {
   const [scoredHistory, setScoredHistory] = useState<ScoredResumeData[]>([]);
   const [loading, setLoading] = useState(true);
   const [initialJdId, setInitialJdId] = useState<string | null>(null);
+  const [showProgress, setShowProgress] = useState(false);
 
   useEffect(() => {
     // Check if there's a jd_id in URL params
     const jdId = searchParams.get('jd_id');
+    const showProgressParam = searchParams.get('show_progress');
     if (jdId) {
       console.log('[ResumeScoringRoute] Found jd_id in URL:', jdId);
       setInitialJdId(jdId);
+    }
+    if (showProgressParam === 'true') {
+      console.log('[ResumeScoringRoute] Show progress requested');
+      setShowProgress(true);
     }
     fetchData();
     loadScoredHistory();
@@ -290,6 +296,7 @@ export default function ResumeScoringRoute() {
       scoredHistory={scoredHistory}
       onSaveScores={saveScoredHistory}
       initialJdId={initialJdId}
+      initialShowProgress={showProgress}
     />
   );
 }

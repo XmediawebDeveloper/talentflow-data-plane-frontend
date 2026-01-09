@@ -7,6 +7,7 @@ import ScoredResumesTable from './ScoredResumesTable';
 import ResumeSelectionModal from './ResumeSelectionModal';
 import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
+import ScoringJobProgressModal, { JobScoringProgress } from './ScoringJobProgressModal';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import api from '@/lib/services/api';
 
@@ -69,6 +70,7 @@ interface ResumeScoringPageProps {
   onBack?: () => void;
   tenant?: Tenant;
   initialJdId?: string | null;
+  initialShowProgress?: boolean;
 }
 
 export default function ResumeScoringPage({
@@ -80,7 +82,8 @@ export default function ResumeScoringPage({
   onNavigateToAITalentMatch,
   onBack,
   tenant,
-  initialJdId
+  initialJdId,
+  initialShowProgress = false
 }: ResumeScoringPageProps) {
   const router = useRouter();
 
@@ -116,6 +119,10 @@ export default function ResumeScoringPage({
   const [filterByJobId, setFilterByJobId] = useState<string | undefined>(undefined);
   const [showJobTitleColumn, setShowJobTitleColumn] = useState(false);
 
+  // State for Job Progress Modal (per-job view)
+  const [showJobProgressModal, setShowJobProgressModal] = useState(false);
+  const [jobProgressData, setJobProgressData] = useState<JobScoringProgress[]>([]);
+
   // History filters
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [historySourceFilter, setHistorySourceFilter] = useState<'all' | 'my-resumes' | 'database'>('all');
@@ -145,11 +152,27 @@ export default function ResumeScoringPage({
         console.log('[ResumeScoringPage] Found history item for JD, auto-opening:', historyItem.jobTitle);
         setSelectedHistoryItem(historyItem);
         setViewMode('details');
+
+        // If show_progress is requested, open the job progress modal
+        if (initialShowProgress) {
+          console.log('[ResumeScoringPage] Show progress requested, opening progress modal');
+          const jobProgress: JobScoringProgress = {
+            jobId: historyItem.jobId,
+            jobTitle: historyItem.jobTitle,
+            total: historyItem.totalScored,
+            queued: 0,
+            inProgress: 0,
+            completed: historyItem.scoredResumes.length,
+            failed: historyItem.totalScored - historyItem.scoredResumes.length,
+          };
+          setJobProgressData([jobProgress]);
+          setShowJobProgressModal(true);
+        }
       } else {
         console.log('[ResumeScoringPage] No history item found for JD:', initialJdId);
       }
     }
-  }, [initialJdId, scoredHistory]);
+  }, [initialJdId, scoredHistory, initialShowProgress]);
 
   // Fetch available units on mount
   useEffect(() => {
@@ -555,6 +578,22 @@ export default function ResumeScoringPage({
             showJobTitleColumn={showJobTitleColumn}
           />
         )}
+
+        {/* Job Progress Modal - Per Job View */}
+        <ScoringJobProgressModal
+          isOpen={showJobProgressModal}
+          onClose={() => setShowJobProgressModal(false)}
+          jobProgressData={jobProgressData}
+          onViewJobDetails={(jobId) => {
+            setShowJobProgressModal(false);
+            // Navigate to job details or filter by job
+            const historyItem = scoredHistory.find(item => item.jobId === jobId);
+            if (historyItem) {
+              setSelectedHistoryItem(historyItem);
+              setViewMode('details');
+            }
+          }}
+        />
       </main>
     );
   }
@@ -960,6 +999,27 @@ export default function ResumeScoringPage({
                         </div>
 
                         <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Show progress for this specific job
+                            const jobProgress: JobScoringProgress[] = [{
+                              jobId: item.jobId,
+                              jobTitle: item.jobTitle,
+                              total: item.totalScored,
+                              queued: 0,
+                              inProgress: 0,
+                              completed: item.scoredResumes.length,
+                              failed: item.totalScored - item.scoredResumes.length,
+                            }];
+                            setJobProgressData(jobProgress);
+                            setShowJobProgressModal(true);
+                          }}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-1.5"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View Progress
+                        </button>
+                        <button
                           onClick={() => {
                             setSelectedHistoryItem(item);
                             setViewMode('details');
@@ -1108,6 +1168,27 @@ export default function ResumeScoringPage({
 
                       <div className="mt-4 flex flex-col gap-2">
                         <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Show progress for this specific job
+                            const jobProgress: JobScoringProgress[] = [{
+                              jobId: item.jobId,
+                              jobTitle: item.jobTitle,
+                              total: item.totalScored,
+                              queued: 0,
+                              inProgress: 0,
+                              completed: item.scoredResumes.length,
+                              failed: item.totalScored - item.scoredResumes.length,
+                            }];
+                            setJobProgressData(jobProgress);
+                            setShowJobProgressModal(true);
+                          }}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-1.5 justify-center"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View Progress
+                        </button>
+                        <button
                           onClick={() => {
                             setSelectedHistoryItem(item);
                             setViewMode('details');
@@ -1184,6 +1265,21 @@ export default function ResumeScoringPage({
             showJobTitleColumn={showJobTitleColumn}
           />
         )}
+
+        {/* Job Progress Modal - Per Job View */}
+        <ScoringJobProgressModal
+          isOpen={showJobProgressModal}
+          onClose={() => setShowJobProgressModal(false)}
+          jobProgressData={jobProgressData}
+          onViewJobDetails={(jobId) => {
+            setShowJobProgressModal(false);
+            const historyItem = scoredHistory.find(item => item.jobId === jobId);
+            if (historyItem) {
+              setSelectedHistoryItem(historyItem);
+              setViewMode('details');
+            }
+          }}
+        />
       </main>
     );
   }
@@ -1486,6 +1582,21 @@ export default function ResumeScoringPage({
           showJobTitleColumn={showJobTitleColumn}
         />
       )}
+
+      {/* Job Progress Modal - Per Job View */}
+      <ScoringJobProgressModal
+        isOpen={showJobProgressModal}
+        onClose={() => setShowJobProgressModal(false)}
+        jobProgressData={jobProgressData}
+        onViewJobDetails={(jobId) => {
+          setShowJobProgressModal(false);
+          const historyItem = scoredHistory.find(item => item.jobId === jobId);
+          if (historyItem) {
+            setSelectedHistoryItem(historyItem);
+            setViewMode('details');
+          }
+        }}
+      />
     </main>
   );
 }

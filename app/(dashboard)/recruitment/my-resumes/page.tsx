@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, FileText, Maximize2 } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2 } from 'lucide-react';
 import ResumeTable from '@/components/ResumeTable';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
@@ -13,7 +13,7 @@ import DuplicateResumeModal, { DuplicateFile, ExistingResume } from '@/component
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import UploadHistoryDetailModal, { UploadHistoryItem } from '@/components/UploadHistoryDetailModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
-import { Resume, Folder, Job } from '@/lib/types/types';
+import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
 import { jdService } from '@/lib/services/jdService';
@@ -23,7 +23,7 @@ import { toast } from 'sonner';
 export default function MyResumesPage() {
   const router = useRouter();
   const [resumes, setResumes] = useState<Resume[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -32,6 +32,8 @@ export default function MyResumesPage() {
   const [filters, setFilters] = useState({});
   const [sortBy, setSortBy] = useState('date');
   const [folderTreeWidth, setFolderTreeWidth] = useState(240);
+  const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
+  const [cardViewFolder, setCardViewFolder] = useState<string | null>(null); // Selected folder in card view
 
   // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -153,22 +155,22 @@ export default function MyResumesPage() {
       }));
 
       // Convert API Folder to component Folder type
-      const convertApiFolder = (f: ApiFolder): Folder => ({
+      const convertApiFolder = (f: ApiFolder): FolderType => ({
         id: f.id,
         name: f.name,
         count: f.resume_count || 0,
         parentId: f.parent_id,
         children: f.children?.map(convertApiFolder),
       });
-      const apiFolders: Folder[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+      const apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
 
       // Add "All Resumes" virtual folder at the top
-      const allResumesFolder: Folder = {
+      const allResumesFolder: FolderType = {
         id: 'all',
         name: 'All Resumes',
         count: convertedResumes.length,
       };
-      const convertedFolders: Folder[] = [allResumesFolder, ...apiFolders];
+      const convertedFolders: FolderType[] = [allResumesFolder, ...apiFolders];
 
       setResumes(convertedResumes);
       setFolders(convertedFolders);
@@ -324,11 +326,11 @@ export default function MyResumesPage() {
           { id: toastId }
         );
 
-        // Clear selection and navigate to scored resumes
+        // Clear selection and navigate to resume scoring page with progress view
         setSelectedResumes([]);
 
-        // Navigate to the job's scored resumes page
-        router.push(`/recruitment/job-details?id=${jobId}&tab=scored`);
+        // Navigate to resume scoring page and show progress for this JD
+        router.push(`/recruitment/resume-scoring?jd_id=${jobId}&show_progress=true`);
       } else {
         toast.error('Failed to score resumes', { id: toastId });
       }
@@ -350,7 +352,7 @@ export default function MyResumesPage() {
       console.log('[DEBUG] Creating folder:', { name, parentId });
       const newFolder = await folderService.create(name, parentId);
       console.log('[DEBUG] Folder created:', newFolder);
-      const converted: Folder = {
+      const converted: FolderType = {
         id: newFolder.id,
         name: newFolder.name,
         count: 0,
@@ -425,7 +427,7 @@ export default function MyResumesPage() {
     // Create "root" folder
     try {
       const newFolder = await folderService.create('root');
-      const converted: Folder = {
+      const converted: FolderType = {
         id: newFolder.id,
         name: newFolder.name,
         count: 0,
@@ -854,8 +856,9 @@ export default function MyResumesPage() {
         ]}
       />
 
-      {selectedResumes.length > 0 && (
-        <div className="mt-6">
+      <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {/* Bulk Actions Bar - Shows at TOP when resumes selected */}
+        {selectedResumes.length > 0 && (
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
@@ -865,18 +868,46 @@ export default function MyResumesPage() {
             onDelete={() => handleDeleteResumes(selectedResumes)}
             folders={folders.filter(f => f.id !== 'all')}
           />
-        </div>
-      )}
+        )}
 
-      <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200">
-        <SearchFilterBarCompact
-          searchQuery={searchQuery}
-          onSearchChange={handleSearchChange}
-          filters={filters}
-          onFiltersChange={setFilters}
-          sortBy={sortBy}
-          onSortChange={setSortBy}
-        />
+        <div className="flex items-center justify-between border-b border-gray-200">
+          <div className="flex-1">
+            <SearchFilterBarCompact
+              searchQuery={searchQuery}
+              onSearchChange={handleSearchChange}
+              filters={filters}
+              onFiltersChange={setFilters}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+            />
+          </div>
+          {/* View Toggle */}
+          <div className="flex items-center gap-1 px-4 py-3 border-l border-gray-200">
+            <span className="text-xs text-gray-500 mr-2">View:</span>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="List View"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('card')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'card'
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Card View"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
 
         {/* Search Results Summary */}
         {appliedSearchQuery && (
@@ -902,37 +933,318 @@ export default function MyResumesPage() {
           </div>
         )}
 
-        <div className="flex">
-          <FolderTree
-            folders={folders}
-            selectedFolder={selectedFolder}
-            onSelectFolder={setSelectedFolder}
-            onCreateFolder={handleCreateFolder}
-            onRenameFolder={handleRenameFolder}
-            onDeleteFolder={handleDeleteFolder}
-            onUploadToFolder={(folderId) => {
-              setSelectedFolder(folderId);
-              setIsUploadModalOpen(true);
-            }}
-            resumes={filteredResumes}
-            width={folderTreeWidth}
-            onWidthChange={setFolderTreeWidth}
-          />
+        {viewMode === 'list' ? (
+          // List View with Folder Tree
+          <div className="flex">
+            <FolderTree
+              folders={folders}
+              selectedFolder={selectedFolder}
+              onSelectFolder={setSelectedFolder}
+              onCreateFolder={handleCreateFolder}
+              onRenameFolder={handleRenameFolder}
+              onDeleteFolder={handleDeleteFolder}
+              onUploadToFolder={(folderId) => {
+                setSelectedFolder(folderId);
+                setIsUploadModalOpen(true);
+              }}
+              resumes={filteredResumes}
+              width={folderTreeWidth}
+              onWidthChange={setFolderTreeWidth}
+            />
 
-          <ResumeTable
-            resumes={filteredResumes}
-            selectedResumes={selectedResumes}
-            onSelectResume={handleSelectResume}
-            onSelectAll={handleSelectAll}
-            onQuickView={(resume) => setQuickViewResume(resume)}
-            onApplyToJob={(resume) => console.log('Apply to job:', resume)}
-            onDelete={(id) => handleDelete(id)}
-            onMoveToFolder={handleMoveToFolder}
-            folders={folders.filter(f => f.id !== 'all')}
-            onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
-            highlightQuery={appliedSearchQuery}
-          />
-        </div>
+            <ResumeTable
+              resumes={filteredResumes}
+              selectedResumes={selectedResumes}
+              onSelectResume={handleSelectResume}
+              onSelectAll={handleSelectAll}
+              onQuickView={(resume) => setQuickViewResume(resume)}
+              onApplyToJob={(resume) => console.log('Apply to job:', resume)}
+              onDelete={(id) => handleDelete(id)}
+              onMoveToFolder={handleMoveToFolder}
+              folders={folders.filter(f => f.id !== 'all')}
+              onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
+              highlightQuery={appliedSearchQuery}
+            />
+          </div>
+        ) : (
+          // Card View - Folders as Cards OR Resumes List when folder selected
+          <div className="p-6">
+            {cardViewFolder === null ? (
+              // Show Folder Cards
+              (() => {
+                const realFolders = folders.filter(f => f.id !== 'all');
+
+                // Group resumes by folder to get counts
+                const resumesByFolder = new Map<string, Resume[]>();
+                const unfolderedResumes: Resume[] = [];
+
+                filteredResumes.forEach(resume => {
+                  if (resume.folderId) {
+                    const existing = resumesByFolder.get(resume.folderId) || [];
+                    resumesByFolder.set(resume.folderId, [...existing, resume]);
+                  } else {
+                    unfolderedResumes.push(resume);
+                  }
+                });
+
+                const folderCards = realFolders.map((folder) => {
+                  const folderResumes = resumesByFolder.get(folder.id) || [];
+
+                  return (
+                    <div
+                      key={folder.id}
+                      className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-blue-300 transition-all"
+                      onClick={() => setCardViewFolder(folder.id)}
+                    >
+                      <div className="flex items-center gap-3 p-4">
+                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <Folder className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900">{folder.name}</h3>
+                          <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      </div>
+                    </div>
+                  );
+                });
+
+                const uncategorizedCard = unfolderedResumes.length > 0 ? (
+                  <div
+                    key="unfoldered"
+                    className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-gray-400 transition-all"
+                    onClick={() => setCardViewFolder('uncategorized')}
+                  >
+                    <div className="flex items-center gap-3 p-4">
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                        <Folder className="w-6 h-6 text-gray-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900">Uncategorized</h3>
+                        <p className="text-sm text-gray-500">{unfolderedResumes.length} resume{unfolderedResumes.length !== 1 ? 's' : ''}</p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    </div>
+                  </div>
+                ) : null;
+
+                return (
+                  <>
+                    {(realFolders.length > 0 || uncategorizedCard) ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {folderCards}
+                        {uncategorizedCard}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <Folder className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No folders found</h3>
+                        <p className="text-gray-500">Create folders to organize your resumes</p>
+                      </div>
+                    )}
+                  </>
+                );
+              })()
+            ) : (
+              // Show Resumes List for selected folder
+              (() => {
+                const selectedFolderData = folders.find(f => f.id === cardViewFolder);
+                const folderName = cardViewFolder === 'uncategorized'
+                  ? 'Uncategorized'
+                  : selectedFolderData?.name || 'Unknown Folder';
+
+                // Get resumes for this folder
+                const folderResumes = cardViewFolder === 'uncategorized'
+                  ? filteredResumes.filter(r => !r.folderId)
+                  : filteredResumes.filter(r => r.folderId === cardViewFolder);
+
+                return (
+                  <div>
+                    {/* Header with Back Button */}
+                    <div className="flex items-center gap-4 mb-6">
+                      <button
+                        onClick={() => setCardViewFolder(null)}
+                        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+                      >
+                        <ArrowLeft className="w-5 h-5" />
+                        <span>Back to Folders</span>
+                      </button>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <FolderOpen className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h2 className="font-semibold text-gray-900">{folderName}</h2>
+                          <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Resumes Table */}
+                    {folderResumes.length > 0 ? (
+                      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        {/* Table Header */}
+                        <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={folderResumes.length > 0 && folderResumes.every(r => selectedResumes.includes(r.id))}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedResumes(prev => [...new Set([...prev, ...folderResumes.map(r => r.id)])]);
+                                } else {
+                                  setSelectedResumes(prev => prev.filter(id => !folderResumes.find(r => r.id === id)));
+                                }
+                              }}
+                              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>Candidate Name</div>
+                          <div>Email</div>
+                          <div>Phone</div>
+                          <div>Skills</div>
+                          <div>Experience</div>
+                          <div>Source</div>
+                          <div>Upload Date</div>
+                          <div>Uploaded By</div>
+                          <div>Files</div>
+                          <div>Actions</div>
+                        </div>
+                        {/* Table Body */}
+                        {folderResumes.map((resume, index) => (
+                          <div
+                            key={resume.id}
+                            className={`grid grid-cols-[auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center ${
+                              index !== folderResumes.length - 1 ? 'border-b border-gray-100' : ''
+                            } ${selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''}`}
+                            onClick={() => router.push(`/recruitment/resume-view/${resume.id}`)}
+                          >
+                            {/* Checkbox */}
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedResumes.includes(resume.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectResume(resume.id);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                              />
+                            </div>
+                            {/* Candidate Name */}
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-medium text-xs flex-shrink-0">
+                                {resume.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
+                              </div>
+                              <span className="font-medium text-gray-900 text-sm truncate">{resume.name}</span>
+                            </div>
+                            {/* Email */}
+                            <div className="text-sm text-gray-600 truncate">{resume.email || '-'}</div>
+                            {/* Phone */}
+                            <div className="text-sm text-gray-600 truncate">{resume.phone || '-'}</div>
+                            {/* Skills */}
+                            <div className="flex flex-wrap gap-1">
+                              {resume.skills && resume.skills.length > 0 ? (
+                                <>
+                                  {resume.skills.slice(0, 2).map((skill, idx) => (
+                                    <span key={idx} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs truncate max-w-[60px]">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                  {resume.skills.length > 2 && (
+                                    <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">
+                                      +{resume.skills.length - 2}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-sm text-gray-400">-</span>
+                              )}
+                            </div>
+                            {/* Experience */}
+                            <div className="text-sm text-gray-600">{resume.experience || '-'}</div>
+                            {/* Source */}
+                            <div>
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                resume.source === 'TalentFlow'
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {resume.source || 'Manual'}
+                              </span>
+                            </div>
+                            {/* Upload Date */}
+                            <div className="text-sm text-gray-600">
+                              {resume.uploadDate ? new Date(resume.uploadDate).toLocaleDateString() : '-'}
+                            </div>
+                            {/* Uploaded By */}
+                            <div className="text-sm text-gray-600 truncate">{resume.uploadedBy || '-'}</div>
+                            {/* Files */}
+                            <div className="flex items-center gap-1 text-sm text-gray-600">
+                              <FileText className="w-4 h-4" />
+                              <span>{resume.attachments || 1}</span>
+                            </div>
+                            {/* Actions */}
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setQuickViewResume(resume);
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                                title="Quick View"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    const blob = await resumeService.download(resume.id);
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = resume.fileName || `${resume.name}.pdf`;
+                                    a.click();
+                                    window.URL.revokeObjectURL(url);
+                                  } catch (err) {
+                                    toast.error('Failed to download');
+                                  }
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+                                title="Download"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(resume.id);
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 bg-white border border-gray-200 rounded-xl">
+                        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No resumes in this folder</h3>
+                        <p className="text-gray-500">Upload resumes to this folder to get started</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            )}
+          </div>
+        )}
       </div>
 
       {isUploadModalOpen && (
@@ -988,7 +1300,7 @@ export default function MyResumesPage() {
             setIsUploadHistoryMinimized(false);
             setIsUploadHistoryModalOpen(true);
           }}
-          className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white px-4 py-3 rounded-xl shadow-lg hover:bg-blue-700 transition-all cursor-pointer flex items-center gap-3 animate-in slide-in-from-bottom duration-300"
+          className="fixed bottom-6 right-6 z-40 bg-blue-600 text-white px-4 py-3 rounded-xl shadow-lg hover:bg-blue-700 transition-all cursor-pointer flex items-center gap-3 animate-in slide-in-from-bottom duration-300"
         >
           <div className="relative">
             <History className="w-5 h-5" />
