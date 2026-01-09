@@ -4,12 +4,22 @@ import { Job } from '@/lib/types/types';
 import { assessmentService, jdService } from '@/lib/services';
 import JDCreation from '@/components/JDCreation';
 
+interface TopicSettings {
+  hr_enabled: boolean;
+  hr_scoring_type: 'informational' | 'scored';
+  technical_enabled: boolean;
+  technical_scoring_type: 'informational' | 'scored';
+  coding_enabled: boolean;
+  coding_scoring_type: 'informational' | 'scored';
+}
+
 interface AssessmentCreationProps {
   onBack: () => void;
   jobs: Job[];
   onCreateAssessment: (assessment: any) => void;
   onCreateNewJD?: () => void;
   onJobsRefresh?: () => void;
+  topicSettings?: TopicSettings;
 }
 
 interface SectionConfig {
@@ -19,15 +29,41 @@ interface SectionConfig {
   enabled: boolean;
 }
 
-export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh }: AssessmentCreationProps) {
+export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings }: AssessmentCreationProps) {
   const [step, setStep] = useState<'select-jd' | 'configure' | 'preview'>(('select-jd'));
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [duration, setDuration] = useState(30);
-  const [sections, setSections] = useState<SectionConfig[]>([
-    { name: 'HR', percentage: 20, topics: [], enabled: true },
-    { name: 'Technical', percentage: 70, topics: [], enabled: true },
-    { name: 'Coding', percentage: 10, topics: [], enabled: false },
-  ]);
+
+  // Initialize sections based on global topic settings
+  const getInitialSections = (): SectionConfig[] => {
+    const hrEnabled = topicSettings?.hr_enabled ?? true;
+    const technicalEnabled = topicSettings?.technical_enabled ?? true;
+    const codingEnabled = topicSettings?.coding_enabled ?? true;
+
+    // Calculate percentages based on enabled sections
+    const enabledCount = [hrEnabled, technicalEnabled, codingEnabled].filter(Boolean).length;
+    let hrPct = 0, techPct = 0, codePct = 0;
+
+    if (enabledCount === 3) {
+      hrPct = 20; techPct = 70; codePct = 10;
+    } else if (enabledCount === 2) {
+      if (hrEnabled && technicalEnabled) { hrPct = 30; techPct = 70; }
+      else if (hrEnabled && codingEnabled) { hrPct = 40; codePct = 60; }
+      else if (technicalEnabled && codingEnabled) { techPct = 70; codePct = 30; }
+    } else if (enabledCount === 1) {
+      if (hrEnabled) hrPct = 100;
+      else if (technicalEnabled) techPct = 100;
+      else if (codingEnabled) codePct = 100;
+    }
+
+    return [
+      { name: 'HR', percentage: hrPct, topics: [], enabled: hrEnabled },
+      { name: 'Technical', percentage: techPct, topics: [], enabled: technicalEnabled },
+      { name: 'Coding', percentage: codePct, topics: [], enabled: false }, // Coding starts disabled, enabled by JD
+    ];
+  };
+
+  const [sections, setSections] = useState<SectionConfig[]>(getInitialSections());
   const [newTopic, setNewTopic] = useState({ section: '' as 'HR' | 'Technical' | 'Coding', value: '' });
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedAssessment, setGeneratedAssessment] = useState<any>(null);
@@ -446,21 +482,28 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
                 <div className="space-y-3">
                   {/* HR Round Toggle */}
-                  <div className={`p-4 border rounded-lg transition-all ${sections.find(s => s.name === 'HR')?.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                  <div className={`p-4 border rounded-lg transition-all ${!topicSettings?.hr_enabled ? 'border-gray-200 bg-gray-100 opacity-60' : sections.find(s => s.name === 'HR')?.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Users className="w-5 h-5 text-gray-600" />
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-gray-900">HR Round</span>
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Informational</span>
+                            {topicSettings?.hr_enabled === false ? (
+                              <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">Disabled in Settings</span>
+                            ) : topicSettings?.hr_scoring_type === 'scored' ? (
+                              <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Informational</span>
+                            )}
                           </div>
                           <p className="text-sm text-gray-500">Cultural fit, communication skills, and behavioral questions</p>
                         </div>
                       </div>
                       <button
-                        onClick={() => setSections(sections.map(s => s.name === 'HR' ? { ...s, enabled: !s.enabled } : s))}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${sections.find(s => s.name === 'HR')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
+                        onClick={() => topicSettings?.hr_enabled !== false && setSections(sections.map(s => s.name === 'HR' ? { ...s, enabled: !s.enabled } : s))}
+                        disabled={topicSettings?.hr_enabled === false}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${topicSettings?.hr_enabled === false ? 'bg-gray-200 cursor-not-allowed' : sections.find(s => s.name === 'HR')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
                       >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'HR')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                       </button>
@@ -468,21 +511,28 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   </div>
 
                   {/* Technical Round Toggle */}
-                  <div className={`p-4 border rounded-lg transition-all ${sections.find(s => s.name === 'Technical')?.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                  <div className={`p-4 border rounded-lg transition-all ${!topicSettings?.technical_enabled ? 'border-gray-200 bg-gray-100 opacity-60' : sections.find(s => s.name === 'Technical')?.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Brain className="w-5 h-5 text-gray-600" />
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-gray-900">Technical Round</span>
-                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
+                            {topicSettings?.technical_enabled === false ? (
+                              <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">Disabled in Settings</span>
+                            ) : topicSettings?.technical_scoring_type === 'informational' ? (
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Informational</span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
+                            )}
                           </div>
                           <p className="text-sm text-gray-500">Domain knowledge, technical concepts, and job-specific skills</p>
                         </div>
                       </div>
                       <button
-                        onClick={() => setSections(sections.map(s => s.name === 'Technical' ? { ...s, enabled: !s.enabled } : s))}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${sections.find(s => s.name === 'Technical')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
+                        onClick={() => topicSettings?.technical_enabled !== false && setSections(sections.map(s => s.name === 'Technical' ? { ...s, enabled: !s.enabled } : s))}
+                        disabled={topicSettings?.technical_enabled === false}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${topicSettings?.technical_enabled === false ? 'bg-gray-200 cursor-not-allowed' : sections.find(s => s.name === 'Technical')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
                       >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'Technical')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                       </button>
@@ -490,15 +540,21 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   </div>
 
                   {/* Coding Round Toggle */}
-                  <div className={`p-4 border rounded-lg transition-all ${sections.find(s => s.name === 'Coding')?.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                  <div className={`p-4 border rounded-lg transition-all ${!topicSettings?.coding_enabled ? 'border-gray-200 bg-gray-100 opacity-60' : sections.find(s => s.name === 'Coding')?.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Code className="w-5 h-5 text-gray-600" />
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-gray-900">Coding Round</span>
-                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
-                            {requiresCoding(selectedJob!) && (
+                            {topicSettings?.coding_enabled === false ? (
+                              <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">Disabled in Settings</span>
+                            ) : topicSettings?.coding_scoring_type === 'informational' ? (
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Informational</span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
+                            )}
+                            {topicSettings?.coding_enabled !== false && requiresCoding(selectedJob!) && (
                               <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Auto-Enabled</span>
                             )}
                           </div>
@@ -506,8 +562,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                         </div>
                       </div>
                       <button
-                        onClick={() => setSections(sections.map(s => s.name === 'Coding' ? { ...s, enabled: !s.enabled } : s))}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${sections.find(s => s.name === 'Coding')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
+                        onClick={() => topicSettings?.coding_enabled !== false && setSections(sections.map(s => s.name === 'Coding' ? { ...s, enabled: !s.enabled } : s))}
+                        disabled={topicSettings?.coding_enabled === false}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${topicSettings?.coding_enabled === false ? 'bg-gray-200 cursor-not-allowed' : sections.find(s => s.name === 'Coding')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
                       >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'Coding')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                       </button>
