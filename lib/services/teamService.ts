@@ -34,6 +34,12 @@ export interface TeamStats {
   avg_members_per_team: number;
 }
 
+export interface TeamConfig {
+  teams_enabled: boolean;
+  max_teams: number;
+  max_team_size: number;
+}
+
 export interface CreateTeamRequest {
   name: string;
   description?: string;
@@ -92,6 +98,30 @@ class TeamService {
     } catch (error) {
       console.error('Error fetching team stats:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Get team configuration (limits) from plan
+   * RBAC02 Task #15
+   */
+  async getTeamConfig(): Promise<TeamConfig> {
+    try {
+      const response = await api.get('/tenant-admin/plan-features');
+      const data = response.data.data || response.data;
+      return {
+        teams_enabled: data.teams_enabled || false,
+        max_teams: data.max_teams || 0,
+        max_team_size: data.max_team_size || 0,
+      };
+    } catch (error) {
+      console.error('Error fetching team config:', error);
+      // Return defaults on error
+      return {
+        teams_enabled: false,
+        max_teams: 0,
+        max_team_size: 0,
+      };
     }
   }
 

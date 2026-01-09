@@ -24,6 +24,10 @@ export default function TeamManagementPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // RBAC02 Task #15: Team limit state
+  const [maxTeams, setMaxTeams] = useState<number>(-1); // -1 = unlimited
+  const [teamsEnabled, setTeamsEnabled] = useState<boolean>(true);
+
   // Form state
   const [teamName, setTeamName] = useState('');
   const [description, setDescription] = useState('');
@@ -40,16 +44,19 @@ export default function TeamManagementPage() {
   const fetchInitialData = async () => {
     setIsLoading(true);
     try {
-      // Fetch current user, teams, and stats from API
-      const [userData, teamsData, statsData] = await Promise.all([
+      // Fetch current user, teams, stats, and team config from API
+      const [userData, teamsData, statsData, teamConfig] = await Promise.all([
         authService.getCurrentUser(),
         teamService.getTeams(),
         teamService.getTeamStats(),
+        teamService.getTeamConfig(),
       ]);
 
       setCurrentUser(userData);
       setTeams(teamsData);
       setStats(statsData);
+      setTeamsEnabled(teamConfig.teams_enabled);
+      setMaxTeams(teamConfig.max_teams);
     } catch (error: any) {
       console.error('Error fetching data:', error);
       toast.error('Failed to load teams data');
@@ -118,6 +125,17 @@ export default function TeamManagementPage() {
     // Check if user is tenant admin
     if (currentUser?.role !== 'tenant_admin') {
       toast.error('Only tenant administrators can create teams');
+      return;
+    }
+
+    // RBAC02 Task #15: Check team limit
+    if (!teamsEnabled) {
+      toast.error('Team creation is not available in your current plan. Please upgrade to Professional or higher.');
+      return;
+    }
+
+    if (isAtTeamLimit) {
+      toast.error(`You have reached the maximum number of teams (${maxTeams}) for your plan. Please upgrade to create more teams.`);
       return;
     }
 
@@ -302,8 +320,10 @@ export default function TeamManagementPage() {
     user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Check if current user is tenant admin
-  const canCreateTeams = currentUser?.role === 'tenant_admin';
+  // RBAC02 Task #15: Check if current user is tenant admin and team limit not reached
+  const canCreateTeams = currentUser?.role === 'tenant_admin' && teamsEnabled;
+  const isAtTeamLimit = maxTeams !== -1 && stats.total_teams >= maxTeams;
+  const canAddTeam = canCreateTeams && !isAtTeamLimit;
 
   if (isLoading) {
     return (
@@ -327,13 +347,28 @@ export default function TeamManagementPage() {
               <p className="text-gray-600">Manage teams and invite new members</p>
             </div>
             {canCreateTeams && (
-              <button
-                onClick={handleOpenCreateModal}
-                className="flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-xl hover:bg-gray-900 transition-all shadow-lg hover:shadow-xl"
-              >
-                <Plus className="w-5 h-5" />
-                Create Team
-              </button>
+              <div className="flex flex-col items-end gap-2">
+                <button
+                  onClick={handleOpenCreateModal}
+                  disabled={isAtTeamLimit}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all shadow-lg ${
+                    isAtTeamLimit
+                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                      : 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-xl'
+                  }`}
+                  title={isAtTeamLimit ? `Team limit reached (${maxTeams}/${maxTeams})` : 'Create a new team'}
+                >
+                  <Plus className="w-5 h-5" />
+                  Create Team
+                </button>
+                {maxTeams !== -1 && (
+                  <p className={`text-sm ${
+                    isAtTeamLimit ? 'text-red-600 font-medium' : 'text-gray-600'
+                  }`}>
+                    {stats.total_teams}/{maxTeams} teams used
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -479,10 +514,12 @@ export default function TeamManagementPage() {
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No teams yet</h3>
                 <p className="text-gray-600 mb-6">
                   {canCreateTeams
-                    ? 'Create your first team to start organizing your recruitment workflow'
+                    ? (isAtTeamLimit
+                        ? `You have reached the maximum number of teams (${maxTeams}) for your plan. Please upgrade to create teams.`
+                        : 'Create your first team to start organizing your recruitment workflow')
                     : 'No teams have been created yet. Contact your administrator to create teams.'}
                 </p>
-              {canCreateTeams && (
+              {canCreateTeams && !isAtTeamLimit && (
                 <button
                   onClick={handleOpenCreateModal}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-xl hover:bg-gray-900 transition-all"
