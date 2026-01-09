@@ -1,12 +1,13 @@
 'use client';
 
-import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, Crown, FileText } from 'lucide-react';
+import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, ArrowUpRight, Crown, FileText, Mail } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/services/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { decodePlanId } from '@/lib/utils/planEncoder';
+import { toast } from 'sonner';
 
 const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://localhost:8001/api/v1';
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -931,6 +932,19 @@ function CurrentPlanContent() {
         setTransactionResult(result);
         setModalStep('result');
 
+        // PS02 Fix: Show toast notification for payment success
+        if (result.queued) {
+          toast.success('Payment successful! Upgrade queued.', {
+            description: `Your upgrade to ${result.plan_name} will be applied automatically on ${result.auto_apply_date ? new Date(result.auto_apply_date).toLocaleDateString() : 'plan expiry'}.`,
+            duration: 6000,
+          });
+        } else {
+          toast.success('Payment successful! Your plan is now active.', {
+            description: `You're now on the ${result.plan_name} plan. All resources have been provisioned.`,
+            duration: 5000,
+          });
+        }
+
         // Check if upgrade was queued (has active plan)
         if (result.queued) {
           console.log('[CurrentPlan] Upgrade queued:', result);
@@ -1225,6 +1239,71 @@ function CurrentPlanContent() {
               </p>
             </div>
           </div>
+
+          {/* PS03 Fix: Renew Plan Button for Expired/Expiring Subscriptions */}
+          {!isOnTrial && !isPendingPayment && !isLocked && companySettings?.plan_expiry_date && currentPlan && (
+            (() => {
+              const expiryDate = new Date(companySettings.plan_expiry_date);
+              const now = new Date();
+              const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              const isExpired = daysUntilExpiry < 0;
+              const isExpiringSoon = daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
+
+              if (isExpired || isExpiringSoon) {
+                return (
+                  <div className={`mt-6 p-4 rounded-lg border-2 ${
+                    isExpired
+                      ? 'bg-red-50 border-red-300'
+                      : 'bg-amber-50 border-amber-300'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className={`w-6 h-6 ${
+                          isExpired ? 'text-red-600' : 'text-amber-600'
+                        }`} />
+                        <div>
+                          <h4 className={`font-medium ${
+                            isExpired ? 'text-red-800' : 'text-amber-800'
+                          }`}>
+                            {isExpired ? 'Plan Expired' : 'Plan Expiring Soon'}
+                          </h4>
+                          <p className={`text-sm ${
+                            isExpired ? 'text-red-700' : 'text-amber-700'
+                          }`}>
+                            {isExpired
+                              ? `Your ${currentPlan.name} plan expired ${Math.abs(daysUntilExpiry)} days ago`
+                              : `Your ${currentPlan.name} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
+                            }
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedPlanForPayment(currentPlan);
+                          setModalStep('isolation');
+                          setIsolationType('schema');
+                          setIsNewTenant(false);
+                          setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
+                          setTransactionResult(null);
+                          setError(null);
+                          setShowPaymentModal(true);
+                        }}
+                        className={`px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                          isExpired
+                            ? 'bg-red-600 hover:bg-red-700 text-white'
+                            : 'bg-amber-600 hover:bg-amber-700 text-white'
+                        }`}
+                      >
+                        <ArrowRight className="w-4 h-4" />
+                        Renew Current Plan
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()
+          )}
 
           {/* Quotas - Using data from quota-status API via companySettings */}
           {companySettings && (
@@ -1811,10 +1890,40 @@ function CurrentPlanContent() {
                       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <CheckCircle className="w-10 h-10 text-green-600" />
                       </div>
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">Plan Upgrade Successful!</h3>
-                      <p className="text-gray-600">Your subscription has been updated successfully.</p>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                        {companySettings?.status?.toLowerCase() === 'expired' || companySettings?.status?.toLowerCase() === 'suspended'
+                          ? 'Account Reactivated!'
+                          : 'Plan Upgrade Successful!'}
+                      </h3>
+                      <p className="text-gray-600">
+                        {companySettings?.status?.toLowerCase() === 'expired' || companySettings?.status?.toLowerCase() === 'suspended'
+                          ? 'Your account has been reactivated and all features are now available.'
+                          : 'Your subscription has been updated successfully.'}
+                      </p>
                     </div>
 
+                    {/* PS03 Fix: Reactivation Confirmation Banner */}
+                    {(companySettings?.status?.toLowerCase() === 'expired' || companySettings?.status?.toLowerCase() === 'suspended') && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2">
+                        <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-green-800">Welcome back!</p>
+                          <p className="text-sm text-green-700 mt-0.5">
+                            Your account is now active. You have full access to all features and resources.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* PS02 Fix: Email Confirmation Message */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
+                      <Mail className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-blue-800">
+                        A confirmation email has been sent to your registered email address.
+                      </p>
+                    </div>
+
+                    {/* Payment Details */}
                     <div className="bg-gray-50 rounded-xl p-4 space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Plan:</span>
@@ -1841,6 +1950,70 @@ function CurrentPlanContent() {
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Status:</span>
                         <Badge className="bg-green-100 text-green-700">{transactionResult.subscription_status}</Badge>
+                      </div>
+                    </div>
+
+                    {/* PS02 Fix: Resource Allocation Details */}
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                      <h4 className="font-medium text-green-900 mb-3 flex items-center gap-2">
+                        <Package className="w-4 h-4" />
+                        Resources Provisioned
+                      </h4>
+                      <div className="space-y-2">
+                        {selectedPlanForPayment?.quotas?.max_seats && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-green-700 flex items-center gap-1.5">
+                              <Users className="w-3.5 h-3.5" />
+                              User Seats:
+                            </span>
+                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.max_seats} seats</span>
+                          </div>
+                        )}
+                        {selectedPlanForPayment?.quotas?.storage_gb && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-green-700 flex items-center gap-1.5">
+                              <Database className="w-3.5 h-3.5" />
+                              Storage:
+                            </span>
+                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.storage_gb} GB</span>
+                          </div>
+                        )}
+                        {selectedPlanForPayment?.quotas?.RS && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-green-700 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5" />
+                              Resume Scoring (RS):
+                            </span>
+                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.RS} units</span>
+                          </div>
+                        )}
+                        {selectedPlanForPayment?.quotas?.AS && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-green-700 flex items-center gap-1.5">
+                              <FileText className="w-3.5 h-3.5" />
+                              Assessments (AS):
+                            </span>
+                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.AS} units</span>
+                          </div>
+                        )}
+                        {selectedPlanForPayment?.quotas?.AIU && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-green-700 flex items-center gap-1.5">
+                              <Zap className="w-3.5 h-3.5" />
+                              AI Interviews (AIU):
+                            </span>
+                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.AIU} units</span>
+                          </div>
+                        )}
+                        {selectedPlanForPayment?.quotas?.RU && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-green-700 flex items-center gap-1.5">
+                              <ArrowUpRight className="w-3.5 h-3.5" />
+                              Resume Uploads (RU):
+                            </span>
+                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.RU} units</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 

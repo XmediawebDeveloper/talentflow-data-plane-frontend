@@ -30,6 +30,7 @@ interface JobsListingProps {
 export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onDeleteJob, quotaInfo, initialStatusFilter }: JobsListingProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'all');
+  const [creationMethodFilter, setCreationMethodFilter] = useState<'manual' | 'ai' | null>(null);
 
   // Sync status filter with URL parameter changes
   useEffect(() => {
@@ -47,8 +48,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
   
   // Advanced filter states
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [industryFilter, setIndustryFilter] = useState<string>('all');
   const [experienceFilter, setExperienceFilter] = useState<string>('all');
-  const [datePostedFilter, setDatePostedFilter] = useState<string>('all');
+  const [datePostedFromFilter, setDatePostedFromFilter] = useState<string>('');
+  const [datePostedToFilter, setDatePostedToFilter] = useState<string>('');
   const [salaryRangeFilter, setSalaryRangeFilter] = useState<string>('all');
   const [employmentTypeFilter, setEmploymentTypeFilter] = useState<string>('all');
   const [applicantsFilter, setApplicantsFilter] = useState<string>('all');
@@ -63,22 +66,64 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
 
+  // Quota modal state
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
+
   const filteredJobs = jobs.filter(job => {
-    const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase());
+    // Enhanced search - search across multiple fields
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = searchQuery === '' || (
+      job.title.toLowerCase().includes(searchLower) ||
+      job.job_id?.toLowerCase().includes(searchLower) ||
+      job.location?.toLowerCase().includes(searchLower) ||
+      job.industry_type?.toLowerCase().includes(searchLower) ||
+      job.department?.toLowerCase().includes(searchLower) ||
+      job.employmentType?.toLowerCase().includes(searchLower) ||
+      job.experience?.toLowerCase().includes(searchLower)
+    );
+
     const matchesStatus = statusFilter === 'all' || job.status.toLowerCase() === statusFilter.toLowerCase();
     const matchesLocation = locationFilter === 'all' || job.location === locationFilter;
     const matchesDepartment = departmentFilter === 'all' || job.department === departmentFilter;
+    const matchesIndustry = industryFilter === 'all' || job.industry_type === industryFilter;
     const matchesEmploymentType = employmentTypeFilter === 'all' || job.employmentType === employmentTypeFilter;
-    
+
+    // Creation method filter (Manual vs AI) - null means show all
+    const matchesCreationMethod = creationMethodFilter === null ||
+      (creationMethodFilter === 'ai' && (job as any).creation_method === 'ai_generated') ||
+      (creationMethodFilter === 'manual' && (job as any).creation_method === 'manual');
+
     // Experience filter
     let matchesExperience = true;
     if (experienceFilter !== 'all') {
       const exp = job.experience?.toLowerCase() || '';
-      if (experienceFilter === 'entry') matchesExperience = exp.includes('0-2') || exp.includes('entry');
-      else if (experienceFilter === 'mid') matchesExperience = exp.includes('2-5') || exp.includes('mid');
-      else if (experienceFilter === 'senior') matchesExperience = exp.includes('5+') || exp.includes('senior');
+      if (experienceFilter === 'entry') matchesExperience = exp.includes('0') || exp.includes('1') || exp.includes('entry');
+      else if (experienceFilter === 'junior') matchesExperience = exp.includes('2') || exp.includes('3') || exp.includes('4') || exp.includes('junior');
+      else if (experienceFilter === 'mid') matchesExperience = exp.includes('5') || exp.includes('6') || exp.includes('7') || exp.includes('mid');
+      else if (experienceFilter === 'senior') matchesExperience = exp.includes('8') || exp.includes('9') || exp.includes('10') || exp.includes('senior');
+      else if (experienceFilter === 'architect') matchesExperience = exp.includes('architect');
+      else if (experienceFilter === 'management') matchesExperience = exp.includes('management') || exp.includes('manager');
     }
-    
+
+    // Date posted filter
+    let matchesDatePosted = true;
+    if (datePostedFromFilter || datePostedToFilter) {
+      const jobDate = job.created_at ? new Date(job.created_at) : (job.postedDate ? new Date(job.postedDate) : null);
+      if (jobDate) {
+        if (datePostedFromFilter) {
+          const fromDate = new Date(datePostedFromFilter);
+          matchesDatePosted = matchesDatePosted && jobDate >= fromDate;
+        }
+        if (datePostedToFilter) {
+          const toDate = new Date(datePostedToFilter);
+          toDate.setHours(23, 59, 59, 999); // End of day
+          matchesDatePosted = matchesDatePosted && jobDate <= toDate;
+        }
+      } else {
+        matchesDatePosted = false;
+      }
+    }
+
     // Applicants filter
     let matchesApplicants = true;
     if (applicantsFilter !== 'all') {
@@ -87,9 +132,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
       else if (applicantsFilter === 'medium') matchesApplicants = count >= 10 && count < 50;
       else if (applicantsFilter === 'high') matchesApplicants = count >= 50;
     }
-    
-    return matchesSearch && matchesStatus && matchesLocation && matchesDepartment && 
-           matchesEmploymentType && matchesExperience && matchesApplicants;
+
+    return matchesSearch && matchesStatus && matchesLocation && matchesDepartment &&
+           matchesIndustry && matchesEmploymentType && matchesExperience && matchesDatePosted &&
+           matchesApplicants && matchesCreationMethod;
   });
 
   // Apply sorting to filtered jobs
@@ -283,6 +329,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
   const uniqueLocations = Array.from(new Set(jobs.map(job => job.location)));
   const uniqueDepartments = Array.from(new Set(jobs.map(job => job.department).filter(Boolean)));
   const uniqueEmploymentTypes = Array.from(new Set(jobs.map(job => job.employmentType).filter(Boolean)));
+  const uniqueIndustries = Array.from(new Set(jobs.map(job => job.industry_type).filter(Boolean)));
 
   // Calculate stats
   const stats = {
@@ -295,13 +342,16 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
   const activeFiltersCount = [
     statusFilter !== 'all',
+    creationMethodFilter !== null,
     locationFilter !== 'all',
     departmentFilter !== 'all',
+    industryFilter !== 'all',
     experienceFilter !== 'all',
     employmentTypeFilter !== 'all',
     applicantsFilter !== 'all',
     salaryRangeFilter !== 'all',
-    datePostedFilter !== 'all'
+    datePostedFromFilter !== '',
+    datePostedToFilter !== ''
   ].filter(Boolean).length;
 
   // NEW: Pagination logic
@@ -311,7 +361,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, locationFilter, departmentFilter, experienceFilter, employmentTypeFilter, applicantsFilter, sortBy, sortOrder]);
+  }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, sortBy, sortOrder]);
 
   // Update items per page based on view mode
   useEffect(() => {
@@ -389,7 +439,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
               <button
                 onClick={() => {
                   if (quotaInfo && quotaInfo.remaining <= 0) {
-                    alert(`Job publishing limit reached (${quotaInfo.used}/${quotaInfo.limit}). Please upgrade your plan to create more jobs.`);
+                    setShowQuotaModal(true);
                     return;
                   }
                   onCreateNew();
@@ -455,7 +505,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search jobs..."
+                  placeholder="Search by title, JD ID, location, industry, experience, employment type..."
                   className="w-full pl-12 pr-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                 />
               </div>
@@ -504,7 +554,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
             </div>
 
             {/* Quick Status Filters */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <span className="text-base text-gray-600">Show:</span>
               {['all', 'Published', 'Draft', 'Closed', 'Disabled', 'Archived'].map((status) => (
                 <button
@@ -520,18 +570,49 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 </button>
               ))}
 
+              {/* Creation Method Toggle - AI vs Manual */}
+              <div className="flex items-center gap-2 ml-4 border-l border-gray-300 pl-4">
+                <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setCreationMethodFilter(creationMethodFilter === 'ai' ? null : 'ai')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                      creationMethodFilter === 'ai'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    AI Generated
+                  </button>
+                  <button
+                    onClick={() => setCreationMethodFilter(creationMethodFilter === 'manual' ? null : 'manual')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                      creationMethodFilter === 'manual'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <Edit className="w-4 h-4" />
+                    Manual
+                  </button>
+                </div>
+              </div>
+
               {/* Clear Filters */}
               {(searchQuery || activeFiltersCount > 0) && (
                 <button
                   onClick={() => {
                     setSearchQuery('');
                     setStatusFilter('all');
+                    setCreationMethodFilter(null);
                     setLocationFilter('all');
                     setDepartmentFilter('all');
+                    setIndustryFilter('all');
                     setExperienceFilter('all');
                     setEmploymentTypeFilter('all');
                     setApplicantsFilter('all');
-                    setDatePostedFilter('all');
+                    setDatePostedFromFilter('');
+                    setDatePostedToFilter('');
                     setSalaryRangeFilter('all');
                   }}
                   className="ml-auto text-base text-red-600 hover:text-red-700 flex items-center gap-1"
@@ -596,6 +677,63 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                       </select>
                     </div>
                   )}
+
+                  {/* Industry */}
+                  {uniqueIndustries.length > 0 && (
+                    <div>
+                      <label className="block text-base text-gray-700 mb-2 font-medium">Industry</label>
+                      <select
+                        value={industryFilter}
+                        onChange={(e) => setIndustryFilter(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                      >
+                        <option value="all">All Industries</option>
+                        {uniqueIndustries.map(industry => (
+                          <option key={industry} value={industry}>{industry}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Experience */}
+                  <div>
+                    <label className="block text-base text-gray-700 mb-2 font-medium">Experience</label>
+                    <select
+                      value={experienceFilter}
+                      onChange={(e) => setExperienceFilter(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                    >
+                      <option value="all">All Levels</option>
+                      <option value="entry">Entry Level (0-2 years)</option>
+                      <option value="junior">Junior Level (2-4 years)</option>
+                      <option value="mid">Mid Level (5-7 years)</option>
+                      <option value="senior">Senior Level (8-10 years)</option>
+                      <option value="architect">Architect Level (10+ years)</option>
+                      <option value="management">Management Level (10+ years)</option>
+                    </select>
+                  </div>
+
+                  {/* Posted From Date */}
+                  <div>
+                    <label className="block text-base text-gray-700 mb-2 font-medium">Posted From</label>
+                    <input
+                      type="date"
+                      value={datePostedFromFilter}
+                      onChange={(e) => setDatePostedFromFilter(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                    />
+                  </div>
+
+                  {/* Posted To Date */}
+                  <div>
+                    <label className="block text-base text-gray-700 mb-2 font-medium">Posted To</label>
+                    <input
+                      type="date"
+                      value={datePostedToFilter}
+                      onChange={(e) => setDatePostedToFilter(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -768,10 +906,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           <MapPin className="w-5 h-5 text-gray-400" />
                           <span>{job.location && job.location.trim() ? job.location : '-'}</span>
                         </div>
-                        {job.employmentType && (
+                        <div className="flex items-center gap-3 text-base text-gray-600">
+                          <Briefcase className="w-5 h-5 text-gray-400" />
+                          <span>{job.employmentType || '-'}</span>
+                        </div>
+                        {(job as any).workMode && (
                           <div className="flex items-center gap-3 text-base text-gray-600">
-                            <Clock className="w-5 h-5 text-gray-400" />
-                            <span>{job.employmentType}</span>
+                            <Users className="w-5 h-5 text-gray-400" />
+                            <span className="capitalize">{(job as any).workMode}</span>
                           </div>
                         )}
                         {job.experience && (
@@ -976,10 +1118,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                             <MapPin className="w-5 h-5 text-gray-400" />
                             {job.location && job.location.trim() ? job.location : '-'}
                           </span>
-                          {job.employmentType && (
+                          <span className="flex items-center gap-2">
+                            <Briefcase className="w-5 h-5 text-gray-400" />
+                            {job.employmentType || '-'}
+                          </span>
+                          {(job as any).workMode && (
                             <span className="flex items-center gap-2">
-                              <Clock className="w-5 h-5 text-gray-400" />
-                              {job.employmentType}
+                              <Users className="w-5 h-5 text-gray-400" />
+                              <span className="capitalize">{(job as any).workMode}</span>
                             </span>
                           )}
                           {job.experience && (
@@ -1174,7 +1320,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 <button
                   onClick={() => {
                     if (quotaInfo && quotaInfo.remaining <= 0) {
-                      alert(`Job publishing limit reached (${quotaInfo.used}/${quotaInfo.limit}). Please upgrade your plan to create more jobs.`);
+                      setShowQuotaModal(true);
                       return;
                     }
                     onCreateNew();
@@ -1283,6 +1429,40 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
             setSelectedJobForAIMatch(null);
           }}
         />
+      )}
+
+      {/* Quota Exceeded Modal */}
+      {showQuotaModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Briefcase className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Insufficient Units</h3>
+              <p className="text-gray-600 mb-6">
+                You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowQuotaModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowQuotaModal(false);
+                    window.location.href = '/subscription/current-plan';
+                  }}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium"
+                >
+                  Upgrade Plan
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

@@ -10,6 +10,7 @@ function JDCreationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const jdId = searchParams.get('id');
+  const stageFromUrl = searchParams.get('stage') as 'create' | 'extract' | 'review' | null;
 
   const [editingJD, setEditingJD] = useState<JDResponse | null>(null);
   const [loading, setLoading] = useState(!!jdId);
@@ -59,7 +60,7 @@ function JDCreationContent() {
         title: editingJD.title,
         description: editingJD.description,
         status: editingJD.status,  // Pass status to determine if draft or published
-        creation_stage: editingJD.creation_stage || 'create',
+        creation_stage: stageFromUrl || editingJD.creation_stage || 'create',  // URL stage takes priority
         must_have_skills: editingJD.must_have_skills,
         nice_to_have_skills: editingJD.nice_to_have_skills,
         education_requirements: editingJD.education_requirements,

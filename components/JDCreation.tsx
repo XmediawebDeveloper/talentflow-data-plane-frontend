@@ -11,6 +11,7 @@ import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -261,6 +262,37 @@ const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkill
   );
 };
 
+// Fallback master data in case API fails or returns empty
+const FALLBACK_EXPERIENCE_LEVELS: ExperienceLevel[] = [
+  { id: 1, code: 'entry', label: 'Entry Level (0-2 Years)', min_years: 0, max_years: 2, sort_order: 1, is_active: true },
+  { id: 2, code: 'junior', label: 'Junior Level (2-4 Years)', min_years: 2, max_years: 4, sort_order: 2, is_active: true },
+  { id: 3, code: 'mid', label: 'Mid Level (5-7 Years)', min_years: 5, max_years: 7, sort_order: 3, is_active: true },
+  { id: 4, code: 'senior', label: 'Senior Level (7-10 Years)', min_years: 7, max_years: 10, sort_order: 4, is_active: true },
+  { id: 5, code: 'architect', label: 'Architect Level (10+ Years)', min_years: 10, max_years: null, sort_order: 5, is_active: true },
+  { id: 6, code: 'management', label: 'Management Level (10+ Years)', min_years: 10, max_years: null, sort_order: 6, is_active: true },
+];
+
+const FALLBACK_EDUCATION_LEVELS: EducationLevel[] = [
+  { id: 1, code: 'diploma', label: 'Diploma', level: 1, sort_order: 1, is_active: true },
+  { id: 2, code: 'associate', label: 'Associate Degree', level: 2, sort_order: 2, is_active: true },
+  { id: 3, code: 'bachelors', label: "Bachelor's Degree", level: 3, sort_order: 3, is_active: true },
+  { id: 4, code: 'masters', label: "Master's Degree", level: 4, sort_order: 4, is_active: true },
+  { id: 5, code: 'doctorate', label: 'Doctorate / PhD', level: 5, sort_order: 5, is_active: true },
+  { id: 6, code: 'none', label: 'No Formal Education', level: 0, sort_order: 6, is_active: true },
+  { id: 7, code: 'others', label: 'Other', level: 0, sort_order: 7, is_active: true },
+];
+
+const FALLBACK_INDUSTRY_TYPES: IndustryType[] = [
+  { id: 1, code: 'technology', label: 'Information Technology', sort_order: 1, is_active: true },
+  { id: 2, code: 'finance', label: 'Finance & Banking', sort_order: 2, is_active: true },
+  { id: 3, code: 'healthcare', label: 'Healthcare & Medical', sort_order: 3, is_active: true },
+  { id: 4, code: 'manufacturing', label: 'Manufacturing', sort_order: 4, is_active: true },
+  { id: 5, code: 'retail', label: 'Retail & E-commerce', sort_order: 5, is_active: true },
+  { id: 6, code: 'education', label: 'Education', sort_order: 6, is_active: true },
+  { id: 7, code: 'consulting', label: 'Consulting', sort_order: 7, is_active: true },
+  { id: 8, code: 'others', label: 'Other', sort_order: 99, is_active: true },
+];
+
 export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }: JDCreationProps = {}) {
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
@@ -364,7 +396,63 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const [validationErrors, setValidationErrors] = useState<{
     mustHaveSkills?: string;
     mustHaveComments?: string;
+    salaryRange?: string;
   }>({});
+
+  // Helper function to parse salary value (handles LPA, L, K, commas, ₹)
+  const parseSalaryValue = (value: string): number | null => {
+    if (!value || value.trim() === '') return null;
+
+    // Remove ₹, Rs, commas, spaces
+    let cleaned = value.replace(/[₹,\s]/g, '').replace(/Rs\.?/gi, '').trim();
+
+    // Handle LPA (Lakhs Per Annum) - multiply by 100000
+    if (/lpa$/i.test(cleaned)) {
+      const num = parseFloat(cleaned.replace(/lpa$/i, ''));
+      return isNaN(num) ? null : num * 100000;
+    }
+
+    // Handle L or Lakhs - multiply by 100000
+    if (/l(akhs?)?$/i.test(cleaned)) {
+      const num = parseFloat(cleaned.replace(/l(akhs?)?$/i, ''));
+      return isNaN(num) ? null : num * 100000;
+    }
+
+    // Handle K or thousands - multiply by 1000
+    if (/k$/i.test(cleaned)) {
+      const num = parseFloat(cleaned.replace(/k$/i, ''));
+      return isNaN(num) ? null : num * 1000;
+    }
+
+    // Handle Cr or Crores - multiply by 10000000
+    if (/cr(ores?)?$/i.test(cleaned)) {
+      const num = parseFloat(cleaned.replace(/cr(ores?)?$/i, ''));
+      return isNaN(num) ? null : num * 10000000;
+    }
+
+    // Plain number
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? null : num;
+  };
+
+  // Validate salary range
+  const validateSalaryRange = (from: string, to: string): string | undefined => {
+    const minSalary = parseSalaryValue(from);
+    const maxSalary = parseSalaryValue(to);
+
+    // If both are empty, no error
+    if (minSalary === null && maxSalary === null) return undefined;
+
+    // If only one is filled, that's okay
+    if (minSalary === null || maxSalary === null) return undefined;
+
+    // Both are filled - validate range
+    if (minSalary >= maxSalary) {
+      return 'Minimum salary must be less than maximum salary';
+    }
+
+    return undefined;
+  };
 
   // Track if user has proceeded to extract stage (to disable regenerate button)
   const [hasProceededToExtract, setHasProceededToExtract] = useState(false);
@@ -377,11 +465,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastAutosaveTime, setLastAutosaveTime] = useState<Date | null>(null);
 
-  // Master data state
-  const [experienceLevels, setExperienceLevels] = useState<ExperienceLevel[]>([]);
-  const [educationLevels, setEducationLevels] = useState<EducationLevel[]>([]);
-  const [industryTypes, setIndustryTypes] = useState<IndustryType[]>([]);
-  const [masterDataLoading, setMasterDataLoading] = useState(true);
+  // Unsaved changes tracking
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+
+  // Master data state - initialized with fallback data so dropdowns work immediately
+  const [experienceLevels, setExperienceLevels] = useState<ExperienceLevel[]>(FALLBACK_EXPERIENCE_LEVELS);
+  const [educationLevels, setEducationLevels] = useState<EducationLevel[]>(FALLBACK_EDUCATION_LEVELS);
+  const [industryTypes, setIndustryTypes] = useState<IndustryType[]>(FALLBACK_INDUSTRY_TYPES);
+  const [masterDataLoading, setMasterDataLoading] = useState(false);  // Set to false since we have fallback data
 
   // Fetch master data on mount
   useEffect(() => {
@@ -393,11 +486,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           experience_levels: data.experience_levels?.map(e => e.code),
           industry_types: data.industry_types?.length
         });
-        setExperienceLevels(data.experience_levels);
-        setEducationLevels(data.education_levels);
-        setIndustryTypes(data.industry_types);
+
+        // Use API data if available, otherwise use fallback
+        setExperienceLevels(data.experience_levels?.length > 0 ? data.experience_levels : FALLBACK_EXPERIENCE_LEVELS);
+        setEducationLevels(data.education_levels?.length > 0 ? data.education_levels : FALLBACK_EDUCATION_LEVELS);
+        setIndustryTypes(data.industry_types?.length > 0 ? data.industry_types : FALLBACK_INDUSTRY_TYPES);
+
+        if (!data.experience_levels?.length) {
+          console.log('[TalentFlow] No experience levels from API, using fallback');
+        }
       } catch (error) {
         console.log('[TalentFlow] Failed to fetch master data, using fallback:', error);
+        // Use fallback data on error
+        setExperienceLevels(FALLBACK_EXPERIENCE_LEVELS);
+        setEducationLevels(FALLBACK_EDUCATION_LEVELS);
+        setIndustryTypes(FALLBACK_INDUSTRY_TYPES);
       } finally {
         setMasterDataLoading(false);
       }
@@ -461,6 +564,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
         setAutosaveStatus('saved');
         setLastAutosaveTime(new Date());
+        setHasUnsavedChanges(false); // Clear unsaved changes after successful save
 
         // Reset status after 3 seconds
         setTimeout(() => {
@@ -479,6 +583,62 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     return () => clearTimeout(autosaveTimer);
   }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing, isPublished]);
 
+  // Track changes for unsaved changes warning
+  useEffect(() => {
+    if (jobTitle.trim() || aiPrompt.trim() || manualJD.trim() || generatedJD.trim()) {
+      setHasUnsavedChanges(true);
+    }
+  }, [jobTitle, aiPrompt, manualJD, generatedJD]);
+
+  // Warn before closing browser tab/window if there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges && !isPublished) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges, isPublished]);
+
+  // Intercept navigation clicks (menu items, links, etc.) if there are unsaved changes
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      // Only intercept if there are unsaved changes and not published
+      if (!hasUnsavedChanges || isPublished) {
+        return;
+      }
+
+      // Find the clicked link/anchor
+      let target = e.target as HTMLElement;
+      while (target && target !== document.body) {
+        if (target.tagName === 'A' || target.getAttribute('role') === 'link') {
+          const href = target.getAttribute('href');
+
+          // Check if it's a navigation link (not # anchors or external links)
+          if (href && href.startsWith('/') && !href.startsWith('/#')) {
+            // Prevent default navigation
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Store the target URL and show dialog
+            setPendingNavigation(href);
+            setShowUnsavedDialog(true);
+            return;
+          }
+        }
+        target = target.parentElement as HTMLElement;
+      }
+    };
+
+    // Attach to document to catch all clicks
+    document.addEventListener('click', handleClick, true);
+    return () => document.removeEventListener('click', handleClick, true);
+  }, [hasUnsavedChanges, isPublished]);
+
   const handleGenerateJD = async () => {
     // Note: Quota check moved to publish action - generation doesn't consume quota
     setIsGenerating(true);
@@ -489,8 +649,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       const response = await jdService.generate(prompt);
 
       if (response?.description) {
-        // Update job title if AI provided a better one
-        if (response.title && !jobTitle) {
+        // Update job title if AI provided one
+        if (response.title) {
           setJobTitle(response.title);
         }
         setGeneratedJD(response.description);
@@ -602,61 +762,173 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         experience_max: params.experience_max,
         experience_level: params.experience_level
       });
+      console.log('[TalentFlow] Mandatory flags from API:', {
+        experience_mandatory: params.experience_mandatory,
+        education_mandatory: params.education_mandatory,
+        industry_mandatory: params.industry_mandatory
+      });
+      console.log('[TalentFlow] Will set UI checkboxes:', {
+        experienceRequired: params.experience_mandatory || false,
+        educationRequired: params.education_mandatory || false,
+        industryTypeRequired: params.industry_mandatory || false
+      });
+      console.log('[TalentFlow] Work settings:', {
+        work_mode: params.work_mode,
+        job_type: params.job_type
+      });
 
       // Map API response to component's ExtractedData format
       // Map experience to dropdown codes: '0-1', '1-3', '3-5', '5-7', '7-10', '10+'
       let experienceValue = '';
 
-      // Use typeof check to properly handle 0 as a valid value
-      const hasExpMin = typeof params.experience_min === 'number';
-      const hasExpMax = typeof params.experience_max === 'number';
+      // Convert experience values to numbers (API might return strings)
+      const expMin = params.experience_min !== null && params.experience_min !== undefined
+        ? Number(params.experience_min)
+        : null;
+      const expMax = params.experience_max !== null && params.experience_max !== undefined
+        ? Number(params.experience_max)
+        : null;
 
-      // Map experience to closest dropdown code
-      const mapToExperienceCode = (min: number, max: number | null): string => {
-        // Use the primary value (prefer min, fallback to max)
-        const primaryValue = min || max || 0;
+      // Check if we have valid numeric experience values
+      const hasExpMin = expMin !== null && !isNaN(expMin);
+      const hasExpMax = expMax !== null && !isNaN(expMax);
 
-        console.log('[TalentFlow] mapToExperienceCode input:', { min, max, primaryValue });
+      console.log('[TalentFlow] Experience conversion:', {
+        raw_min: params.experience_min,
+        raw_max: params.experience_max,
+        converted_min: expMin,
+        converted_max: expMax,
+        hasExpMin,
+        hasExpMax
+      });
 
-        // Map based on primary value
-        if (primaryValue >= 10) return '10+';
-        if (primaryValue >= 7) return '7-10';
-        if (primaryValue >= 5) return '5-7';
-        if (primaryValue >= 3) return '3-5';
-        if (primaryValue >= 1) return '1-3';
-        return '0-1';
+      // Map experience to predefined levels based on rules:
+      // Entry Level (0-2 Years), Junior Level (2-4 Years), Mid Level (5-7 Years),
+      // Senior Level (7-10 Years), Architect Level (10+), Management Level (10+)
+      const mapToExperienceCode = (min: number, max: number | null, jdText: string): string => {
+        console.log('[TalentFlow] mapToExperienceCode input:', { min, max });
+
+        // Check for 10+ years - need to determine if Architect or Management
+        if (min >= 10 || (max && max >= 10)) {
+          const jdLower = jdText.toLowerCase();
+          // Check for architecture-related keywords
+          const isArchitect = jdLower.includes('architect') ||
+                              jdLower.includes('system design') ||
+                              jdLower.includes('architecture') ||
+                              jdLower.includes('technical design') ||
+                              jdLower.includes('solution design');
+          // Check for management-related keywords
+          const isManagement = jdLower.includes('management') ||
+                               jdLower.includes('leadership') ||
+                               jdLower.includes('strategic planning') ||
+                               jdLower.includes('team lead') ||
+                               jdLower.includes('director') ||
+                               jdLower.includes('head of');
+
+          if (isArchitect && !isManagement) return 'architect';
+          if (isManagement) return 'management';
+          return 'senior'; // Default to senior if 10+ but no specific keywords
+        }
+
+        // 7-10 years = Senior Level
+        if (min >= 7 || (max && max >= 7 && min >= 5)) return 'senior';
+
+        // 5-7 years = Mid Level
+        if (min >= 5 || (max && max >= 5 && min >= 3)) return 'mid';
+
+        // 2-4 years = Junior Level
+        if (min >= 2 || (max && max >= 2 && min >= 1)) return 'junior';
+
+        // 0-2 years = Entry Level
+        return 'entry';
       };
 
       if (hasExpMin || hasExpMax) {
-        const min = hasExpMin ? params.experience_min : 0;
-        const max = hasExpMax ? params.experience_max : null;
-        experienceValue = mapToExperienceCode(min, max);
+        const min = hasExpMin ? expMin! : 0;
+        const max = hasExpMax ? expMax : null;
+        experienceValue = mapToExperienceCode(min, max, jdText);
         console.log('[TalentFlow] Mapped experience:', { min, max, code: experienceValue });
       }
 
       // Fall back to experience_level mapping if no min/max
       if (!experienceValue && params.experience_level) {
         const levelMap: Record<string, string> = {
-          'entry': '0-1',
-          'fresher': '0-1',
-          'junior': '1-3',
-          'mid': '3-5',
-          'senior': '5-7',
-          'lead': '7-10',
-          'architect': '10+',
-          'management': '10+',
-          'principal': '10+',
+          // Entry Level keywords
+          'entry': 'entry',
+          'entrylevel': 'entry',
+          'fresher': 'entry',
+          'fresh': 'entry',
+          'noexperience': 'entry',
+          'graduate': 'entry',
+          'trainee': 'entry',
+          // Junior Level keywords
+          'junior': 'junior',
+          'juniorlevel': 'junior',
+          'associate': 'junior',
+          // Mid Level keywords
+          'mid': 'mid',
+          'midlevel': 'mid',
+          'intermediate': 'mid',
+          'experienced': 'mid',
+          // Senior Level keywords
+          'senior': 'senior',
+          'seniorlevel': 'senior',
+          'lead': 'senior',
+          'teamlead': 'senior',
+          'principal': 'senior',
+          // Architect Level keywords
+          'architect': 'architect',
+          'solutionarchitect': 'architect',
+          'technicalarchitect': 'architect',
+          'systemarchitect': 'architect',
+          'architectlevel': 'architect',
+          // Management Level keywords
+          'management': 'management',
+          'manager': 'management',
+          'director': 'management',
+          'head': 'management',
+          'executive': 'management',
+          'vp': 'management',
+          'cto': 'management',
+          'ceo': 'management',
+          'managementlevel': 'management',
         };
-        // Handle various formats like "mid", "Mid", "Mid Level", "mid-level"
+        // Handle various formats like "mid", "Mid", "Mid Level", "mid-level", "mid_level"
         const normalizedLevel = params.experience_level.toLowerCase().replace(/[^a-z]/g, '');
-        experienceValue = levelMap[normalizedLevel] || '3-5';  // Default to 3-5 if unknown
-        console.log('[TalentFlow] Mapped experience from level:', { level: params.experience_level, code: experienceValue });
+        experienceValue = levelMap[normalizedLevel] || '';
+
+        // If still not found, try to extract the base level from the string
+        if (!experienceValue) {
+          if (normalizedLevel.includes('entry')) experienceValue = 'entry';
+          else if (normalizedLevel.includes('junior')) experienceValue = 'junior';
+          else if (normalizedLevel.includes('mid')) experienceValue = 'mid';
+          else if (normalizedLevel.includes('senior')) experienceValue = 'senior';
+          else if (normalizedLevel.includes('architect')) experienceValue = 'architect';
+          else if (normalizedLevel.includes('management') || normalizedLevel.includes('manager')) experienceValue = 'management';
+        }
+
+        if (experienceValue) {
+          console.log('[TalentFlow] Mapped experience from level:', { level: params.experience_level, code: experienceValue });
+        }
       }
 
-      // Final fallback - always set a default
+      // Final fallback: use experience_level directly if it's a valid code
+      if (!experienceValue && params.experience_level) {
+        const validCodes = ['entry', 'junior', 'mid', 'senior', 'architect', 'management'];
+        const directCode = params.experience_level.toLowerCase();
+        if (validCodes.includes(directCode)) {
+          experienceValue = directCode;
+          console.log('[TalentFlow] Using experience_level directly:', experienceValue);
+        }
+      }
+
+      // Log if still no experience extracted
       if (!experienceValue) {
-        experienceValue = '3-5';
-        console.log('[TalentFlow] Using default experience: 3-5');
+        console.log('[TalentFlow] No experience extracted, params were:', {
+          experience_min: params.experience_min,
+          experience_max: params.experience_max,
+          experience_level: params.experience_level
+        });
       }
 
       // Map education to dropdown codes: 'diploma', 'associate', 'bachelors', 'masters', 'doctorate', 'none', 'others'
@@ -695,19 +967,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       };
 
       let educationValue = mapToEducationCode(params.education_requirements?.degree);
-      // Default to bachelors if no education found
+      // No fallback - leave empty if not extracted
       if (!educationValue) {
-        educationValue = 'bachelors';
-        console.log('[TalentFlow] Using default education: bachelors');
+        console.log('[TalentFlow] No education extracted, leaving empty');
       } else {
         console.log('[TalentFlow] Mapped education:', { degree: params.education_requirements?.degree, code: educationValue });
       }
 
-      // Map industry to lowercase
+      // Map industry to lowercase - no default fallback
       let industryValue = params.industry_type?.toLowerCase().replace(/[^a-z_]/g, '_') || '';
       if (!industryValue) {
-        industryValue = 'technology';
-        console.log('[TalentFlow] Using default industry: technology');
+        console.log('[TalentFlow] No industry extracted, leaving empty');
       } else {
         console.log('[TalentFlow] Mapped industry:', { industry: params.industry_type, code: industryValue });
       }
@@ -717,14 +987,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         mustHaveComments: params.must_have_comments || [],
         niceToHaveSkills: params.nice_to_have_skills || [],
         education: educationValue,
-        educationRequired: true,  // Auto-check since we always have a value
+        // Use API's mandatory flag for education
+        educationRequired: params.education_mandatory || false,
         experience: experienceValue,
-        experienceRequired: true,  // Auto-check since we always have a value
+        // Use API's mandatory flag for experience
+        experienceRequired: params.experience_mandatory || false,
         industryType: industryValue,
-        industryTypeRequired: true,  // Auto-check since we always have a value
+        // Use API's mandatory flag for industry
+        industryTypeRequired: params.industry_mandatory || false,
         allowOverqualified: false,
-        employmentType: 'full_time',  // Default value
-        workModel: 'onsite',  // Default value
+        employmentType: params.job_type || 'full_time',  // Use API response or default
+        workModel: params.work_mode || 'onsite',  // Use API response or default
         salaryFrom: params.salary_min ? params.salary_min.toString() : '',
         salaryTo: params.salary_max ? params.salary_max.toString() : '',
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || 'yearly',
@@ -742,6 +1015,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         codingRequired: params.coding_required === true,
         suggestedLanguages: params.suggested_languages || [],
       };
+
+      console.log('[TalentFlow] Final extracted data being set:', {
+        experience: extraction.experience,
+        experienceRequired: extraction.experienceRequired,
+        education: extraction.education,
+        educationRequired: extraction.educationRequired,
+        industryType: extraction.industryType,
+        industryTypeRequired: extraction.industryTypeRequired,
+        mustHaveSkills: extraction.mustHaveSkills.length + ' skills',
+        mustHaveComments: extraction.mustHaveComments.length + ' comments',
+        niceToHaveSkills: extraction.niceToHaveSkills.length + ' skills',
+        employmentType: extraction.employmentType,
+        workModel: extraction.workModel,
+        salaryRange: `${extraction.salaryFrom}-${extraction.salaryTo}`,
+      });
 
       console.log('[TalentFlow] Extracted coding fields:', {
         codingRequired: extraction.codingRequired,
@@ -1032,15 +1320,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       errors.mustHaveComments = 'At least one Must-Have Comment is required';
     }
 
-    if (!extractedData.experience) {
-      missingFields.push('Experience');
-    }
-    if (!extractedData.education) {
-      missingFields.push('Education');
-    }
-    if (!extractedData.industryType) {
-      missingFields.push('Industry Type');
-    }
+    // Experience, Education, and Industry Type are optional - no validation required
 
     // Set validation errors for inline display
     setValidationErrors(errors);
@@ -1262,6 +1542,27 @@ Use professional language, clear formatting, and make it engaging for candidates
     }
   };
 
+  // Helper function to get experience label from master data
+  const getExperienceLabel = (code: string): string => {
+    if (!code) return 'Not specified';
+    const level = experienceLevels.find(l => l.code === code);
+    return level?.label || code.charAt(0).toUpperCase() + code.slice(1) + ' Level';
+  };
+
+  // Helper function to get education label from master data
+  const getEducationLabel = (code: string): string => {
+    if (!code) return 'Not specified';
+    const level = educationLevels.find(l => l.code === code);
+    return level?.label || code.charAt(0).toUpperCase() + code.slice(1).replace('-', ' ');
+  };
+
+  // Helper function to get industry label from master data
+  const getIndustryLabel = (code: string): string => {
+    if (!code) return 'Not specified';
+    const industry = industryTypes.find(i => i.code === code);
+    return industry?.label || code.charAt(0).toUpperCase() + code.slice(1).replace(/_/g, ' ');
+  };
+
   // JD12: Compute validation status for review screen
   const getValidationStatus = () => {
     const missingFields: string[] = [];
@@ -1269,14 +1570,13 @@ Use professional language, clear formatting, and make it engaging for candidates
     if (extractedData.mustHaveSkills.length === 0) {
       missingFields.push('At least one Must-Have Skill');
     }
-    if (!extractedData.experience) {
-      missingFields.push('Experience');
-    }
-    if (!extractedData.education) {
-      missingFields.push('Education');
-    }
-    if (!extractedData.industryType) {
-      missingFields.push('Industry Type');
+
+    // Experience, Education, and Industry Type are optional - no validation required
+
+    // Validate salary range
+    const salaryError = validateSalaryRange(extractedData.salaryFrom || '', extractedData.salaryTo || '');
+    if (salaryError) {
+      missingFields.push('Valid Salary Range (min must be less than max)');
     }
 
     return {
@@ -1522,6 +1822,42 @@ Use professional language, clear formatting, and make it engaging for candidates
     }
   };
 
+  // Handle "Save Draft" button in unsaved changes dialog
+  const handleSaveAndNavigate = async () => {
+    setShowUnsavedDialog(false);
+    setIsNavigatingBack(true);
+
+    // Save draft first
+    await handleSaveDraft();
+
+    // Then navigate to the stored URL
+    if (pendingNavigation) {
+      router.push(pendingNavigation);
+    }
+
+    setPendingNavigation(null);
+    setIsNavigatingBack(false);
+  };
+
+  // Handle "Discard" button in unsaved changes dialog
+  const handleDiscardAndNavigate = () => {
+    setShowUnsavedDialog(false);
+    setHasUnsavedChanges(false);
+
+    // Navigate without saving
+    if (pendingNavigation) {
+      router.push(pendingNavigation);
+    }
+
+    setPendingNavigation(null);
+  };
+
+  // Handle dialog cancel (X button or clicking outside)
+  const handleCancelDialog = () => {
+    setShowUnsavedDialog(false);
+    setPendingNavigation(null);
+  };
+
   // Save JD as draft
   const handleSaveDraft = async () => {
     // Validate job title has at least 1 non-space character
@@ -1618,6 +1954,7 @@ Use professional language, clear formatting, and make it engaging for candidates
       }
 
       setIsSavingDraft(false);
+      setHasUnsavedChanges(false); // Clear unsaved changes after successful save
 
       toast.success({
         title: isEditingPublished ? 'New draft created!' : 'Draft saved!',
@@ -1706,6 +2043,14 @@ Use professional language, clear formatting, and make it engaging for candidates
 
       setJobTitle(editingJD.title);
       setGeneratedJD(editingJD.description);
+
+      // Populate AI prompt field with existing description in edit mode
+      if (editingJD.creation_method === 'ai_generated') {
+        setAiPrompt(editingJD.description || '');
+      } else if (editingJD.creation_method === 'manual') {
+        setManualJD(editingJD.description || '');
+      }
+
       setStep(editingJD.creation_stage);
       console.log('[TalentFlow] Set step to:', editingJD.creation_stage);
 
@@ -1716,22 +2061,51 @@ Use professional language, clear formatting, and make it engaging for candidates
 
       // Load extracted data if we're past the create step
       if (editingJD.creation_stage !== 'create') {
-        const hasEducation = !!(editingJD.education_requirements?.degree);
-        const hasExperience = !!(editingJD.experience_min || editingJD.experience_max);
-        const hasIndustry = !!(editingJD.industry_type);
+        // Calculate actual values first, then set Required based on whether value exists
+        const educationValue = editingJD.education_requirements?.degree || '';
+
+        // Map experience_min/max to level codes (entry, junior, mid, senior, architect, management)
+        const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
+          if (!min) return '';
+
+          // 10+ years
+          if (min >= 10) {
+            // Check JD description for architect/management keywords
+            const desc = (editingJD.description || '').toLowerCase();
+            const isArchitect = desc.includes('architect') || desc.includes('architecture');
+            const isManagement = desc.includes('manager') || desc.includes('management') || desc.includes('director') || desc.includes('lead');
+
+            if (isArchitect && !isManagement) return 'architect';
+            if (isManagement) return 'management';
+            return 'senior';
+          }
+
+          // 7-10 years = Senior
+          if (min >= 7) return 'senior';
+
+          // 5-7 years = Mid
+          if (min >= 5) return 'mid';
+
+          // 2-4 years = Junior
+          if (min >= 2) return 'junior';
+
+          // 0-2 years = Entry
+          return 'entry';
+        };
+
+        const experienceValue = mapExpToLevel(editingJD.experience_min, editingJD.experience_max);
+        const industryValue = editingJD.industry_type || '';
 
         setExtractedData(prev => ({
           ...prev,
           mustHaveSkills: editingJD.must_have_skills || [],
           niceToHaveSkills: editingJD.nice_to_have_skills || [],
-          education: editingJD.education_requirements?.degree || '',
-          educationRequired: hasEducation,  // Auto-check if value exists
-          experience: editingJD.experience_min
-            ? `${editingJD.experience_min}${editingJD.experience_max ? `-${editingJD.experience_max}` : '+'}`
-            : '',
-          experienceRequired: hasExperience,  // Auto-check if value exists
-          industryType: editingJD.industry_type || '',
-          industryTypeRequired: hasIndustry,  // Auto-check if value exists
+          education: educationValue,
+          educationRequired: false,  // Default to false - user can enable if needed
+          experience: experienceValue,
+          experienceRequired: false,  // Default to false - user can enable if needed
+          industryType: industryValue,
+          industryTypeRequired: false,  // Default to false - user can enable if needed
           department: editingJD.department || '',
           salaryFrom: editingJD.salary_min?.toString() || '',
           salaryTo: editingJD.salary_max?.toString() || '',
@@ -1902,13 +2276,13 @@ Use professional language, clear formatting, and make it engaging for candidates
 
                     <div>
                       <label className="block text-sm text-gray-700 mb-2">
-                        AI Prompt – Quick Job Details <span className="text-red-500">*</span>
+                        AI Prompt – Quick Job Details {!editingId && <span className="text-red-500">*</span>}
                       </label>
                       <textarea
                         value={aiPrompt}
                         onChange={(e) => setAiPrompt(e.target.value)}
                         maxLength={VALIDATION.AI_PROMPT.max}
-                        placeholder="Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"
+                        placeholder={editingId ? "Add additional details or context to regenerate the job description..." : "Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"}
                         rows={12}
                         className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
                           aiPrompt.length > 0 && aiPrompt.length > VALIDATION.AI_PROMPT.max
@@ -1918,14 +2292,15 @@ Use professional language, clear formatting, and make it engaging for candidates
                       />
                       <div className="flex justify-between mt-1">
                         <p className="text-xs text-gray-500">
-                          {aiPrompt.length > 0 && aiPrompt.length < VALIDATION.AI_PROMPT.min && `Tip: Add more details (${VALIDATION.AI_PROMPT.min - aiPrompt.length} more chars) for better results`}
+                          {aiPrompt.length > 0 && aiPrompt.length < VALIDATION.AI_PROMPT.min && !editingId && `Tip: Add more details (${VALIDATION.AI_PROMPT.min - aiPrompt.length} more chars) for better results`}
+                          {editingId && aiPrompt.length === 0 && 'Optional: Add details to customize the regenerated JD'}
                         </p>
                         <p className={`text-xs ${aiPrompt.length > VALIDATION.AI_PROMPT.max ? 'text-red-500' : 'text-gray-500'}`}>
                           {aiPrompt.length}/{VALIDATION.AI_PROMPT.max}
                         </p>
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        💡 Tip: Include details like experience level, key skills, responsibilities, location, team size, or any specific requirements
+                        💡 Tip: {editingId ? 'Add any changes or additional requirements to regenerate the JD' : 'Include details like experience level, key skills, responsibilities, location, team size, or any specific requirements'}
                       </p>
                     </div>
 
@@ -1947,7 +2322,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                       onClick={handleGenerateJD}
                       disabled={
                         !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
-                        !aiPrompt.trim() ||
+                        (!editingId && !aiPrompt.trim()) ||
                         aiPrompt.length > VALIDATION.AI_PROMPT.max ||
                         isGenerating ||
                         hasProceededToExtract
@@ -2481,7 +2856,7 @@ Use professional language, clear formatting, and make it engaging for candidates
               <div className="grid grid-cols-3 gap-6 mb-8">
                 {/* Experience */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Experience <span className="text-red-500">*</span></h3>
+                  <h3 className="text-gray-900 mb-4">Experience {extractedData.experienceRequired && <span className="text-red-500">*</span>}</h3>
                   <select
                     value={extractedData.experience}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, experience: e.target.value }))}
@@ -2506,7 +2881,7 @@ Use professional language, clear formatting, and make it engaging for candidates
 
                 {/* Education */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Education <span className="text-red-500">*</span></h3>
+                  <h3 className="text-gray-900 mb-4">Education {extractedData.educationRequired && <span className="text-red-500">*</span>}</h3>
                   <select
                     value={extractedData.education}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, education: e.target.value }))}
@@ -2531,7 +2906,7 @@ Use professional language, clear formatting, and make it engaging for candidates
 
                 {/* Industry Type */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Industry Type <span className="text-red-500">*</span></h3>
+                  <h3 className="text-gray-900 mb-4">Industry Type {extractedData.industryTypeRequired && <span className="text-red-500">*</span>}</h3>
                   <select
                     value={extractedData.industryType}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, industryType: e.target.value }))}
@@ -2564,9 +2939,17 @@ Use professional language, clear formatting, and make it engaging for candidates
                       <input
                         type="text"
                         value={extractedData.salaryFrom || ''}
-                        onChange={(e) => setExtractedData(prev => ({ ...prev, salaryFrom: e.target.value }))}
-                        placeholder="From"
-                        className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setExtractedData(prev => ({ ...prev, salaryFrom: newValue }));
+                          // Validate salary range
+                          const error = validateSalaryRange(newValue, extractedData.salaryTo || '');
+                          setValidationErrors(prev => ({ ...prev, salaryRange: error }));
+                        }}
+                        placeholder="From (e.g., 500000, 5L, 5LPA)"
+                        className={`w-full pl-7 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm ${
+                          validationErrors.salaryRange ? 'border-red-500' : 'border-gray-300'
+                        }`}
                       />
                     </div>
                     <span className="text-gray-400">–</span>
@@ -2575,9 +2958,17 @@ Use professional language, clear formatting, and make it engaging for candidates
                       <input
                         type="text"
                         value={extractedData.salaryTo || ''}
-                        onChange={(e) => setExtractedData(prev => ({ ...prev, salaryTo: e.target.value }))}
-                        placeholder="To"
-                        className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setExtractedData(prev => ({ ...prev, salaryTo: newValue }));
+                          // Validate salary range
+                          const error = validateSalaryRange(extractedData.salaryFrom || '', newValue);
+                          setValidationErrors(prev => ({ ...prev, salaryRange: error }));
+                        }}
+                        placeholder="To (e.g., 1000000, 10L, 10LPA)"
+                        className={`w-full pl-7 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm ${
+                          validationErrors.salaryRange ? 'border-red-500' : 'border-gray-300'
+                        }`}
                       />
                     </div>
                     <select
@@ -2591,6 +2982,12 @@ Use professional language, clear formatting, and make it engaging for candidates
                       <option value="yearly">Yearly</option>
                     </select>
                   </div>
+                  {validationErrors.salaryRange && (
+                    <p className="text-red-500 text-xs mt-2 flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center">!</span>
+                      {validationErrors.salaryRange}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -2997,26 +3394,43 @@ Use professional language, clear formatting, and make it engaging for candidates
               </div>
               <div className="p-8 bg-white">
                 <div className="prose prose-sm max-w-none">
-                  {/* Job Title */}
+                  {/* Job Title & Quick Info */}
                   <div className="mb-6 pb-6 border-b border-gray-200">
-                    <h1 className="text-3xl text-gray-900 mb-2">{jobTitle}</h1>
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
-                      {extractedData.locations.length > 0 && (
-                        <span>📍 {extractedData.locations[0].city}</span>
-                      )}
-                      {(extractedData.salaryFrom || extractedData.salaryTo) && (
-                        <span>💰 ₹{extractedData.salaryFrom ? parseInt(extractedData.salaryFrom).toLocaleString('en-IN') : '0'} - ₹{extractedData.salaryTo ? parseInt(extractedData.salaryTo).toLocaleString('en-IN') : '0'} / {extractedData.compensationType}</span>
+                    <h1 className="text-3xl text-gray-900 mb-3">{jobTitle}</h1>
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                      {extractedData.locations.length > 0 && extractedData.locations[0].city && (
+                        <span className="flex items-center gap-1">📍 {extractedData.locations[0].city}</span>
                       )}
                       {extractedData.experience && (
-                        <span>⏱️ {extractedData.experience} years exp</span>
+                        <span className="flex items-center gap-1">⏱️ {getExperienceLabel(extractedData.experience)}</span>
+                      )}
+                      {extractedData.education && (
+                        <span className="flex items-center gap-1">🎓 {getEducationLabel(extractedData.education)}</span>
+                      )}
+                      {extractedData.employmentType && (
+                        <span className="flex items-center gap-1">💼 {extractedData.employmentType === 'full_time' ? 'Full Time' : extractedData.employmentType === 'part_time' ? 'Part Time' : extractedData.employmentType === 'contract' ? 'Contract' : extractedData.employmentType}</span>
+                      )}
+                      {extractedData.workModel && (
+                        <span className="flex items-center gap-1">🏢 {extractedData.workModel === 'onsite' ? 'On-site' : extractedData.workModel === 'remote' ? 'Remote' : extractedData.workModel === 'hybrid' ? 'Hybrid' : extractedData.workModel}</span>
                       )}
                     </div>
+                    {(extractedData.salaryFrom || extractedData.salaryTo) && (
+                      <div className="mt-3 text-sm text-green-700 font-medium">
+                        💰 ₹{extractedData.salaryFrom ? parseInt(extractedData.salaryFrom).toLocaleString('en-IN') : '0'} - ₹{extractedData.salaryTo ? parseInt(extractedData.salaryTo).toLocaleString('en-IN') : '0'} / {extractedData.compensationType}
+                      </div>
+                    )}
                   </div>
 
                   {/* JD Content */}
                   <div className="markdown-content text-gray-700 leading-relaxed">
                     <ReactMarkdown>
-                      {mode === 'ai' ? generatedJD : manualJD}
+                      {(mode === 'ai' ? generatedJD : manualJD)
+                        .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
+                          match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
+                        )
+                        .replace(/\*\*Certifications\*\*[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
+                        .replace(/Certifications[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
+                      }
                     </ReactMarkdown>
                   </div>
                 </div>
@@ -3130,7 +3544,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                   {/* Experience */}
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="text-sm text-gray-600 mb-2">Experience</h4>
-                    <p className="text-gray-900">{extractedData.experience || 'Not specified'} years</p>
+                    <p className="text-gray-900">{getExperienceLabel(extractedData.experience)}</p>
                     <p className="text-xs text-gray-500 mt-1">
                       {extractedData.experienceRequired ? '✓ Required' : '○ Preferred'}
                     </p>
@@ -3139,7 +3553,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                   {/* Education */}
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="text-sm text-gray-600 mb-2">Education</h4>
-                    <p className="text-gray-900 capitalize">{extractedData.education?.replace('-', ' ') || 'Not specified'}</p>
+                    <p className="text-gray-900">{getEducationLabel(extractedData.education)}</p>
                     <p className="text-xs text-gray-500 mt-1">
                       {extractedData.educationRequired ? '✓ Required' : '○ Preferred'}
                     </p>
@@ -3148,7 +3562,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                   {/* Industry Type */}
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="text-sm text-gray-600 mb-2">Industry Type</h4>
-                    <p className="text-gray-900 capitalize">{extractedData.industryType || 'Not specified'}</p>
+                    <p className="text-gray-900">{getIndustryLabel(extractedData.industryType)}</p>
                     <p className="text-xs text-gray-500 mt-1">
                       {extractedData.industryTypeRequired ? '✓ Required' : '○ Preferred'}
                     </p>
@@ -3449,6 +3863,40 @@ Use professional language, clear formatting, and make it engaging for candidates
         )}
         </div>
       </div>
+
+      {/* Unsaved Changes Dialog */}
+      <Dialog open={showUnsavedDialog} onOpenChange={(open) => !open && handleCancelDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes. Would you like to save them as a draft before leaving?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={handleDiscardAndNavigate}
+              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Discard Changes
+            </button>
+            <button
+              onClick={handleSaveAndNavigate}
+              disabled={isSavingDraft}
+              className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isSavingDraft ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Draft'
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </DndProvider>
   );
