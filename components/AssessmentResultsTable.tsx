@@ -1,6 +1,10 @@
-import { useState } from 'react';
-import { Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, Eye, BarChart3, Calendar, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, Eye, BarChart3, Calendar, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive, Loader2 } from 'lucide-react';
 import React from 'react';
+import { assessmentService } from '@/lib/services/assessmentService';
+
+// AS-24: localStorage key for column preferences
+const COLUMN_PREFERENCES_KEY = 'assessment_results_column_preferences';
 
 interface AssessmentResult {
   id: string;
@@ -50,8 +54,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
 
-  // Column Selection
-  const [columns, setColumns] = useState<Column[]>([
+  // AS-24: Default columns configuration
+  const defaultColumns: Column[] = [
     { id: 'candidateName', label: 'Candidate Name', enabled: true },
     { id: 'email', label: 'Email', enabled: true },
     { id: 'phone', label: 'Phone', enabled: true },
@@ -62,9 +66,42 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     { id: 'completionTime', label: 'Time Taken', enabled: true },
     { id: 'invitedBy', label: 'Invited By', enabled: false },
     { id: 'invitedDate', label: 'Invited Date', enabled: false },
-  ]);
+  ];
+
+  // AS-24: Load column preferences from localStorage on mount
+  const [columns, setColumns] = useState<Column[]>(() => {
+    if (typeof window === 'undefined') return defaultColumns;
+    try {
+      const saved = localStorage.getItem(COLUMN_PREFERENCES_KEY);
+      if (saved) {
+        const savedColumns = JSON.parse(saved) as Column[];
+        // Merge saved preferences with default columns to handle new columns
+        return defaultColumns.map(defaultCol => {
+          const savedCol = savedColumns.find(sc => sc.id === defaultCol.id);
+          return savedCol ? { ...defaultCol, enabled: savedCol.enabled } : defaultCol;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load column preferences:', error);
+    }
+    return defaultColumns;
+  });
+
+  // AS-24: Save column preferences to localStorage when they change
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(COLUMN_PREFERENCES_KEY, JSON.stringify(columns));
+    } catch (error) {
+      console.error('Failed to save column preferences:', error);
+    }
+  }, [columns]);
 
   const [selectedResultDetail, setSelectedResultDetail] = useState<string | null>(null);
+
+  // AS-25/AS-26: PDF download states
+  const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
+  const [downloadingBulkPDF, setDownloadingBulkPDF] = useState(false);
 
   const enabledColumns = columns.filter(col => col.enabled);
 
@@ -118,14 +155,55 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     alert(`Exporting ${selectedResults.length > 0 ? selectedResults.length : filteredResults.length} assessment results to Excel with ${enabledColumns.length} columns`);
   };
 
-  const handleDownloadPDF = (resultId: string) => {
-    console.log('Downloading PDF for result:', resultId);
-    alert(`Downloading Assessment Report PDF for result: ${resultId}`);
+  // AS-25: Individual PDF download
+  const handleDownloadPDF = async (resultId: string) => {
+    if (downloadingPDF) return;
+
+    setDownloadingPDF(resultId);
+    try {
+      const blob = await assessmentService.exportPDF(resultId);
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Assessment_Report_${resultId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download PDF:', error);
+      alert('Failed to download PDF report. Please try again.');
+    } finally {
+      setDownloadingPDF(null);
+    }
   };
 
-  const handleDownloadBulkPDFs = () => {
-    console.log('Downloading bulk PDFs as ZIP:', selectedResults);
-    alert(`Downloading ${selectedResults.length} Assessment Reports as ZIP file`);
+  // AS-26: Bulk PDF download as ZIP
+  const handleDownloadBulkPDFs = async () => {
+    if (downloadingBulkPDF || selectedResults.length === 0) return;
+
+    setDownloadingBulkPDF(true);
+    try {
+      const blob = await assessmentService.exportBulkPDFs(selectedResults);
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      link.download = `Assessment_Reports_${timestamp}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download bulk PDFs:', error);
+      alert('Failed to download PDF reports. Please try again.');
+    } finally {
+      setDownloadingBulkPDF(false);
+    }
   };
 
   const handleViewDetails = (result: AssessmentResult) => {
@@ -202,10 +280,15 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               <>
                 <button
                   onClick={handleDownloadBulkPDFs}
-                  className="px-4 py-2 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2"
+                  disabled={downloadingBulkPDF}
+                  className="px-4 py-2 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Archive className="w-4 h-4" />
-                  Download PDFs ({selectedResults.length})
+                  {downloadingBulkPDF ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Archive className="w-4 h-4" />
+                  )}
+                  {downloadingBulkPDF ? 'Downloading...' : `Download PDFs (${selectedResults.length})`}
                 </button>
                 <button
                   onClick={handleExportExcel}
@@ -536,10 +619,15 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         </button>
                         <button
                           onClick={() => handleDownloadPDF(result.id)}
-                          className="p-1.5 text-gray-800 hover:bg-gray-50 rounded-md transition-colors"
+                          disabled={downloadingPDF === result.id}
+                          className="p-1.5 text-gray-800 hover:bg-gray-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Download PDF Report"
                         >
-                          <FileText className="w-4 h-4" />
+                          {downloadingPDF === result.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <FileText className="w-4 h-4" />
+                          )}
                         </button>
                       </div>
                     </td>
@@ -704,10 +792,15 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     </button>
                     <button
                       onClick={() => handleDownloadPDF(result.id)}
-                      className="flex-1 px-3 py-1.5 text-xs text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
+                      disabled={downloadingPDF === result.id}
+                      className="flex-1 px-3 py-1.5 text-xs text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <FileText className="w-3.5 h-3.5" />
-                      Download PDF
+                      {downloadingPDF === result.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <FileText className="w-3.5 h-3.5" />
+                      )}
+                      {downloadingPDF === result.id ? 'Downloading...' : 'Download PDF'}
                     </button>
                   </div>
 

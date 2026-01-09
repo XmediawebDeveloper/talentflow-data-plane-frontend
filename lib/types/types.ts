@@ -114,6 +114,8 @@ export interface Job {
   department?: string;
   industry_type?: string;
   experience?: string;
+  experience_min?: number; // Minimum years of experience
+  experience_max?: number; // Maximum years of experience
   applicants?: number;
   description?: string;
   skills?: string[];
@@ -128,4 +130,6 @@ export interface Job {
   created_at?: string; // ISO timestamp for sorting
   creation_method?: 'manual' | 'ai_generated'; // JD creation method
   creation_stage?: string; // Stage where draft JD was left off (create, skills, assessment, review)
+  coding_required?: boolean; // Whether JD requires coding assessment
+  supported_languages?: string[]; // Programming languages for coding assessment
 }

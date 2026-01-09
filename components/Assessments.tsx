@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Clock, Users, CheckCircle, FileText, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock } from 'lucide-react';
+import { Plus, Clock, Users, CheckCircle, FileText, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import AssessmentCreation from './AssessmentCreation';
 import AssessmentResults from './AssessmentResults';
@@ -75,9 +75,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Stats from API
   const [stats, setStats] = useState({
     total_assessments: 0,
+    total_ever_created: 0,
+    total_deleted: 0,
     active_assessments: 0,
+    draft_assessments: 0,
+    archived_assessments: 0,
     total_candidates_tested: 0,
     average_pass_rate: null as number | null,
+    average_score: null as number | null,
+    units_consumed: 0,
   });
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
@@ -148,9 +154,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         const response = statsResult.value;
         setStats({
           total_assessments: response.total_assessments,
+          total_ever_created: response.total_ever_created || response.total_assessments,
+          total_deleted: response.total_deleted || 0,
           active_assessments: response.active_assessments,
+          draft_assessments: response.draft_assessments || 0,
+          archived_assessments: response.archived_assessments || 0,
           total_candidates_tested: response.total_candidates_tested,
           average_pass_rate: response.average_pass_rate,
+          average_score: response.average_score,
+          units_consumed: response.units_consumed || 0,
         });
         console.log('[TalentFlow] Loaded assessment stats from API');
       } else {
@@ -304,9 +316,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const statsResponse = await assessmentService.getStats();
       setStats({
         total_assessments: statsResponse.total_assessments,
+        total_ever_created: statsResponse.total_ever_created || statsResponse.total_assessments,
+        total_deleted: statsResponse.total_deleted || 0,
         active_assessments: statsResponse.active_assessments,
+        draft_assessments: statsResponse.draft_assessments || 0,
+        archived_assessments: statsResponse.archived_assessments || 0,
         total_candidates_tested: statsResponse.total_candidates_tested,
         average_pass_rate: statsResponse.average_pass_rate,
+        average_score: statsResponse.average_score,
+        units_consumed: statsResponse.units_consumed || 0,
       });
     } catch (error) {
       console.log('[TalentFlow] Failed to reload stats:', error);
@@ -622,53 +640,96 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-4 gap-6 mb-6">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                <FileText className="w-5 h-5 text-gray-800" />
+        {/* Stats Cards - Two Rows */}
+        <div className="space-y-4 mb-6">
+          {/* Row 1: Historical Metrics (Total Created, Total Deleted, Units Used) */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
+                  <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                </div>
+                <span className="text-xs text-gray-500">Total Created</span>
               </div>
-              <span className="text-sm text-gray-500">Total Assessments</span>
+              <div className="text-xl font-semibold text-gray-900">
+                {isLoadingStats ? '...' : stats.total_ever_created.toLocaleString()}
+              </div>
             </div>
-            <div className="text-3xl text-gray-900">
-              {isLoadingStats ? '...' : stats.total_assessments.toLocaleString()}
+
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-lg bg-red-100 flex items-center justify-center">
+                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                </div>
+                <span className="text-xs text-gray-500">Total Deleted</span>
+              </div>
+              <div className="text-xl font-semibold text-gray-900">
+                {isLoadingStats ? '...' : stats.total_deleted.toLocaleString()}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-lg bg-yellow-100 flex items-center justify-center">
+                  <Zap className="w-3.5 h-3.5 text-yellow-600" />
+                </div>
+                <span className="text-xs text-gray-500">Units Used</span>
+              </div>
+              <div className="text-xl font-semibold text-gray-900">
+                {isLoadingStats ? '...' : `${stats.units_consumed}/${(availableUnits || 0) + stats.units_consumed}`}
+              </div>
+              <div className="text-[10px] text-gray-400 mt-0.5">{availableUnits || 0} remaining</div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-                <Play className="w-5 h-5 text-green-600" />
+          {/* Row 2: Current State Metrics (Total Assessments, Active, Candidates Tested, Avg. Score) */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <FileText className="w-3.5 h-3.5 text-gray-700" />
+                </div>
+                <span className="text-xs text-gray-500">Total Assessments</span>
               </div>
-              <span className="text-sm text-gray-500">Active</span>
+              <div className="text-xl font-semibold text-gray-900">
+                {isLoadingStats ? '...' : stats.total_assessments.toLocaleString()}
+              </div>
             </div>
-            <div className="text-3xl text-gray-900">
-              {isLoadingStats ? '...' : stats.active_assessments.toLocaleString()}
-            </div>
-          </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                <Users className="w-5 h-5 text-gray-800" />
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-lg bg-green-100 flex items-center justify-center">
+                  <Play className="w-3.5 h-3.5 text-green-600" />
+                </div>
+                <span className="text-xs text-gray-500">Active</span>
               </div>
-              <span className="text-sm text-gray-500">Candidates Tested</span>
+              <div className="text-xl font-semibold text-gray-900">
+                {isLoadingStats ? '...' : stats.active_assessments.toLocaleString()}
+              </div>
             </div>
-            <div className="text-3xl text-gray-900">
-              {isLoadingStats ? '...' : stats.total_candidates_tested.toLocaleString()}
-            </div>
-          </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-yellow-600" />
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <Users className="w-3.5 h-3.5 text-blue-600" />
+                </div>
+                <span className="text-xs text-gray-500">Candidates Tested</span>
               </div>
-              <span className="text-sm text-gray-500">Avg. Pass Rate</span>
+              <div className="text-xl font-semibold text-gray-900">
+                {isLoadingStats ? '...' : stats.total_candidates_tested.toLocaleString()}
+              </div>
             </div>
-            <div className="text-3xl text-gray-900">
-              {isLoadingStats ? '...' : (stats.average_pass_rate !== null ? `${stats.average_pass_rate}%` : 'N/A')}
+
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-lg bg-purple-100 flex items-center justify-center">
+                  <TrendingUp className="w-3.5 h-3.5 text-purple-600" />
+                </div>
+                <span className="text-xs text-gray-500">Avg. Score</span>
+              </div>
+              <div className="text-xl font-semibold text-gray-900">
+                {isLoadingStats ? '...' : (stats.average_score !== null ? `${stats.average_score}%` : 'N/A')}
+              </div>
             </div>
           </div>
         </div>

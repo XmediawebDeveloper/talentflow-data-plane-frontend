@@ -59,6 +59,9 @@ interface ExtractedData {
   // JD09: Additional extraction fields
   certifications: string[];
   domainKeywords: string[];
+  // Coding assessment fields
+  codingRequired: boolean;
+  suggestedLanguages: string[];
 }
 
 interface EditingJDData {
@@ -329,6 +332,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     // JD09: Certifications and Domain Keywords
     certifications: [],
     domainKeywords: [],
+    // Coding assessment fields
+    codingRequired: false,
+    suggestedLanguages: [],
   });
   const [isExtracting, setIsExtracting] = useState(false);
   const [newSkill, setNewSkill] = useState('');
@@ -522,6 +528,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
             expValue = levelMap[normalizedLevel] || '';
           }
 
+          console.log('[TalentFlow] AI Generation - extracted coding fields:', {
+            coding_required: params.coding_required,
+            suggested_languages: params.suggested_languages
+          });
+
           setExtractedData(prev => ({
             ...prev,
             mustHaveSkills: params.must_have_skills || [],
@@ -540,6 +551,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               radius: '50'
             })),
             allowOverqualified: false,
+            // Coding assessment fields from AI extraction
+            codingRequired: params.coding_required === true,
+            suggestedLanguages: params.suggested_languages || [],
           }));
         }
 
@@ -724,7 +738,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         // JD09: Extract certifications and domain keywords
         certifications: params.certifications || [],
         domainKeywords: params.domain_keywords || [],
+        // Coding assessment fields - extract from AI response
+        codingRequired: params.coding_required === true,
+        suggestedLanguages: params.suggested_languages || [],
       };
+
+      console.log('[TalentFlow] Extracted coding fields:', {
+        codingRequired: extraction.codingRequired,
+        suggestedLanguages: extraction.suggestedLanguages
+      });
 
       setExtractedData(extraction);
       setStep('extract');
@@ -750,12 +772,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         remote_type: extraction.workModel,
         certifications: extraction.certifications,
         domain_keywords: extraction.domainKeywords,
+        // Coding assessment fields
+        coding_required: extraction.codingRequired,
+        supported_languages: extraction.suggestedLanguages,
         locations: extraction.locations.map(loc => ({
           city: loc.city,
           radius_km: parseInt(loc.radius) || 50,
           is_required: extraction.locationsRequired,
         })),
       };
+
+      console.log('[TalentFlow] Saving JD with coding fields:', {
+        coding_required: jdData.coding_required,
+        supported_languages: jdData.supported_languages
+      });
 
       try {
         let savedJd;
@@ -1190,12 +1220,20 @@ Use professional language, clear formatting, and make it engaging for candidates
         allow_overqualified: extractedData.allowOverqualified,
         certifications: extractedData.certifications,
         domain_keywords: extractedData.domainKeywords,
+        // Coding assessment fields
+        coding_required: extractedData.codingRequired,
+        supported_languages: extractedData.suggestedLanguages,
         locations: extractedData.locations.map(loc => ({
           city: loc.city,
           radius_km: parseInt(loc.radius) || 50,
           is_required: extractedData.locationsRequired,
         })),
       };
+
+      console.log('[TalentFlow] Saving JD at review stage with coding fields:', {
+        coding_required: jdData.coding_required,
+        supported_languages: jdData.supported_languages
+      });
 
       let savedJd;
       let jdId = editingId;
