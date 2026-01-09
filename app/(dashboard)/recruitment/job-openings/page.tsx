@@ -79,6 +79,7 @@ export default function JobOpeningsPage() {
         postedDate: jd.created_at,
         postedBy: jd.created_by_name || jd.created_by,
         employmentType: jd.employment_type,
+        workMode: jd.remote_type, // onsite, hybrid, remote
         created_at: jd.created_at, // For accurate sorting
         creation_stage: jd.creation_stage, // For draft JDs
         creation_method: jd.creation_method, // AI or Manual
