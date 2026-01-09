@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import ResumeScoringPage from '@/components/ResumeScoringPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService, folderService } from '@/lib/services/resumeService';
+import { scoringService } from '@/lib/services/scoringService';
 import { Resume, Folder } from '@/lib/types/types';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -42,11 +43,37 @@ export default function ResumeScoringRoute() {
   const [loading, setLoading] = useState(true);
   const [initialJdId, setInitialJdId] = useState<string | null>(null);
   const [showProgress, setShowProgress] = useState(false);
+  const [pendingScoringData, setPendingScoringData] = useState<{
+    jobId: string;
+    jobTitle: string;
+    resumeIds: string[];
+    resumeNames: string[];
+  } | null>(null);
+  const [pendingBatchId, setPendingBatchId] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{
+    jobId: string;
+    jobTitle: string;
+    total: number;
+    queued: number;
+    processing: number;
+    completed: number;
+    failed: number;
+    items?: {
+      resumeId: string;
+      candidateName: string;
+      status: 'queued' | 'processing' | 'completed' | 'failed';
+      score?: number;
+      errorMessage?: string;
+    }[];
+  } | null>(null);
 
   useEffect(() => {
     // Check if there's a jd_id in URL params
     const jdId = searchParams.get('jd_id');
     const showProgressParam = searchParams.get('show_progress');
+    const startScoringParam = searchParams.get('start_scoring');
+    const batchIdParam = searchParams.get('batch_id');
+
     if (jdId) {
       console.log('[ResumeScoringRoute] Found jd_id in URL:', jdId);
       setInitialJdId(jdId);
@@ -55,9 +82,102 @@ export default function ResumeScoringRoute() {
       console.log('[ResumeScoringRoute] Show progress requested');
       setShowProgress(true);
     }
+
+    // Handle batch_id from async scoring (Celery)
+    if (batchIdParam) {
+      console.log('[ResumeScoringRoute] Found batch_id:', batchIdParam);
+      setPendingBatchId(batchIdParam);
+
+      // Read batch info from sessionStorage
+      try {
+        const storedData = sessionStorage.getItem('pendingScoringBatch');
+        if (storedData) {
+          const data = JSON.parse(storedData);
+          console.log('[ResumeScoringRoute] Found pending batch data:', data);
+          setBatchProgress({
+            jobId: data.jobId,
+            jobTitle: data.jobTitle,
+            total: data.totalResumes,
+            queued: data.totalResumes,
+            processing: 0,
+            completed: 0,
+            failed: 0,
+          });
+          sessionStorage.removeItem('pendingScoringBatch');
+        }
+      } catch (e) {
+        console.error('[ResumeScoringRoute] Error reading batch data:', e);
+      }
+    }
+
+    // Check for pending scoring data from my-resumes page (old sync method)
+    if (startScoringParam === 'true') {
+      try {
+        const storedData = sessionStorage.getItem('pendingScoringData');
+        if (storedData) {
+          const data = JSON.parse(storedData);
+          console.log('[ResumeScoringRoute] Found pending scoring data:', data);
+          setPendingScoringData(data);
+          sessionStorage.removeItem('pendingScoringData');
+        }
+      } catch (e) {
+        console.error('[ResumeScoringRoute] Error reading pending scoring data:', e);
+      }
+    }
+
     fetchData();
     loadScoredHistory();
   }, []);
+
+  // Poll for batch status when we have a pending batch
+  useEffect(() => {
+    if (!pendingBatchId) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await scoringService.getBatchStatus(pendingBatchId);
+        console.log('[ResumeScoringRoute] Batch status:', status);
+
+        // Map items from API response to our format
+        const items = status.items?.map(item => ({
+          resumeId: item.resume_id,
+          candidateName: item.candidate_name || 'Unknown',
+          status: item.status,
+          score: item.overall_score,
+          errorMessage: item.error_message,
+        }));
+
+        setBatchProgress({
+          jobId: status.jd_id,
+          jobTitle: status.jd_title,
+          total: status.total,
+          queued: status.queued,
+          processing: status.processing,
+          completed: status.completed,
+          failed: status.failed,
+          items: items,
+        });
+
+        // Stop polling when batch is complete
+        if (status.status === 'completed' || status.status === 'failed') {
+          console.log('[ResumeScoringRoute] Batch completed, stopping poll');
+          clearInterval(pollInterval);
+          setPendingBatchId(null);
+
+          // Reload scored history to show new results
+          setTimeout(() => {
+            loadScoredHistory();
+            // Redirect to show the scored results
+            window.location.href = `/recruitment/resume-scoring?jd_id=${status.jd_id}`;
+          }, 2000);
+        }
+      } catch (e) {
+        console.error('[ResumeScoringRoute] Error polling batch status:', e);
+      }
+    }, 2000); // Poll every 2 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [pendingBatchId]);
 
   const loadScoredHistory = async () => {
     // Load scored history from the API - fetch scored resumes for all published JDs
@@ -297,6 +417,8 @@ export default function ResumeScoringRoute() {
       onSaveScores={saveScoredHistory}
       initialJdId={initialJdId}
       initialShowProgress={showProgress}
+      pendingScoringData={pendingScoringData}
+      batchProgress={batchProgress}
     />
   );
 }

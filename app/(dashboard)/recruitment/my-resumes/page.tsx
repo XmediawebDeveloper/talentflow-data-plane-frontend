@@ -290,60 +290,35 @@ export default function MyResumesPage() {
     setIsApplyToJobModalOpen(true);
   };
 
-  // Handle applying resumes to selected jobs (scoring)
+  // Handle applying resumes to selected jobs (scoring) - using async Celery
   const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setIsApplyToJobModalOpen(false);
 
-    // For each selected job, score all selected resumes
-    const jobId = jobIds[0]; // Use first selected job for scoring
-    const toastId = toast.loading(`Scoring ${resumeIds.length} resume(s) against job...`);
+    // Get the selected job details
+    const jobId = jobIds[0];
+    const selectedJob = publishedJobs.find(j => j.id === jobId);
 
     try {
-      // Score each resume individually using the single scoring endpoint
-      let successCount = 0;
-      let failCount = 0;
+      // Start async bulk scoring via Celery
+      const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
-      for (let i = 0; i < resumeIds.length; i++) {
-        const resumeId = resumeIds[i];
+      // Store batch info for the resume-scoring page to poll
+      const scoringData = {
+        batchId: response.batch_id,
+        jobId: response.jd_id,
+        jobTitle: response.jd_title,
+        totalResumes: response.total_resumes,
+      };
+      sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
 
-        // Update progress
-        toast.loading(`Scoring resume ${i + 1} of ${resumeIds.length}...`, { id: toastId });
-
-        try {
-          await scoringService.scoreResume(jobId, resumeId);
-          successCount++;
-        } catch (err) {
-          console.error(`Failed to score resume ${resumeId}:`, err);
-          failCount++;
-        }
-      }
-
-      if (successCount > 0) {
-        toast.success(
-          `Scored ${successCount} resume${successCount > 1 ? 's' : ''} successfully!${failCount > 0 ? ` (${failCount} failed)` : ''}`,
-          { id: toastId }
-        );
-
-        // Clear selection and navigate to resume scoring page with progress view
-        setSelectedResumes([]);
-
-        // Navigate to resume scoring page and show progress for this JD
-        router.push(`/recruitment/resume-scoring?jd_id=${jobId}&show_progress=true`);
-      } else {
-        toast.error('Failed to score resumes', { id: toastId });
-      }
-
+      // Clear selection and navigate to resume scoring page
+      setSelectedResumes([]);
+      router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
     } catch (error: any) {
-      console.error('Scoring error:', error);
-
-      // Check for quota error
-      if (error?.message?.includes('QUOTA') || error?.response?.status === 403) {
-        toast.error('Resume scoring quota exhausted. Please upgrade your plan.', { id: toastId });
-      } else {
-        toast.error('Failed to score resumes. Please try again.', { id: toastId });
-      }
+      console.error('Failed to start scoring:', error);
+      toast.error(error.message || 'Failed to start scoring');
     }
   };
 

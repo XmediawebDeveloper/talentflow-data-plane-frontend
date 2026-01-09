@@ -63,6 +63,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
 
+  // Quota modal state
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
+
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || job.status.toLowerCase() === statusFilter.toLowerCase();
@@ -389,7 +392,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
               <button
                 onClick={() => {
                   if (quotaInfo && quotaInfo.remaining <= 0) {
-                    alert(`Job publishing limit reached (${quotaInfo.used}/${quotaInfo.limit}). Please upgrade your plan to create more jobs.`);
+                    setShowQuotaModal(true);
                     return;
                   }
                   onCreateNew();
@@ -1174,7 +1177,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 <button
                   onClick={() => {
                     if (quotaInfo && quotaInfo.remaining <= 0) {
-                      alert(`Job publishing limit reached (${quotaInfo.used}/${quotaInfo.limit}). Please upgrade your plan to create more jobs.`);
+                      setShowQuotaModal(true);
                       return;
                     }
                     onCreateNew();
@@ -1283,6 +1286,40 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
             setSelectedJobForAIMatch(null);
           }}
         />
+      )}
+
+      {/* Quota Exceeded Modal */}
+      {showQuotaModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Briefcase className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Insufficient Units</h3>
+              <p className="text-gray-600 mb-6">
+                You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowQuotaModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowQuotaModal(false);
+                    window.location.href = '/subscription/current-plan';
+                  }}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium"
+                >
+                  Upgrade Plan
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

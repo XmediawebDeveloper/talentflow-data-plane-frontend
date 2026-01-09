@@ -10,6 +10,7 @@ import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProg
 import ScoringJobProgressModal, { JobScoringProgress } from './ScoringJobProgressModal';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import api from '@/lib/services/api';
+import { scoringService } from '@/lib/services/scoringService';
 
 // Types
 interface Job {
@@ -60,6 +61,32 @@ interface ScoredResumeData {
   scoredResumes: any[];
 }
 
+interface PendingScoringData {
+  jobId: string;
+  jobTitle: string;
+  resumeIds: string[];
+  resumeNames: string[];
+}
+
+interface BatchProgressItem {
+  resumeId: string;
+  candidateName: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  score?: number;
+  errorMessage?: string;
+}
+
+interface BatchProgress {
+  jobId: string;
+  jobTitle: string;
+  total: number;
+  queued: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  items?: BatchProgressItem[];
+}
+
 interface ResumeScoringPageProps {
   jobs?: Job[];
   resumes?: Resume[];
@@ -71,6 +98,8 @@ interface ResumeScoringPageProps {
   tenant?: Tenant;
   initialJdId?: string | null;
   initialShowProgress?: boolean;
+  pendingScoringData?: PendingScoringData | null;
+  batchProgress?: BatchProgress | null;
 }
 
 export default function ResumeScoringPage({
@@ -83,7 +112,9 @@ export default function ResumeScoringPage({
   onBack,
   tenant,
   initialJdId,
-  initialShowProgress = false
+  initialShowProgress = false,
+  pendingScoringData = null,
+  batchProgress = null
 }: ResumeScoringPageProps) {
   const router = useRouter();
 
@@ -122,6 +153,7 @@ export default function ResumeScoringPage({
   // State for Job Progress Modal (per-job view)
   const [showJobProgressModal, setShowJobProgressModal] = useState(false);
   const [jobProgressData, setJobProgressData] = useState<JobScoringProgress[]>([]);
+  const [isJobProgressMinimized, setIsJobProgressMinimized] = useState(false);
 
   // History filters
   const [historySearchQuery, setHistorySearchQuery] = useState('');
@@ -189,6 +221,115 @@ export default function ResumeScoringPage({
     };
     fetchQuota();
   }, []);
+
+  // Handle pending scoring from my-resumes page - start scoring and show progress modal
+  useEffect(() => {
+    if (!pendingScoringData) return;
+
+    const { jobId, jobTitle, resumeIds, resumeNames } = pendingScoringData;
+    console.log('[ResumeScoringPage] Starting pending scoring for job:', jobTitle, 'with', resumeIds.length, 'resumes');
+
+    // Initialize progress modal immediately
+    const initialProgress: JobScoringProgress = {
+      jobId,
+      jobTitle,
+      total: resumeIds.length,
+      queued: resumeIds.length,
+      inProgress: 0,
+      completed: 0,
+      failed: 0,
+    };
+    setJobProgressData([initialProgress]);
+    setShowJobProgressModal(true);
+
+    // Start scoring resumes
+    const scoreResumes = async () => {
+      let completed = 0;
+      let failed = 0;
+
+      for (let i = 0; i < resumeIds.length; i++) {
+        const resumeId = resumeIds[i];
+
+        // Update progress - move from queued to in progress
+        setJobProgressData([{
+          jobId,
+          jobTitle,
+          total: resumeIds.length,
+          queued: resumeIds.length - i - 1,
+          inProgress: 1,
+          completed,
+          failed,
+        }]);
+
+        try {
+          await scoringService.scoreResume(jobId, resumeId);
+          completed++;
+          console.log(`[ResumeScoringPage] Scored resume ${i + 1}/${resumeIds.length}`);
+        } catch (err) {
+          console.error(`[ResumeScoringPage] Failed to score resume ${resumeId}:`, err);
+          failed++;
+        }
+
+        // Update progress after scoring
+        setJobProgressData([{
+          jobId,
+          jobTitle,
+          total: resumeIds.length,
+          queued: resumeIds.length - i - 1,
+          inProgress: 0,
+          completed,
+          failed,
+        }]);
+      }
+
+      // Final update - all done
+      setJobProgressData([{
+        jobId,
+        jobTitle,
+        total: resumeIds.length,
+        queued: 0,
+        inProgress: 0,
+        completed,
+        failed,
+      }]);
+
+      console.log(`[ResumeScoringPage] Scoring complete: ${completed} succeeded, ${failed} failed`);
+
+      // Refresh page after a short delay to load the scored results
+      setTimeout(() => {
+        window.location.href = `/recruitment/resume-scoring?jd_id=${jobId}`;
+      }, 2000);
+    };
+
+    scoreResumes();
+  }, [pendingScoringData]);
+
+  // Handle batch progress from Celery async scoring - show progress modal
+  useEffect(() => {
+    if (!batchProgress) return;
+
+    console.log('[ResumeScoringPage] Batch progress update:', batchProgress);
+
+    // Update job progress modal with batch status including individual resume items
+    const progress: JobScoringProgress = {
+      jobId: batchProgress.jobId,
+      jobTitle: batchProgress.jobTitle,
+      total: batchProgress.total,
+      queued: batchProgress.queued,
+      inProgress: batchProgress.processing,
+      completed: batchProgress.completed,
+      failed: batchProgress.failed,
+      items: batchProgress.items?.map(item => ({
+        resumeId: item.resumeId,
+        candidateName: item.candidateName,
+        status: item.status,
+        score: item.score,
+        errorMessage: item.errorMessage,
+      })),
+    };
+    setJobProgressData([progress]);
+    setShowJobProgressModal(true);
+  }, [batchProgress]);
 
   // Split resumes - myResumes are all user-uploaded resumes, databaseResumes are all resumes
   const myResumes = resumes; // All resumes belong to the user (My Resumes)
@@ -582,10 +723,16 @@ export default function ResumeScoringPage({
         {/* Job Progress Modal - Per Job View */}
         <ScoringJobProgressModal
           isOpen={showJobProgressModal}
-          onClose={() => setShowJobProgressModal(false)}
+          onClose={() => {
+            setShowJobProgressModal(false);
+            setIsJobProgressMinimized(false);
+          }}
+          onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
+          isMinimized={isJobProgressMinimized}
           jobProgressData={jobProgressData}
           onViewJobDetails={(jobId) => {
             setShowJobProgressModal(false);
+            setIsJobProgressMinimized(false);
             // Navigate to job details or filter by job
             const historyItem = scoredHistory.find(item => item.jobId === jobId);
             if (historyItem) {
@@ -1269,10 +1416,16 @@ export default function ResumeScoringPage({
         {/* Job Progress Modal - Per Job View */}
         <ScoringJobProgressModal
           isOpen={showJobProgressModal}
-          onClose={() => setShowJobProgressModal(false)}
+          onClose={() => {
+            setShowJobProgressModal(false);
+            setIsJobProgressMinimized(false);
+          }}
+          onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
+          isMinimized={isJobProgressMinimized}
           jobProgressData={jobProgressData}
           onViewJobDetails={(jobId) => {
             setShowJobProgressModal(false);
+            setIsJobProgressMinimized(false);
             const historyItem = scoredHistory.find(item => item.jobId === jobId);
             if (historyItem) {
               setSelectedHistoryItem(historyItem);
@@ -1586,10 +1739,16 @@ export default function ResumeScoringPage({
       {/* Job Progress Modal - Per Job View */}
       <ScoringJobProgressModal
         isOpen={showJobProgressModal}
-        onClose={() => setShowJobProgressModal(false)}
+        onClose={() => {
+          setShowJobProgressModal(false);
+          setIsJobProgressMinimized(false);
+        }}
+        onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
+        isMinimized={isJobProgressMinimized}
         jobProgressData={jobProgressData}
         onViewJobDetails={(jobId) => {
           setShowJobProgressModal(false);
+          setIsJobProgressMinimized(false);
           const historyItem = scoredHistory.find(item => item.jobId === jobId);
           if (historyItem) {
             setSelectedHistoryItem(historyItem);
