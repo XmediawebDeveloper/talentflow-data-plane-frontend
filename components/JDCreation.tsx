@@ -11,6 +11,7 @@ import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -458,6 +459,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastAutosaveTime, setLastAutosaveTime] = useState<Date | null>(null);
 
+  // Unsaved changes tracking
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+
   // Master data state - initialized with fallback data so dropdowns work immediately
   const [experienceLevels, setExperienceLevels] = useState<ExperienceLevel[]>(FALLBACK_EXPERIENCE_LEVELS);
   const [educationLevels, setEducationLevels] = useState<EducationLevel[]>(FALLBACK_EDUCATION_LEVELS);
@@ -552,6 +558,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
         setAutosaveStatus('saved');
         setLastAutosaveTime(new Date());
+        setHasUnsavedChanges(false); // Clear unsaved changes after successful save
 
         // Reset status after 3 seconds
         setTimeout(() => {
@@ -570,6 +577,62 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     return () => clearTimeout(autosaveTimer);
   }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing, isPublished]);
 
+  // Track changes for unsaved changes warning
+  useEffect(() => {
+    if (jobTitle.trim() || aiPrompt.trim() || manualJD.trim() || generatedJD.trim()) {
+      setHasUnsavedChanges(true);
+    }
+  }, [jobTitle, aiPrompt, manualJD, generatedJD]);
+
+  // Warn before closing browser tab/window if there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges && !isPublished) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges, isPublished]);
+
+  // Intercept navigation clicks (menu items, links, etc.) if there are unsaved changes
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      // Only intercept if there are unsaved changes and not published
+      if (!hasUnsavedChanges || isPublished) {
+        return;
+      }
+
+      // Find the clicked link/anchor
+      let target = e.target as HTMLElement;
+      while (target && target !== document.body) {
+        if (target.tagName === 'A' || target.getAttribute('role') === 'link') {
+          const href = target.getAttribute('href');
+
+          // Check if it's a navigation link (not # anchors or external links)
+          if (href && href.startsWith('/') && !href.startsWith('/#')) {
+            // Prevent default navigation
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Store the target URL and show dialog
+            setPendingNavigation(href);
+            setShowUnsavedDialog(true);
+            return;
+          }
+        }
+        target = target.parentElement as HTMLElement;
+      }
+    };
+
+    // Attach to document to catch all clicks
+    document.addEventListener('click', handleClick, true);
+    return () => document.removeEventListener('click', handleClick, true);
+  }, [hasUnsavedChanges, isPublished]);
+
   const handleGenerateJD = async () => {
     // Note: Quota check moved to publish action - generation doesn't consume quota
     setIsGenerating(true);
@@ -580,8 +643,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       const response = await jdService.generate(prompt);
 
       if (response?.description) {
-        // Update job title if AI provided a better one
-        if (response.title && !jobTitle) {
+        // Update job title if AI provided one
+        if (response.title) {
           setJobTitle(response.title);
         }
         setGeneratedJD(response.description);
@@ -685,10 +748,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         experience_max: params.experience_max,
         experience_level: params.experience_level
       });
-      console.log('[TalentFlow] Mandatory flags:', {
+      console.log('[TalentFlow] Mandatory flags from API:', {
         experience_mandatory: params.experience_mandatory,
         education_mandatory: params.education_mandatory,
         industry_mandatory: params.industry_mandatory
+      });
+      console.log('[TalentFlow] Will set UI checkboxes:', {
+        experienceRequired: params.experience_mandatory || false,
+        educationRequired: params.education_mandatory || false,
+        industryTypeRequired: params.industry_mandatory || false
       });
       console.log('[TalentFlow] Work settings:', {
         work_mode: params.work_mode,
@@ -905,14 +973,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         mustHaveComments: params.must_have_comments || [],
         niceToHaveSkills: params.nice_to_have_skills || [],
         education: educationValue,
-        // Always default to false - user can manually enable if needed
-        educationRequired: false,
+        // Use API's mandatory flag for education
+        educationRequired: params.education_mandatory || false,
         experience: experienceValue,
-        // Always default to false - user can manually enable if needed
-        experienceRequired: false,
+        // Use API's mandatory flag for experience
+        experienceRequired: params.experience_mandatory || false,
         industryType: industryValue,
-        // Always default to false - user can manually enable if needed
-        industryTypeRequired: false,
+        // Use API's mandatory flag for industry
+        industryTypeRequired: params.industry_mandatory || false,
         allowOverqualified: false,
         employmentType: params.job_type || 'full_time',  // Use API response or default
         workModel: params.work_mode || 'onsite',  // Use API response or default
@@ -930,6 +998,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         certifications: params.certifications || [],
         domainKeywords: params.domain_keywords || [],
       };
+
+      console.log('[TalentFlow] Final extracted data being set:', {
+        experience: extraction.experience,
+        experienceRequired: extraction.experienceRequired,
+        education: extraction.education,
+        educationRequired: extraction.educationRequired,
+        industryType: extraction.industryType,
+        industryTypeRequired: extraction.industryTypeRequired,
+        mustHaveSkills: extraction.mustHaveSkills.length + ' skills',
+        mustHaveComments: extraction.mustHaveComments.length + ' comments',
+        niceToHaveSkills: extraction.niceToHaveSkills.length + ' skills',
+        employmentType: extraction.employmentType,
+        workModel: extraction.workModel,
+        salaryRange: `${extraction.salaryFrom}-${extraction.salaryTo}`,
+      });
 
       setExtractedData(extraction);
       setStep('extract');
@@ -1701,6 +1784,42 @@ Use professional language, clear formatting, and make it engaging for candidates
     }
   };
 
+  // Handle "Save Draft" button in unsaved changes dialog
+  const handleSaveAndNavigate = async () => {
+    setShowUnsavedDialog(false);
+    setIsNavigatingBack(true);
+
+    // Save draft first
+    await handleSaveDraft();
+
+    // Then navigate to the stored URL
+    if (pendingNavigation) {
+      router.push(pendingNavigation);
+    }
+
+    setPendingNavigation(null);
+    setIsNavigatingBack(false);
+  };
+
+  // Handle "Discard" button in unsaved changes dialog
+  const handleDiscardAndNavigate = () => {
+    setShowUnsavedDialog(false);
+    setHasUnsavedChanges(false);
+
+    // Navigate without saving
+    if (pendingNavigation) {
+      router.push(pendingNavigation);
+    }
+
+    setPendingNavigation(null);
+  };
+
+  // Handle dialog cancel (X button or clicking outside)
+  const handleCancelDialog = () => {
+    setShowUnsavedDialog(false);
+    setPendingNavigation(null);
+  };
+
   // Save JD as draft
   const handleSaveDraft = async () => {
     // Validate job title has at least 1 non-space character
@@ -1797,6 +1916,7 @@ Use professional language, clear formatting, and make it engaging for candidates
       }
 
       setIsSavingDraft(false);
+      setHasUnsavedChanges(false); // Clear unsaved changes after successful save
 
       toast.success({
         title: isEditingPublished ? 'New draft created!' : 'Draft saved!',
@@ -1885,6 +2005,14 @@ Use professional language, clear formatting, and make it engaging for candidates
 
       setJobTitle(editingJD.title);
       setGeneratedJD(editingJD.description);
+
+      // Populate AI prompt field with existing description in edit mode
+      if (editingJD.creation_method === 'ai_generated') {
+        setAiPrompt(editingJD.description || '');
+      } else if (editingJD.creation_method === 'manual') {
+        setManualJD(editingJD.description || '');
+      }
+
       setStep(editingJD.creation_stage);
       console.log('[TalentFlow] Set step to:', editingJD.creation_stage);
 
@@ -1897,9 +2025,37 @@ Use professional language, clear formatting, and make it engaging for candidates
       if (editingJD.creation_stage !== 'create') {
         // Calculate actual values first, then set Required based on whether value exists
         const educationValue = editingJD.education_requirements?.degree || '';
-        const experienceValue = editingJD.experience_min
-          ? `${editingJD.experience_min}${editingJD.experience_max ? `-${editingJD.experience_max}` : '+'}`
-          : '';
+
+        // Map experience_min/max to level codes (entry, junior, mid, senior, architect, management)
+        const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
+          if (!min) return '';
+
+          // 10+ years
+          if (min >= 10) {
+            // Check JD description for architect/management keywords
+            const desc = (editingJD.description || '').toLowerCase();
+            const isArchitect = desc.includes('architect') || desc.includes('architecture');
+            const isManagement = desc.includes('manager') || desc.includes('management') || desc.includes('director') || desc.includes('lead');
+
+            if (isArchitect && !isManagement) return 'architect';
+            if (isManagement) return 'management';
+            return 'senior';
+          }
+
+          // 7-10 years = Senior
+          if (min >= 7) return 'senior';
+
+          // 5-7 years = Mid
+          if (min >= 5) return 'mid';
+
+          // 2-4 years = Junior
+          if (min >= 2) return 'junior';
+
+          // 0-2 years = Entry
+          return 'entry';
+        };
+
+        const experienceValue = mapExpToLevel(editingJD.experience_min, editingJD.experience_max);
         const industryValue = editingJD.industry_type || '';
 
         setExtractedData(prev => ({
@@ -2082,13 +2238,13 @@ Use professional language, clear formatting, and make it engaging for candidates
 
                     <div>
                       <label className="block text-sm text-gray-700 mb-2">
-                        AI Prompt – Quick Job Details <span className="text-red-500">*</span>
+                        AI Prompt – Quick Job Details {!editingId && <span className="text-red-500">*</span>}
                       </label>
                       <textarea
                         value={aiPrompt}
                         onChange={(e) => setAiPrompt(e.target.value)}
                         maxLength={VALIDATION.AI_PROMPT.max}
-                        placeholder="Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"
+                        placeholder={editingId ? "Add additional details or context to regenerate the job description..." : "Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"}
                         rows={12}
                         className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
                           aiPrompt.length > 0 && aiPrompt.length > VALIDATION.AI_PROMPT.max
@@ -2098,14 +2254,15 @@ Use professional language, clear formatting, and make it engaging for candidates
                       />
                       <div className="flex justify-between mt-1">
                         <p className="text-xs text-gray-500">
-                          {aiPrompt.length > 0 && aiPrompt.length < VALIDATION.AI_PROMPT.min && `Tip: Add more details (${VALIDATION.AI_PROMPT.min - aiPrompt.length} more chars) for better results`}
+                          {aiPrompt.length > 0 && aiPrompt.length < VALIDATION.AI_PROMPT.min && !editingId && `Tip: Add more details (${VALIDATION.AI_PROMPT.min - aiPrompt.length} more chars) for better results`}
+                          {editingId && aiPrompt.length === 0 && 'Optional: Add details to customize the regenerated JD'}
                         </p>
                         <p className={`text-xs ${aiPrompt.length > VALIDATION.AI_PROMPT.max ? 'text-red-500' : 'text-gray-500'}`}>
                           {aiPrompt.length}/{VALIDATION.AI_PROMPT.max}
                         </p>
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        💡 Tip: Include details like experience level, key skills, responsibilities, location, team size, or any specific requirements
+                        💡 Tip: {editingId ? 'Add any changes or additional requirements to regenerate the JD' : 'Include details like experience level, key skills, responsibilities, location, team size, or any specific requirements'}
                       </p>
                     </div>
 
@@ -2127,7 +2284,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                       onClick={handleGenerateJD}
                       disabled={
                         !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
-                        !aiPrompt.trim() ||
+                        (!editingId && !aiPrompt.trim()) ||
                         aiPrompt.length > VALIDATION.AI_PROMPT.max ||
                         isGenerating ||
                         hasProceededToExtract
@@ -3668,6 +3825,40 @@ Use professional language, clear formatting, and make it engaging for candidates
         )}
         </div>
       </div>
+
+      {/* Unsaved Changes Dialog */}
+      <Dialog open={showUnsavedDialog} onOpenChange={(open) => !open && handleCancelDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes. Would you like to save them as a draft before leaving?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={handleDiscardAndNavigate}
+              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Discard Changes
+            </button>
+            <button
+              onClick={handleSaveAndNavigate}
+              disabled={isSavingDraft}
+              className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isSavingDraft ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Draft'
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </DndProvider>
   );
