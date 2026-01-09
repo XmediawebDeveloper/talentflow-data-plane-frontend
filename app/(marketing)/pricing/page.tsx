@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Check, Sparkles, Building2, Users, Zap, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { encodePlanId } from "@/lib/utils/planEncoder";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -442,7 +443,7 @@ export default function PricingPage() {
                         <span className="text-4xl font-bold text-gray-800 dark:text-gray-200">Free</span>
                       </div>
                       <Link
-                        href="/signup"
+                        href={trialPlan ? `/signup?plan=${encodePlanId(trialPlan.id)}` : "/signup"}
                         className="inline-block px-8 py-3 bg-gray-800 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors whitespace-nowrap"
                       >
                         Start Free Trial
@@ -705,7 +706,7 @@ export default function PricingPage() {
 
                 {/* Button - Fixed at bottom */}
                 <Link
-                  href={plan.basePrice ? `/signup?plan_id=${plan.id}` : "/contact"}
+                  href={plan.basePrice ? `/signup?plan=${encodePlanId(plan.id)}` : "/contact"}
                   className={`block w-full h-12 rounded-lg font-medium text-center leading-[48px] transition-all ${
                     plan.popular
                       ? "bg-gray-800 text-white hover:bg-gray-700"

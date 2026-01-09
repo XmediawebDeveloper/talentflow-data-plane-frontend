@@ -23,9 +23,16 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [quotaData, setQuotaData] = useState<any>(null);
   const [loadingQuota, setLoadingQuota] = useState(true);
 
-  // Fetch quota status from API
+  // Fetch quota status from API - re-fetch when user changes
   useEffect(() => {
     const fetchQuotaStatus = async () => {
+      if (!user) {
+        setQuotaData(null);
+        setLoadingQuota(false);
+        return;
+      }
+
+      setLoadingQuota(true);
       try {
         const response = await api.get('/usage/quota-status');
         if (response.data?.status === 'success') {
@@ -39,7 +46,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     };
 
     fetchQuotaStatus();
-  }, []);
+  }, [user?.id]);
   
   // Calculate total units (RU + RS + AS + AIU + max_jobs + max_seats)
   const calculateTotalUnits = () => {
@@ -116,241 +123,6 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             <span className="text-sm font-medium">Quick Tour</span>
           </button>
         )}
-
-        {/* Plan & Unit Balance */}
-        <div className="relative">
-          <button
-            onClick={() => {
-              setShowPlanMenu(!showPlanMenu);
-              setShowUserMenu(false);
-            }}
-            className="flex items-center gap-2 px-3 py-2 bg-white border-2 border-gray-700 text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 group"
-            title="View plan and unit balance"
-          >
-            <CreditCard className="w-4 h-4" />
-            <div className="text-left">
-              <div className="text-xs leading-tight">{loadingQuota ? 'Loading...' : planName}</div>
-              <div className="text-sm font-medium leading-tight">
-                {loadingQuota ? '...' : `${totalUnits.remaining.toLocaleString()} Units`}
-              </div>
-            </div>
-            <ChevronDown className="w-4 h-4" />
-          </button>
-
-          {showPlanMenu && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowPlanMenu(false)}
-              ></div>
-              <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20">
-                <div className="px-4 py-3 bg-gray-800 text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium">{planName}</h3>
-                      <p className="text-sm text-gray-300 mt-1">
-                        {quotaData?.billing_period?.end_date
-                          ? `Active until ${new Date(quotaData.billing_period.end_date).toLocaleDateString()}`
-                          : 'Active'
-                        }
-                      </p>
-                    </div>
-                    <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                      <Users className="w-5 h-5 text-white" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Shared Pool Banner */}
-                <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center">
-                      <Users className="w-3.5 h-3.5 text-gray-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-900">Organization-wide Shared Pool</p>
-                      <p className="text-xs text-gray-600">Available to all 8 team members</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="p-4">
-                  {/* Unit Balance */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-gray-600">Unit Balance</span>
-                      <span className="text-lg font-medium text-gray-900">
-                        {loadingQuota ? 'Loading...' : `${totalUnits.remaining.toLocaleString()} / ${totalUnits.limit.toLocaleString()}`}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-gray-700 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${Math.min(usagePercentage, 100)}%` }}
-                      ></div>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {loadingQuota ? 'Calculating...' : `${totalUnits.used.toLocaleString()} units consumed`}
-                    </p>
-                  </div>
-
-                  {/* Quota Breakdown by Type */}
-                  <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm text-gray-900 flex items-center gap-1.5">
-                        <Activity className="w-4 h-4 text-gray-600" />
-                        Quota Overview
-                      </h4>
-                    </div>
-                    <div className="space-y-2">
-                      {/* Resume Upload */}
-                      {quotaData?.quotas?.RU && (
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                            <span className="text-gray-900">Resume Upload</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-600">
-                              {quotaData.quotas.RU.total_remaining || 0} / {((quotaData.quotas.RU.subscription?.limit || 0) + (quotaData.quotas.RU.addon?.total_purchased || 0)).toLocaleString()}
-                            </span>
-                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                              <div
-                                className="bg-blue-600 h-1.5 rounded-full"
-                                style={{ width: `${Math.min((quotaData.quotas.RU.subscription?.used || 0) / ((quotaData.quotas.RU.subscription?.limit || 0) + (quotaData.quotas.RU.addon?.total_purchased || 0)) * 100, 100)}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {/* Resume Scoring */}
-                      {quotaData?.quotas?.RS && (
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-purple-600 rounded-full"></div>
-                            <span className="text-gray-900">Resume Scoring</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-600">
-                              {quotaData.quotas.RS.total_remaining || 0} / {((quotaData.quotas.RS.subscription?.limit || 0) + (quotaData.quotas.RS.addon?.total_purchased || 0)).toLocaleString()}
-                            </span>
-                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                              <div
-                                className="bg-purple-600 h-1.5 rounded-full"
-                                style={{ width: `${Math.min((quotaData.quotas.RS.subscription?.used || 0) / ((quotaData.quotas.RS.subscription?.limit || 0) + (quotaData.quotas.RS.addon?.total_purchased || 0)) * 100, 100)}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {/* Assessments */}
-                      {quotaData?.quotas?.AS && (
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-600 rounded-full"></div>
-                            <span className="text-gray-900">Assessments</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-600">
-                              {quotaData.quotas.AS.total_remaining || 0} / {((quotaData.quotas.AS.subscription?.limit || 0) + (quotaData.quotas.AS.addon?.total_purchased || 0)).toLocaleString()}
-                            </span>
-                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                              <div
-                                className="bg-green-600 h-1.5 rounded-full"
-                                style={{ width: `${Math.min((quotaData.quotas.AS.subscription?.used || 0) / ((quotaData.quotas.AS.subscription?.limit || 0) + (quotaData.quotas.AS.addon?.total_purchased || 0)) * 100, 100)}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {/* AI Interviews */}
-                      {quotaData?.quotas?.AIU && (
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
-                            <span className="text-gray-900">AI Interviews</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-600">
-                              {quotaData.quotas.AIU.total_remaining || 0} / {((quotaData.quotas.AIU.subscription?.limit || 0) + (quotaData.quotas.AIU.addon?.total_purchased || 0)).toLocaleString()}
-                            </span>
-                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                              <div
-                                className="bg-orange-600 h-1.5 rounded-full"
-                                style={{ width: `${Math.min((quotaData.quotas.AIU.subscription?.used || 0) / ((quotaData.quotas.AIU.subscription?.limit || 0) + (quotaData.quotas.AIU.addon?.total_purchased || 0)) * 100, 100)}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {/* Job Slots */}
-                      {quotaData?.quotas?.max_jobs && (
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-indigo-600 rounded-full"></div>
-                            <span className="text-gray-900">Job Slots</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-600">
-                              {quotaData.quotas.max_jobs.total_remaining || 0} / {((quotaData.quotas.max_jobs.subscription?.limit || 0) + (quotaData.quotas.max_jobs.addon?.total_purchased || 0)).toLocaleString()}
-                            </span>
-                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                              <div
-                                className="bg-indigo-600 h-1.5 rounded-full"
-                                style={{ width: `${Math.min((quotaData.quotas.max_jobs.subscription?.used || 0) / ((quotaData.quotas.max_jobs.subscription?.limit || 0) + (quotaData.quotas.max_jobs.addon?.total_purchased || 0)) * 100, 100)}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {/* Team Seats */}
-                      {quotaData?.quotas?.max_seats && (
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-pink-600 rounded-full"></div>
-                            <span className="text-gray-900">Team Seats</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-600">
-                              {quotaData.quotas.max_seats.total_remaining || 0} / {((quotaData.quotas.max_seats.subscription?.limit || 0) + (quotaData.quotas.max_seats.addon?.total_purchased || 0)).toLocaleString()}
-                            </span>
-                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                              <div
-                                className="bg-pink-600 h-1.5 rounded-full"
-                                style={{ width: `${Math.min((quotaData.quotas.max_seats.subscription?.used || 0) / ((quotaData.quotas.max_seats.subscription?.limit || 0) + (quotaData.quotas.max_seats.addon?.total_purchased || 0)) * 100, 100)}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        window.location.href = '/subscription/addons';
-                      }}
-                      className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
-                    >
-                      Buy Addons
-                    </button>
-                    <button
-                      onClick={() => {
-                        window.location.href = '/subscription/current-plan';
-                      }}
-                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
-                    >
-                      View Details
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
 
         {/* Help & Support */}
         <div className="relative">

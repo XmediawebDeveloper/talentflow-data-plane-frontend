@@ -147,6 +147,48 @@ export const authService = {
     const token = localStorage.getItem('accessToken');
     return !!token;
   },
+
+  /**
+   * Request password reset OTP
+   */
+  async forgotPassword(email: string): Promise<{ message: string; email: string; expires_in_minutes: number }> {
+    try {
+      const response = await api.post('/auth/forgot-password', { email });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Verify password reset OTP
+   */
+  async verifyResetOTP(email: string, otpCode: string): Promise<{ success: boolean; message: string; reset_token: string }> {
+    try {
+      const response = await api.post('/auth/verify-reset-otp', {
+        email,
+        otp_code: otpCode,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Reset password with token
+   */
+  async resetPassword(resetToken: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await api.post('/auth/reset-password', {
+        reset_token: resetToken,
+        new_password: newPassword,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
 };
 
 export default authService;

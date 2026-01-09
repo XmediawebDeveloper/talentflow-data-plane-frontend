@@ -1777,34 +1777,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </div>
         </div>
 
-        {/* Assessment Templates */}
-        <div className="mt-8 bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-          <h2 className="text-gray-900 mb-4">Assessment Templates</h2>
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { name: 'Technical Skills', icon: Monitor, count: 12, bgColor: 'bg-gray-100' },
-              { name: 'Behavioral', icon: Brain, count: 8, bgColor: 'bg-gray-100' },
-              { name: 'Coding Challenge', icon: Code, count: 15, bgColor: 'bg-gray-100' },
-              { name: 'Aptitude Test', icon: ClipboardList, count: 6, bgColor: 'bg-gray-100' },
-              { name: 'Language Proficiency', icon: Globe, count: 5, bgColor: 'bg-gray-100' },
-              { name: 'Custom Template', icon: Pencil, count: 0, bgColor: 'bg-gray-100' },
-            ].map((template, index) => {
-              const IconComponent = template.icon;
-              return (
-                <div
-                  key={index}
-                  className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all cursor-pointer"
-                >
-                  <div className={`w-10 h-10 ${template.bgColor} rounded-lg flex items-center justify-center mb-3`}>
-                    <IconComponent className="w-5 h-5 text-gray-700" />
-                  </div>
-                  <div className="text-sm font-medium text-gray-900 mb-1">{template.name}</div>
-                  <div className="text-xs text-gray-500">{template.count} templates</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
 
       {/* Share Assessment Modal */}

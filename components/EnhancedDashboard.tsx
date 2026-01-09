@@ -246,23 +246,18 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
     };
   }, []);
 
-  // Fetch quota status from API
+  // Fetch quota status from API - refetch when user changes
   useEffect(() => {
-    // Skip if already fetched (check both ref and module cache)
-    if (hasFetchedQuotaStatus.current || dashboardCache.quotaFetched) {
-      // Restore from cache if available
-      if (dashboardCache.quotaData) {
-        setQuotaStatusData(dashboardCache.quotaData);
-        setLoadingQuota(false);
-      }
-      return;
+    // Clear cache when user changes to ensure fresh data
+    if (user?.id) {
+      dashboardCache.quotaFetched = false;
+      dashboardCache.quotaData = null;
+      hasFetchedQuotaStatus.current = false;
     }
 
     const controller = new AbortController();
 
     const fetchQuotaStatus = async () => {
-      // Double-check before making API calls
-      if (hasFetchedQuotaStatus.current || dashboardCache.quotaFetched) return;
       hasFetchedQuotaStatus.current = true;
       dashboardCache.quotaFetched = true;
 
@@ -302,7 +297,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             'AS': 'Assessments',
             'AIU': 'AI Interviews',
             'storage_gb': 'Storage',
-            'max_jobs': 'Job Postings',
+            'max_jobs': 'Job Publishing Units',
             'max_seats': 'Max Users',
           };
 
@@ -382,7 +377,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [user?.id]);
 
   const handleViewJobDetails = (jd: JDResponse) => {
     if (jd.status === 'draft') {
@@ -436,7 +431,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {/* Published JDs */}
             <div
               className="p-4 rounded-lg border-2 border-green-200 bg-green-50 hover:border-green-300 transition-all cursor-pointer"
-              onClick={() => router.push('/recruitment/jd-list?status=published')}
+              onClick={() => router.push('/recruitment/job-openings?status=published')}
             >
               <div className="text-4xl font-bold text-green-600 mb-2">
                 {jdStatusCounts.published}
@@ -455,7 +450,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {/* Draft JDs */}
             <div
               className="p-4 rounded-lg border-2 border-yellow-200 bg-yellow-50 hover:border-yellow-300 transition-all cursor-pointer"
-              onClick={() => router.push('/recruitment/jd-list?status=draft')}
+              onClick={() => router.push('/recruitment/job-openings?status=draft')}
             >
               <div className="text-4xl font-bold text-yellow-600 mb-2">
                 {jdStatusCounts.draft}
@@ -474,7 +469,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {/* Disabled JDs */}
             <div
               className="p-4 rounded-lg border-2 border-red-200 bg-red-50 hover:border-red-300 transition-all cursor-pointer"
-              onClick={() => router.push('/recruitment/jd-list?status=disabled')}
+              onClick={() => router.push('/recruitment/job-openings?status=disabled')}
             >
               <div className="text-4xl font-bold text-red-600 mb-2">
                 {jdStatusCounts.disabled}
@@ -493,7 +488,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {/* Archived JDs */}
             <div
               className="p-4 rounded-lg border-2 border-gray-200 bg-gray-50 hover:border-gray-300 transition-all cursor-pointer"
-              onClick={() => router.push('/recruitment/jd-list?status=archived')}
+              onClick={() => router.push('/recruitment/job-openings?status=archived')}
             >
               <div className="text-4xl font-bold text-gray-600 mb-2">
                 {jdStatusCounts.archived}
@@ -518,7 +513,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-lg font-semibold text-gray-900">
-                {tenant?.subscription?.planName || quotaStatusData?.plan_name || 'Current Plan'} - Quotas & Usage
+                {quotaStatusData?.plan_name || 'Current Plan'} - Quotas & Usage
               </CardTitle>
               <CardDescription className="text-gray-600">
                 Monitor your plan limits and current usage
@@ -674,7 +669,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               <Button
                 variant="ghost"
                 className="mt-4 w-full"
-                onClick={() => router.push('/recruitment/jd-list?status=published')}
+                onClick={() => router.push('/recruitment/job-openings?status=published')}
               >
                 View all published jobs
                 <ArrowUpRight className="ml-2 h-4 w-4" />
@@ -753,7 +748,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               <Button
                 variant="ghost"
                 className="mt-4 w-full"
-                onClick={() => router.push('/recruitment/jd-list?status=draft')}
+                onClick={() => router.push('/recruitment/job-openings?status=draft')}
               >
                 View all drafts
                 <ArrowUpRight className="ml-2 h-4 w-4" />

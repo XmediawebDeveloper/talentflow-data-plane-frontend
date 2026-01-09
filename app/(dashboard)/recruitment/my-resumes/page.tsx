@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2 } from 'lucide-react';
 import ResumeTable from '@/components/ResumeTable';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
@@ -11,23 +11,29 @@ import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadModal from '@/components/UploadModal';
 import DuplicateResumeModal, { DuplicateFile, ExistingResume } from '@/components/DuplicateResumeModal';
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
-import { Resume, Folder } from '@/lib/types/types';
+import UploadHistoryDetailModal, { UploadHistoryItem } from '@/components/UploadHistoryDetailModal';
+import ApplyToJobModal from '@/components/ApplyToJobModal';
+import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
+import { jdService } from '@/lib/services/jdService';
+import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 
 export default function MyResumesPage() {
   const router = useRouter();
   const [resumes, setResumes] = useState<Resume[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [appliedSearchQuery, setAppliedSearchQuery] = useState(''); // For highlighting
   const [filters, setFilters] = useState({});
   const [sortBy, setSortBy] = useState('date');
   const [folderTreeWidth, setFolderTreeWidth] = useState(240);
+  const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
+  const [cardViewFolder, setCardViewFolder] = useState<string | null>(null); // Selected folder in card view
 
   // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -41,6 +47,13 @@ export default function MyResumesPage() {
 
   // Upload history modal state
   const [isUploadHistoryModalOpen, setIsUploadHistoryModalOpen] = useState(false);
+  const [isUploadHistoryMinimized, setIsUploadHistoryMinimized] = useState(false);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
+
+  // Apply to Job modal state
+  const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
+  const [publishedJobs, setPublishedJobs] = useState<Job[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -68,6 +81,8 @@ export default function MyResumesPage() {
             fileName: item.file_name,
             status: item.status,
             errorMessage: item.error_message,
+            candidateName: item.candidate_name,
+            resumeId: item.resume_id,
           })) || [],
         }));
         setUploadHistory(history);
@@ -100,7 +115,7 @@ export default function MyResumesPage() {
         folderId: r.folder_id || '',
         uploadDate: r.created_at,
         attachments: r.file_name ? 1 : 0,
-        uploadedBy: 'current-user',
+        uploadedBy: r.uploaded_by_name || 'Unknown',
         currentCompany: r.current_company,
         previousCompany: r.previous_company,
         noticePeriod: r.notice_period,
@@ -140,14 +155,22 @@ export default function MyResumesPage() {
       }));
 
       // Convert API Folder to component Folder type
-      const convertApiFolder = (f: ApiFolder): Folder => ({
+      const convertApiFolder = (f: ApiFolder): FolderType => ({
         id: f.id,
         name: f.name,
         count: f.resume_count || 0,
         parentId: f.parent_id,
         children: f.children?.map(convertApiFolder),
       });
-      const convertedFolders: Folder[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+      const apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+
+      // Add "All Resumes" virtual folder at the top
+      const allResumesFolder: FolderType = {
+        id: 'all',
+        name: 'All Resumes',
+        count: convertedResumes.length,
+      };
+      const convertedFolders: FolderType[] = [allResumesFolder, ...apiFolders];
 
       setResumes(convertedResumes);
       setFolders(convertedFolders);
@@ -170,14 +193,10 @@ export default function MyResumesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    const confirmed = window.confirm('Are you sure you want to delete this resume?');
-    if (!confirmed) return;
-
     try {
       await resumeService.delete(id);
       setResumes(prev => prev.filter(r => r.id !== id));
       setSelectedResumes(prev => prev.filter(r => r !== id));
-      toast.success('Resume deleted');
     } catch (error) {
       toast.error('Failed to delete resume');
     }
@@ -200,9 +219,131 @@ export default function MyResumesPage() {
       setResumes(prev => prev.map(r =>
         resumeIds.includes(r.id) ? { ...r, folderId } : r
       ));
+      setSelectedResumes([]);
       toast.success(`${resumeIds.length} resume(s) moved`);
     } catch (error) {
       toast.error('Failed to move resumes');
+    }
+  };
+
+  // Handle bulk download of selected resumes
+  const handleBulkDownload = async () => {
+    if (selectedResumes.length === 0) return;
+
+    toast.loading(`Downloading ${selectedResumes.length} resume(s)...`, { id: 'bulk-download' });
+
+    try {
+      for (const resumeId of selectedResumes) {
+        const resume = resumes.find(r => r.id === resumeId);
+        const blob = await resumeService.download(resumeId);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${resume?.name || 'resume'}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+      toast.success(`${selectedResumes.length} resume(s) downloaded`, { id: 'bulk-download' });
+      setSelectedResumes([]);
+    } catch (error) {
+      console.error('Download failed:', error);
+      toast.error('Failed to download resumes', { id: 'bulk-download' });
+    }
+  };
+
+  // Fetch published jobs for the Apply to Job modal
+  const fetchPublishedJobs = async () => {
+    setLoadingJobs(true);
+    try {
+      const response = await jdService.list({ status: 'published', page_size: 100 });
+      const convertedJobs: Job[] = response.items.map((jd: any) => ({
+        id: jd.id,
+        job_id: jd.job_id,
+        title: jd.title || 'Untitled',
+        status: 'Published' as const,
+        location: jd.location || '',
+        daysActive: jd.created_at ? Math.ceil((new Date().getTime() - new Date(jd.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0,
+        requiredMatch: jd.required_match || 70,
+        department: jd.department,
+        applicants: jd.applicants_count || 0,
+        description: jd.description,
+        skills: jd.skills || jd.must_have_skills || [],
+        postedDate: jd.created_at,
+      }));
+      setPublishedJobs(convertedJobs);
+    } catch (error) {
+      console.error('Failed to fetch jobs:', error);
+      toast.error('Failed to load jobs');
+    } finally {
+      setLoadingJobs(false);
+    }
+  };
+
+  // Handle apply to job - open the modal
+  const handleApplyToJob = async () => {
+    if (selectedResumes.length === 0) return;
+
+    // Fetch published jobs and open modal
+    await fetchPublishedJobs();
+    setIsApplyToJobModalOpen(true);
+  };
+
+  // Handle applying resumes to selected jobs (scoring)
+  const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[]) => {
+    if (jobIds.length === 0 || resumeIds.length === 0) return;
+
+    setIsApplyToJobModalOpen(false);
+
+    // For each selected job, score all selected resumes
+    const jobId = jobIds[0]; // Use first selected job for scoring
+    const toastId = toast.loading(`Scoring ${resumeIds.length} resume(s) against job...`);
+
+    try {
+      // Score each resume individually using the single scoring endpoint
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < resumeIds.length; i++) {
+        const resumeId = resumeIds[i];
+
+        // Update progress
+        toast.loading(`Scoring resume ${i + 1} of ${resumeIds.length}...`, { id: toastId });
+
+        try {
+          await scoringService.scoreResume(jobId, resumeId);
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to score resume ${resumeId}:`, err);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(
+          `Scored ${successCount} resume${successCount > 1 ? 's' : ''} successfully!${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+          { id: toastId }
+        );
+
+        // Clear selection and navigate to resume scoring page with progress view
+        setSelectedResumes([]);
+
+        // Navigate to resume scoring page and show progress for this JD
+        router.push(`/recruitment/resume-scoring?jd_id=${jobId}&show_progress=true`);
+      } else {
+        toast.error('Failed to score resumes', { id: toastId });
+      }
+
+    } catch (error: any) {
+      console.error('Scoring error:', error);
+
+      // Check for quota error
+      if (error?.message?.includes('QUOTA') || error?.response?.status === 403) {
+        toast.error('Resume scoring quota exhausted. Please upgrade your plan.', { id: toastId });
+      } else {
+        toast.error('Failed to score resumes. Please try again.', { id: toastId });
+      }
     }
   };
 
@@ -211,7 +352,7 @@ export default function MyResumesPage() {
       console.log('[DEBUG] Creating folder:', { name, parentId });
       const newFolder = await folderService.create(name, parentId);
       console.log('[DEBUG] Folder created:', newFolder);
-      const converted: Folder = {
+      const converted: FolderType = {
         id: newFolder.id,
         name: newFolder.name,
         count: 0,
@@ -286,7 +427,7 @@ export default function MyResumesPage() {
     // Create "root" folder
     try {
       const newFolder = await folderService.create('root');
-      const converted: Folder = {
+      const converted: FolderType = {
         id: newFolder.id,
         name: newFolder.name,
         count: 0,
@@ -305,14 +446,45 @@ export default function MyResumesPage() {
     error?: string;
     existingResume?: { id: string; candidateName: string; uploadedAt?: string };
   }> => {
-    // If no folder is selected, use or create "root" folder
+    // If no folder is selected or "All Resumes" is selected, use or create "root" folder
     let targetFolderId = folderId;
-    if (!targetFolderId) {
+    if (!targetFolderId || targetFolderId === 'all') {
       try {
         targetFolderId = await getOrCreateRootFolder();
       } catch (error) {
         return { success: false, error: 'Failed to create root folder for upload' };
       }
+    }
+
+    // Auto-open upload history panel immediately when upload starts (for multiple files)
+    if (files.length > 1) {
+      console.log('[UPLOAD] Auto-opening upload history panel for', files.length, 'files');
+      setIsUploadHistoryModalOpen(true);
+      setIsUploadHistoryMinimized(false);
+
+      // Show "Uploading..." record immediately BEFORE API call
+      const tempId = `temp-${Date.now()}`;
+      const uploadingRecord = {
+        id: tempId,
+        date: new Date().toISOString(),
+        fileName: `Uploading ${files.length} files...`,
+        totalFiles: files.length,
+        completed: 0,
+        pending: files.length,
+        duplicated: 0,
+        versioned: 0,
+        errors: 0,
+        status: 'uploading',
+        source: 'my-resumes' as const,
+        statuses: files.map((f, idx) => ({
+          id: `temp-file-${idx}`,
+          fileName: f.name,
+          status: 'pending',
+          errorMessage: null,
+          candidateName: null,
+        })),
+      };
+      setUploadHistory(prev => [uploadingRecord, ...prev]);
     }
 
     // For single file, use single upload endpoint
@@ -370,31 +542,44 @@ export default function MyResumesPage() {
 
     // For multiple files, use bulk upload with async processing
     try {
-      const toastId = toast.loading(`Uploading ${files.length} resumes...`);
-
       // Start bulk upload - returns immediately with batch info
       const batch = await resumeService.uploadBulk(files, targetFolderId);
 
-      toast.loading(`Processing ${batch.total_files} resumes...`, { id: toastId });
+      // Fetch full status with items immediately
+      let initialStatuses: any[] = [];
+      try {
+        const fullStatus = await resumeService.getBatchStatus(batch.id);
+        initialStatuses = fullStatus.items?.map((item: any) => ({
+          id: item.id,
+          fileName: item.file_name,
+          status: item.status,
+          errorMessage: item.error_message,
+          candidateName: item.candidate_name,
+          resumeId: item.resume_id,
+        })) || [];
+      } catch (e) {
+        console.error('Error fetching initial batch status:', e);
+      }
 
-      // Add batch to upload history immediately and show the panel
+      // Replace temp "Uploading..." record with real batch data
       const newBatchRecord = {
         id: batch.id,
         date: new Date().toISOString(),
         fileName: `Bulk Upload (${batch.total_files} files)`,
         totalFiles: batch.total_files,
-        completed: 0,
-        pending: batch.total_files,
-        duplicated: 0,
-        versioned: 0,
-        errors: 0,
-        status: 'processing',
+        completed: batch.completed || 0,
+        pending: batch.pending || batch.total_files,
+        duplicated: batch.duplicates || 0,
+        versioned: batch.versions || 0,
+        errors: batch.errors || 0,
+        status: batch.status || 'processing',
         source: 'my-resumes' as const,
-        statuses: [],
+        statuses: initialStatuses,
       };
-      setUploadHistory(prev => [newBatchRecord, ...prev]);
+      // Remove temp record and add real one
+      setUploadHistory(prev => [newBatchRecord, ...prev.filter(r => !r.id.startsWith('temp-'))]);
 
-      // Poll for batch status until complete
+      // Poll for batch status until complete (every 1 second)
       const pollInterval = setInterval(async () => {
         try {
           const status = await resumeService.getBatchStatus(batch.id);
@@ -403,7 +588,7 @@ export default function MyResumesPage() {
           const total = status.total_files;
           const percentage = Math.round((processed / total) * 100);
 
-          // Update upload history to show progress
+          // Update upload history to show progress including individual file statuses
           setUploadHistory(prev => prev.map(record =>
             record.id === batch.id
               ? {
@@ -414,28 +599,21 @@ export default function MyResumesPage() {
                   versioned: status.versions,
                   errors: status.errors,
                   status: status.status,
+                  statuses: status.items?.map((item: any) => ({
+                    id: item.id,
+                    fileName: item.file_name,
+                    status: item.status,
+                    errorMessage: item.error_message,
+                    candidateName: item.candidate_name,
+                    resumeId: item.resume_id,
+                  })) || [],
                 }
               : record
           ));
 
-          toast.loading(`Processing resumes: ${processed}/${total} (${percentage}%)`, { id: toastId });
-
           // Check if batch is complete
           if (status.status === 'completed' || status.pending === 0) {
             clearInterval(pollInterval);
-
-            const successCount = status.completed + status.versions;
-            if (status.errors > 0) {
-              toast.warning(
-                `Upload complete: ${successCount} succeeded, ${status.duplicates} duplicates, ${status.errors} failed`,
-                { id: toastId, duration: 5000 }
-              );
-            } else {
-              toast.success(
-                `Successfully uploaded ${successCount} resumes${status.duplicates > 0 ? `, ${status.duplicates} duplicates skipped` : ''}`,
-                { id: toastId, duration: 3000 }
-              );
-            }
 
             // Refresh upload history and resume list
             fetchUploadHistory();
@@ -444,7 +622,7 @@ export default function MyResumesPage() {
         } catch (pollError) {
           console.error('Error polling batch status:', pollError);
         }
-      }, 2000); // Poll every 2 seconds
+      }, 1000); // Poll every 1 second for faster updates
 
       // Set a timeout to stop polling after 10 minutes
       setTimeout(() => {
@@ -480,7 +658,7 @@ export default function MyResumesPage() {
     folderId: r.folder_id || '',
     uploadDate: r.created_at,
     attachments: 1,
-    uploadedBy: 'current-user',
+    uploadedBy: r.uploaded_by_name || 'Unknown',
     currentCompany: r.current_company,
     previousCompany: r.previous_company,
     noticePeriod: r.notice_period,
@@ -553,8 +731,8 @@ export default function MyResumesPage() {
   const filteredResumes = useMemo(() => {
     let filtered = resumes;
 
-    // Filter by folder
-    if (selectedFolder) {
+    // Filter by folder (skip filtering if 'all' is selected - show all resumes)
+    if (selectedFolder && selectedFolder !== 'all') {
       filtered = filtered.filter(r => r.folderId === selectedFolder);
     }
 
@@ -678,28 +856,58 @@ export default function MyResumesPage() {
         ]}
       />
 
-      {selectedResumes.length > 0 && (
-        <div className="mt-6">
+      <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {/* Bulk Actions Bar - Shows at TOP when resumes selected */}
+        {selectedResumes.length > 0 && (
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
             onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
-            onApplyToJob={() => {}}
+            onApplyToJob={handleApplyToJob}
+            onDownload={handleBulkDownload}
             onDelete={() => handleDeleteResumes(selectedResumes)}
-            folders={folders}
+            folders={folders.filter(f => f.id !== 'all')}
           />
-        </div>
-      )}
+        )}
 
-      <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200">
-        <SearchFilterBarCompact
-          searchQuery={searchQuery}
-          onSearchChange={handleSearchChange}
-          filters={filters}
-          onFiltersChange={setFilters}
-          sortBy={sortBy}
-          onSortChange={setSortBy}
-        />
+        <div className="flex items-center justify-between border-b border-gray-200">
+          <div className="flex-1">
+            <SearchFilterBarCompact
+              searchQuery={searchQuery}
+              onSearchChange={handleSearchChange}
+              filters={filters}
+              onFiltersChange={setFilters}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+            />
+          </div>
+          {/* View Toggle */}
+          <div className="flex items-center gap-1 px-4 py-3 border-l border-gray-200">
+            <span className="text-xs text-gray-500 mr-2">View:</span>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="List View"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('card')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'card'
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Card View"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
 
         {/* Search Results Summary */}
         {appliedSearchQuery && (
@@ -725,42 +933,325 @@ export default function MyResumesPage() {
           </div>
         )}
 
-        <div className="flex">
-          <FolderTree
-            folders={folders}
-            selectedFolder={selectedFolder}
-            onSelectFolder={setSelectedFolder}
-            onCreateFolder={handleCreateFolder}
-            onRenameFolder={handleRenameFolder}
-            onDeleteFolder={handleDeleteFolder}
-            onUploadToFolder={(folderId) => {
-              setIsUploadModalOpen(true);
-            }}
-            resumes={filteredResumes}
-            width={folderTreeWidth}
-            onWidthChange={setFolderTreeWidth}
-          />
+        {viewMode === 'list' ? (
+          // List View with Folder Tree
+          <div className="flex">
+            <FolderTree
+              folders={folders}
+              selectedFolder={selectedFolder}
+              onSelectFolder={setSelectedFolder}
+              onCreateFolder={handleCreateFolder}
+              onRenameFolder={handleRenameFolder}
+              onDeleteFolder={handleDeleteFolder}
+              onUploadToFolder={(folderId) => {
+                setSelectedFolder(folderId);
+                setIsUploadModalOpen(true);
+              }}
+              resumes={filteredResumes}
+              width={folderTreeWidth}
+              onWidthChange={setFolderTreeWidth}
+            />
 
-          <ResumeTable
-            resumes={filteredResumes}
-            selectedResumes={selectedResumes}
-            onSelectResume={handleSelectResume}
-            onSelectAll={handleSelectAll}
-            onQuickView={(resume) => setQuickViewResume(resume)}
-            onApplyToJob={(resume) => console.log('Apply to job:', resume)}
-            onDelete={(id) => handleDelete(id)}
-            onMoveToFolder={handleMoveToFolder}
-            folders={folders}
-            onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
-            highlightQuery={appliedSearchQuery}
-          />
-        </div>
+            <ResumeTable
+              resumes={filteredResumes}
+              selectedResumes={selectedResumes}
+              onSelectResume={handleSelectResume}
+              onSelectAll={handleSelectAll}
+              onQuickView={(resume) => setQuickViewResume(resume)}
+              onApplyToJob={(resume) => console.log('Apply to job:', resume)}
+              onDelete={(id) => handleDelete(id)}
+              onMoveToFolder={handleMoveToFolder}
+              folders={folders.filter(f => f.id !== 'all')}
+              onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
+              highlightQuery={appliedSearchQuery}
+            />
+          </div>
+        ) : (
+          // Card View - Folders as Cards OR Resumes List when folder selected
+          <div className="p-6">
+            {cardViewFolder === null ? (
+              // Show Folder Cards
+              (() => {
+                const realFolders = folders.filter(f => f.id !== 'all');
+
+                // Group resumes by folder to get counts
+                const resumesByFolder = new Map<string, Resume[]>();
+                const unfolderedResumes: Resume[] = [];
+
+                filteredResumes.forEach(resume => {
+                  if (resume.folderId) {
+                    const existing = resumesByFolder.get(resume.folderId) || [];
+                    resumesByFolder.set(resume.folderId, [...existing, resume]);
+                  } else {
+                    unfolderedResumes.push(resume);
+                  }
+                });
+
+                const folderCards = realFolders.map((folder) => {
+                  const folderResumes = resumesByFolder.get(folder.id) || [];
+
+                  return (
+                    <div
+                      key={folder.id}
+                      className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-blue-300 transition-all"
+                      onClick={() => setCardViewFolder(folder.id)}
+                    >
+                      <div className="flex items-center gap-3 p-4">
+                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <Folder className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900">{folder.name}</h3>
+                          <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      </div>
+                    </div>
+                  );
+                });
+
+                const uncategorizedCard = unfolderedResumes.length > 0 ? (
+                  <div
+                    key="unfoldered"
+                    className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-gray-400 transition-all"
+                    onClick={() => setCardViewFolder('uncategorized')}
+                  >
+                    <div className="flex items-center gap-3 p-4">
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                        <Folder className="w-6 h-6 text-gray-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900">Uncategorized</h3>
+                        <p className="text-sm text-gray-500">{unfolderedResumes.length} resume{unfolderedResumes.length !== 1 ? 's' : ''}</p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    </div>
+                  </div>
+                ) : null;
+
+                return (
+                  <>
+                    {(realFolders.length > 0 || uncategorizedCard) ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {folderCards}
+                        {uncategorizedCard}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <Folder className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No folders found</h3>
+                        <p className="text-gray-500">Create folders to organize your resumes</p>
+                      </div>
+                    )}
+                  </>
+                );
+              })()
+            ) : (
+              // Show Resumes List for selected folder
+              (() => {
+                const selectedFolderData = folders.find(f => f.id === cardViewFolder);
+                const folderName = cardViewFolder === 'uncategorized'
+                  ? 'Uncategorized'
+                  : selectedFolderData?.name || 'Unknown Folder';
+
+                // Get resumes for this folder
+                const folderResumes = cardViewFolder === 'uncategorized'
+                  ? filteredResumes.filter(r => !r.folderId)
+                  : filteredResumes.filter(r => r.folderId === cardViewFolder);
+
+                return (
+                  <div>
+                    {/* Header with Back Button */}
+                    <div className="flex items-center gap-4 mb-6">
+                      <button
+                        onClick={() => setCardViewFolder(null)}
+                        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+                      >
+                        <ArrowLeft className="w-5 h-5" />
+                        <span>Back to Folders</span>
+                      </button>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <FolderOpen className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h2 className="font-semibold text-gray-900">{folderName}</h2>
+                          <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Resumes Table */}
+                    {folderResumes.length > 0 ? (
+                      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        {/* Table Header */}
+                        <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={folderResumes.length > 0 && folderResumes.every(r => selectedResumes.includes(r.id))}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedResumes(prev => [...new Set([...prev, ...folderResumes.map(r => r.id)])]);
+                                } else {
+                                  setSelectedResumes(prev => prev.filter(id => !folderResumes.find(r => r.id === id)));
+                                }
+                              }}
+                              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>Candidate Name</div>
+                          <div>Email</div>
+                          <div>Phone</div>
+                          <div>Skills</div>
+                          <div>Experience</div>
+                          <div>Source</div>
+                          <div>Upload Date</div>
+                          <div>Uploaded By</div>
+                          <div>Files</div>
+                          <div>Actions</div>
+                        </div>
+                        {/* Table Body */}
+                        {folderResumes.map((resume, index) => (
+                          <div
+                            key={resume.id}
+                            className={`grid grid-cols-[auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center ${
+                              index !== folderResumes.length - 1 ? 'border-b border-gray-100' : ''
+                            } ${selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''}`}
+                            onClick={() => router.push(`/recruitment/resume-view/${resume.id}`)}
+                          >
+                            {/* Checkbox */}
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedResumes.includes(resume.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectResume(resume.id);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                              />
+                            </div>
+                            {/* Candidate Name */}
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-medium text-xs flex-shrink-0">
+                                {resume.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
+                              </div>
+                              <span className="font-medium text-gray-900 text-sm truncate">{resume.name}</span>
+                            </div>
+                            {/* Email */}
+                            <div className="text-sm text-gray-600 truncate">{resume.email || '-'}</div>
+                            {/* Phone */}
+                            <div className="text-sm text-gray-600 truncate">{resume.phone || '-'}</div>
+                            {/* Skills */}
+                            <div className="flex flex-wrap gap-1">
+                              {resume.skills && resume.skills.length > 0 ? (
+                                <>
+                                  {resume.skills.slice(0, 2).map((skill, idx) => (
+                                    <span key={idx} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs truncate max-w-[60px]">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                  {resume.skills.length > 2 && (
+                                    <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">
+                                      +{resume.skills.length - 2}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-sm text-gray-400">-</span>
+                              )}
+                            </div>
+                            {/* Experience */}
+                            <div className="text-sm text-gray-600">{resume.experience || '-'}</div>
+                            {/* Source */}
+                            <div>
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                resume.source === 'TalentFlow'
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {resume.source || 'Manual'}
+                              </span>
+                            </div>
+                            {/* Upload Date */}
+                            <div className="text-sm text-gray-600">
+                              {resume.uploadDate ? new Date(resume.uploadDate).toLocaleDateString() : '-'}
+                            </div>
+                            {/* Uploaded By */}
+                            <div className="text-sm text-gray-600 truncate">{resume.uploadedBy || '-'}</div>
+                            {/* Files */}
+                            <div className="flex items-center gap-1 text-sm text-gray-600">
+                              <FileText className="w-4 h-4" />
+                              <span>{resume.attachments || 1}</span>
+                            </div>
+                            {/* Actions */}
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setQuickViewResume(resume);
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                                title="Quick View"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    const blob = await resumeService.download(resume.id);
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = resume.fileName || `${resume.name}.pdf`;
+                                    a.click();
+                                    window.URL.revokeObjectURL(url);
+                                  } catch (err) {
+                                    toast.error('Failed to download');
+                                  }
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+                                title="Download"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(resume.id);
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 bg-white border border-gray-200 rounded-xl">
+                        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No resumes in this folder</h3>
+                        <p className="text-gray-500">Upload resumes to this folder to get started</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            )}
+          </div>
+        )}
       </div>
 
       {isUploadModalOpen && (
         <UploadModal
-          folders={folders}
+          folders={folders.filter(f => f.id !== 'all')}
           tenant={null}
+          targetFolder={selectedFolder !== 'all' ? selectedFolder || undefined : undefined}
           onClose={() => setIsUploadModalOpen(false)}
           onUpload={handleUploadResumes}
           onCreateFolder={handleCreateFolder}
@@ -791,220 +1282,391 @@ export default function MyResumesPage() {
         />
       )}
 
+      {/* Apply to Job Modal */}
+      {isApplyToJobModalOpen && (
+        <ApplyToJobModal
+          resumes={resumes.filter(r => selectedResumes.includes(r.id))}
+          jobs={publishedJobs}
+          onClose={() => setIsApplyToJobModalOpen(false)}
+          onApply={handleApplyToJobSubmit}
+        />
+      )}
+
       {/* Upload History Sheet (Slide-in Panel) */}
-      {isUploadHistoryModalOpen && (
+      {/* Minimized Upload History Floating Indicator */}
+      {isUploadHistoryMinimized && (
+        <div
+          onClick={() => {
+            setIsUploadHistoryMinimized(false);
+            setIsUploadHistoryModalOpen(true);
+          }}
+          className="fixed bottom-6 right-6 z-40 bg-blue-600 text-white px-4 py-3 rounded-xl shadow-lg hover:bg-blue-700 transition-all cursor-pointer flex items-center gap-3 animate-in slide-in-from-bottom duration-300"
+        >
+          <div className="relative">
+            <History className="w-5 h-5" />
+            {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
+            )}
+          </div>
+          <div>
+            <p className="text-sm font-medium">Upload History</p>
+            <p className="text-xs text-blue-200">
+              {(() => {
+                const processing = uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length;
+                return processing > 0 ? `${processing} processing...` : 'Click to expand';
+              })()}
+            </p>
+          </div>
+          <Maximize2 className="w-4 h-4 ml-2" />
+        </div>
+      )}
+
+      {isUploadHistoryModalOpen && !isUploadHistoryMinimized && (
         <>
           {/* Backdrop */}
           <div
             className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-300"
-            onClick={() => setIsUploadHistoryModalOpen(false)}
+            onClick={() => {
+              setIsUploadHistoryMinimized(true);
+              setIsUploadHistoryModalOpen(false);
+            }}
           />
-          {/* Sheet Panel */}
-          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg bg-white shadow-xl animate-in slide-in-from-right duration-300">
-            <div className="flex flex-col h-full">
+          {/* Centered Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
               {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Upload History</h2>
-                  <p className="text-sm text-gray-500">Track your resume upload progress</p>
+              <div className="bg-gradient-to-r from-blue-50 to-white border-b border-gray-200 px-6 py-4 rounded-t-2xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Upload History</h2>
+                    <p className="text-sm text-gray-600 mt-0.5">View all past bulk upload reports</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setIsUploadHistoryMinimized(true);
+                        setIsUploadHistoryModalOpen(false);
+                      }}
+                      className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-xl font-medium"
+                      title="Minimize"
+                    >
+                      −
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsUploadHistoryModalOpen(false);
+                        setIsUploadHistoryMinimized(false);
+                      }}
+                      className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="Close"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => setIsUploadHistoryModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
               </div>
 
               {/* Content */}
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
                 {(() => {
                   const myResumesHistory = uploadHistory.filter(r => r.source === 'my-resumes');
                   const processingCount = myResumesHistory.filter(r => r.status === 'processing' || r.pending > 0).length;
-                  const completedCount = myResumesHistory.filter(r => r.status === 'completed' && r.pending === 0 && r.errors === 0).length;
-                  const failedCount = myResumesHistory.filter(r => r.errors > 0).length;
-                  const totalUploaded = myResumesHistory.reduce((sum, r) => sum + (r.completed || 0), 0);
+                  const completedCount = myResumesHistory.reduce((sum, r) => sum + (r.completed || 0), 0);
+                  const duplicatedCount = myResumesHistory.reduce((sum, r) => sum + (r.duplicated || 0), 0);
+                  const versionedCount = myResumesHistory.reduce((sum, r) => sum + (r.versioned || 0), 0);
+                  const failedCount = myResumesHistory.reduce((sum, r) => sum + (r.errors || 0), 0);
+                  const pendingCount = myResumesHistory.reduce((sum, r) => sum + (r.pending || 0), 0);
+                  const totalFiles = myResumesHistory.reduce((sum, r) => sum + (r.totalFiles || 0), 0);
+                  const successRate = totalFiles > 0 ? Math.round((completedCount / totalFiles) * 100) : 0;
 
                   return (
                     <>
-                      {/* Status Summary Boxes - Dashboard Style */}
-                      <div className="grid grid-cols-2 gap-3 mb-6">
-                        {/* Processing */}
-                        <div className="p-4 rounded-lg border-2 border-blue-200 bg-blue-50">
-                          <div className="text-3xl font-bold text-blue-600 mb-1">
-                            {processingCount}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="p-1.5 bg-blue-100 rounded-lg">
-                              <Loader2 className="h-4 w-4 text-blue-600" />
+                      {/* Status Summary Cards - 6 Column Grid */}
+                      <div className="grid grid-cols-3 gap-3 mb-6">
+                        {/* Completed */}
+                        <div className="bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200 rounded-xl p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                              <CheckCircle className="w-4 h-4 text-white" />
                             </div>
-                            <div>
-                              <h3 className="text-sm font-medium text-gray-900">Processing</h3>
-                              <p className="text-xs text-gray-600">In progress</p>
-                            </div>
+                            <span className="text-xs text-gray-700">Completed</span>
                           </div>
+                          <div className="text-2xl font-bold text-green-700">{completedCount}</div>
                         </div>
 
-                        {/* Completed */}
-                        <div className="p-4 rounded-lg border-2 border-green-200 bg-green-50">
-                          <div className="text-3xl font-bold text-green-600 mb-1">
-                            {completedCount}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="p-1.5 bg-green-100 rounded-lg">
-                              <CheckCircle className="h-4 w-4 text-green-600" />
+                        {/* Duplicates */}
+                        <div className="bg-gradient-to-br from-yellow-50 to-yellow-100/50 border border-yellow-200 rounded-xl p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
+                              <Copy className="w-4 h-4 text-white" />
                             </div>
-                            <div>
-                              <h3 className="text-sm font-medium text-gray-900">Completed</h3>
-                              <p className="text-xs text-gray-600">Successful uploads</p>
-                            </div>
+                            <span className="text-xs text-gray-700">Duplicates</span>
                           </div>
+                          <div className="text-2xl font-bold text-yellow-700">{duplicatedCount}</div>
+                        </div>
+
+                        {/* Versioned */}
+                        <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200 rounded-xl p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+                              <GitBranch className="w-4 h-4 text-white" />
+                            </div>
+                            <span className="text-xs text-gray-700">Versioned</span>
+                          </div>
+                          <div className="text-2xl font-bold text-purple-700">{versionedCount}</div>
                         </div>
 
                         {/* Failed */}
-                        <div className="p-4 rounded-lg border-2 border-red-200 bg-red-50">
-                          <div className="text-3xl font-bold text-red-600 mb-1">
-                            {failedCount}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="p-1.5 bg-red-100 rounded-lg">
-                              <AlertCircle className="h-4 w-4 text-red-600" />
+                        <div className="bg-gradient-to-br from-red-50 to-red-100/50 border border-red-200 rounded-xl p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
+                              <AlertCircle className="w-4 h-4 text-white" />
                             </div>
-                            <div>
-                              <h3 className="text-sm font-medium text-gray-900">Has Errors</h3>
-                              <p className="text-xs text-gray-600">Needs attention</p>
-                            </div>
+                            <span className="text-xs text-gray-700">Failed</span>
                           </div>
+                          <div className="text-2xl font-bold text-red-700">{failedCount}</div>
                         </div>
 
-                        {/* Total Uploaded */}
-                        <div className="p-4 rounded-lg border-2 border-gray-200 bg-gray-50">
-                          <div className="text-3xl font-bold text-gray-600 mb-1">
-                            {totalUploaded}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="p-1.5 bg-gray-100 rounded-lg">
-                              <Upload className="h-4 w-4 text-gray-600" />
+                        {/* Pending */}
+                        <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-300 rounded-xl p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center">
+                              <Clock className="w-4 h-4 text-white" />
                             </div>
-                            <div>
-                              <h3 className="text-sm font-medium text-gray-900">Total Files</h3>
-                              <p className="text-xs text-gray-600">Resumes uploaded</p>
-                            </div>
+                            <span className="text-xs text-gray-700">Pending</span>
                           </div>
+                          <div className="text-2xl font-bold text-gray-700">{pendingCount}</div>
+                        </div>
+
+                        {/* Success Rate */}
+                        <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200 rounded-xl p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                              <FileText className="w-4 h-4 text-white" />
+                            </div>
+                            <span className="text-xs text-gray-700">Success Rate</span>
+                          </div>
+                          <div className="text-2xl font-bold text-blue-700">{successRate}%</div>
                         </div>
                       </div>
 
                       {/* Upload History List */}
-                      <div className="mb-3">
-                        <h3 className="text-sm font-semibold text-gray-900 mb-3">Recent Uploads</h3>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-gray-900">Recent Uploads</h3>
+                        <span className="text-xs text-gray-500">{myResumesHistory.length} batch{myResumesHistory.length !== 1 ? 'es' : ''}</span>
                       </div>
 
                       {myResumesHistory.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center text-center py-8">
-                          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                            <History className="w-8 h-8 text-gray-400" />
+                        <div className="flex flex-col items-center justify-center text-center py-12">
+                          <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                            <FileText className="w-10 h-10 text-blue-600" />
                           </div>
-                          <h3 className="font-medium text-gray-900 mb-1">No upload history</h3>
-                          <p className="text-sm text-gray-500">Your upload history will appear here</p>
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No Upload History</h3>
+                          <p className="text-sm text-gray-500 max-w-sm">Bulk upload reports will appear here. Upload multiple resumes to see detailed status reports.</p>
                         </div>
                       ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                           {myResumesHistory
                             .slice(0, 20)
                             .map(record => {
                               const processed = record.completed + record.errors + record.duplicated + (record.versioned || 0);
-                              const percentage = record.totalFiles > 0 ? Math.round((processed / record.totalFiles) * 100) : 100;
+                              const percentage = record.totalFiles > 0 ? Math.round((record.completed / record.totalFiles) * 100) : 100;
+                              const isUploading = record.status === 'uploading';
                               const isProcessing = record.status === 'processing' || record.pending > 0;
                               const hasErrors = record.errors > 0;
-                              const isComplete = !isProcessing && percentage === 100;
+                              const hasIssues = record.duplicated > 0 || (record.versioned || 0) > 0 || record.errors > 0;
 
                               return (
                                 <div
                                   key={record.id}
-                                  className={`rounded-lg p-4 border-2 transition-all ${
-                                    isProcessing
-                                      ? 'bg-blue-50 border-blue-200'
-                                      : hasErrors
-                                        ? 'bg-red-50 border-red-200'
-                                        : 'bg-green-50 border-green-200'
-                                  }`}
+                                  className="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-300 hover:shadow-lg transition-all cursor-pointer"
                                 >
-                                  <div className="flex items-start justify-between mb-2">
-                                    <div className="flex items-center gap-2">
-                                      {isProcessing ? (
-                                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                          <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
-                                        </div>
-                                      ) : hasErrors ? (
-                                        <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-                                          <AlertCircle className="w-4 h-4 text-red-600" />
-                                        </div>
-                                      ) : (
-                                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                                          <CheckCircle className="w-4 h-4 text-green-600" />
-                                        </div>
-                                      )}
+                                  {/* Header Row */}
+                                  <div className="flex items-start justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <FileText className="w-5 h-5 text-blue-600" />
+                                      </div>
                                       <div>
                                         <span className="font-medium text-gray-900 text-sm block">{record.fileName}</span>
                                         {record.date && (
-                                          <span className="text-xs text-gray-500">
+                                          <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                            <Calendar className="w-3 h-3" />
                                             {new Date(record.date).toLocaleString()}
                                           </span>
                                         )}
                                       </div>
                                     </div>
-                                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                                      isProcessing
-                                        ? 'bg-blue-100 text-blue-700'
-                                        : hasErrors
-                                          ? 'bg-red-100 text-red-700'
-                                          : 'bg-green-100 text-green-700'
-                                    }`}>
-                                      {isProcessing ? `${percentage}%` : isComplete ? 'Completed' : 'Has errors'}
-                                    </span>
+                                    <div className="flex items-center gap-3">
+                                      {isUploading && (
+                                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 text-blue-700 text-xs rounded-full border border-blue-200 animate-pulse">
+                                          <Loader2 className="w-3 h-3 animate-spin" />
+                                          Uploading...
+                                        </span>
+                                      )}
+                                      {!isUploading && hasIssues && (
+                                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full border border-yellow-200">
+                                          <AlertCircle className="w-3 h-3" />
+                                          Needs Review
+                                        </span>
+                                      )}
+                                      {!isUploading && (
+                                        <div className="text-right">
+                                          <div className={`text-xl font-bold ${
+                                            percentage === 100 ? 'text-green-600' :
+                                            percentage >= 90 ? 'text-blue-600' :
+                                            percentage >= 70 ? 'text-yellow-600' :
+                                            'text-red-600'
+                                          }`}>
+                                            {percentage}%
+                                          </div>
+                                          <div className="text-xs text-gray-500">Success</div>
+                                        </div>
+                                      )}
+                                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                                    </div>
                                   </div>
 
-                                  {isProcessing && (
-                                    <div className="h-2 bg-blue-100 rounded-full overflow-hidden mb-3">
+                                  {/* Mini Stats */}
+                                  <div className="grid grid-cols-5 gap-2 mb-4">
+                                    <div className="text-center p-2 bg-green-50 rounded-lg border border-green-100">
+                                      <div className="text-sm font-semibold text-green-700">{record.completed}</div>
+                                      <div className="text-xs text-gray-600">Done</div>
+                                    </div>
+                                    <div className="text-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
+                                      <div className="text-sm font-semibold text-yellow-700">{record.duplicated}</div>
+                                      <div className="text-xs text-gray-600">Dup</div>
+                                    </div>
+                                    <div className="text-center p-2 bg-purple-50 rounded-lg border border-purple-100">
+                                      <div className="text-sm font-semibold text-purple-700">{record.versioned || 0}</div>
+                                      <div className="text-xs text-gray-600">Ver</div>
+                                    </div>
+                                    <div className="text-center p-2 bg-red-50 rounded-lg border border-red-100">
+                                      <div className="text-sm font-semibold text-red-700">{record.errors}</div>
+                                      <div className="text-xs text-gray-600">Failed</div>
+                                    </div>
+                                    <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100">
+                                      <div className="text-sm font-semibold text-blue-700">{record.pending}</div>
+                                      <div className="text-xs text-gray-600">Pend</div>
+                                    </div>
+                                  </div>
+
+                                  {/* Progress Bar */}
+                                  <div className="mb-4">
+                                    <div className="flex items-center justify-between text-xs text-gray-600 mb-1.5">
+                                      <span>Progress</span>
+                                      <span>{processed} of {record.totalFiles}</span>
+                                    </div>
+                                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                                       <div
-                                        className="h-full bg-blue-500 transition-all duration-300 rounded-full"
-                                        style={{ width: `${percentage}%` }}
+                                        className={`h-full transition-all ${
+                                          percentage === 100 ? 'bg-green-500' :
+                                          percentage >= 90 ? 'bg-blue-500' :
+                                          percentage >= 70 ? 'bg-yellow-500' :
+                                          'bg-red-500'
+                                        }`}
+                                        style={{ width: `${Math.min((processed / record.totalFiles) * 100, 100)}%` }}
                                       />
                                     </div>
-                                  )}
-
-                                  <div className="flex flex-wrap gap-2 text-xs">
-                                    {record.completed > 0 && (
-                                      <span className="flex items-center gap-1 bg-green-100 text-green-700 px-2 py-1 rounded">
-                                        <CheckCircle className="w-3 h-3" />
-                                        {record.completed} uploaded
-                                      </span>
-                                    )}
-                                    {(record.versioned || 0) > 0 && (
-                                      <span className="flex items-center gap-1 bg-purple-100 text-purple-700 px-2 py-1 rounded">
-                                        <GitBranch className="w-3 h-3" />
-                                        {record.versioned} versioned
-                                      </span>
-                                    )}
-                                    {record.duplicated > 0 && (
-                                      <span className="flex items-center gap-1 bg-yellow-100 text-yellow-700 px-2 py-1 rounded">
-                                        <Copy className="w-3 h-3" />
-                                        {record.duplicated} duplicate
-                                      </span>
-                                    )}
-                                    {record.errors > 0 && (
-                                      <span className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-1 rounded">
-                                        <AlertCircle className="w-3 h-3" />
-                                        {record.errors} failed
-                                      </span>
-                                    )}
-                                    {record.pending > 0 && (
-                                      <span className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                                        <Clock className="w-3 h-3" />
-                                        {record.pending} pending
-                                      </span>
-                                    )}
                                   </div>
+
+                                  {/* Individual File Statuses */}
+                                  {record.statuses && record.statuses.length > 0 && (
+                                    <div className="border-t border-gray-100 pt-4">
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div className="text-xs font-semibold text-gray-700">Files ({record.statuses.length})</div>
+                                        <div className="flex items-center gap-2 text-xs">
+                                          <span className="flex items-center gap-1 text-green-600">
+                                            <CheckCircle className="w-3 h-3" />
+                                            {record.statuses.filter((f: any) => f.status === 'completed' || f.status === 'versioned').length}
+                                          </span>
+                                          <span className="flex items-center gap-1 text-blue-600">
+                                            <Loader2 className="w-3 h-3" />
+                                            {record.statuses.filter((f: any) => f.status === 'processing' || f.status === 'pending').length}
+                                          </span>
+                                          <span className="flex items-center gap-1 text-red-600">
+                                            <AlertCircle className="w-3 h-3" />
+                                            {record.statuses.filter((f: any) => f.status === 'error' || f.status === 'duplicate').length}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                                        {record.statuses.map((file: any, idx: number) => {
+                                          const isClickable = ['completed', 'versioned', 'duplicate', 'error'].includes(file.status);
+                                          return (
+                                          <div
+                                            key={file.id || idx}
+                                            onClick={() => {
+                                              if (isClickable) {
+                                                setSelectedHistoryItem({
+                                                  id: file.id,
+                                                  fileName: file.fileName,
+                                                  status: file.status,
+                                                  errorMessage: file.errorMessage,
+                                                  candidateName: file.candidateName,
+                                                  resumeId: file.resumeId,
+                                                });
+                                              }
+                                            }}
+                                            className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+                                              file.status === 'completed' ? 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300' :
+                                              file.status === 'versioned' ? 'bg-purple-50 border-purple-200 hover:bg-purple-100 hover:border-purple-300' :
+                                              file.status === 'processing' ? 'bg-blue-50 border-blue-200' :
+                                              file.status === 'duplicate' ? 'bg-yellow-50 border-yellow-200 hover:bg-yellow-100 hover:border-yellow-300' :
+                                              file.status === 'error' ? 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300' :
+                                              'bg-gray-50 border-gray-200'
+                                            } ${isClickable ? 'cursor-pointer' : ''}`}
+                                          >
+                                            {/* Status Icon */}
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                              file.status === 'completed' ? 'bg-green-500' :
+                                              file.status === 'versioned' ? 'bg-purple-500' :
+                                              file.status === 'processing' ? 'bg-blue-500' :
+                                              file.status === 'duplicate' ? 'bg-yellow-500' :
+                                              file.status === 'error' ? 'bg-red-500' :
+                                              'bg-gray-400'
+                                            }`}>
+                                              {file.status === 'completed' && <CheckCircle className="w-4 h-4 text-white" />}
+                                              {file.status === 'versioned' && <GitBranch className="w-4 h-4 text-white" />}
+                                              {file.status === 'processing' && <Loader2 className="w-4 h-4 text-white animate-spin" />}
+                                              {file.status === 'duplicate' && <Copy className="w-4 h-4 text-white" />}
+                                              {file.status === 'error' && <AlertCircle className="w-4 h-4 text-white" />}
+                                              {file.status === 'pending' && <Clock className="w-4 h-4 text-white animate-pulse" />}
+                                            </div>
+                                            {/* File Info */}
+                                            <div className="flex-1 min-w-0">
+                                              <div className="font-medium text-gray-900 text-sm truncate">{file.fileName}</div>
+                                              <div className="text-xs text-gray-500 mt-0.5">
+                                                {file.status === 'completed' && (file.candidateName ? `✓ ${file.candidateName}` : '✓ Uploaded successfully')}
+                                                {file.status === 'versioned' && (file.candidateName ? `↑ ${file.candidateName} - New version` : '↑ Saved as new version')}
+                                                {file.status === 'processing' && '⚡ Processing...'}
+                                                {file.status === 'pending' && '⏳ Waiting in queue...'}
+                                                {file.status === 'duplicate' && (file.errorMessage || '⚠ Duplicate - already exists')}
+                                                {file.status === 'error' && (file.errorMessage || '✗ Failed to process')}
+                                              </div>
+                                            </div>
+                                            {/* Status Badge */}
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                              file.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                              file.status === 'versioned' ? 'bg-purple-100 text-purple-700' :
+                                              file.status === 'processing' ? 'bg-blue-100 text-blue-700' :
+                                              file.status === 'duplicate' ? 'bg-yellow-100 text-yellow-700' :
+                                              file.status === 'error' ? 'bg-red-100 text-red-700' :
+                                              'bg-gray-100 text-gray-600'
+                                            }`}>
+                                              {file.status === 'completed' ? '✓ Done' :
+                                               file.status === 'versioned' ? '↑ Version' :
+                                               file.status === 'processing' ? '⚡ Running' :
+                                               file.status === 'duplicate' ? '⚠ Duplicate' :
+                                               file.status === 'error' ? '✗ Failed' :
+                                               '⏳ Queued'}
+                                            </span>
+                                          </div>
+                                        );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -1016,10 +1678,13 @@ export default function MyResumesPage() {
               </div>
 
               {/* Footer */}
-              <div className="p-4 border-t border-gray-200 bg-gray-50">
+              <div className="border-t border-gray-200 px-6 py-4 bg-white rounded-b-2xl">
                 <button
-                  onClick={() => setIsUploadHistoryModalOpen(false)}
-                  className="w-full px-4 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+                  onClick={() => {
+                    setIsUploadHistoryModalOpen(false);
+                    setIsUploadHistoryMinimized(false);
+                  }}
+                  className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
                 >
                   Close
                 </button>
@@ -1027,6 +1692,14 @@ export default function MyResumesPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Upload History Item Detail Modal */}
+      {selectedHistoryItem && (
+        <UploadHistoryDetailModal
+          item={selectedHistoryItem}
+          onClose={() => setSelectedHistoryItem(null)}
+        />
       )}
     </main>
   );

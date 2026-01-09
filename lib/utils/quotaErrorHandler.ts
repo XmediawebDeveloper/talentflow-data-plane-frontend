@@ -119,7 +119,7 @@ export function getQuotaTypeName(quotaType: string): string {
     'RS': 'Resume Scoring',
     'AS': 'Assessment',
     'AIU': 'AI Interview',
-    'max_jobs': 'Job Creation',
+    'max_jobs': 'Job Publishing Units',
     'max_seats': 'Team Seats',
   };
   return names[quotaType] || quotaType;
