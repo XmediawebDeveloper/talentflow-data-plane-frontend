@@ -360,6 +360,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     mustHaveComments?: string;
   }>({});
 
+  // Track if user has proceeded to extract stage (to disable regenerate button)
+  const [hasProceededToExtract, setHasProceededToExtract] = useState(false);
+
   // Save to draft state
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isNavigatingBack, setIsNavigatingBack] = useState(false);
@@ -379,6 +382,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     const fetchMasterData = async () => {
       try {
         const data = await masterDataService.getAll();
+        console.log('[TalentFlow] Master data loaded:', {
+          education_levels: data.education_levels?.map(e => e.code),
+          experience_levels: data.experience_levels?.map(e => e.code),
+          industry_types: data.industry_types?.length
+        });
         setExperienceLevels(data.experience_levels);
         setEducationLevels(data.education_levels);
         setIndustryTypes(data.industry_types);
@@ -554,54 +562,152 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   };
 
   const handleNext = async () => {
+    const jdText = mode === 'ai' ? generatedJD : manualJD;
+
+    // Validate JD input is not empty
+    if (!jdText || jdText.trim().length < 50) {
+      toast.error({
+        title: 'Invalid JD',
+        description: 'Please provide a valid job description with at least 50 characters.',
+      });
+      return;
+    }
+
     setIsExtracting(true);
+    setHasProceededToExtract(true); // Disable regenerate button immediately when Next is clicked
 
     try {
-      const jdText = mode === 'ai' ? generatedJD : manualJD;
-
       // Call real API to extract parameters using AI
+      console.log('[TalentFlow] Extracting parameters from JD, length:', jdText.length);
       const params = await jdService.extractParamsFromText(jdText);
 
+      // Debug: Log API response to see what's being extracted
+      console.log('[TalentFlow] Extraction API response:', params);
+      console.log('[TalentFlow] Experience values:', {
+        experience_min: params.experience_min,
+        experience_max: params.experience_max,
+        experience_level: params.experience_level
+      });
+
       // Map API response to component's ExtractedData format
-      // Map experience - prioritize explicit min/max values over level mapping
+      // Map experience to dropdown codes: '0-1', '1-3', '3-5', '5-7', '7-10', '10+'
       let experienceValue = '';
 
-      // First try to use experience_min and experience_max (more accurate)
-      if (params.experience_min !== null && params.experience_min !== undefined) {
-        if (params.experience_max !== null && params.experience_max !== undefined) {
-          experienceValue = `${params.experience_min}-${params.experience_max}`;
-        } else {
-          experienceValue = `${params.experience_min}+`;
-        }
-      } else if (params.experience_max !== null && params.experience_max !== undefined) {
-        experienceValue = `0-${params.experience_max}`;
+      // Use typeof check to properly handle 0 as a valid value
+      const hasExpMin = typeof params.experience_min === 'number';
+      const hasExpMax = typeof params.experience_max === 'number';
+
+      // Map experience to closest dropdown code
+      const mapToExperienceCode = (min: number, max: number | null): string => {
+        // Use the primary value (prefer min, fallback to max)
+        const primaryValue = min || max || 0;
+
+        console.log('[TalentFlow] mapToExperienceCode input:', { min, max, primaryValue });
+
+        // Map based on primary value
+        if (primaryValue >= 10) return '10+';
+        if (primaryValue >= 7) return '7-10';
+        if (primaryValue >= 5) return '5-7';
+        if (primaryValue >= 3) return '3-5';
+        if (primaryValue >= 1) return '1-3';
+        return '0-1';
+      };
+
+      if (hasExpMin || hasExpMax) {
+        const min = hasExpMin ? params.experience_min : 0;
+        const max = hasExpMax ? params.experience_max : null;
+        experienceValue = mapToExperienceCode(min, max);
+        console.log('[TalentFlow] Mapped experience:', { min, max, code: experienceValue });
       }
 
       // Fall back to experience_level mapping if no min/max
       if (!experienceValue && params.experience_level) {
         const levelMap: Record<string, string> = {
-          'entry': '0-2',
-          'junior': '2-5',
-          'mid': '5-7',
-          'senior': '7-10',
+          'entry': '0-1',
+          'fresher': '0-1',
+          'junior': '1-3',
+          'mid': '3-5',
+          'senior': '5-7',
+          'lead': '7-10',
           'architect': '10+',
           'management': '10+',
+          'principal': '10+',
         };
         // Handle various formats like "mid", "Mid", "Mid Level", "mid-level"
         const normalizedLevel = params.experience_level.toLowerCase().replace(/[^a-z]/g, '');
-        experienceValue = levelMap[normalizedLevel] || '';
+        experienceValue = levelMap[normalizedLevel] || '3-5';  // Default to 3-5 if unknown
+        console.log('[TalentFlow] Mapped experience from level:', { level: params.experience_level, code: experienceValue });
+      }
+
+      // Final fallback - always set a default
+      if (!experienceValue) {
+        experienceValue = '3-5';
+        console.log('[TalentFlow] Using default experience: 3-5');
+      }
+
+      // Map education to dropdown codes: 'diploma', 'associate', 'bachelors', 'masters', 'doctorate', 'none', 'others'
+      const mapToEducationCode = (degree: string | undefined): string => {
+        if (!degree) return '';
+        const normalized = degree.toLowerCase().replace(/[^a-z]/g, '');
+        const educationMap: Record<string, string> = {
+          'diploma': 'diploma',
+          'associate': 'associate',
+          'associatedegree': 'associate',
+          'bachelors': 'bachelors',
+          'bachelorsdegree': 'bachelors',
+          'bachelor': 'bachelors',
+          'btech': 'bachelors',
+          'be': 'bachelors',
+          'bsc': 'bachelors',
+          'ba': 'bachelors',
+          'masters': 'masters',
+          'mastersdegree': 'masters',
+          'master': 'masters',
+          'mtech': 'masters',
+          'me': 'masters',
+          'msc': 'masters',
+          'mba': 'masters',
+          'doctorate': 'doctorate',
+          'phd': 'doctorate',
+          'doctoral': 'doctorate',
+          'none': 'none',
+          'noformal': 'none',
+          'noformaleducation': 'none',
+          'others': 'others',
+          'other': 'others',
+          'any': 'others',
+        };
+        return educationMap[normalized] || 'others';
+      };
+
+      let educationValue = mapToEducationCode(params.education_requirements?.degree);
+      // Default to bachelors if no education found
+      if (!educationValue) {
+        educationValue = 'bachelors';
+        console.log('[TalentFlow] Using default education: bachelors');
+      } else {
+        console.log('[TalentFlow] Mapped education:', { degree: params.education_requirements?.degree, code: educationValue });
+      }
+
+      // Map industry to lowercase
+      let industryValue = params.industry_type?.toLowerCase().replace(/[^a-z_]/g, '_') || '';
+      if (!industryValue) {
+        industryValue = 'technology';
+        console.log('[TalentFlow] Using default industry: technology');
+      } else {
+        console.log('[TalentFlow] Mapped industry:', { industry: params.industry_type, code: industryValue });
       }
 
       const extraction: ExtractedData = {
         mustHaveSkills: params.must_have_skills || [],
         mustHaveComments: params.must_have_comments || [],
         niceToHaveSkills: params.nice_to_have_skills || [],
-        education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
-        educationRequired: true,
+        education: educationValue,
+        educationRequired: true,  // Auto-check since we always have a value
         experience: experienceValue,
-        experienceRequired: true,
-        industryType: params.industry_type?.toLowerCase() || '',
-        industryTypeRequired: false,
+        experienceRequired: true,  // Auto-check since we always have a value
+        industryType: industryValue,
+        industryTypeRequired: true,  // Auto-check since we always have a value
         allowOverqualified: false,
         employmentType: 'full_time',  // Default value
         workModel: 'onsite',  // Default value
@@ -623,16 +729,89 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       setExtractedData(extraction);
       setStep('extract');
 
+      // Save JD with creation_stage: 'extract' so refresh preserves the stage
+      console.log('[TalentFlow] Saving JD with extract stage, editingId:', editingId);
+      const jdData = {
+        title: jobTitle.trim(),
+        description: jdText,
+        creation_stage: 'extract' as const,
+        creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
+        must_have_skills: extraction.mustHaveSkills,
+        nice_to_have_skills: extraction.niceToHaveSkills,
+        must_have_comments: extraction.mustHaveComments,
+        education_requirements: extraction.education ? { degree: extraction.education } : undefined,
+        experience_min: hasExpMin ? params.experience_min : undefined,
+        experience_max: hasExpMax ? params.experience_max : undefined,
+        industry_type: extraction.industryType || undefined,
+        salary_min: extraction.salaryFrom ? parseInt(extraction.salaryFrom.replace(/[^0-9]/g, '')) : undefined,
+        salary_max: extraction.salaryTo ? parseInt(extraction.salaryTo.replace(/[^0-9]/g, '')) : undefined,
+        compensation_type: extraction.compensationType,
+        employment_type: extraction.employmentType,
+        remote_type: extraction.workModel,
+        certifications: extraction.certifications,
+        domain_keywords: extraction.domainKeywords,
+        locations: extraction.locations.map(loc => ({
+          city: loc.city,
+          radius_km: parseInt(loc.radius) || 50,
+          is_required: extraction.locationsRequired,
+        })),
+      };
+
+      try {
+        let savedJd;
+        let jdId = editingId;
+        if (editingId) {
+          savedJd = await jdService.update(editingId, jdData);
+          console.log('[TalentFlow] JD updated with extract stage, id:', editingId);
+        } else {
+          savedJd = await jdService.create(jdData);
+          jdId = savedJd.id;
+          setEditingId(savedJd.id);
+          console.log('[TalentFlow] JD created with extract stage, new id:', savedJd.id);
+        }
+
+        // Always ensure URL has the JD ID
+        if (jdId && !window.location.search.includes(`id=${jdId}`)) {
+          const newUrl = `${window.location.pathname}?id=${jdId}`;
+          window.history.replaceState({}, '', newUrl);
+          console.log('[TalentFlow] URL updated with JD ID:', jdId);
+        }
+      } catch (saveError) {
+        console.error('[TalentFlow] Failed to save extract stage:', saveError);
+        toast.error({
+          title: 'Save Failed',
+          description: 'Could not save progress. Your work may be lost on refresh.',
+        });
+      }
+
       toast.success({
         title: 'Data Extracted',
         description: 'AI has analyzed your JD and extracted key requirements.'
       });
     } catch (error) {
       console.error('[TalentFlow] Extraction failed:', error);
-      toast.error({
-        title: 'Extraction Failed',
-        description: 'Could not extract data. Please check your connection and try again.'
-      });
+
+      // Reset hasProceededToExtract so user can try again
+      setHasProceededToExtract(false);
+
+      // Show appropriate error message
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('AI service')) {
+        toast.error({
+          title: 'AI Service Error',
+          description: 'The AI extraction service is currently unavailable. Please try again later.'
+        });
+      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        toast.error({
+          title: 'Connection Error',
+          description: 'Could not connect to the server. Please check your internet connection.'
+        });
+      } else {
+        toast.error({
+          title: 'Extraction Failed',
+          description: 'Could not extract parameters from JD. Please try again.'
+        });
+      }
     } finally {
       setIsExtracting(false);
     }
@@ -966,6 +1145,83 @@ Use professional language, clear formatting, and make it engaging for candidates
 
     // Go to review step to show the reformatted summary
     setStep('review');
+
+    // Save JD with creation_stage: 'review' so refresh preserves the stage
+    try {
+      // Parse experience for saving
+      let experienceMin: number | undefined;
+      let experienceMax: number | undefined;
+      if (extractedData.experience) {
+        const rangeMatch = extractedData.experience.match(/(\d+)\s*-\s*(\d+)/);
+        const plusMatch = extractedData.experience.match(/(\d+)\+/);
+        if (rangeMatch) {
+          experienceMin = parseInt(rangeMatch[1]);
+          experienceMax = parseInt(rangeMatch[2]);
+        } else if (plusMatch) {
+          experienceMin = parseInt(plusMatch[1]);
+          experienceMax = experienceMin + 5;
+        } else {
+          const singleMatch = extractedData.experience.match(/(\d+)/);
+          if (singleMatch) {
+            experienceMin = parseInt(singleMatch[1]);
+            experienceMax = experienceMin + 2;
+          }
+        }
+      }
+
+      const jdData = {
+        title: jobTitle.trim(),
+        description: generatedJD || manualJD,
+        creation_stage: 'review' as const,
+        creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
+        must_have_skills: extractedData.mustHaveSkills,
+        nice_to_have_skills: extractedData.niceToHaveSkills,
+        must_have_comments: extractedData.mustHaveComments,
+        education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
+        experience_min: experienceMin,
+        experience_max: experienceMax,
+        industry_type: extractedData.industryType || undefined,
+        salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9]/g, '')) : undefined,
+        salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9]/g, '')) : undefined,
+        compensation_type: extractedData.compensationType,
+        employment_type: extractedData.employmentType,
+        remote_type: extractedData.workModel,
+        assessment_guidance: extractedData.assessmentGuidance || undefined,
+        allow_overqualified: extractedData.allowOverqualified,
+        certifications: extractedData.certifications,
+        domain_keywords: extractedData.domainKeywords,
+        locations: extractedData.locations.map(loc => ({
+          city: loc.city,
+          radius_km: parseInt(loc.radius) || 50,
+          is_required: extractedData.locationsRequired,
+        })),
+      };
+
+      let savedJd;
+      let jdId = editingId;
+      if (editingId) {
+        savedJd = await jdService.update(editingId, jdData);
+        console.log('[TalentFlow] JD updated with review stage, id:', editingId);
+      } else {
+        savedJd = await jdService.create(jdData);
+        jdId = savedJd.id;
+        setEditingId(savedJd.id);
+        console.log('[TalentFlow] JD created with review stage:', savedJd.id);
+      }
+
+      // Always ensure URL has the JD ID
+      if (jdId && !window.location.search.includes(`id=${jdId}`)) {
+        const newUrl = `${window.location.pathname}?id=${jdId}`;
+        window.history.replaceState({}, '', newUrl);
+        console.log('[TalentFlow] URL updated with JD ID:', jdId);
+      }
+    } catch (saveError) {
+      console.error('[TalentFlow] Failed to save review stage:', saveError);
+      toast.error({
+        title: 'Save Failed',
+        description: 'Could not save progress. Your work may be lost on refresh.',
+      });
+    }
   };
 
   // JD12: Compute validation status for review screen
@@ -1402,9 +1658,18 @@ Use professional language, clear formatting, and make it engaging for candidates
   // - Published JD: editingId is null, so saves will create a new draft
   useEffect(() => {
     if (editingJD) {
+      console.log('[TalentFlow] Restoring JD state from editingJD:', {
+        id: editingJD.id,
+        title: editingJD.title,
+        creation_stage: editingJD.creation_stage,
+        creation_method: editingJD.creation_method,
+        status: editingJD.status
+      });
+
       setJobTitle(editingJD.title);
       setGeneratedJD(editingJD.description);
       setStep(editingJD.creation_stage);
+      console.log('[TalentFlow] Set step to:', editingJD.creation_stage);
 
       // Restore the creation mode based on saved creation_method
       if (editingJD.creation_method) {
@@ -1413,15 +1678,22 @@ Use professional language, clear formatting, and make it engaging for candidates
 
       // Load extracted data if we're past the create step
       if (editingJD.creation_stage !== 'create') {
+        const hasEducation = !!(editingJD.education_requirements?.degree);
+        const hasExperience = !!(editingJD.experience_min || editingJD.experience_max);
+        const hasIndustry = !!(editingJD.industry_type);
+
         setExtractedData(prev => ({
           ...prev,
           mustHaveSkills: editingJD.must_have_skills || [],
           niceToHaveSkills: editingJD.nice_to_have_skills || [],
           education: editingJD.education_requirements?.degree || '',
+          educationRequired: hasEducation,  // Auto-check if value exists
           experience: editingJD.experience_min
             ? `${editingJD.experience_min}${editingJD.experience_max ? `-${editingJD.experience_max}` : '+'}`
             : '',
+          experienceRequired: hasExperience,  // Auto-check if value exists
           industryType: editingJD.industry_type || '',
+          industryTypeRequired: hasIndustry,  // Auto-check if value exists
           department: editingJD.department || '',
           salaryFrom: editingJD.salary_min?.toString() || '',
           salaryTo: editingJD.salary_max?.toString() || '',
@@ -1639,7 +1911,8 @@ Use professional language, clear formatting, and make it engaging for candidates
                         !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
                         !aiPrompt.trim() ||
                         aiPrompt.length > VALIDATION.AI_PROMPT.max ||
-                        isGenerating
+                        isGenerating ||
+                        hasProceededToExtract
                       }
                       className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white px-6 py-3 rounded-md hover:from-gray-700 hover:to-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -2589,7 +2862,10 @@ Use professional language, clear formatting, and make it engaging for candidates
 
             <div className="flex justify-between items-center mt-8">
               <button
-                onClick={() => setStep('create')}
+                onClick={() => {
+                  setStep('create');
+                  setHasProceededToExtract(false);  // Re-enable regenerate button when going back
+                }}
                 className="px-8 py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >
                 Back
@@ -2690,8 +2966,8 @@ Use professional language, clear formatting, and make it engaging for candidates
                       {extractedData.locations.length > 0 && (
                         <span>📍 {extractedData.locations[0].city}</span>
                       )}
-                      {extractedData.compensationType && (
-                        <span>💰 {extractedData.compensationType}</span>
+                      {(extractedData.salaryFrom || extractedData.salaryTo) && (
+                        <span>💰 ₹{extractedData.salaryFrom ? parseInt(extractedData.salaryFrom).toLocaleString('en-IN') : '0'} - ₹{extractedData.salaryTo ? parseInt(extractedData.salaryTo).toLocaleString('en-IN') : '0'} / {extractedData.compensationType}</span>
                       )}
                       {extractedData.experience && (
                         <span>⏱️ {extractedData.experience} years exp</span>
