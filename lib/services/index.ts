@@ -83,6 +83,16 @@ export type {
   UpdateUserRequest,
 } from './userService';
 
+// Team Management
+export { default as teamService } from './teamService';
+export type {
+  Team,
+  TeamMember,
+  TeamStats,
+  CreateTeamRequest,
+  UpdateTeamRequest,
+} from './teamService';
+
 // Master Data
 export { masterDataService } from './masterDataService';
 export type {

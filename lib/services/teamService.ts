@@ -1,0 +1,163 @@
+/**
+ * Team Service
+ * Handles team management API calls
+ */
+
+import api from './api';
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  initials: string;
+  avatar_url?: string;
+  role?: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  description: string;
+  members: TeamMember[];
+  member_count: number;
+  active_jobs_count: number;
+  resumes_count: number;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  team_lead?: TeamMember;
+}
+
+export interface TeamStats {
+  total_teams: number;
+  total_members: number;
+  avg_members_per_team: number;
+}
+
+export interface CreateTeamRequest {
+  name: string;
+  description?: string;
+  member_ids?: string[];
+  team_lead_id?: string;
+}
+
+export interface UpdateTeamRequest {
+  name?: string;
+  description?: string;
+  member_ids?: string[];
+  team_lead_id?: string;
+}
+
+class TeamService {
+  /**
+   * Get all teams
+   */
+  async getTeams(): Promise<Team[]> {
+    try {
+      const response = await api.get('/teams');
+      return response.data.data || response.data;
+    } catch (error) {
+      console.error('Error fetching teams:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get team by ID
+   */
+  async getTeamById(teamId: string): Promise<Team> {
+    try {
+      const response = await api.get(`/teams/${teamId}`);
+      return response.data.data || response.data;
+    } catch (error) {
+      console.error(`Error fetching team ${teamId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get team (alias for getTeamById)
+   */
+  async getTeam(teamId: string): Promise<Team> {
+    return this.getTeamById(teamId);
+  }
+
+  /**
+   * Get team statistics
+   */
+  async getTeamStats(): Promise<TeamStats> {
+    try {
+      const response = await api.get('/teams/stats');
+      return response.data.data || response.data;
+    } catch (error) {
+      console.error('Error fetching team stats:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new team
+   */
+  async createTeam(data: CreateTeamRequest): Promise<Team> {
+    try {
+      const response = await api.post('/teams', data);
+      return response.data.data || response.data;
+    } catch (error) {
+      console.error('Error creating team:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a team
+   */
+  async updateTeam(teamId: string, data: UpdateTeamRequest): Promise<Team> {
+    try {
+      const response = await api.put(`/teams/${teamId}`, data);
+      return response.data.data || response.data;
+    } catch (error) {
+      console.error(`Error updating team ${teamId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a team
+   */
+  async deleteTeam(teamId: string): Promise<void> {
+    try {
+      await api.delete(`/teams/${teamId}`);
+    } catch (error) {
+      console.error(`Error deleting team ${teamId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add members to a team
+   */
+  async addTeamMembers(teamId: string, memberIds: string[]): Promise<Team> {
+    try {
+      const response = await api.post(`/teams/${teamId}/members`, { member_ids: memberIds });
+      return response.data.data || response.data;
+    } catch (error) {
+      console.error(`Error adding members to team ${teamId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Remove member from a team
+   */
+  async removeTeamMember(teamId: string, memberId: string): Promise<void> {
+    try {
+      await api.delete(`/teams/${teamId}/members/${memberId}`);
+    } catch (error) {
+      console.error(`Error removing member from team ${teamId}:`, error);
+      throw error;
+    }
+  }
+}
+
+const teamService = new TeamService();
+export default teamService;
