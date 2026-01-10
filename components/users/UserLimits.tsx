@@ -6,24 +6,31 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Users,
   AlertTriangle,
   TrendingUp,
   Loader2,
-  Info
+  Info,
+  Plus,
+  ShoppingCart
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { featurePermissionService, UserLimitsResponse } from '@/lib/services/featurePermissionService';
+import AddSeatsModal from './AddSeatsModal';
 
 interface UserLimitsProps {
   onUpgradeClick?: () => void;
+  onAddSeatsClick?: () => void;
   compact?: boolean;
 }
 
-export default function UserLimits({ onUpgradeClick, compact = false }: UserLimitsProps) {
+export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = false }: UserLimitsProps) {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [limits, setLimits] = useState<UserLimitsResponse | null>(null);
+  const [showAddSeatsModal, setShowAddSeatsModal] = useState(false);
 
   useEffect(() => {
     loadLimits();
@@ -66,33 +73,57 @@ export default function UserLimits({ onUpgradeClick, compact = false }: UserLimi
 
   if (compact) {
     return (
-      <div className={`p-3 rounded-lg border ${
-        limits.is_at_limit
-          ? 'bg-red-50 border-red-200'
-          : limits.approaching_limit
-          ? 'bg-amber-50 border-amber-200'
-          : 'bg-gray-50 border-gray-200'
-      }`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users className={`w-4 h-4 ${
-              limits.is_at_limit ? 'text-red-500' : limits.approaching_limit ? 'text-amber-500' : 'text-gray-500'
-            }`} />
-            <span className="text-sm font-medium text-gray-700">
-              {limits.current_users}/{limits.max_users} users
-            </span>
+      <>
+        <div className={`p-3 rounded-lg border ${
+          limits.is_at_limit
+            ? 'bg-red-50 border-red-200'
+            : limits.approaching_limit
+            ? 'bg-amber-50 border-amber-200'
+            : 'bg-gray-50 border-gray-200'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className={`w-4 h-4 ${
+                limits.is_at_limit ? 'text-red-500' : limits.approaching_limit ? 'text-amber-500' : 'text-gray-500'
+              }`} />
+              <span className="text-sm font-medium text-gray-700">
+                {limits.current_users}/{limits.max_users === -1 ? '∞' : limits.max_users} users
+              </span>
+            </div>
+            {limits.is_at_limit && (
+              <button
+                onClick={() => {
+                  if (onAddSeatsClick) {
+                    onAddSeatsClick();
+                  } else {
+                    setShowAddSeatsModal(true);
+                  }
+                }}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+                Add Seats
+              </button>
+            )}
           </div>
-          {limits.is_at_limit && (
-            <span className="text-xs text-red-600 font-medium">At limit</span>
-          )}
+          <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className={`h-full ${progressColor} transition-all`}
+              style={{ width: `${progressPercentage}%` }}
+            />
+          </div>
         </div>
-        <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-          <div
-            className={`h-full ${progressColor} transition-all`}
-            style={{ width: `${progressPercentage}%` }}
-          />
-        </div>
-      </div>
+
+        {/* Add Seats Modal */}
+        <AddSeatsModal
+          isOpen={showAddSeatsModal}
+          onClose={() => setShowAddSeatsModal(false)}
+          currentSeats={limits.current_users}
+          maxSeats={limits.max_users}
+          planName={limits.plan_name}
+          onSuccess={loadLimits}
+        />
+      </>
     );
   }
 
@@ -150,19 +181,35 @@ export default function UserLimits({ onUpgradeClick, compact = false }: UserLimi
       {limits.is_at_limit && (
         <div className="mt-4 flex items-start gap-2 p-3 bg-red-100 rounded-lg">
           <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-medium text-red-800">User limit reached</p>
             <p className="text-sm text-red-700 mt-0.5">
-              You cannot add more users. Upgrade your plan or deactivate existing users.
+              You cannot add more users. Purchase additional seats, upgrade your plan, or deactivate existing users.
             </p>
-            {onUpgradeClick && (
+            <div className="mt-3 flex flex-wrap gap-2">
               <button
-                onClick={onUpgradeClick}
-                className="mt-2 text-sm font-medium text-red-800 hover:text-red-900 underline"
+                onClick={() => {
+                  if (onAddSeatsClick) {
+                    onAddSeatsClick();
+                  } else {
+                    setShowAddSeatsModal(true);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
               >
-                Upgrade Plan
+                <Plus className="w-4 h-4" />
+                Add Seats
               </button>
-            )}
+              {onUpgradeClick && (
+                <button
+                  onClick={onUpgradeClick}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-700 text-sm font-medium rounded-lg border border-red-300 hover:bg-red-50 transition-colors"
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  Upgrade Plan
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -170,15 +217,40 @@ export default function UserLimits({ onUpgradeClick, compact = false }: UserLimi
       {limits.approaching_limit && !limits.is_at_limit && (
         <div className="mt-4 flex items-start gap-2 p-3 bg-amber-100 rounded-lg">
           <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-medium text-amber-800">Approaching user limit</p>
             <p className="text-sm text-amber-700 mt-0.5">
               Only {limits.available_slots} user slot{limits.available_slots !== 1 ? 's' : ''} remaining.
-              Consider upgrading your plan.
+              Consider adding more seats or upgrading your plan.
             </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                onClick={() => {
+                  if (onAddSeatsClick) {
+                    onAddSeatsClick();
+                  } else {
+                    setShowAddSeatsModal(true);
+                  }
+                }}
+                className="inline-flex items-center gap-1 text-sm font-medium text-amber-800 hover:text-amber-900 underline"
+              >
+                <Plus className="w-3 h-3" />
+                Add Seats
+              </button>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Add Seats Modal */}
+      <AddSeatsModal
+        isOpen={showAddSeatsModal}
+        onClose={() => setShowAddSeatsModal(false)}
+        currentSeats={limits.current_users}
+        maxSeats={limits.max_users}
+        planName={limits.plan_name}
+        onSuccess={loadLimits}
+      />
     </div>
   );
 }
