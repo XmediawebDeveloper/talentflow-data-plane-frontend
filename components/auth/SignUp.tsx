@@ -187,6 +187,27 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
   };
 
+  // Password strength validation (live feedback)
+  const getPasswordStrength = (password: string) => {
+    let strength = 0;
+    const checks = {
+      length: password.length >= 8,
+      uppercase: /[A-Z]/.test(password),
+      lowercase: /[a-z]/.test(password),
+      number: /[0-9]/.test(password),
+      special: /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(password),
+    };
+
+    Object.values(checks).forEach(check => {
+      if (check) strength++;
+    });
+
+    return { strength, checks };
+  };
+
+  const { strength: passwordStrength, checks: passwordChecks } = getPasswordStrength(form.password);
+  const passwordsMatch = form.password && form.confirmPassword && form.password === form.confirmPassword;
+
   const validateForm = (): string | null => {
     // Company name validation
     if (!form.companyName.trim()) {
@@ -1039,7 +1060,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                       onChange={handleChange('password')}
                       placeholder="Min 8 chars"
                       required
-                      style={{ ...inputStyle, paddingRight: 40 }}
+                      style={{
+                        ...inputStyle,
+                        paddingRight: 40,
+                        borderColor: form.password ? (passwordStrength === 5 ? '#10B981' : passwordStrength >= 3 ? '#F59E0B' : '#EF4444') : '#D1D5DB',
+                      }}
                     />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
                       {showPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
@@ -1056,7 +1081,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                       onChange={handleChange('confirmPassword')}
                       placeholder="Confirm"
                       required
-                      style={{ ...inputStyle, paddingRight: 40 }}
+                      style={{
+                        ...inputStyle,
+                        paddingRight: 40,
+                        borderColor: form.confirmPassword ? (passwordsMatch ? '#10B981' : '#EF4444') : '#D1D5DB',
+                      }}
                     />
                     <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
                       {showConfirmPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
@@ -1064,6 +1093,72 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                   </div>
                 </div>
               </div>
+
+              {/* Password Requirements - Live Validation */}
+              {(form.password || form.confirmPassword) && (
+                <div style={{
+                  marginBottom: 16,
+                  padding: 16,
+                  backgroundColor: '#F9FAFB',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: 12
+                }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>Password Requirements:</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
+                    {[
+                      { label: 'At least 8 characters', check: passwordChecks.length },
+                      { label: 'One uppercase letter', check: passwordChecks.uppercase },
+                      { label: 'One lowercase letter', check: passwordChecks.lowercase },
+                      { label: 'One number', check: passwordChecks.number },
+                      { label: 'One special character', check: passwordChecks.special },
+                      { label: 'Passwords match', check: passwordsMatch },
+                    ].map((req, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <CheckCircle style={{
+                          width: 16,
+                          height: 16,
+                          color: req.check ? '#10B981' : '#D1D5DB',
+                          transition: 'color 0.2s'
+                        }} />
+                        <span style={{
+                          fontSize: 13,
+                          color: req.check ? '#059669' : '#6B7280',
+                          transition: 'color 0.2s'
+                        }}>
+                          {req.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Strength Bar */}
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, color: '#6B7280' }}>Password Strength</span>
+                      <span style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: passwordStrength <= 2 ? '#EF4444' : passwordStrength <= 3 ? '#F59E0B' : passwordStrength <= 4 ? '#3B82F6' : '#10B981'
+                      }}>
+                        {passwordStrength === 0 ? 'Too Weak' : passwordStrength <= 2 ? 'Weak' : passwordStrength <= 3 ? 'Fair' : passwordStrength <= 4 ? 'Good' : 'Strong'}
+                      </span>
+                    </div>
+                    <div style={{
+                      height: 6,
+                      backgroundColor: '#E5E7EB',
+                      borderRadius: 3,
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${(passwordStrength / 5) * 100}%`,
+                        backgroundColor: passwordStrength <= 2 ? '#EF4444' : passwordStrength <= 3 ? '#F59E0B' : passwordStrength <= 4 ? '#3B82F6' : '#10B981',
+                        borderRadius: 3,
+                        transition: 'all 0.3s ease'
+                      }} />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Terms */}
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 24 }}>

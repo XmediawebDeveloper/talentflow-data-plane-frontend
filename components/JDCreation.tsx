@@ -18,7 +18,7 @@ type Step = 'create' | 'extract' | 'review';
 
 // Validation constants
 const VALIDATION = {
-  JOB_TITLE: { min: 2, max: 75 },
+  JOB_TITLE: { min: 2, max: 100 },
   AI_PROMPT: { min: 30, max: 1500 },
   MANUAL_JD: { min: 100, max: 10000 },
   ASSESSMENT_GUIDANCE: { min: 10, max: 100 },
@@ -40,6 +40,7 @@ interface ExtractedData {
   mustHaveSkills: string[];
   mustHaveComments: string[];
   niceToHaveSkills: string[];
+  niceToHaveComments: string[];
   education: string;
   educationRequired: boolean;
   experience: string;
@@ -87,6 +88,7 @@ interface EditingJDData {
   assessment_guidance?: string;
   internal_comments?: string;
   must_have_comments?: string[];
+  nice_to_have_comments?: string[];
   certifications?: string[];
   domain_keywords?: string[];
   allow_overqualified?: boolean;
@@ -344,6 +346,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     mustHaveSkills: [],
     mustHaveComments: [],
     niceToHaveSkills: [],
+    niceToHaveComments: [],
     education: '',
     educationRequired: false,
     experience: '',
@@ -381,6 +384,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const [editingSkillValue, setEditingSkillValue] = useState('');
   const [editingCommentIndex, setEditingCommentIndex] = useState<number | null>(null);
   const [editingCommentValue, setEditingCommentValue] = useState('');
+  const [editingNiceCommentIndex, setEditingNiceCommentIndex] = useState<number | null>(null);
+  const [editingNiceCommentValue, setEditingNiceCommentValue] = useState('');
   const [editingRecruiterCommentIndex, setEditingRecruiterCommentIndex] = useState<number | null>(null);
   const [editingRecruiterCommentValue, setEditingRecruiterCommentValue] = useState('');
   const [newRecruiterComment, setNewRecruiterComment] = useState('');
@@ -986,6 +991,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         mustHaveSkills: params.must_have_skills || [],
         mustHaveComments: params.must_have_comments || [],
         niceToHaveSkills: params.nice_to_have_skills || [],
+        niceToHaveComments: params.nice_to_have_comments || [],
         education: educationValue,
         // Use API's mandatory flag for education
         educationRequired: params.education_mandatory || false,
@@ -1235,6 +1241,51 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     setEditingCommentValue('');
   };
 
+  // Nice-to-Have Comments handlers
+  const handleAddNiceComment = () => {
+    if (newComment.trim()) {
+      setExtractedData(prev => ({
+        ...prev,
+        niceToHaveComments: [...(prev.niceToHaveComments || []), newComment.trim()],
+      }));
+      setNewComment('');
+      setEditingCategory(null);
+      setExtractedDataModified(true); // Mark as modified for regeneration
+    }
+  };
+
+  const handleRemoveNiceComment = (index: number) => {
+    setExtractedData(prev => ({
+      ...prev,
+      niceToHaveComments: (prev.niceToHaveComments || []).filter((_, i) => i !== index),
+    }));
+    setExtractedDataModified(true); // Mark as modified for regeneration
+  };
+
+  const handleStartEditNiceComment = (index: number, value: string) => {
+    setEditingNiceCommentIndex(index);
+    setEditingNiceCommentValue(value);
+  };
+
+  const handleSaveEditNiceComment = () => {
+    if (editingNiceCommentIndex !== null && editingNiceCommentValue.trim()) {
+      setExtractedData(prev => ({
+        ...prev,
+        niceToHaveComments: (prev.niceToHaveComments || []).map((comment, i) =>
+          i === editingNiceCommentIndex ? editingNiceCommentValue.trim() : comment
+        ),
+      }));
+      setExtractedDataModified(true); // Mark as modified for regeneration
+    }
+    setEditingNiceCommentIndex(null);
+    setEditingNiceCommentValue('');
+  };
+
+  const handleCancelEditNiceComment = () => {
+    setEditingNiceCommentIndex(null);
+    setEditingNiceCommentValue('');
+  };
+
   const handleAddRecruiterComment = () => {
     if (newRecruiterComment.trim()) {
       setExtractedData(prev => ({
@@ -1334,120 +1385,93 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       return;
     }
 
-    // BEFORE going to review, reformat the JD description using AI
-    console.log('[DEBUG] Reformatting JD description with AI before review...');
+    // BEFORE going to review, reformat the JD description using AI (Odoo-style)
+    // If user has modified extracted data (skills/comments), regenerate JD with those changes
+    console.log('[DEBUG] Reformatting JD description with extracted parameters...');
+    console.log('[DEBUG] extractedDataModified:', extractedDataModified);
     setIsRegenerating(true);
 
     try {
-      // Build a detailed prompt from all the extracted data
-      // Safety checks: ensure all arrays exist
-      const mustHaveSkills = extractedData.mustHaveSkills || [];
-      const niceToHaveSkills = extractedData.niceToHaveSkills || [];
-      const locations = extractedData.locations || [];
+      // Always reformat if there are parameters to include (comments, skills, etc.)
+      // This ensures both manual and AI JDs get properly formatted with nice-to-have comments
       const mustHaveComments = extractedData.mustHaveComments || [];
+      const niceToHaveComments = extractedData.niceToHaveComments || [];
+      const hasParameters = extractedData.mustHaveSkills?.length > 0 ||
+                           extractedData.niceToHaveSkills?.length > 0 ||
+                           mustHaveComments.length > 0 ||
+                           niceToHaveComments.length > 0;
 
-      const skillsText = [
-        ...mustHaveSkills.map(s => `Must have: ${s}`),
-        ...niceToHaveSkills.map(s => `Nice to have: ${s}`),
-      ].join(', ');
+      if (extractedDataModified || mode === 'ai' || (mode === 'manual' && hasParameters)) {
+        console.log('[DEBUG] Calling reformat API with parameters...');
+        console.log('[DEBUG] Mode:', mode, 'extractedDataModified:', extractedDataModified, 'hasParameters:', hasParameters);
 
-      const requirementsText = [
-        extractedData.experience ? `Experience: ${extractedData.experience}` : '',
-        extractedData.education ? `Education: ${extractedData.education}` : '',
-        extractedData.industryType ? `Industry: ${extractedData.industryType}` : '',
-        extractedData.employmentType ? `Employment Type: ${extractedData.employmentType}` : '',
-        extractedData.workModel ? `Work Model: ${extractedData.workModel}` : '',
-      ].filter(Boolean).join('. ');
+        if (editingId) {
+          console.log('[DEBUG] Passing parameters - must_have_comments:', mustHaveComments.length, 'nice_to_have_comments:', niceToHaveComments.length);
+          console.log('[DEBUG] Nice-to-have comments:', niceToHaveComments);
 
-      const locationsText = locations.length > 0
-        ? `Location: ${locations.map(l => l.city).join(', ')}`
-        : '';
+          // Parse experience for saving
+          let experienceMin: number | undefined;
+          let experienceMax: number | undefined;
+          if (extractedData.experience) {
+            const rangeMatch = extractedData.experience.match(/(\d+)\s*-\s*(\d+)/);
+            const plusMatch = extractedData.experience.match(/(\d+)\+/);
+            if (rangeMatch) {
+              experienceMin = parseInt(rangeMatch[1]);
+              experienceMax = parseInt(rangeMatch[2]);
+            } else if (plusMatch) {
+              experienceMin = parseInt(plusMatch[1]);
+            }
+          }
 
-      const commentsText = mustHaveComments.length > 0
-        ? `Additional Requirements: ${mustHaveComments.join(', ')}`
-        : '';
+          // Convert education to proper format if it's a string
+          let educationRequirements = null;
+          if (extractedData.education) {
+            if (typeof extractedData.education === 'string') {
+              educationRequirements = { degree: extractedData.education };
+            } else {
+              educationRequirements = extractedData.education;
+            }
+          }
 
-      // Create comprehensive prompt for professional formatting using ALL extracted data
-      const reformatPrompt = `You are a professional HR recruiter. Create a comprehensive, well-structured job description using the information below.
+          // Call reformat endpoint with ALL parameters directly in the request
+          // This ensures nice-to-have comments are passed to the AI
+          const reformattedJD = await jdService.reformatWithParams(editingId, {
+            must_have_skills: extractedData.mustHaveSkills,
+            nice_to_have_skills: extractedData.niceToHaveSkills,
+            must_have_comments: mustHaveComments,
+            nice_to_have_comments: niceToHaveComments,
+            experience_min: experienceMin,
+            experience_max: experienceMax,
+            education_requirements: educationRequirements,
+            certifications: extractedData.certifications,
+            coding_required: extractedData.codingRequired,
+            supported_languages: extractedData.suggestedLanguages,
+          });
 
-Job Title: ${jobTitle}
+          console.log('[DEBUG] Reformat successful, updated description length:', reformattedJD.description?.length);
 
-Required Skills (Must Have):
-${mustHaveSkills.map(s => `- ${s}`).join('\n')}
+          // Update the description based on mode
+          // For AI mode, update generatedJD
+          // For manual mode, update manualJD so the formatted version shows in review
+          if (mode === 'ai') {
+            setGeneratedJD(reformattedJD.description);
+          } else {
+            setManualJD(reformattedJD.description);
+          }
 
-Preferred Skills (Nice to Have):
-${niceToHaveSkills.map(s => `- ${s}`).join('\n')}
-
-Experience Required: ${extractedData.experience || 'Not specified'}
-Education Required: ${extractedData.education || 'Not specified'}
-Industry: ${extractedData.industryType || 'Not specified'}
-Employment Type: ${extractedData.employmentType || 'full_time'}
-Work Model: ${extractedData.workModel || 'onsite'}
-Locations: ${locations.map(l => l.city).join(', ') || 'Not specified'}
-Salary Range: ${extractedData.salaryFrom && extractedData.salaryTo ? `₹${extractedData.salaryFrom} - ₹${extractedData.salaryTo} (${extractedData.compensationType})` : 'Competitive'}
-
-Additional Requirements:
-${mustHaveComments.map(c => `- ${c}`).join('\n') || 'None'}
-
-Internal Guidance: ${extractedData.assessmentGuidance || 'None'}
-
-IMPORTANT FORMATTING INSTRUCTIONS:
-Create a professional job description with these EXACT sections in this order:
-
-Job Title: ${jobTitle}
-
-Job Overview:
-[Write a compelling 2-3 sentence overview about the role and what the ideal candidate will do]
-
-Key Responsibilities:
-[List 5-7 main responsibilities as bullet points starting with action verbs]
-
-Required Skills and Experience:
-[List all must-have skills and experience requirements as bullet points]
-
-Preferred Skills:
-[List all nice-to-have skills as bullet points - only if there are nice-to-have skills]
-
-Education:
-[State the education requirement clearly]
-
-Experience Level:
-[State the experience level based on years mentioned]
-
-Industry:
-[State the industry type - "Preferred" or "Required" based on context]
-
-Why Join Us:
-[List 3-4 compelling reasons to join, such as competitive salary, growth opportunities, work culture, etc.]
-
-Use professional language, clear formatting, and make it engaging for candidates. Each section should be clearly labeled and well-organized.`;
-
-      console.log('[DEBUG] Calling AI to reformat JD...');
-      console.log('[DEBUG] Prompt:', reformatPrompt.substring(0, 200) + '...');
-
-      const response = await jdService.generate(reformatPrompt);
-      console.log('[DEBUG] AI Response received:', response);
-
-      if (response && response.description) {
-        setGeneratedJD(response.description);
-        console.log('[DEBUG] JD reformatted successfully, length:', response.description.length);
-
-        toast.success({
-          title: 'JD Reformatted',
-          description: 'Job description has been formatted professionally by AI.',
-        });
+          toast.success({
+            title: 'JD Reformatted',
+            description: 'Job description has been regenerated with your changes.',
+          });
+        }
       } else {
-        console.warn('[WARN] No description in response, keeping original');
-        toast.warning({
-          title: 'Using Original JD',
-          description: 'AI formatting unavailable. Using current version.',
-        });
+        console.log('[DEBUG] No modifications, keeping original JD');
       }
     } catch (error) {
       console.error('[ERROR] Failed to reformat JD:', error);
       toast.warning({
         title: 'Formatting Warning',
-        description: 'Could not reformat JD with AI. Proceeding with current version.',
+        description: 'Could not reformat JD. Proceeding with current version.',
       });
     } finally {
       setIsRegenerating(false);
@@ -1487,6 +1511,7 @@ Use professional language, clear formatting, and make it engaging for candidates
         must_have_skills: extractedData.mustHaveSkills,
         nice_to_have_skills: extractedData.niceToHaveSkills,
         must_have_comments: extractedData.mustHaveComments,
+        nice_to_have_comments: extractedData.niceToHaveComments,
         education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
         experience_min: experienceMin,
         experience_max: experienceMax,
@@ -2113,6 +2138,7 @@ Use professional language, clear formatting, and make it engaging for candidates
           assessmentGuidance: editingJD.assessment_guidance || '',
           internalRecruiterComments: editingJD.internal_comments ? editingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
           mustHaveComments: editingJD.must_have_comments || [],
+          niceToHaveComments: editingJD.nice_to_have_comments || [],
           certifications: editingJD.certifications || [],
           domainKeywords: editingJD.domain_keywords || [],
           allowOverqualified: editingJD.allow_overqualified ?? false,
@@ -2262,7 +2288,8 @@ Use professional language, clear formatting, and make it engaging for candidates
                       />
                       <div className="flex justify-between mt-1">
                         <p className={`text-xs ${getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
-                          {jobTitle.length < VALIDATION.JOB_TITLE.min && jobTitle.length > 0 && `Min ${VALIDATION.JOB_TITLE.min} characters required`}
+                          {jobTitle.length === 0 && `Job Title is required (min ${VALIDATION.JOB_TITLE.min} characters)`}
+                          {jobTitle.length > 0 && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required (${VALIDATION.JOB_TITLE.min - jobTitle.length} more)`}
                         </p>
                         <p className={`text-xs ${getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
@@ -2285,14 +2312,17 @@ Use professional language, clear formatting, and make it engaging for candidates
                         placeholder={editingId ? "Add additional details or context to regenerate the job description..." : "Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"}
                         rows={12}
                         className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
-                          aiPrompt.length > 0 && aiPrompt.length > VALIDATION.AI_PROMPT.max
+                          aiPrompt.length > 0 && !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max) && !editingId
+                            ? 'border-orange-300 bg-orange-50'
+                            : aiPrompt.length > VALIDATION.AI_PROMPT.max
                             ? 'border-red-300 bg-red-50'
                             : 'border-gray-300'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className="text-xs text-gray-500">
-                          {aiPrompt.length > 0 && aiPrompt.length < VALIDATION.AI_PROMPT.min && !editingId && `Tip: Add more details (${VALIDATION.AI_PROMPT.min - aiPrompt.length} more chars) for better results`}
+                        <p className={`text-xs ${aiPrompt.length < VALIDATION.AI_PROMPT.min && !editingId ? 'text-orange-500' : 'text-gray-500'}`}>
+                          {!editingId && aiPrompt.length === 0 && `AI Prompt is required (min ${VALIDATION.AI_PROMPT.min} characters)`}
+                          {!editingId && aiPrompt.length > 0 && aiPrompt.length < VALIDATION.AI_PROMPT.min && `Minimum ${VALIDATION.AI_PROMPT.min} characters required (${VALIDATION.AI_PROMPT.min - aiPrompt.length} more)`}
                           {editingId && aiPrompt.length === 0 && 'Optional: Add details to customize the regenerated JD'}
                         </p>
                         <p className={`text-xs ${aiPrompt.length > VALIDATION.AI_PROMPT.max ? 'text-red-500' : 'text-gray-500'}`}>
@@ -2322,7 +2352,7 @@ Use professional language, clear formatting, and make it engaging for candidates
                       onClick={handleGenerateJD}
                       disabled={
                         !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
-                        (!editingId && !aiPrompt.trim()) ||
+                        (!editingId && !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max)) ||
                         aiPrompt.length > VALIDATION.AI_PROMPT.max ||
                         isGenerating ||
                         hasProceededToExtract
@@ -2616,9 +2646,9 @@ Use professional language, clear formatting, and make it engaging for candidates
                     <Wand2 className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h4 className="text-blue-800 font-medium">Skills Modified</h4>
+                    <h4 className="text-blue-800 font-medium">Parameters Modified</h4>
                     <p className="text-sm text-blue-600">
-                      You&apos;ve made changes to the extracted skills.
+                      You&apos;ve made changes to skills or comments. The JD will be regenerated when you continue to Review.
                     </p>
                   </div>
                 </div>
@@ -2849,6 +2879,104 @@ Use professional language, clear formatting, and make it engaging for candidates
                       {validationErrors.mustHaveComments}
                     </p>
                   )}
+                </div>
+
+                {/* Nice-to-Have Comments */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-gray-900">Nice-to-Have Comments</h3>
+                    </div>
+                    <button
+                      onClick={() => setEditingCategory('nice-comments')}
+                      className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add
+                    </button>
+                  </div>
+                  {editingCategory === 'nice-comments' && (
+                    <div className="flex gap-2 mb-4">
+                      <input
+                        type="text"
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddNiceComment()}
+                        placeholder="Enter nice-to-have comment..."
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                        autoFocus
+                      />
+                      <button
+                        onClick={handleAddNiceComment}
+                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {(extractedData.niceToHaveComments || []).map((comment, index) => (
+                      <div key={index} className="flex items-center justify-between p-2.5 bg-blue-50 border border-blue-200 rounded-lg group">
+                        {editingNiceCommentIndex === index ? (
+                          <>
+                            <input
+                              type="text"
+                              value={editingNiceCommentValue}
+                              onChange={(e) => setEditingNiceCommentValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveEditNiceComment();
+                                if (e.key === 'Escape') handleCancelEditNiceComment();
+                              }}
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
+                              autoFocus
+                            />
+                            <div className="flex gap-1 ml-2">
+                              <button
+                                onClick={handleSaveEditNiceComment}
+                                className="text-green-600 hover:text-green-700 px-2"
+                                title="Save"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={handleCancelEditNiceComment}
+                                className="text-red-600 hover:text-red-700"
+                                title="Cancel"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <span
+                              className="text-sm text-gray-900 flex-1 cursor-pointer hover:text-gray-800"
+                              onClick={() => handleStartEditNiceComment(index, comment)}
+                              title="Click to edit"
+                            >
+                              {comment}
+                            </span>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleStartEditNiceComment(index, comment)}
+                                className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Edit"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleRemoveNiceComment(index)}
+                                className="text-blue-600 hover:text-blue-700"
+                                title="Delete"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 

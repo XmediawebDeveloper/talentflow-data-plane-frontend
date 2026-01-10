@@ -40,6 +40,51 @@ export interface TeamConfig {
   max_team_size: number;
 }
 
+// Team-Level Usage Visibility interfaces
+export interface TeamUsageByType {
+  total_consumed: number;
+  consumption_count: number;
+}
+
+export interface TeamUsageSummary {
+  team_id: string;
+  team_name: string | null;
+  reporting_scope: string;
+  period: {
+    start: string | null;
+    end: string | null;
+  };
+  by_type: {
+    RS?: TeamUsageByType;
+    AS?: TeamUsageByType;
+    AIU?: TeamUsageByType;
+  };
+  note: string;
+}
+
+export interface AllTeamsUsageSummary {
+  tenant_id: string;
+  reporting_scope: string;
+  period: {
+    start: string;
+    end: string;
+  };
+  teams: TeamUsageSummary[];
+  total_teams: number;
+}
+
+export interface MyTeamsUsageSummary {
+  tenant_id: string;
+  reporting_scope: string;
+  period: {
+    start: string | null;
+    end: string | null;
+  };
+  teams: TeamUsageSummary[];
+  total_teams: number;
+  note?: string;
+}
+
 export interface CreateTeamRequest {
   name: string;
   description?: string;
@@ -184,6 +229,60 @@ class TeamService {
       await api.delete(`/teams/${teamId}/members/${memberId}`);
     } catch (error) {
       console.error(`Error removing member from team ${teamId}:`, error);
+      throw error;
+    }
+  }
+
+  // =========================================================================
+  // TEAM-LEVEL USAGE VISIBILITY
+  // =========================================================================
+
+  /**
+   * Get usage summary for a specific team
+   * Role-Based Access:
+   * - Tenant Admin: Can view any team's usage
+   * - Standard User/Viewer: Can only view their own team's usage
+   * - Billing Manager: No access
+   */
+  async getTeamUsage(teamId: string, days: number = 30): Promise<TeamUsageSummary> {
+    try {
+      const response = await api.get(`/unit-pool/teams/${teamId}/usage`, {
+        params: { days },
+      });
+      return response.data.data || response.data;
+    } catch (error: any) {
+      console.error(`Error fetching team ${teamId} usage:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get usage summary for all teams (Tenant Admin only)
+   */
+  async getAllTeamsUsage(days: number = 30): Promise<AllTeamsUsageSummary> {
+    try {
+      const response = await api.get('/unit-pool/teams/usage', {
+        params: { days },
+      });
+      return response.data.data || response.data;
+    } catch (error: any) {
+      console.error('Error fetching all teams usage:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get usage summary for current user's teams
+   * Available for Standard Users and Viewers
+   */
+  async getMyTeamsUsage(days: number = 30): Promise<MyTeamsUsageSummary> {
+    try {
+      const response = await api.get('/unit-pool/my-teams/usage', {
+        params: { days },
+      });
+      return response.data.data || response.data;
+    } catch (error: any) {
+      console.error('Error fetching my teams usage:', error);
       throw error;
     }
   }

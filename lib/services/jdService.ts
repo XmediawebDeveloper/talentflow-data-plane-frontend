@@ -35,6 +35,7 @@ export interface JDCreate {
   assessment_guidance?: string;
   internal_comments?: string;
   must_have_comments?: string[];
+  nice_to_have_comments?: string[];
   coding_required?: boolean;
   supported_languages?: string[];
   allow_overqualified?: boolean;
@@ -404,6 +405,19 @@ export const jdService = {
   async publish(id: string): Promise<JDResponse> {
     try {
       const response = await api.post<JDResponse>(`/jd/${id}/publish`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Reformat JD with current parameters (Odoo-style regeneration)
+   * Regenerates JD description including all must-have and nice-to-have comments
+   */
+  async reformatWithParams(id: string, params: Partial<JDCreate>): Promise<JDResponse> {
+    try {
+      const response = await api.post<JDResponse>(`/jd/${id}/reformat-with-params`, params);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

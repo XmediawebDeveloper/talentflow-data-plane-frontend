@@ -132,6 +132,14 @@ export function AssessmentInterface({
     setAllQuestionsAnswered(progress.answered >= progress.total && progress.total > 0);
   }, [progress.answered, progress.total]);
 
+  // Set video stream when available
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      console.log('[PROCTORING] Video stream attached to video element');
+    }
+  }, [stream, videoRef]);
+
   // Reset answer when question changes
   useEffect(() => {
     if (currentQuestion.previous_answer) {

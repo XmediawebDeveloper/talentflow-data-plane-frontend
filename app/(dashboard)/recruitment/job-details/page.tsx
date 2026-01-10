@@ -36,6 +36,8 @@ function JobDetailsContent() {
   const [job, setJob] = useState<ExtendedJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [rawJdData, setRawJdData] = useState<JDResponse | null>(null);
+  const [showDisableModal, setShowDisableModal] = useState(false);
+  const [jobToDisable, setJobToDisable] = useState<Job | null>(null);
 
   useEffect(() => {
     if (jobId) {
@@ -173,23 +175,21 @@ function JobDetailsContent() {
     }
   };
 
-  // JD15: Disable JD with confirmation dialog
-  const handleDisable = async (disableJob: Job) => {
-    // Show confirmation dialog before disabling
-    const confirmed = window.confirm(
-      `Are you sure you want to disable "${disableJob.title}"?\n\n` +
-      `This will:\n` +
-      `• Remove the JD from Resume Scoring, AI Talent Match, and Assessment modules\n` +
-      `• The JD will no longer be available for new scoring or assessments\n` +
-      `• Existing results will be preserved for reference\n\n` +
-      `You can re-enable this JD later if needed.`
-    );
+  // JD15: Show disable confirmation modal
+  const handleDisable = (disableJob: Job) => {
+    setJobToDisable(disableJob);
+    setShowDisableModal(true);
+  };
 
-    if (!confirmed) return;
+  // JD15: Confirm and execute disable
+  const confirmDisable = async () => {
+    if (!jobToDisable) return;
 
     try {
-      await jdService.disable(disableJob.id);
-      toast.info(`"${disableJob.title}" has been disabled`);
+      await jdService.disable(jobToDisable.id);
+      toast.info(`"${jobToDisable.title}" has been disabled`);
+      setShowDisableModal(false);
+      setJobToDisable(null);
       fetchJobDetails();
     } catch (error: any) {
       if (error.message?.includes('403') || error.message?.includes('Tenant Admin')) {
@@ -266,18 +266,59 @@ function JobDetailsContent() {
   }
 
   return (
-    <JobDetailView
-      job={job}
-      onBack={handleBack}
-      onEdit={handleEdit}
-      onDisable={handleDisable}
-      onEnable={handleEnable}  // JD15: Enable handler
-      onArchive={handleArchive}
-      onDelete={handleDelete}
-      onNavigateToAITalentMatch={handleNavigateToAITalentMatch}
-      onRepublish={handleRepublish}  // JD13: Republish handler
-      isTenantAdmin={isTenantAdmin}  // JD15: Pass role for disable/enable button visibility
-    />
+    <>
+      {/* Disable Confirmation Modal */}
+      {showDisableModal && (
+        <div className="fixed inset-0 bg-gray-900/10 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 p-6 border-2 border-gray-300">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">
+              Disable Job Description?
+            </h3>
+            <p className="text-gray-700 mb-4">
+              If you disable this JD, it will be removed from:
+            </p>
+            <ul className="list-disc list-inside text-gray-700 mb-6 space-y-2">
+              <li>Resume Scoring</li>
+              <li>Assessment Generation</li>
+              <li>AI Talent Match</li>
+            </ul>
+            <p className="text-sm text-gray-600 mb-6">
+              You can re-enable this JD later if needed.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowDisableModal(false);
+                  setJobToDisable(null);
+                }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDisable}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+              >
+                Yes, Disable
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <JobDetailView
+        job={job}
+        onBack={handleBack}
+        onEdit={handleEdit}
+        onDisable={handleDisable}
+        onEnable={handleEnable}  // JD15: Enable handler
+        onArchive={handleArchive}
+        onDelete={handleDelete}
+        onNavigateToAITalentMatch={handleNavigateToAITalentMatch}
+        onRepublish={handleRepublish}  // JD13: Republish handler
+        isTenantAdmin={isTenantAdmin}  // JD15: Pass role for disable/enable button visibility
+      />
+    </>
   );
 }
 

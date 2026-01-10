@@ -341,14 +341,18 @@ export default function ResumeViewPage() {
 
                 {/* Contact Info */}
                 <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="flex items-center gap-2 text-sm text-gray-700">
-                    <Mail className="w-4 h-4 text-blue-600" />
-                    <a href={`mailto:${resume.email}`} className="hover:text-blue-600">{resume.email}</a>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-700">
-                    <Phone className="w-4 h-4 text-blue-600" />
-                    <a href={`tel:${resume.phone}`} className="hover:text-blue-600">{resume.phone}</a>
-                  </div>
+                  {resume.email && resume.email !== 'No email' && (
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Mail className="w-4 h-4 text-blue-600" />
+                      <a href={`mailto:${resume.email}`} className="hover:text-blue-600">{resume.email}</a>
+                    </div>
+                  )}
+                  {resume.phone && resume.phone !== 'No phone' && (
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Phone className="w-4 h-4 text-blue-600" />
+                      <a href={`tel:${resume.phone}`} className="hover:text-blue-600">{resume.phone}</a>
+                    </div>
+                  )}
                 </div>
 
                 {/* Tags */}

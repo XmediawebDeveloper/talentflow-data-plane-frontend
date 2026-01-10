@@ -18,7 +18,7 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     name: 'Python 3',
     monacoLanguage: 'python',
     extension: '.py',
-    compilerName: 'py',
+    compilerName: 'python3',
     template: `# Write your code here
 
 def solve():
@@ -68,7 +68,7 @@ process.stdin.on('end', () => solve(inputData));
     name: 'TypeScript',
     monacoLanguage: 'typescript',
     extension: '.ts',
-    compilerName: 'ts',
+    compilerName: 'typescript',
     template: `// Write your code here
 
 function solve(input: string): void {
@@ -258,7 +258,7 @@ fn main() {
     name: 'Ruby',
     monacoLanguage: 'ruby',
     extension: '.rb',
-    compilerName: 'rb',
+    compilerName: 'ruby',
     template: `# Write your code here
 
 # Read input
