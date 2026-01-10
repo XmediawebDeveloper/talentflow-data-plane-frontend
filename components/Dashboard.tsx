@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
+import { assessmentService } from '@/lib/services';
 import { toast } from 'sonner';
 
 import { User, Tenant, getRemainingUnits } from '@/lib/types/tenant';
@@ -67,38 +68,55 @@ export default function Dashboard({
   const [draftJDs, setDraftJDs] = useState<JDResponse[]>([]);
   const [loadingJDs, setLoadingJDs] = useState(true);
 
+  // Assessment Stats
+  const [assessmentStats, setAssessmentStats] = useState({
+    total_assessments: 0,
+    active_assessments: 0,
+    units_consumed: 0,
+  });
+
   // Permission checks
   const canCreateJD = user?.is_tenant_admin || user?.permissions?.canCreateJD;
 
-  // Fetch JDs from API
+  // Fetch JDs and Assessment Stats from API
   useEffect(() => {
-    const fetchJDs = async () => {
+    const fetchData = async () => {
       setLoadingJDs(true);
       try {
-        // Fetch published JDs
-        const publishedResponse = await jdService.list({
-          status: 'published',
-          page_size: 5,
-          page: 1
-        });
-        setPublishedJDs(publishedResponse.items || []);
+        // Fetch all data in parallel
+        const [publishedResponse, draftResponse, statsResponse] = await Promise.allSettled([
+          jdService.list({ status: 'published', page_size: 5, page: 1 }),
+          jdService.list({ status: 'draft', page_size: 5, page: 1 }),
+          assessmentService.getStats(),
+        ]);
 
-        // Fetch draft JDs
-        const draftResponse = await jdService.list({
-          status: 'draft',
-          page_size: 5,
-          page: 1
-        });
-        setDraftJDs(draftResponse.items || []);
+        // Process published JDs
+        if (publishedResponse.status === 'fulfilled') {
+          setPublishedJDs(publishedResponse.value.items || []);
+        }
+
+        // Process draft JDs
+        if (draftResponse.status === 'fulfilled') {
+          setDraftJDs(draftResponse.value.items || []);
+        }
+
+        // Process assessment stats
+        if (statsResponse.status === 'fulfilled') {
+          setAssessmentStats({
+            total_assessments: statsResponse.value.total_assessments || 0,
+            active_assessments: statsResponse.value.active_assessments || 0,
+            units_consumed: statsResponse.value.units_consumed || 0,
+          });
+        }
       } catch (error) {
-        console.error('Failed to fetch JDs:', error);
-        toast.error('Failed to load job descriptions');
+        console.error('Failed to fetch dashboard data:', error);
+        toast.error('Failed to load dashboard data');
       } finally {
         setLoadingJDs(false);
       }
     };
 
-    fetchJDs();
+    fetchData();
   }, []);
   return (
     <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
@@ -163,12 +181,8 @@ export default function Dashboard({
               <div className="w-12 h-12 rounded-xl bg-yellow-100 flex items-center justify-center">
                 <FileText className="w-6 h-6 text-yellow-600" />
               </div>
-              <span className="flex items-center gap-1 text-sm text-green-600">
-                <TrendingUp className="w-4 h-4" />
-                +15%
-              </span>
             </div>
-            <div className="text-3xl text-gray-900 mb-1">18</div>
+            <div className="text-3xl text-gray-900 mb-1">{assessmentStats.active_assessments}</div>
             <div className="text-sm text-gray-600">Active Assessments</div>
           </div>
         </div>
@@ -260,20 +274,20 @@ export default function Dashboard({
                 </div>
               </div>
               <div className="text-2xl text-gray-900 mb-1">{limits?.assessments || '500'}</div>
-              <div className="text-xs text-gray-600 mb-3">Assessments</div>
+              <div className="text-xs text-gray-600 mb-3">Assessment Units</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-yellow-600 h-2 rounded-full" 
-                    style={{ width: `${limits?.assessments ? Math.round((usage?.assessments || 0) / limits.assessments * 100) : 28}%` }}
+                  <div
+                    className="bg-yellow-600 h-2 rounded-full"
+                    style={{ width: `${limits?.assessments ? Math.round(assessmentStats.units_consumed / (limits.assessments || 1) * 100) : 0}%` }}
                   ></div>
                 </div>
                 <span className="text-xs text-gray-600 w-10 text-right">
-                  {limits?.assessments ? Math.round((usage?.assessments || 0) / limits.assessments * 100) : 28}%
+                  {limits?.assessments ? Math.round(assessmentStats.units_consumed / (limits.assessments || 1) * 100) : 0}%
                 </span>
               </div>
               <div className="text-xs text-gray-500">
-                {usage?.assessments || '140'} used of {limits?.assessments || '500'}
+                {assessmentStats.units_consumed} used of {limits?.assessments || '500'}
               </div>
             </div>
 

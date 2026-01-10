@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { assessmentService } from '@/lib/services';
 import {
@@ -58,6 +58,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [apiStats, setApiStats] = useState<{ completed_count: number; passed_count: number; failed_count: number; average_score: number | null }>({ completed_count: 0, passed_count: 0, failed_count: 0, average_score: null });
+
+  // AS-23: Search, Sort, and Pagination state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<'name' | 'score' | 'status' | 'date'>('date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Passed' | 'Failed' | 'Under Review'>('all');
 
   // Fetch results from API
   useEffect(() => {
@@ -158,12 +166,67 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     );
   }
 
+  // AS-23: Handle sort toggle
+  const handleSort = (field: 'name' | 'score' | 'status' | 'date') => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+    setCurrentPage(1); // Reset to first page on sort change
+  };
+
   // Overview view
   if (!selectedCandidate) {
-    // Filter candidates by round
-    const filteredCandidates = selectedRound === 'all'
-      ? displayResults
-      : displayResults.filter(c => c.round === selectedRound);
+    // AS-23: Filter candidates by round, search, and status
+    let filteredCandidates = displayResults;
+
+    // Round filter
+    if (selectedRound !== 'all') {
+      filteredCandidates = filteredCandidates.filter(c => c.round === selectedRound);
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      filteredCandidates = filteredCandidates.filter(c => c.status === statusFilter);
+    }
+
+    // Search filter (name or email)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filteredCandidates = filteredCandidates.filter(c =>
+        c.name.toLowerCase().includes(query) ||
+        c.email.toLowerCase().includes(query)
+      );
+    }
+
+    // AS-23: Sort candidates
+    filteredCandidates = [...filteredCandidates].sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'score':
+          comparison = a.percentage - b.percentage;
+          break;
+        case 'status':
+          comparison = a.status.localeCompare(b.status);
+          break;
+        case 'date':
+          comparison = new Date(a.completedDate).getTime() - new Date(b.completedDate).getTime();
+          break;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+
+    // AS-23: Pagination calculations
+    const totalItems = filteredCandidates.length;
+    const totalPages = Math.ceil(totalItems / pageSize);
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedCandidates = filteredCandidates.slice(startIndex, endIndex);
 
     // Get unique rounds for filter
     const availableRounds = Array.from(new Set(displayResults.map(c => c.round))).sort();
@@ -339,6 +402,49 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </div>
           </div>
 
+          {/* AS-23: Search and Filter Bar */}
+          <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+            <div className="flex flex-col md:flex-row gap-4">
+              {/* Search Input */}
+              <div className="flex-1 relative">
+                <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent"
+                />
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Status:</span>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value as 'all' | 'Passed' | 'Failed' | 'Under Review');
+                    setCurrentPage(1);
+                  }}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent"
+                >
+                  <option value="all">All Status</option>
+                  <option value="Passed">Passed</option>
+                  <option value="Failed">Failed</option>
+                  <option value="Under Review">Under Review</option>
+                </select>
+              </div>
+
+              {/* Results count */}
+              <div className="flex items-center text-sm text-gray-600">
+                Showing {paginatedCandidates.length} of {totalItems} results
+              </div>
+            </div>
+          </div>
+
           {/* Candidates Results Table */}
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
@@ -348,27 +454,68 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="text-left px-6 py-3 text-xs text-gray-600">Candidate</th>
-                    <th className="text-center px-6 py-3 text-xs text-gray-600">Score</th>
-                    <th className="text-center px-6 py-3 text-xs text-gray-600">Status</th>
-                    <th className="text-left px-6 py-3 text-xs text-gray-600">Completed</th>
+                    <th
+                      className="text-left px-6 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('name')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Candidate
+                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'name' ? 'text-gray-800' : 'text-gray-400'}`} />
+                      </div>
+                    </th>
+                    <th
+                      className="text-center px-6 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('score')}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        Score
+                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-gray-800' : 'text-gray-400'}`} />
+                      </div>
+                    </th>
+                    <th
+                      className="text-center px-6 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('status')}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        Status
+                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'status' ? 'text-gray-800' : 'text-gray-400'}`} />
+                      </div>
+                    </th>
+                    <th
+                      className="text-left px-6 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('date')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Completed
+                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'date' ? 'text-gray-800' : 'text-gray-400'}`} />
+                      </div>
+                    </th>
                     <th className="text-center px-6 py-3 text-xs text-gray-600">Duration</th>
                     <th className="text-center px-6 py-3 text-xs text-gray-600">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredCandidates.length === 0 ? (
+                  {paginatedCandidates.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center">
                           <User className="w-12 h-12 text-gray-300 mb-3" />
-                          <p className="text-gray-600 mb-1">No candidates have completed this assessment yet</p>
-                          <p className="text-sm text-gray-500">Share the assessment link to invite candidates</p>
+                          {searchQuery || statusFilter !== 'all' ? (
+                            <>
+                              <p className="text-gray-600 mb-1">No candidates match your search criteria</p>
+                              <p className="text-sm text-gray-500">Try adjusting your filters or search query</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-gray-600 mb-1">No candidates have completed this assessment yet</p>
+                              <p className="text-sm text-gray-500">Share the assessment link to invite candidates</p>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
                   ) : (
-                    filteredCandidates.map((candidate) => (
+                    paginatedCandidates.map((candidate) => (
                       <tr key={candidate.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -423,6 +570,75 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </tbody>
               </table>
             </div>
+
+            {/* AS-23: Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} results
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  >
+                    First
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="p-1.5 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  {/* Page Numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-3 py-1.5 text-sm rounded-md ${
+                            currentPage === pageNum
+                              ? 'bg-gray-800 text-white'
+                              : 'border border-gray-300 hover:bg-gray-100'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  >
+                    Last
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

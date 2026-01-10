@@ -499,6 +499,36 @@ export const assessmentService = {
       throw new Error(handleApiError(error));
     }
   },
+
+  /**
+   * 7. Export individual assessment report as PDF
+   * AS-25: Individual PDF report generation
+   */
+  async exportPDF(assessmentId: string): Promise<Blob> {
+    try {
+      const response = await api.get(`/reports/export/assessment/${assessmentId}`, {
+        responseType: 'blob',
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * 8. Export multiple assessment reports as ZIP
+   * AS-26: Bulk PDF report generation
+   */
+  async exportBulkPDFs(assessmentIds: string[]): Promise<Blob> {
+    try {
+      const response = await api.post(`/reports/export/assessments/bulk`, assessmentIds, {
+        responseType: 'blob',
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
 };
 
 // Candidate-facing services (public)
