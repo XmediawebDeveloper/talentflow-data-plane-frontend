@@ -58,7 +58,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 py-4">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-lg">TF</span>
@@ -74,7 +74,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Welcome Card */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           {/* Gradient Header */}
@@ -202,7 +202,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
       </main>
 
       {/* Footer */}
-      <footer className="max-w-4xl mx-auto px-4 py-6 text-center">
+      <footer className="max-w-7xl mx-auto px-4 py-6 text-center">
         <p className="text-sm text-gray-500">
           Powered by TalentFlow | Need help? Contact{' '}
           <a href="mailto:support@talentflow.app" className="text-gray-700 hover:underline">
