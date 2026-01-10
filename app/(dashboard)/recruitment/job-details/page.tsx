@@ -269,8 +269,8 @@ function JobDetailsContent() {
     <>
       {/* Disable Confirmation Modal */}
       {showDisableModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+        <div className="fixed inset-0 bg-gray-900/10 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 p-6 border-2 border-gray-300">
             <h3 className="text-xl font-semibold text-gray-900 mb-4">
               Disable Job Description?
             </h3>
