@@ -1,4 +1,4 @@
-import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, FileText, Users, Upload, Database } from 'lucide-react';
+import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, FileText, Users, Upload, Database, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
@@ -88,6 +88,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [sentCount, setSentCount] = useState(0);
+
+  // Duplicate invitation popup state
+  const [showDuplicateError, setShowDuplicateError] = useState(false);
+  const [duplicateEmail, setDuplicateEmail] = useState('');
 
   if (!isOpen) return null;
 
@@ -180,9 +184,27 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
         setShowSuccess(false);
         onClose();
       }, 2000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send invitations:', error);
       setIsSubmitting(false);
+
+      // Check for duplicate invitation error (409 Conflict)
+      const is409Error = error?.response?.status === 409 ||
+                         error?.message?.includes('status code 409') ||
+                         error?.message?.includes('already been invited') ||
+                         error?.message?.includes('DUPLICATE_INVITATION');
+
+      if (is409Error) {
+        // Extract email from different possible response formats
+        const email = error?.response?.data?.detail?.candidate_email ||
+                      error?.response?.data?.candidate_email ||
+                      candidates[0]?.email ||
+                      'this candidate';
+        setDuplicateEmail(email);
+        setShowDuplicateError(true);
+        return;
+      }
+
       handleQuotaError(error, router, `Failed to send invitations: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
@@ -202,6 +224,56 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
           <p className="text-gray-600 text-sm">
             Email invitations have been sent to {sentCount} candidate{sentCount > 1 ? 's' : ''}
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Duplicate invitation error popup
+  if (showDuplicateError) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-10 h-10 text-amber-600" />
+            </div>
+            <h3 className="text-gray-900 text-lg font-medium mb-2">Invitation Already Sent</h3>
+            <p className="text-gray-600 text-sm">
+              An invitation has already been sent to <span className="font-medium text-gray-800">{duplicateEmail}</span> for this assessment.
+            </p>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <p className="text-sm text-gray-700 mb-2">You can:</p>
+            <ul className="text-sm text-gray-600 space-y-1">
+              <li>• Try a <span className="font-medium">different email address</span></li>
+              <li>• Send invitation for a <span className="font-medium">different assessment</span></li>
+              <li>• Check the candidate&apos;s existing invitation status</li>
+            </ul>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setShowDuplicateError(false);
+                setDuplicateEmail('');
+              }}
+              className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+            >
+              Try Different Email
+            </button>
+            <button
+              onClick={() => {
+                setShowDuplicateError(false);
+                setDuplicateEmail('');
+                onClose();
+              }}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     );

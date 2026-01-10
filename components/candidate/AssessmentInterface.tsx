@@ -40,6 +40,8 @@ interface AssessmentInterfaceProps {
     percent: number;
   };
   rounds: Round[];
+  startedAt: string; // ISO timestamp when assessment started
+  durationMinutes: number; // Total assessment duration (default 30)
   onAnswerSubmit: (
     questionId: string,
     answer: {
@@ -62,6 +64,8 @@ export function AssessmentInterface({
   currentQuestion,
   progress,
   rounds,
+  startedAt,
+  durationMinutes,
   onAnswerSubmit,
   onComplete,
   onNavigate,
@@ -82,6 +86,46 @@ export function AssessmentInterface({
   );
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [allQuestionsAnswered, setAllQuestionsAnswered] = useState(false);
+
+  // Global assessment timer (30 minutes)
+  const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
+    const startTime = new Date(startedAt).getTime();
+    const totalDuration = durationMinutes * 60; // Convert to seconds
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    return Math.max(0, totalDuration - elapsed);
+  });
+  const [isGlobalTimeExpired, setIsGlobalTimeExpired] = useState(false);
+  const globalTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Global timer countdown - runs independently of question timer
+  useEffect(() => {
+    if (globalTimeRemaining <= 0 || isGlobalTimeExpired) {
+      if (!isGlobalTimeExpired) {
+        setIsGlobalTimeExpired(true);
+        // Auto-submit entire assessment when global timer expires
+        onComplete();
+      }
+      return;
+    }
+
+    globalTimerRef.current = setInterval(() => {
+      setGlobalTimeRemaining(prev => {
+        if (prev <= 1) {
+          setIsGlobalTimeExpired(true);
+          // Auto-submit entire assessment
+          onComplete();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (globalTimerRef.current) {
+        clearInterval(globalTimerRef.current);
+      }
+    };
+  }, [globalTimeRemaining, isGlobalTimeExpired, onComplete]);
 
   // Track when all questions are answered
   useEffect(() => {
@@ -224,13 +268,25 @@ export function AssessmentInterface({
               })}
             </div>
 
+            {/* Global Assessment Timer */}
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+              globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
+              globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+            }`}>
+              <Clock className="w-4 h-4" />
+              <div className="flex flex-col items-center">
+                <span className="font-mono font-bold text-lg">{formatTime(globalTimeRemaining)}</span>
+                <span className="text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
+              </div>
+            </div>
+
             {/* Question Timer */}
             {timeRemaining !== null && (
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
                 timeRemaining < 30 ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-700'
               }`}>
-                <Clock className="w-4 h-4" />
-                <span className="font-mono font-medium">{formatTime(timeRemaining)}</span>
+                <span className="text-xs text-gray-500">Q:</span>
+                <span className="font-mono font-medium text-sm">{formatTime(timeRemaining)}</span>
               </div>
             )}
 
@@ -344,6 +400,7 @@ export function AssessmentInterface({
                   question={currentQuestion}
                   answer={answer}
                   onAnswerChange={setAnswer}
+                  allowLanguageChange={false}
                 />
               )}
             </div>
