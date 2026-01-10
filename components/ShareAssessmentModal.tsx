@@ -5,6 +5,12 @@ import { assessmentService } from '@/lib/services';
 import api from '@/lib/services/api';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 
+// Email validation regex - requires valid format with domain containing a period
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email.trim());
+};
+
 interface ShareAssessmentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -151,14 +157,25 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
   const handleSend = async () => {
     setIsSubmitting(true);
     try {
-      // Filter valid candidates
-      const validCandidates = candidates.filter(c => c.name.trim() && c.email.trim());
+      // Filter candidates with name and email
+      const candidatesWithData = candidates.filter(c => c.name.trim() && c.email.trim());
 
-      if (validCandidates.length === 0) {
-        alert('Please add at least one candidate');
+      if (candidatesWithData.length === 0) {
+        alert('Please add at least one candidate with name and email');
         setIsSubmitting(false);
         return;
       }
+
+      // Validate all email addresses
+      const invalidEmails = candidatesWithData.filter(c => !isValidEmail(c.email));
+      if (invalidEmails.length > 0) {
+        const invalidEmailList = invalidEmails.map(c => c.email).join(', ');
+        alert(`Invalid email address(es): ${invalidEmailList}\n\nPlease enter valid email addresses (e.g., user@example.com)`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const validCandidates = candidatesWithData;
 
       if (validCandidates.length === 1) {
         // Single invite
@@ -209,7 +226,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
     }
   };
 
-  const isValid = candidates.every(c => c.name.trim() && c.email.trim() && c.email.includes('@'));
+  // Check if all candidates have valid name and email
+  const isValid = candidates.every(c => c.name.trim() && c.email.trim() && isValidEmail(c.email));
 
   const assessmentLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://talentflow.app'}/assessment/${assessment.id}`;
 
@@ -404,12 +422,19 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                             type="email"
                             value={candidate.email}
                             onChange={(e) => updateCandidate(candidate.id, 'email', e.target.value)}
-                            placeholder="e.g., john.doe@email.com"
+                            placeholder="e.g., john.doe@example.com"
                             readOnly={candidate.source === 'database'}
-                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 ${
-                              candidate.source === 'database' ? 'bg-gray-100 cursor-not-allowed' : ''
+                            className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
+                              candidate.source === 'database'
+                                ? 'bg-gray-100 cursor-not-allowed border-gray-300'
+                                : candidate.email.trim() && !isValidEmail(candidate.email)
+                                  ? 'border-red-500 focus:ring-red-500'
+                                  : 'border-gray-300 focus:ring-gray-500'
                             }`}
                           />
+                          {candidate.email.trim() && !isValidEmail(candidate.email) && (
+                            <p className="text-xs text-red-500 mt-1">Please enter a valid email (e.g., user@example.com)</p>
+                          )}
                         </div>
                       </div>
                       {(candidates.length > 1 || candidate.source === 'database') && (

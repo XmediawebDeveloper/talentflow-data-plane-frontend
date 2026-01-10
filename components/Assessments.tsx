@@ -41,6 +41,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
+  const [totalUnits, setTotalUnits] = useState<number>(10); // Total subscription limit
 
   // Proctoring settings from API
   const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings | null>(null);
@@ -173,7 +174,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       if (quotaResult.status === 'fulfilled') {
         const quotas = quotaResult.value.data?.data?.quotas;
         if (quotas?.AS) {
-          setAvailableUnits(quotas.AS.total_remaining || 0);
+          // Get subscription limit (total units)
+          const subLimit = quotas.AS.subscription?.limit || 10;
+          const addonRemaining = quotas.AS.addon?.remaining || 0;
+          const totalLimit = (typeof subLimit === 'number' ? subLimit : 10) + addonRemaining;
+          setTotalUnits(totalLimit);
+
+          // Get remaining units (total_remaining is limit - used + addon)
+          const remaining = quotas.AS.total_remaining ?? (totalLimit - (quotas.AS.subscription?.used || 0));
+          setAvailableUnits(remaining);
+
+          console.log('[TalentFlow] Quota loaded: limit=', totalLimit, 'remaining=', remaining);
         }
       } else {
         console.log('[TalentFlow] Failed to load quota:', quotaResult.reason);
@@ -599,11 +610,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Available Units Badge */}
-            {availableUnits !== null && (
+            {/* Available Units Badge - shows remaining units (total - consumed) */}
+            {totalUnits > 0 && (
               <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg border border-gray-200">
                 <span className="text-sm text-gray-600">Available Units</span>
-                <span className="text-sm font-semibold text-gray-900">{availableUnits}</span>
+                <span className="text-sm font-semibold text-gray-900">{Math.max(0, totalUnits - stats.units_consumed)}</span>
               </div>
             )}
             {onOpenCandidateView && (
@@ -676,9 +687,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <span className="text-xs text-gray-500">Units Used</span>
               </div>
               <div className="text-xl font-semibold text-gray-900">
-                {isLoadingStats ? '...' : `${stats.units_consumed}/${(availableUnits || 0) + stats.units_consumed}`}
+                {isLoadingStats ? '...' : `${stats.units_consumed}/${totalUnits}`}
               </div>
-              <div className="text-[10px] text-gray-400 mt-0.5">{availableUnits || 0} remaining</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">{Math.max(0, totalUnits - stats.units_consumed)} remaining</div>
             </div>
           </div>
 
