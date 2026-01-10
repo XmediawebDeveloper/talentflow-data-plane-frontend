@@ -23,6 +23,7 @@ import { UserRole } from '@/lib/types/tenant';
 import FeaturePermissionManager from './FeaturePermissionManager';
 import DependencyMatrix from './DependencyMatrix';
 import UserLimits, { useUserLimits } from './UserLimits';
+import SeatQuotaCard from './SeatQuotaCard';
 
 // Types
 interface UserPermissions {
@@ -710,9 +711,11 @@ export default function UserManagement() {
           </div>
         </div>
 
-        {/* RBAC01: User Limits */}
-        <div className="mt-6">
-          <UserLimits compact />
+        {/* RBAC01: User Limits - always visible */}
+        <div className="mt-6 space-y-4">
+          <UserLimits compact onAddSeatsClick={() => {}} />
+          {/* Addon card - only shows when quota exhausted */}
+          <SeatQuotaCard onRefresh={() => { loadUsers(); refreshLimits(); }} compact />
         </div>
       </div>
 

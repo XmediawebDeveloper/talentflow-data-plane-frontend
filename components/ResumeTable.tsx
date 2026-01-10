@@ -286,10 +286,16 @@ export default function ResumeTable({
                 </div>
               </td>
               <td className="px-4 py-4 text-sm text-gray-700">
-                {highlightQuery ? highlightText(resume.email, highlightQuery) : resume.email}
+                {resume.email && resume.email !== 'No email'
+                  ? (highlightQuery ? highlightText(resume.email, highlightQuery) : resume.email)
+                  : <span className="text-gray-400">-</span>
+                }
               </td>
               <td className="px-4 py-4 text-sm text-gray-700">
-                {highlightQuery ? highlightText(resume.phone, highlightQuery) : resume.phone}
+                {resume.phone && resume.phone !== 'No phone'
+                  ? (highlightQuery ? highlightText(resume.phone, highlightQuery) : resume.phone)
+                  : <span className="text-gray-400">-</span>
+                }
               </td>
               <td className="px-4 py-4">
                 <div className="flex flex-wrap gap-1">

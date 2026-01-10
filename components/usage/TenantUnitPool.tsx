@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import {
   Loader2,
   Target,
@@ -20,6 +21,11 @@ import {
   User,
   Calendar,
   Info,
+  ExternalLink,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -53,6 +59,37 @@ const UNIT_TYPE_COLORS: Record<UnitType, { bg: string; text: string; bar: string
   AIU: { bg: 'bg-green-50', text: 'text-green-700', bar: 'bg-green-500' },
 };
 
+// Feature-Level Unit Deduction Recording: Generate entity link based on type
+function getEntityLink(entityType: string | null, entityId: string | null, jobDescriptionId: string | null): string | null {
+  if (!entityId) return null;
+
+  switch (entityType) {
+    case 'resume_scoring':
+    case 'resume_score':
+      // Link to the scored resume within the JD context
+      if (jobDescriptionId) {
+        return `/jobs/${jobDescriptionId}/scored-resumes?scoreId=${entityId}`;
+      }
+      return `/resumes/${entityId}`;
+    case 'resume':
+      return `/resumes/${entityId}`;
+    case 'assessment_attempt':
+    case 'assessment':
+      return `/assessments/results/${entityId}`;
+    case 'interview_session':
+    case 'interview':
+      return `/interviews/${entityId}`;
+    default:
+      return null;
+  }
+}
+
+// Export format type
+type ExportFormat = 'csv' | 'excel';
+
+// Export type
+type ExportType = 'consumption' | 'summary';
+
 export default function TenantUnitPool({ compact = false, showHistory = true }: TenantUnitPoolProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -61,6 +98,17 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
   const [history, setHistory] = useState<ConsumptionLogEntry[]>([]);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [selectedType, setSelectedType] = useState<UnitType | null>(null);
+
+  // Export modal state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportType, setExportType] = useState<ExportType>('consumption');
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
+  const [exportUnitType, setExportUnitType] = useState<UnitType | ''>('');
+  const [exportStatus, setExportStatus] = useState<string>('');
+  const [exportStartDate, setExportStartDate] = useState<string>('');
+  const [exportEndDate, setExportEndDate] = useState<string>('');
+  const [exportDays, setExportDays] = useState<number>(30);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -104,6 +152,61 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
     } catch (error: any) {
       toast.error(error.message || 'Failed to load consumption history');
     }
+  };
+
+  // Export handler
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      let blob: Blob;
+      let filename: string;
+      const timestamp = new Date().toISOString().split('T')[0];
+
+      if (exportType === 'consumption') {
+        blob = await unitPoolService.exportConsumptionHistory({
+          format: exportFormat,
+          unit_type: exportUnitType || undefined,
+          status: exportStatus || undefined,
+          start_date: exportStartDate || undefined,
+          end_date: exportEndDate || undefined,
+        });
+        filename = `consumption-history-${timestamp}.${exportFormat === 'excel' ? 'xlsx' : 'csv'}`;
+      } else {
+        blob = await unitPoolService.exportUsageSummary({
+          format: exportFormat,
+          days: exportDays,
+        });
+        filename = `usage-summary-${exportDays}days-${timestamp}.${exportFormat === 'excel' ? 'xlsx' : 'csv'}`;
+      }
+
+      // Download the file
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success(`Export completed: ${filename}`);
+      setShowExportModal(false);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to export data');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Reset export modal state
+  const resetExportModal = () => {
+    setExportType('consumption');
+    setExportFormat('csv');
+    setExportUnitType('');
+    setExportStatus('');
+    setExportStartDate('');
+    setExportEndDate('');
+    setExportDays(30);
   };
 
   // Calculate overall usage status
@@ -205,6 +308,16 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
               {overallStatus === 'critical' ? 'Low Units' : 'Running Low'}
             </span>
           )}
+          <button
+            onClick={() => {
+              resetExportModal();
+              setShowExportModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </button>
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
@@ -378,12 +491,31 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                   const Icon = UNIT_TYPE_ICONS[entry.unit_type];
                   const isSuccess = entry.status === 'SUCCESS';
 
+                  // Failed & Abandoned Action Logging: Status-based styling
+                  const isAbandoned = entry.status === 'ABANDONED';
+                  const isInterrupted = entry.status === 'INTERRUPTED';
+                  const isFailed = !isSuccess && !isAbandoned && !isInterrupted;
+
+                  // Determine border/background color based on status
+                  const getStatusStyle = () => {
+                    if (isSuccess) return 'border-gray-200';
+                    if (isAbandoned) return 'border-yellow-200 bg-yellow-50';
+                    if (isInterrupted) return 'border-orange-200 bg-orange-50';
+                    return 'border-red-200 bg-red-50';
+                  };
+
+                  // Determine status badge color
+                  const getStatusBadgeStyle = () => {
+                    if (isSuccess) return 'bg-green-100 text-green-700';
+                    if (isAbandoned) return 'bg-yellow-100 text-yellow-700';
+                    if (isInterrupted) return 'bg-orange-100 text-orange-700';
+                    return 'bg-red-100 text-red-700';
+                  };
+
                   return (
                     <div
                       key={entry.id}
-                      className={`p-3 rounded-lg border ${
-                        isSuccess ? 'border-gray-200' : 'border-red-200 bg-red-50'
-                      }`}
+                      className={`p-3 rounded-lg border ${getStatusStyle()}`}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
@@ -395,17 +527,40 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                               <span className="font-medium text-gray-900">
                                 {entry.units_consumed} {getUnitTypeName(entry.unit_type)}
                               </span>
-                              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                isSuccess ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                              }`}>
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${getStatusBadgeStyle()}`}>
                                 {entry.status}
                               </span>
+                              {/* Resume Scoring Usage Logging: Display overall_score for RS entries */}
+                              {entry.unit_type === 'RS' && entry.overall_score != null && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
+                                  Score: {entry.overall_score}%
+                                </span>
+                              )}
                             </div>
-                            <p className="text-sm text-gray-500 mt-0.5">
-                              {entry.entity_type && entry.entity_name
+                            {/* Feature-Level Unit Deduction Recording: Clickable entity link */}
+                            {(() => {
+                              const entityLink = getEntityLink(entry.entity_type, entry.entity_id, entry.job_description_id);
+                              const entityText = entry.entity_type && entry.entity_name
                                 ? `${entry.entity_type}: ${entry.entity_name}`
-                                : entry.entity_type || 'General usage'}
-                            </p>
+                                : entry.entity_type || 'General usage';
+
+                              if (entityLink) {
+                                return (
+                                  <Link
+                                    href={entityLink}
+                                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline mt-0.5 flex items-center gap-1"
+                                  >
+                                    {entityText}
+                                    <ExternalLink className="w-3 h-3" />
+                                  </Link>
+                                );
+                              }
+                              return (
+                                <p className="text-sm text-gray-500 mt-0.5">
+                                  {entityText}
+                                </p>
+                              );
+                            })()}
                           </div>
                         </div>
                         <div className="text-right">
@@ -418,6 +573,25 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                           </p>
                         </div>
                       </div>
+                      {/* Feature-Level Unit Deduction Recording: Display balance before/after */}
+                      {(entry.balance_before != null || entry.balance_after != null) && (
+                        <div className="mt-2 flex items-center gap-4 text-xs text-gray-500 border-t border-gray-100 pt-2">
+                          <span className="flex items-center gap-1">
+                            <span className="font-medium">Balance:</span>
+                            {entry.balance_before != null && (
+                              <span>{entry.balance_before.toLocaleString()}</span>
+                            )}
+                            {entry.balance_before != null && entry.balance_after != null && (
+                              <span className="text-gray-400 mx-1">→</span>
+                            )}
+                            {entry.balance_after != null && (
+                              <span className={entry.balance_after < (entry.balance_before || 0) ? 'text-red-600' : 'text-green-600'}>
+                                {entry.balance_after.toLocaleString()}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      )}
                       {entry.failure_reason && (
                         <p className="mt-2 text-xs text-red-600">
                           {entry.failure_reason}
@@ -428,6 +602,196 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowExportModal(false)} />
+            <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+              <div className="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Export Usage Data</h3>
+                  <button
+                    onClick={() => setShowExportModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Export Type Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Export Type</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setExportType('consumption')}
+                        className={`p-3 rounded-lg border-2 text-left transition-colors ${
+                          exportType === 'consumption'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-5 h-5 text-blue-600" />
+                          <span className="font-medium">Consumption History</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Detailed usage logs</p>
+                      </button>
+                      <button
+                        onClick={() => setExportType('summary')}
+                        className={`p-3 rounded-lg border-2 text-left transition-colors ${
+                          exportType === 'summary'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="w-5 h-5 text-purple-600" />
+                          <span className="font-medium">Usage Summary</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Aggregated statistics</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Export Format Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Format</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setExportFormat('csv')}
+                        className={`p-3 rounded-lg border-2 flex items-center gap-2 transition-colors ${
+                          exportFormat === 'csv'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <FileText className="w-5 h-5 text-green-600" />
+                        <span className="font-medium">CSV</span>
+                      </button>
+                      <button
+                        onClick={() => setExportFormat('excel')}
+                        className={`p-3 rounded-lg border-2 flex items-center gap-2 transition-colors ${
+                          exportFormat === 'excel'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                        <span className="font-medium">Excel</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Filters for Consumption History */}
+                  {exportType === 'consumption' && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Unit Type</label>
+                          <select
+                            value={exportUnitType}
+                            onChange={(e) => setExportUnitType(e.target.value as UnitType | '')}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="">All Types</option>
+                            <option value="RS">Resume Scoring</option>
+                            <option value="AS">Assessment</option>
+                            <option value="AIU">AI Interview</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                          <select
+                            value={exportStatus}
+                            onChange={(e) => setExportStatus(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="">All Statuses</option>
+                            <option value="SUCCESS">Success</option>
+                            <option value="FAILED">Failed</option>
+                            <option value="INSUFFICIENT_UNITS">Insufficient Units</option>
+                            <option value="ABANDONED">Abandoned</option>
+                            <option value="INTERRUPTED">Interrupted</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                          <input
+                            type="date"
+                            value={exportStartDate}
+                            onChange={(e) => setExportStartDate(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                          <input
+                            type="date"
+                            value={exportEndDate}
+                            onChange={(e) => setExportEndDate(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Days selection for Summary */}
+                  {exportType === 'summary' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Period</label>
+                      <select
+                        value={exportDays}
+                        onChange={(e) => setExportDays(Number(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value={7}>Last 7 days</option>
+                        <option value={30}>Last 30 days</option>
+                        <option value={60}>Last 60 days</option>
+                        <option value={90}>Last 90 days</option>
+                        <option value={180}>Last 6 months</option>
+                        <option value={365}>Last year</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 gap-2">
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  disabled={isExporting}
+                  className="inline-flex w-full justify-center items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed sm:w-auto"
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Export
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportModal(false)}
+                  className="mt-3 inline-flex w-full justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

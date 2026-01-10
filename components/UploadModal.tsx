@@ -6,7 +6,7 @@ import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } fr
 
 // Default constants for fallback
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const MAX_BULK_FILES = 300; // Async processing supports up to 300 files
+const MAX_BULK_FILES = 100; // Maximum files per bulk upload (matches backend limit)
 const ALLOWED_FORMATS = [
   'application/pdf',
   'application/msword',
@@ -59,6 +59,22 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Handler to switch tabs with validation
+  const handleTabSwitch = (newTab: 'single' | 'bulk') => {
+    // If switching to single tab and have multiple files selected, clear them
+    if (newTab === 'single' && selectedFiles.length > 1) {
+      setSelectedFiles([]);
+      setValidationErrors([{
+        fileName: '',
+        error: 'Files cleared. Single upload accepts only 1 file at a time.',
+        type: 'limit'
+      }]);
+    } else {
+      setValidationErrors([]);
+    }
+    setActiveTab(newTab);
+  };
+
   // Check quota status on mount
   useEffect(() => {
     const fetchQuotaStatus = async () => {
@@ -96,8 +112,19 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     const files = Array.from(e.dataTransfer.files);
+
+    // Validate file count for single upload
+    if (activeTab === 'single' && files.length > 1) {
+      setValidationErrors([{
+        fileName: '',
+        error: `Single upload accepts only 1 file. You dropped ${files.length} files. Please use Bulk Upload to upload multiple files.`,
+        type: 'limit'
+      }]);
+      return;
+    }
+
     const validatedFiles = validateAndFilterFiles(files);
     setSelectedFiles(prev => [...prev, ...validatedFiles]);
   };
@@ -105,6 +132,21 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files);
+
+      // Validate file count for single upload
+      if (activeTab === 'single' && files.length > 1) {
+        setValidationErrors([{
+          fileName: '',
+          error: `Single upload accepts only 1 file. You selected ${files.length} files. Please use Bulk Upload to upload multiple files.`,
+          type: 'limit'
+        }]);
+        // Clear the file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+
       const validatedFiles = validateAndFilterFiles(files);
       setSelectedFiles(prev => [...prev, ...validatedFiles]);
     }
@@ -197,6 +239,17 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     const errors: FileValidationError[] = [];
     const validFiles: File[] = [];
     const totalSizeMB = files.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024);
+
+    // Check single upload file limit (only 1 file allowed)
+    if (activeTab === 'single' && files.length > 1) {
+      errors.push({
+        fileName: '',
+        error: `Single upload accepts only 1 file. You selected ${files.length} files. Please use Bulk Upload tab for multiple files.`,
+        type: 'limit'
+      });
+      setValidationErrors(errors);
+      return [];
+    }
 
     // ✅ STEP 2.3: Check tenant storage limit
     const availableStorageMB = storageLimitMB - storageUsedMB;
@@ -330,7 +383,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     }
   };
 
-  const storagePercentage = (storageUsedMB / storageLimitMB) * 100;
+  // Storage percentage calculation removed (no longer displayed in UI)
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -351,42 +404,6 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
         </div>
 
         <div className="p-6">
-          {/* Storage Usage Indicator */}
-          <div className="mb-6 p-4 bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg">
-            <div className="flex items-start gap-3">
-              <HardDrive className="w-5 h-5 text-gray-800 mt-0.5" />
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-900">Storage Usage</span>
-                  <span className="text-sm text-gray-700">
-                    {formatStorage(storageUsedMB)} / {formatStorage(storageLimitMB)}
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className={`h-2 rounded-full transition-all ${
-                      storagePercentage >= 90 ? 'bg-red-600' : 
-                      storagePercentage >= 70 ? 'bg-yellow-500' : 
-                      'bg-gray-800'
-                    }`}
-                    style={{ width: `${Math.min(100, storagePercentage)}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs text-gray-600">
-                    {formatStorage(storageLimitMB - storageUsedMB)} remaining
-                  </span>
-                  {virusScanEnabled && (
-                    <span className="flex items-center gap-1 text-xs text-green-700">
-                      <Shield className="w-3 h-3" />
-                      Virus scan enabled
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* RU Quota Indicator */}
           <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-start gap-3">
@@ -439,7 +456,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
 
           <div className="flex gap-4 mb-6">
             <button
-              onClick={() => setActiveTab('single')}
+              onClick={() => handleTabSwitch('single')}
               className={`flex-1 p-4 rounded-lg border-2 transition-all ${
                 activeTab === 'single'
                   ? 'border-gray-800 bg-gray-50'
@@ -455,7 +472,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               </div>
             </button>
             <button
-              onClick={() => setActiveTab('bulk')}
+              onClick={() => handleTabSwitch('bulk')}
               className={`flex-1 p-4 rounded-lg border-2 transition-all ${
                 activeTab === 'bulk'
                   ? 'border-gray-800 bg-gray-50'
@@ -467,7 +484,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 <div className={`text-sm mb-1 ${activeTab === 'bulk' ? 'text-gray-800' : 'text-gray-900'}`}>
                   Bulk Upload
                 </div>
-                <div className="text-xs text-gray-500">Upload multiple resumes (up to 300)</div>
+                <div className="text-xs text-gray-500">Upload multiple resumes (up to 100)</div>
               </div>
             </button>
           </div>
@@ -495,12 +512,12 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 <FileText className="w-3 h-3" />
                 Max file size: {maxFileSizeMB} MB
               </span>
-              {activeTab === 'bulk' && <span>• Max files: 300 resumes</span>}
+              {activeTab === 'bulk' && <span>• Max files: 100 resumes</span>}
             </div>
             <input
               ref={fileInputRef}
               type="file"
-              multiple
+              multiple={activeTab === 'bulk'}
               accept=".pdf,.doc,.docx"
               onChange={handleFileSelect}
               className="hidden"

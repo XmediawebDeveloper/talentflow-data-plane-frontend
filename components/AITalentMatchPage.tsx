@@ -1,7 +1,8 @@
 'use client';
 
 import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, PlayCircle, Paperclip } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import AITalentMatchPageJobsList from './AITalentMatchPageJobsList';
 import ResumeVersionsModal from './ResumeVersionsModal';
@@ -47,19 +48,52 @@ interface AITalentMatchPageProps {
   onBack?: () => void;
 }
 
-export default function AITalentMatchPage({ 
-  jobs, 
-  matchHistory = [], 
+export default function AITalentMatchPage({
+  jobs,
+  matchHistory = [],
   onSaveMatch,
   onSubmitToScoring,
   onBack
 }: AITalentMatchPageProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'results'>('history');
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<MatchHistory | null>(null);
   const [selectedJob, setSelectedJob] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterThreshold, setFilterThreshold] = useState(0);
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
+
+  // Track if we're in an active matching session to prevent URL effect interference
+  const isMatchingInProgress = useRef(false);
+
+  // Helper function to format uploaded by name (avoid showing UUIDs)
+  const formatUploadedBy = (name?: string, id?: string) => {
+    // Check if uploadedByName exists and is not a UUID
+    if (name && !name.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      return name;
+    }
+    // If we only have UUID or no name, return generic label
+    return 'System';
+  };
+
+  // Helper to update URL params
+  const updateUrlParams = (params: { jdId?: string; view?: string }) => {
+    const newParams = new URLSearchParams();
+
+    if (params.jdId) {
+      newParams.set('jdId', params.jdId);
+    }
+
+    if (params.view) {
+      newParams.set('view', params.view);
+    }
+
+    const queryString = newParams.toString();
+    const newUrl = queryString ? `/recruitment/ai-talent-match?${queryString}` : '/recruitment/ai-talent-match';
+    router.replace(newUrl, { scroll: false });
+  };
   
   // History filters
   const [historySearchQuery, setHistorySearchQuery] = useState('');
@@ -78,44 +112,90 @@ export default function AITalentMatchPage({
   // Available units from quota API
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
 
-  // Handle preselected job from JD view page
+  // Handle URL params and sessionStorage for job selection
   useEffect(() => {
-    const preselectedJobId = sessionStorage.getItem('preselectedJobId');
+    // Skip if we're in an active matching session
+    if (isMatchingInProgress.current) return;
+
+    // First check URL params (for refresh persistence)
+    const urlJdId = searchParams.get('jdId');
+    const urlView = searchParams.get('view');
+
+    // Then check sessionStorage (for navigation from JD page)
+    const sessionJobId = sessionStorage.getItem('preselectedJobId');
     const showResultsOnly = sessionStorage.getItem('showResultsOnly') === 'true';
+
+    const preselectedJobId = urlJdId || sessionJobId;
 
     if (!preselectedJobId) return;
     // Wait for jobs to be loaded before processing
     if (jobs.length === 0) return;
 
-    // Clear sessionStorage immediately
-    sessionStorage.removeItem('preselectedJobId');
-    sessionStorage.removeItem('showResultsOnly');
+    // Clear sessionStorage if we used it
+    if (sessionJobId) {
+      sessionStorage.removeItem('preselectedJobId');
+      sessionStorage.removeItem('showResultsOnly');
+    }
 
     // Set the selected job
     setSelectedJob(preselectedJobId);
 
-    // Check if there are existing match results for this job
-    const existingMatch = matchHistory.find(h => h.jobId === preselectedJobId);
+    // Determine view based on URL param or sessionStorage flag
+    const shouldShowResults = urlView === 'results' || showResultsOnly;
+    const shouldShowDetails = urlView === 'details';
+    const isMatching = urlView === 'matching';
 
-    if (existingMatch && existingMatch.matchedCandidates.length > 0) {
-      // Show existing results directly
-      setSelectedHistoryItem(existingMatch);
-      setMatchedCandidates(existingMatch.matchedCandidates);
-      setViewMode('results');
-    } else if (showResultsOnly) {
-      // User clicked "AI Talent Match Results" - show empty results view for this JD
-      // Set empty results so the results view shows "no results" message
-      setMatchedCandidates([]);
-      setViewMode('results');
+    if (isMatching) {
+      // User is in matching mode - don't change view, matching panel will handle it
+      // Just make sure job is selected, but don't change the current view mode
+      return;
+    } else if (shouldShowDetails) {
+      // User clicked from history list - show details view
+      const existingMatch = matchHistory.find(h => h.jobId === preselectedJobId);
+
+      if (existingMatch && existingMatch.matchedCandidates.length > 0) {
+        // Show history details
+        setSelectedHistoryItem(existingMatch);
+        setViewMode('details');
+      } else {
+        // No match found, go to history
+        setViewMode('history');
+        updateUrlParams({});
+      }
+    } else if (shouldShowResults) {
+      // User clicked "AI Talent Match Results" - show existing results or empty state
+      const existingMatch = matchHistory.find(h => h.jobId === preselectedJobId);
+
+      if (existingMatch && existingMatch.matchedCandidates.length > 0) {
+        // Show existing results
+        setSelectedHistoryItem(existingMatch);
+        setMatchedCandidates(existingMatch.matchedCandidates);
+        setViewMode('results');
+      } else {
+        // No results yet - show empty results view
+        setMatchedCandidates([]);
+        setViewMode('results');
+      }
+
+      // Update URL to persist state on refresh
+      if (!urlJdId) {
+        updateUrlParams({ jdId: preselectedJobId, view: 'results' });
+      }
     } else {
-      // User clicked "AI Talent Match" - run new match
+      // User clicked "AI Talent Match" - ALWAYS run new match (ignore history)
       setViewMode('new');
-      // Trigger matching panel after a short delay to ensure job is selected
+
+      // Update URL to persist state on refresh
+      if (!urlJdId) {
+        updateUrlParams({ jdId: preselectedJobId, view: 'matching' });
+      }
+
+      // Trigger matching panel immediately
       setTimeout(() => {
         setShowMatchingPanel(true);
-      }, 500);
+      }, 300);
     }
-  }, [jobs, matchHistory]);
+  }, [jobs, matchHistory, searchParams]);
 
   // Fetch available units on mount
   useEffect(() => {
@@ -167,6 +247,14 @@ export default function AITalentMatchPage({
     setMatchError(null);
     setViewMode('results');
 
+    // Update URL to show results view
+    updateUrlParams({ jdId: selectedJob, view: 'results' });
+
+    // Clear matching flag after a short delay to allow state to settle
+    setTimeout(() => {
+      isMatchingInProgress.current = false;
+    }, 100);
+
     // Track usage - POST /api/v1/external/usage/record (RS - talent match uses resume scoring quota)
     recordUsage({
       quota_type: 'RS',
@@ -206,15 +294,40 @@ export default function AITalentMatchPage({
   };
 
   const handleSubmitToScoring = () => {
-    if (selectedCandidates.length === 0 || !selectedJob) {
+    if (selectedCandidates.length === 0) {
       alert('Please select at least one candidate to score');
       return;
     }
-    
-    if (onSubmitToScoring) {
-      onSubmitToScoring(selectedJob, selectedCandidates);
-      alert(`${selectedCandidates.length} candidate${selectedCandidates.length > 1 ? 's' : ''} submitted for scoring!`);
+
+    // Get the current candidates based on view mode
+    const currentCandidates = viewMode === 'results' ? matchedCandidates :
+                              selectedHistoryItem ? selectedHistoryItem.matchedCandidates : [];
+
+    // Get selected candidates data
+    const selected = currentCandidates.filter(c => selectedCandidates.includes(c.id));
+    const resumeIds = selected.map(c => c.resumeId);
+    const resumeNames = selected.map(c => c.name);
+
+    // Get the job ID and title
+    const jobId = selectedJob || selectedHistoryItem?.jobId;
+    const jobTitle = selectedJobData?.title || selectedHistoryItem?.jobTitle || 'Job';
+
+    if (!jobId) {
+      alert('Job ID not found');
+      return;
     }
+
+    // Store in sessionStorage in the format expected by resume scoring page
+    const pendingScoringData = {
+      jobId,
+      jobTitle,
+      resumeIds,
+      resumeNames,
+    };
+    sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingScoringData));
+
+    // Navigate to resume scoring page with start_scoring=true to trigger auto-scoring
+    router.push('/recruitment/resume-scoring?start_scoring=true');
   };
 
   const getFilteredCandidates = (): MatchedCandidateWithVersions[] => {
@@ -289,6 +402,7 @@ export default function AITalentMatchPage({
                 setViewMode('history');
                 setSelectedHistoryItem(null);
                 setSelectedCandidates([]);
+                updateUrlParams({}); // Clear URL params
               }}
               className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors"
             >
@@ -297,9 +411,16 @@ export default function AITalentMatchPage({
             </button>
             <button
               onClick={() => {
-                setViewMode('new');
-                setSelectedJob('');
-                setSelectedCandidates([]);
+                // Keep the current JD and run new match
+                if (selectedHistoryItem?.jobId) {
+                  isMatchingInProgress.current = true;
+                  setSelectedJob(selectedHistoryItem.jobId);
+                  setSelectedCandidates([]);
+                  // Don't change URL view - just show overlay
+                  // updateUrlParams({ jdId: selectedHistoryItem.jobId, view: 'matching' });
+                  // Trigger matching panel immediately
+                  setShowMatchingPanel(true);
+                }
               }}
               className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2"
             >
@@ -329,21 +450,6 @@ export default function AITalentMatchPage({
                     <User className="w-4 h-4" />
                     {selectedHistoryItem.totalMatches} matches
                   </span>
-                </div>
-              </div>
-              {/* Match Distribution - Compact */}
-              <div className="flex gap-2">
-                <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-center">
-                  <div className="text-lg font-bold text-green-700">{excellentCount}</div>
-                  <div className="text-xs text-gray-600">85%+</div>
-                </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-center">
-                  <div className="text-lg font-bold text-gray-900">{goodCount}</div>
-                  <div className="text-xs text-gray-600">70-84%</div>
-                </div>
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-center">
-                  <div className="text-lg font-bold text-yellow-700">{moderateCount}</div>
-                  <div className="text-xs text-gray-600">&lt;70%</div>
                 </div>
               </div>
             </div>
@@ -386,119 +492,147 @@ export default function AITalentMatchPage({
           </div>
         </div>
 
-        {/* Scrollable Candidates List */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="space-y-3">
-          {filteredCandidates.map((candidate, index) => (
-            <div
-              key={candidate.id}
-              className={`bg-white rounded-xl border-2 transition-all p-6 ${
-                selectedCandidates.includes(candidate.id)
-                  ? 'border-gray-300 shadow-md'
-                  : 'border-gray-200 hover:border-gray-300 hover:shadow-lg'
-              }`}
-            >
-              <div className="flex items-start gap-6">
-                {/* Checkbox & Rank */}
-                <div className="flex flex-col items-center gap-3">
+        {/* Candidates List - Table View */}
+        <div className="flex-1 overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 sticky top-0">
+              <tr>
+                <th className="w-12 px-4 py-3">
                   <input
                     type="checkbox"
-                    checked={selectedCandidates.includes(candidate.id)}
-                    onChange={() => handleSelectCandidate(candidate.id)}
-                    className="w-5 h-5 text-gray-800 rounded border-gray-300 focus:ring-gray-500"
+                    checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selectedCandidates.includes(c.id))}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedCandidates(filteredCandidates.map(c => c.id));
+                      } else {
+                        setSelectedCandidates([]);
+                      }
+                    }}
+                    className="rounded border-gray-300 text-gray-800 focus:ring-gray-500"
                   />
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-base font-medium ${
-                    index === 0 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
-                    index === 1 ? 'bg-gray-100 text-gray-700 border-2 border-gray-300' :
-                    index === 2 ? 'bg-orange-100 text-orange-700 border-2 border-orange-300' :
-                    'bg-gray-50 text-gray-600'
-                  }`}>
-                    #{index + 1}
-                  </div>
-                </div>
-
-                {/* Candidate Info */}
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-xl text-gray-900 mb-1">{candidate.name}</h3>
-                  <p className="text-gray-600 mb-3">{candidate.title}</p>
-                  
-                  {/* Match Score */}
-                  <div className="mb-3">
-                    <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border-2 ${getMatchBgColor(candidate.matchScore)}`}>
-                      <Target className="w-4 h-4" />
-                      <span className="font-bold">{candidate.matchScore}% Match</span>
-                      <span className="text-xs opacity-75">• {getMatchLabel(candidate.matchScore)}</span>
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                  Rank
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                  Candidate Name
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                  Email
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                  Phone
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                  Location
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                  Skills
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                  Experience
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                  Uploaded By
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                  Uploaded Date
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                  Attachments
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredCandidates.map((candidate, index) => (
+                <tr
+                  key={candidate.id}
+                  className={`hover:bg-gray-50 transition-colors ${
+                    selectedCandidates.includes(candidate.id) ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  <td className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedCandidates.includes(candidate.id)}
+                      onChange={() => handleSelectCandidate(candidate.id)}
+                      className="rounded border-gray-300 text-gray-800 focus:ring-gray-500"
+                    />
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-sm ${
+                      index === 0 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
+                      index === 1 ? 'bg-gray-100 text-gray-700 border-2 border-gray-300' :
+                      index === 2 ? 'bg-orange-100 text-orange-700 border-2 border-orange-300' :
+                      'bg-gray-50 text-gray-600 border border-gray-200'
+                    }`}>
+                      {index < 3 && <Star className="w-3.5 h-3.5" fill="currentColor" />}
+                      #{filteredCandidates.length - index}
                     </div>
-                  </div>
-
-                  {/* Match Reason */}
-                  <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <p className="text-sm text-gray-700">
-                      <span className="font-medium text-gray-900">Why this match: </span>
-                      {candidate.matchReason}
-                    </p>
-                  </div>
-
-                  {/* Skill Matches */}
-                  {candidate.skillMatches && candidate.skillMatches.length > 0 && (
-                    <div className="mb-3">
-                      <p className="text-xs text-gray-600 mb-2 font-medium">Key Skill Matches:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {candidate.skillMatches.map((skill, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2.5 py-1 bg-green-100 text-green-700 rounded-md text-xs font-medium border border-green-300"
-                          >
-                            <CheckCircle className="w-3 h-3 inline mr-1" />
-                            {skill}
-                          </span>
-                        ))}
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm text-gray-700 font-medium">
+                        {candidate.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{candidate.name}</div>
                       </div>
                     </div>
-                  )}
-
-                  {/* Candidate Details */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600">
-                    <span className="flex items-center gap-1">
-                      <Mail className="w-4 h-4" />
-                      {candidate.email}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Phone className="w-4 h-4" />
-                      {candidate.phone}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-4 h-4" />
-                      {candidate.location}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Building2 className="w-4 h-4" />
-                      {candidate.currentCompany}
-                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-sm text-gray-700">
+                    {candidate.email ? candidate.email : <span className="text-gray-400">-</span>}
+                  </td>
+                  <td className="px-4 py-4 text-sm text-gray-700">
+                    {candidate.phone ? candidate.phone : <span className="text-gray-400">-</span>}
+                  </td>
+                  <td className="px-4 py-4 text-sm text-gray-700">
+                    {candidate.location ? candidate.location : <span className="text-gray-400">-</span>}
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex flex-wrap gap-1">
+                      {candidate.skills && candidate.skills.slice(0, 4).map((skill, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                      {candidate.skills && candidate.skills.length > 4 && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-blue-600">
+                          +{candidate.skills.length - 4} more
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 text-sm text-gray-700">{candidate.experience}</td>
+                  <td className="px-4 py-4 text-sm text-gray-700">
+                    {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
+                  </td>
+                  <td className="px-4 py-4 text-sm text-gray-700">
+                    {candidate.uploadDate ? new Date(candidate.uploadDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    }) : <span className="text-gray-400">-</span>}
+                  </td>
+                  <td className="px-4 py-4">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedVersionsCandidate(candidate);
                       }}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 font-medium"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 text-xs font-medium"
                     >
-                      <Paperclip className="w-4 h-4" />
-                      {candidate.attachmentCount || 1} {(candidate.attachmentCount || 1) === 1 ? 'Attachment' : 'Attachments'}
+                      <Paperclip className="w-3.5 h-3.5" />
+                      {candidate.attachmentCount || 1}
                     </button>
-                    <span className="flex items-center gap-1 px-3 py-1.5 bg-gray-50 text-gray-900 rounded-lg border border-gray-200 font-medium">
-                      <Clock className="w-4 h-4" />
-                      Uploaded: {new Date(candidate.uploadDate).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-          </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </main>
 
@@ -678,84 +812,44 @@ export default function AITalentMatchPage({
                   onClick={() => {
                     setSelectedHistoryItem(item);
                     setViewMode('details');
+                    updateUrlParams({ jdId: item.jobId, view: 'details' });
                   }}
                   className="bg-white rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all p-6 cursor-pointer group"
                   role="button"
                   tabIndex={0}
                 >
-                  <div className="flex items-start gap-6">
+                  <div className="flex items-center justify-between">
                     {/* Job Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start gap-4 mb-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
-                          <Sparkles className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-xl text-gray-900 mb-2 group-hover:text-gray-800 transition-colors">
-                            {item.jobTitle}
-                          </h3>
-                          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                            <span className="flex items-center gap-1.5">
-                              <Clock className="w-4 h-4" />
-                              {new Date(item.matchedAt).toLocaleDateString('en-US', { 
-                                month: 'short', 
-                                day: 'numeric', 
-                                year: 'numeric'
-                              })}
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                              <User className="w-4 h-4" />
-                              {item.totalMatches} matches
-                            </span>
-                          </div>
-                        </div>
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
+                        <Sparkles className="w-6 h-6 text-white" />
                       </div>
-
-                      {/* Match Distribution */}
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 font-medium">Excellent</span>
-                            <Award className="w-4 h-4 text-green-600" />
-                          </div>
-                          <div className="text-2xl text-green-700 font-bold">{excellentCount}</div>
-                          <div className="text-xs text-gray-600 mt-0.5">85%+ match</div>
-                        </div>
-
-                        <div className="bg-gradient-to-br from-gray-50 to-sky-50 border border-gray-200 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 font-medium">Good</span>
-                            <CheckCircle className="w-4 h-4 text-gray-800" />
-                          </div>
-                          <div className="text-2xl text-gray-900 font-bold">{goodCount}</div>
-                          <div className="text-xs text-gray-600 mt-0.5">70-84% match</div>
-                        </div>
-
-                        <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 font-medium">Moderate</span>
-                            <TrendingUp className="w-4 h-4 text-yellow-600" />
-                          </div>
-                          <div className="text-2xl text-yellow-700 font-bold">{moderateCount}</div>
-                          <div className="text-xs text-gray-600 mt-0.5">&lt;70% match</div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-gray-800 transition-colors">
+                          {item.jobTitle}
+                        </h3>
+                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                          <span className="flex items-center gap-1.5">
+                            <Clock className="w-4 h-4" />
+                            {new Date(item.matchedAt).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <User className="w-4 h-4" />
+                            {item.totalMatches} matches
+                          </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Avg Score */}
-                    <div className="flex-shrink-0 text-center">
-                      <div className="text-sm text-gray-600 mb-2 font-medium">Avg Score</div>
-                      <div className={`text-4xl font-bold mb-2 ${getMatchColor(avgScore)}`}>
-                        {avgScore}%
-                      </div>
-                      <div className={`inline-block px-3 py-1.5 rounded-full text-xs border font-medium ${getMatchBgColor(avgScore)}`}>
-                        {getMatchLabel(avgScore)}
-                      </div>
-                      <div className="mt-4 text-gray-800 group-hover:text-gray-900 text-sm font-medium flex items-center gap-1 justify-center">
-                        View Details
-                        <ArrowLeft className="w-4 h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </div>
+                    {/* View Details Button */}
+                    <button className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 font-medium">
+                      View Details
+                      <ArrowLeft className="w-4 h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
+                    </button>
                   </div>
                 </div>
               );
@@ -830,24 +924,54 @@ export default function AITalentMatchPage({
                 setViewMode('history');
                 setSelectedCandidates([]);
                 setMatchedCandidates([]);
+                updateUrlParams({}); // Clear URL params
               }}
               className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
               Back to Matched Jobs
             </button>
-            <button
-              onClick={() => {
-                setViewMode('new');
-                setSelectedJob('');
-                setSelectedCandidates([]);
-                setMatchedCandidates([]);
-              }}
-              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2"
-            >
-              <Sparkles className="w-4 h-4" />
-              New AI Match
-            </button>
+            <div className="flex items-center gap-3">
+              {selectedCandidates.length > 0 && (
+                <button
+                  onClick={() => {
+                    // Get selected candidate resume IDs
+                    const selectedResumes = filteredCandidates
+                      .filter(c => selectedCandidates.includes(c.id))
+                      .map(c => c.resumeId);
+
+                    // Store in sessionStorage for resume scoring page
+                    sessionStorage.setItem('scoringResumeIds', JSON.stringify(selectedResumes));
+                    sessionStorage.setItem('scoringJobId', selectedJob);
+
+                    // Navigate to resume scoring page
+                    router.push('/recruitment/resume-scoring');
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
+                >
+                  <Target className="w-4 h-4" />
+                  Score Selected ({selectedCandidates.length})
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  // Keep the current JD and run new match
+                  if (selectedJob) {
+                    isMatchingInProgress.current = true;
+                    setSelectedCandidates([]);
+                    setMatchedCandidates([]);
+                    // Don't change URL view - just show overlay
+                    // updateUrlParams({ jdId: selectedJob, view: 'matching' });
+                    // Trigger matching panel immediately
+                    setShowMatchingPanel(true);
+                  }
+                }}
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                New AI Match
+              </button>
+            </div>
           </div>
 
           {/* Job Info Card */}
@@ -867,21 +991,6 @@ export default function AITalentMatchPage({
                     <CheckCircle2 className="w-3 h-3" />
                     Complete
                   </span>
-                </div>
-              </div>
-              {/* Match Distribution - Compact */}
-              <div className="flex gap-2">
-                <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-center">
-                  <div className="text-lg font-bold text-green-700">{excellentCount}</div>
-                  <div className="text-xs text-gray-600">85%+</div>
-                </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-center">
-                  <div className="text-lg font-bold text-gray-900">{goodCount}</div>
-                  <div className="text-xs text-gray-600">70-84%</div>
-                </div>
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-center">
-                  <div className="text-lg font-bold text-yellow-700">{moderateCount}</div>
-                  <div className="text-xs text-gray-600">&lt;70%</div>
                 </div>
               </div>
             </div>
@@ -946,116 +1055,146 @@ export default function AITalentMatchPage({
               </button>
             </div>
           ) : (
-          <div className="space-y-3">
-            {filteredCandidates.map((candidate, index) => (
-              <div
-                key={candidate.id}
-                className={`bg-white rounded-xl border-2 transition-all p-6 ${
-                  selectedCandidates.includes(candidate.id)
-                    ? 'border-gray-300 shadow-md'
-                    : 'border-gray-200 hover:border-gray-300 hover:shadow-lg'
-                }`}
-              >
-                <div className="flex items-start gap-6">
-                  {/* Checkbox & Rank */}
-                  <div className="flex flex-col items-center gap-3">
+          <div className="flex-1 overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <th className="w-12 px-4 py-3">
                     <input
                       type="checkbox"
-                      checked={selectedCandidates.includes(candidate.id)}
-                      onChange={() => handleSelectCandidate(candidate.id)}
-                      className="w-5 h-5 text-gray-800 rounded border-gray-300 focus:ring-gray-500"
+                      checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selectedCandidates.includes(c.id))}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedCandidates(filteredCandidates.map(c => c.id));
+                        } else {
+                          setSelectedCandidates([]);
+                        }
+                      }}
+                      className="rounded border-gray-300 text-gray-800 focus:ring-gray-500"
                     />
-                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-base font-medium ${
-                      index === 0 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
-                      index === 1 ? 'bg-gray-100 text-gray-700 border-2 border-gray-300' :
-                      index === 2 ? 'bg-orange-100 text-orange-700 border-2 border-orange-300' :
-                      'bg-gray-50 text-gray-600'
-                    }`}>
-                      #{index + 1}
-                    </div>
-                  </div>
-
-                  {/* Candidate Info */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xl text-gray-900 mb-1">{candidate.name}</h3>
-                    <p className="text-gray-600 mb-3">{candidate.title}</p>
-                    
-                    {/* Match Score */}
-                    <div className="mb-3">
-                      <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border-2 ${getMatchBgColor(candidate.matchScore)}`}>
-                        <Target className="w-4 h-4" />
-                        <span className="font-bold">{candidate.matchScore}% Match</span>
-                        <span className="text-xs opacity-75">• {getMatchLabel(candidate.matchScore)}</span>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                    Rank
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                    Candidate Name
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                    Phone
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                    Location
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                    Skills
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                    Experience
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                    Uploaded By
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                    Uploaded Date
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                    Attachments
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredCandidates.map((candidate, index) => (
+                  <tr
+                    key={candidate.id}
+                    className={`hover:bg-gray-50 transition-colors ${
+                      selectedCandidates.includes(candidate.id) ? 'bg-blue-50' : ''
+                    }`}
+                  >
+                    <td className="px-4 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedCandidates.includes(candidate.id)}
+                        onChange={() => handleSelectCandidate(candidate.id)}
+                        className="rounded border-gray-300 text-gray-800 focus:ring-gray-500"
+                      />
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-sm ${
+                        index === 0 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
+                        index === 1 ? 'bg-gray-100 text-gray-700 border-2 border-gray-300' :
+                        index === 2 ? 'bg-orange-100 text-orange-700 border-2 border-orange-300' :
+                        'bg-gray-50 text-gray-600 border border-gray-200'
+                      }`}>
+                        {index < 3 && <Star className="w-3.5 h-3.5" fill="currentColor" />}
+                        #{filteredCandidates.length - index}
                       </div>
-                    </div>
-
-                    {/* Match Reason */}
-                    <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <p className="text-sm text-gray-700">
-                        <span className="font-medium text-gray-900">Why this match: </span>
-                        {candidate.matchReason}
-                      </p>
-                    </div>
-
-                    {/* Skill Matches */}
-                    {candidate.skillMatches && candidate.skillMatches.length > 0 && (
-                      <div className="mb-3">
-                        <p className="text-xs text-gray-600 mb-2 font-medium">Key Skill Matches:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {candidate.skillMatches.map((skill, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2.5 py-1 bg-green-100 text-green-700 rounded-md text-xs font-medium border border-green-300"
-                            >
-                              <CheckCircle className="w-3 h-3 inline mr-1" />
-                              {skill}
-                            </span>
-                          ))}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm text-gray-700 font-medium">
+                          {candidate.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{candidate.name}</div>
                         </div>
                       </div>
-                    )}
-
-                    {/* Candidate Details */}
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <Mail className="w-4 h-4" />
-                        {candidate.email}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Phone className="w-4 h-4" />
-                        {candidate.phone}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        {candidate.location}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Building2 className="w-4 h-4" />
-                        {candidate.currentCompany}
-                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-700">
+                      {candidate.email ? candidate.email : <span className="text-gray-400">-</span>}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-700">
+                      {candidate.phone ? candidate.phone : <span className="text-gray-400">-</span>}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-700">
+                      {candidate.location ? candidate.location : <span className="text-gray-400">-</span>}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex flex-wrap gap-1">
+                        {candidate.skills && candidate.skills.slice(0, 4).map((skill, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                        {candidate.skills && candidate.skills.length > 4 && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 text-xs text-blue-600">
+                            +{candidate.skills.length - 4} more
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-700">{candidate.experience}</td>
+                    <td className="px-4 py-4 text-sm text-gray-700">
+                      {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-700">
+                      {candidate.uploadDate ? new Date(candidate.uploadDate).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      }) : <span className="text-gray-400">-</span>}
+                    </td>
+                    <td className="px-4 py-4">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedVersionsCandidate(candidate);
                         }}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 font-medium"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 text-xs font-medium"
                       >
-                        <Paperclip className="w-4 h-4" />
-                        {candidate.attachmentCount || 1} {(candidate.attachmentCount || 1) === 1 ? 'Attachment' : 'Attachments'}
+                        <Paperclip className="w-3.5 h-3.5" />
+                        {candidate.attachmentCount || 1}
                       </button>
-                      <span className="flex items-center gap-1 px-3 py-1.5 bg-gray-50 text-gray-900 rounded-lg border border-gray-200 font-medium">
-                        <Clock className="w-4 h-4" />
-                        Uploaded: {new Date(candidate.uploadDate).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
           )}
         </div>

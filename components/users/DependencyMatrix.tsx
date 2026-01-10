@@ -62,11 +62,19 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
   const dependencyTree = useMemo(() => {
     if (!matrix) return [];
 
-    const nodes: DependencyNode[] = matrix.features.map(code => ({
+    // Get features array - fallback to keys from feature_names or dependencies if not provided
+    const features = matrix.features ||
+      Object.keys(matrix.feature_names || {}) ||
+      Object.keys(matrix.dependencies || {}) ||
+      [];
+
+    if (!features || features.length === 0) return [];
+
+    const nodes: DependencyNode[] = features.map(code => ({
       code,
-      name: matrix.feature_names[code] || code,
-      dependencies: matrix.dependencies[code] || [],
-      dependents: matrix.reverse_dependencies[code] || [],
+      name: (matrix.feature_names || {})[code] || code,
+      dependencies: (matrix.dependencies || {})[code] || [],
+      dependents: (matrix.reverse_dependencies || {})[code] || [],
       level: 0,
     }));
 
@@ -75,7 +83,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
       if (visited.has(code)) return 0;
       visited.add(code);
 
-      const deps = matrix.dependencies[code] || [];
+      const deps = (matrix.dependencies || {})[code] || [];
       if (deps.length === 0) return 0;
 
       const maxDepLevel = Math.max(...deps.map(d => calculateLevel(d, visited)));
@@ -262,26 +270,26 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                       <th className="sticky left-0 bg-white p-2 border border-gray-200 text-xs font-medium text-gray-500">
                         Feature
                       </th>
-                      {matrix?.features.map(code => (
+                      {(matrix?.features || Object.keys(matrix?.feature_names || {})).map(code => (
                         <th
                           key={code}
                           className="p-2 border border-gray-200 text-xs font-medium text-gray-500 whitespace-nowrap"
                           style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
                         >
-                          {matrix.feature_names[code] || code}
+                          {(matrix?.feature_names || {})[code] || code}
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {matrix?.features.map(rowCode => (
+                    {(matrix?.features || Object.keys(matrix?.feature_names || {})).map(rowCode => (
                       <tr key={rowCode}>
                         <td className="sticky left-0 bg-white p-2 border border-gray-200 text-sm font-medium text-gray-700 whitespace-nowrap">
-                          {matrix.feature_names[rowCode] || rowCode}
+                          {(matrix?.feature_names || {})[rowCode] || rowCode}
                         </td>
-                        {matrix.features.map(colCode => {
-                          const isDependency = (matrix.dependencies[rowCode] || []).includes(colCode);
-                          const isDependent = (matrix.reverse_dependencies[rowCode] || []).includes(colCode);
+                        {(matrix?.features || Object.keys(matrix?.feature_names || {})).map(colCode => {
+                          const isDependency = ((matrix?.dependencies || {})[rowCode] || []).includes(colCode);
+                          const isDependent = ((matrix?.reverse_dependencies || {})[rowCode] || []).includes(colCode);
                           const isSelf = rowCode === colCode;
 
                           return (
@@ -388,7 +396,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
           <div className="text-sm text-gray-500">
-            {matrix?.features.length || 0} features, {Object.keys(matrix?.dependencies || {}).length} with dependencies
+            {(matrix?.features || Object.keys(matrix?.feature_names || {})).length || 0} features, {Object.keys(matrix?.dependencies || {}).length} with dependencies
           </div>
           <button
             onClick={onClose}
