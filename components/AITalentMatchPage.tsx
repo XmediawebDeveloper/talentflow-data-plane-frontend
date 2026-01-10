@@ -143,8 +143,13 @@ export default function AITalentMatchPage({
     // Determine view based on URL param or sessionStorage flag
     const shouldShowResults = urlView === 'results' || showResultsOnly;
     const shouldShowDetails = urlView === 'details';
+    const isMatching = urlView === 'matching';
 
-    if (shouldShowDetails) {
+    if (isMatching) {
+      // User is in matching mode - don't change view, matching panel will handle it
+      // Just make sure job is selected, but don't change the current view mode
+      return;
+    } else if (shouldShowDetails) {
       // User clicked from history list - show details view
       const existingMatch = matchHistory.find(h => h.jobId === preselectedJobId);
 
@@ -298,25 +303,31 @@ export default function AITalentMatchPage({
     const currentCandidates = viewMode === 'results' ? matchedCandidates :
                               selectedHistoryItem ? selectedHistoryItem.matchedCandidates : [];
 
-    // Get selected candidate resume IDs
-    const selectedResumes = currentCandidates
-      .filter(c => selectedCandidates.includes(c.id))
-      .map(c => c.resumeId);
+    // Get selected candidates data
+    const selected = currentCandidates.filter(c => selectedCandidates.includes(c.id));
+    const resumeIds = selected.map(c => c.resumeId);
+    const resumeNames = selected.map(c => c.name);
 
-    // Get the job ID
+    // Get the job ID and title
     const jobId = selectedJob || selectedHistoryItem?.jobId;
+    const jobTitle = selectedJobData?.title || selectedHistoryItem?.jobTitle || 'Job';
 
     if (!jobId) {
       alert('Job ID not found');
       return;
     }
 
-    // Store in sessionStorage for resume scoring page
-    sessionStorage.setItem('scoringResumeIds', JSON.stringify(selectedResumes));
-    sessionStorage.setItem('scoringJobId', jobId);
+    // Store in sessionStorage in the format expected by resume scoring page
+    const pendingScoringData = {
+      jobId,
+      jobTitle,
+      resumeIds,
+      resumeNames,
+    };
+    sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingScoringData));
 
-    // Navigate to resume scoring page
-    router.push('/recruitment/resume-scoring');
+    // Navigate to resume scoring page with start_scoring=true to trigger auto-scoring
+    router.push('/recruitment/resume-scoring?start_scoring=true');
   };
 
   const getFilteredCandidates = (): MatchedCandidateWithVersions[] => {
