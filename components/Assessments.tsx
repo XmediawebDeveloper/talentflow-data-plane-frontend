@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Clock, Users, CheckCircle, FileText, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp } from 'lucide-react';
+import { Plus, Clock, Users, CheckCircle, FileText, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import AssessmentCreation from './AssessmentCreation';
 import AssessmentResults from './AssessmentResults';
@@ -23,7 +23,7 @@ interface AssessmentsProps {
 }
 
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation }: AssessmentsProps) {
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'archived' | 'settings'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
   const [showCreation, setShowCreation] = useState(false);
   const [showResults, setShowResults] = useState(false);
@@ -780,6 +780,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   Completed
                 </button>
                 <button
+                  onClick={() => setActiveTab('audit')}
+                  className={`py-4 text-sm border-b-2 transition-colors flex items-center gap-1.5 ${
+                    activeTab === 'audit'
+                      ? 'border-gray-800 text-gray-800'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Activity className="w-4 h-4" />
+                  Audit Logs
+                </button>
+                <button
                   onClick={() => setActiveTab('archived')}
                   className={`py-4 text-sm border-b-2 transition-colors ${
                     activeTab === 'archived'
@@ -831,7 +842,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
           {/* Assessment List */}
           <div className="p-6">
-            {activeTab === 'settings' ? (
+            {activeTab === 'audit' ? (
+              /* Audit Logs Tab */
+              <AssessmentAuditTrail />
+            ) : activeTab === 'settings' ? (
               /* Settings Tab with Sub-tabs */
               <div className="space-y-6">
                 {/* Settings Sub-tabs */}
