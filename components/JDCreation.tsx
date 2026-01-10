@@ -991,6 +991,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         mustHaveSkills: params.must_have_skills || [],
         mustHaveComments: params.must_have_comments || [],
         niceToHaveSkills: params.nice_to_have_skills || [],
+        niceToHaveComments: params.nice_to_have_comments || [],
         education: educationValue,
         // Use API's mandatory flag for education
         educationRequired: params.education_mandatory || false,
@@ -2885,7 +2886,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <h3 className="text-gray-900">Nice-to-Have Comments</h3>
-                      <span className="text-xs text-gray-500">(Optional)</span>
                     </div>
                     <button
                       onClick={() => setEditingCategory('nice-comments')}

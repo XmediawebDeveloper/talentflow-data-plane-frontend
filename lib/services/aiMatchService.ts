@@ -4,6 +4,7 @@
  */
 
 import api, { handleApiError } from './api';
+import { resumeService } from './resumeService';
 
 // Backend response types (match the backend schemas)
 export interface AIMatchResultItem {
@@ -58,6 +59,8 @@ export interface MatchedCandidate {
   matchReason: string;
   skillMatches: string[];
   uploadDate: string;
+  uploadedBy?: string;
+  uploadedByName?: string;
   education?: string;
   certifications?: string[];
   attachmentCount?: number;
@@ -78,7 +81,7 @@ function transformResultToCandidate(result: AIMatchResultItem): MatchedCandidate
     resumeId: result.resume_id,
     name: result.candidate_name || 'Unknown Candidate',
     title: result.candidate_title || 'Not specified',
-    email: '', // Will be populated from resume details if needed
+    email: '', // Will be populated from resume details
     phone: '',
     location: '',
     experience: result.experience_years ? `${result.experience_years} years` : 'Not specified',
@@ -93,6 +96,39 @@ function transformResultToCandidate(result: AIMatchResultItem): MatchedCandidate
     concerns: result.concerns,
     attachmentCount: 1,
   };
+}
+
+// Enrich candidates with resume details (email, phone, location, uploaded by, uploaded date)
+async function enrichCandidatesWithResumeDetails(candidates: MatchedCandidate[]): Promise<MatchedCandidate[]> {
+  try {
+    // Fetch resume details for all candidates in parallel
+    const enrichedCandidates = await Promise.all(
+      candidates.map(async (candidate) => {
+        try {
+          const resume = await resumeService.get(candidate.resumeId);
+          return {
+            ...candidate,
+            email: resume.email || '',
+            phone: resume.phone || '',
+            location: resume.location || '',
+            currentCompany: resume.current_company || '',
+            noticePeriod: resume.notice_period || 'Not specified',
+            uploadedBy: resume.uploaded_by || '',
+            uploadedByName: resume.uploaded_by_name || '',
+            uploadDate: resume.created_at || candidate.uploadDate,
+          };
+        } catch (error) {
+          console.error(`Failed to fetch resume details for ${candidate.resumeId}:`, error);
+          // Return candidate without enrichment if fetch fails
+          return candidate;
+        }
+      })
+    );
+    return enrichedCandidates;
+  } catch (error) {
+    console.error('Failed to enrich candidates:', error);
+    return candidates; // Return original candidates if enrichment fails
+  }
 }
 
 export const aiMatchService = {
@@ -117,7 +153,10 @@ export const aiMatchService = {
       const session = response.data;
       const candidates = session.results.map(transformResultToCandidate);
 
-      return { session, candidates };
+      // Enrich candidates with email, phone, location from resume details
+      const enrichedCandidates = await enrichCandidatesWithResumeDetails(candidates);
+
+      return { session, candidates: enrichedCandidates };
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -140,7 +179,10 @@ export const aiMatchService = {
       const session = response.data;
       const candidates = session.results.map(transformResultToCandidate);
 
-      return { session, candidates };
+      // Enrich candidates with email, phone, location from resume details
+      const enrichedCandidates = await enrichCandidatesWithResumeDetails(candidates);
+
+      return { session, candidates: enrichedCandidates };
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -171,7 +213,11 @@ export const aiMatchService = {
       const response = await api.get<AIMatchSessionResponse>(`/ai-match/sessions/${sessionId}`);
       const session = response.data;
       const candidates = session.results.map(transformResultToCandidate);
-      return { session, candidates };
+
+      // Enrich candidates with email, phone, location from resume details
+      const enrichedCandidates = await enrichCandidatesWithResumeDetails(candidates);
+
+      return { session, candidates: enrichedCandidates };
     } catch (error) {
       throw new Error(handleApiError(error));
     }

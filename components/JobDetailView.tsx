@@ -699,7 +699,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </button>
 
             {/* Add Applicants Dropdown */}
-            <div className="relative" ref={menuRef}>
+            {/* <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setShowAddApplicantsMenu(!showAddApplicantsMenu)}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
@@ -709,7 +709,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <ChevronDown className="w-4 h-4" />
               </button>
 
-              {/* Dropdown Menu */}
               {showAddApplicantsMenu && (
                 <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                   <button
@@ -735,7 +734,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </button>
                 </div>
               )}
-            </div>
+            </div> */}
 
             {/* JD13: Usage Status Info Banner */}
             {job.status === 'Published' && job.usageStatus?.is_used && (
@@ -1045,14 +1044,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <span>View JD History</span>
               </button>
 
-              {job.status === 'Published' && (
+              {/* {job.status === 'Published' && (
                 <button
                   onClick={() => handleStatusChange('Closed')}
                   className="w-full px-4 py-2.5 text-sm border border-red-300 text-red-700 rounded-md hover:bg-red-50 transition-colors text-left"
                 >
                   Close Job Opening
                 </button>
-              )}
+              )} */}
             </div>
           </div>
 
