@@ -522,6 +522,8 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
           currentQuestion={currentQuestion}
           progress={progress}
           rounds={assessmentData?.rounds || []}
+          startedAt={assessmentData?.started_at || new Date().toISOString()}
+          durationMinutes={assessmentInfo?.duration_minutes || 30}
           onAnswerSubmit={handleAnswerSubmit}
           onComplete={handleCompleteAssessment}
           onNavigate={handleNavigateToQuestion}

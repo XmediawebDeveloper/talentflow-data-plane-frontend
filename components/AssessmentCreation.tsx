@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info } from 'lucide-react';
+import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import { assessmentService, jdService } from '@/lib/services';
@@ -75,6 +75,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // Full-screen JD Creation modal state
   const [showJDCreation, setShowJDCreation] = useState(false);
 
+  // Coding confirmation popup state
+  const [showCodingConfirm, setShowCodingConfirm] = useState(false);
+  const [codingPopupMode, setCodingPopupMode] = useState<'enable' | 'disable'>('enable');
+  const [selectedCodingLanguages, setSelectedCodingLanguages] = useState<string[]>([]);
+
+  // Available programming languages for selection
+  const programmingLanguages = [
+    'Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'C#', 'Go',
+    'Rust', 'Ruby', 'PHP', 'Swift', 'Kotlin', 'Scala', 'R', 'SQL'
+  ];
+
   // Handle when JD is published from the modal
   const handleJDPublished = async (publishedJob: Job) => {
     // Close the modal
@@ -97,6 +108,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           applicants: jd.applicants_count || 0,
           daysActive: 0,
           requiredMatch: 70,
+          coding_required: jd.coding_required || false,
+          supported_languages: jd.supported_languages || [],
         }));
         setLocalJobs(mappedJobs);
 
@@ -125,6 +138,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         if (response?.items?.length > 0) {
           const mappedJobs: Job[] = response.items.map((jd: any) => ({
             id: jd.id,
+            job_id: jd.job_id || '',
             title: jd.title,
             description: jd.description || '',
             department: jd.department || 'General',
@@ -132,10 +146,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             experience: jd.job_level || 'Mid-Level',
             skills: jd.must_have_skills || [],
             status: 'Published',
-            created: jd.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+            postedDate: jd.published_at || jd.created_at,
+            postedBy: jd.created_by_name || 'Unknown',
             applicants: jd.applicants_count || 0,
             daysActive: 0,
             requiredMatch: 70,
+            coding_required: jd.coding_required || false,
+            supported_languages: jd.supported_languages || [],
+            industry_type: jd.industry_type || 'Technology',
+            employmentType: jd.employment_type || 'full_time',
+            creation_method: jd.creation_method || 'manual',
+            experience_min: jd.experience_min,
+            experience_max: jd.experience_max,
           }));
           setLocalJobs(mappedJobs);
         }
@@ -160,21 +182,29 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   const handleJobSelect = (job: Job) => {
     setSelectedJob(job);
-    const hasCoding = requiresCoding(job);
-    
-    // Auto-configure sections based on JD
-    if (hasCoding) {
+
+    // Check if JD explicitly requires coding (from JD configuration)
+    const jdRequiresCoding = job.coding_required === true;
+    const hasLanguages = job.supported_languages && job.supported_languages.length > 0;
+
+    // Auto-configure sections based on JD's coding_required field
+    if (jdRequiresCoding && hasLanguages) {
+      // JD explicitly requires coding AND has languages configured - enable coding
       setSections([
         { name: 'HR', percentage: 20, topics: [], enabled: true },
         { name: 'Technical', percentage: 70, topics: [], enabled: true },
         { name: 'Coding', percentage: 10, topics: [], enabled: true },
       ]);
+      setSelectedCodingLanguages(job.supported_languages!);
     } else {
+      // JD does NOT require coding (coding_required is false or undefined)
+      // Coding section is disabled and LOCKED - user cannot enable it
       setSections([
         { name: 'HR', percentage: 30, topics: [], enabled: true },
         { name: 'Technical', percentage: 70, topics: [], enabled: true },
         { name: 'Coding', percentage: 0, topics: [], enabled: false },
       ]);
+      setSelectedCodingLanguages([]);
     }
     setStep('configure');
   };
@@ -208,6 +238,59 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     return sections.filter(s => s.enabled).reduce((sum, s) => sum + s.percentage, 0);
   };
 
+  // Handle coding section toggle with confirmation popups
+  const handleCodingToggle = () => {
+    const codingSection = sections.find(s => s.name === 'Coding');
+    const isCurrentlyEnabled = codingSection?.enabled || false;
+
+    if (!isCurrentlyEnabled) {
+      // User wants to ENABLE coding - always show popup for language selection
+      setCodingPopupMode('enable');
+      setShowCodingConfirm(true);
+    } else {
+      // User wants to DISABLE coding
+      const hasLanguages = selectedCodingLanguages.length > 0;
+      if (hasLanguages) {
+        // Has languages configured - show confirmation popup before disabling
+        setCodingPopupMode('disable');
+        setShowCodingConfirm(true);
+      } else {
+        // No languages - just disable directly
+        setSections(sections.map(s => s.name === 'Coding' ? { ...s, enabled: false, percentage: 0 } : s));
+      }
+    }
+  };
+
+  // Confirm button handler - works for both enable and disable modes
+  const handleConfirmCodingAction = () => {
+    if (codingPopupMode === 'enable') {
+      // Enabling coding - require language selection
+      if (selectedCodingLanguages.length === 0) {
+        alert('Please select at least one programming language');
+        return;
+      }
+      setSections(sections.map(s => s.name === 'Coding' ? { ...s, enabled: true, percentage: 10 } : s));
+    } else {
+      // Disabling coding - clear languages and disable
+      setSelectedCodingLanguages([]);
+      setSections(sections.map(s => s.name === 'Coding' ? { ...s, enabled: false, percentage: 0 } : s));
+    }
+    setShowCodingConfirm(false);
+  };
+
+  // Cancel button handler - works for both enable and disable modes
+  const handleCancelCodingAction = () => {
+    // Just close the popup without making changes
+    setShowCodingConfirm(false);
+  };
+
+  // Toggle a language in the selection
+  const toggleLanguageSelection = (lang: string) => {
+    setSelectedCodingLanguages(prev =>
+      prev.includes(lang) ? prev.filter(l => l !== lang) : [...prev, lang]
+    );
+  };
+
   const handleGenerateAssessment = async (saveAsDraft: boolean = false) => {
     setIsGenerating(true);
 
@@ -231,7 +314,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         coding_enabled: codingSection?.enabled || false,
         coding_percentage: codingSection?.enabled ? codingSection.percentage : 0,
         coding_topics: codingSection?.topics || [],
-        coding_languages: [],
+        coding_languages: selectedCodingLanguages,
         proctoring_enabled: proctoringEnabled,
       };
 
@@ -340,51 +423,109 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
               ) : (
               <div className="space-y-3">
-                {availableJobs.filter(j => j.status === 'Published').map(job => (
-                  <button
-                    key={job.id}
-                    onClick={() => handleJobSelect(job)}
-                    className="w-full text-left p-6 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all group"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-gray-900 mb-2 group-hover:text-gray-800 transition-colors">
-                          {job.title}
-                        </h3>
-                        <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                          <span className="flex items-center gap-1">
-                            <Briefcase className="w-4 h-4" />
-                            {job.department}
-                          </span>
-                          <span>{job.location}</span>
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
-                            {job.experience}
-                          </span>
+                {availableJobs.filter(j => j.status === 'Published').map(job => {
+                  // Format experience range
+                  const expRange = job.experience_min && job.experience_max
+                    ? `${job.experience_min}-${job.experience_max} years`
+                    : job.experience_min
+                      ? `${job.experience_min}+ years`
+                      : job.experience || 'Not specified';
+
+                  // Format posted date
+                  const postedDate = job.postedDate
+                    ? new Date(job.postedDate).toLocaleDateString('en-US', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                    : 'N/A';
+
+                  return (
+                    <div
+                      key={job.id}
+                      onClick={() => handleJobSelect(job)}
+                      className="w-full text-left p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all cursor-pointer bg-white"
+                    >
+                      <div className="flex items-start gap-4">
+                        {/* Icon */}
+                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Briefcase className="w-5 h-5 text-gray-500" />
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {job.skills.slice(0, 4).map((skill, idx) => (
-                            <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                              {skill}
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          {/* Title Row */}
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            {job.job_id && (
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium">
+                                {job.job_id}
+                              </span>
+                            )}
+                            <h3 className="text-gray-900 font-medium">
+                              {job.title}
+                            </h3>
+                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                              Published
                             </span>
-                          ))}
-                          {job.skills.length > 4 && (
-                            <span className="text-xs text-gray-500">
-                              +{job.skills.length - 4} more
+                            {job.creation_method === 'ai_generated' && (
+                              <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                AI
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Details Row */}
+                          <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+                            <span className="flex items-center gap-1">
+                              <Building2 className="w-3.5 h-3.5" />
+                              {job.industry_type || 'Technology'}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5" />
+                              {job.location}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              {job.employmentType || 'full_time'}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <TrendingUp className="w-3.5 h-3.5" />
+                              {expRange}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5" />
+                              Posted {postedDate}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <User className="w-3.5 h-3.5" />
+                              By {job.postedBy || 'Unknown'}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Users className="w-3.5 h-3.5" />
+                              {job.applicants || 0} applicants
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Right side - Coding badge and Select button */}
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          {job.coding_required === true ? (
+                            <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded text-xs flex items-center gap-1">
+                              <Code className="w-3 h-3" />
+                              Coding
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-gray-100 text-gray-500 rounded text-xs flex items-center gap-1">
+                              <Code className="w-3 h-3" />
+                              No Coding
                             </span>
                           )}
+                          <button className="px-3 py-1.5 bg-gray-800 text-white rounded-lg text-xs hover:bg-gray-900 transition-colors">
+                            Select
+                          </button>
                         </div>
                       </div>
-                      <div className="ml-4">
-                        {requiresCoding(job) && (
-                          <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-xs flex items-center gap-1">
-                            <Code className="w-3 h-3" />
-                            Coding Required
-                          </span>
-                        )}
-                      </div>
                     </div>
-                  </button>
-                ))}
+                  );
+                })}
 
                 {availableJobs.filter(j => j.status === 'Published').length === 0 && (
                   <div className="text-center py-12 text-gray-500">
@@ -540,36 +681,53 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   </div>
 
                   {/* Coding Round Toggle */}
-                  <div className={`p-4 border rounded-lg transition-all ${!topicSettings?.coding_enabled ? 'border-gray-200 bg-gray-100 opacity-60' : sections.find(s => s.name === 'Coding')?.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Code className="w-5 h-5 text-gray-600" />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-gray-900">Coding Round</span>
-                            {topicSettings?.coding_enabled === false ? (
-                              <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">Disabled in Settings</span>
-                            ) : topicSettings?.coding_scoring_type === 'informational' ? (
-                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Informational</span>
-                            ) : (
-                              <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
-                            )}
-                            {topicSettings?.coding_enabled !== false && requiresCoding(selectedJob!) && (
-                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Auto-Enabled</span>
-                            )}
+                  {(() => {
+                    // Determine if coding is disabled and why
+                    const isCodingDisabledBySettings = topicSettings?.coding_enabled === false;
+                    const isCodingDisabledByJD = selectedJob?.coding_required === false;
+                    const isCodingLocked = isCodingDisabledBySettings || isCodingDisabledByJD;
+                    const codingEnabled = sections.find(s => s.name === 'Coding')?.enabled;
+
+                    return (
+                      <div className={`p-4 border rounded-lg transition-all ${isCodingLocked ? 'border-gray-200 bg-gray-100 opacity-60' : codingEnabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Code className="w-5 h-5 text-gray-600" />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-gray-900">Coding Round</span>
+                                {isCodingDisabledBySettings ? (
+                                  <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">Disabled in Settings</span>
+                                ) : isCodingDisabledByJD ? (
+                                  <span className="px-2 py-0.5 bg-orange-100 text-orange-600 rounded text-xs">Not Required for this JD</span>
+                                ) : topicSettings?.coding_scoring_type === 'informational' ? (
+                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Informational</span>
+                                ) : (
+                                  <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
+                                )}
+                                {!isCodingLocked && selectedJob?.coding_required && (
+                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Auto-Enabled</span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-500">
+                                {isCodingDisabledByJD
+                                  ? 'This job description does not require coding assessment'
+                                  : 'Programming challenges, algorithm design, and code implementation'
+                                }
+                              </p>
+                            </div>
                           </div>
-                          <p className="text-sm text-gray-500">Programming challenges, algorithm design, and code implementation</p>
+                          <button
+                            onClick={() => !isCodingLocked && handleCodingToggle()}
+                            disabled={isCodingLocked}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isCodingLocked ? 'bg-gray-200 cursor-not-allowed' : codingEnabled ? 'bg-gray-800' : 'bg-gray-300'}`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </button>
                         </div>
                       </div>
-                      <button
-                        onClick={() => topicSettings?.coding_enabled !== false && setSections(sections.map(s => s.name === 'Coding' ? { ...s, enabled: !s.enabled } : s))}
-                        disabled={topicSettings?.coding_enabled === false}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${topicSettings?.coding_enabled === false ? 'bg-gray-200 cursor-not-allowed' : sections.find(s => s.name === 'Coding')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'Coding')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                      </button>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Smart Configuration Info */}
@@ -577,7 +735,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   <div className="flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-gray-600">
-                      <strong>Smart Configuration:</strong> Coding round is auto-enabled based on JD analysis. You can manually override this setting. Disabled rounds will be hidden from the section distribution below.
+                      <strong>Smart Configuration:</strong> Coding round availability is determined by the Job Description. If the JD has <code className="bg-gray-200 px-1 rounded">coding_required: false</code>, the coding round will be locked and cannot be enabled. For technical JDs with coding enabled, you can configure languages. Disabled rounds will be hidden from the section distribution below.
                     </p>
                   </div>
                 </div>
@@ -921,6 +1079,107 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             </div>
           </div>
         </div>
+
+        {/* Coding Confirmation Popup */}
+        {showCodingConfirm && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+              {/* Header */}
+              <div className={`${codingPopupMode === 'disable' ? 'bg-red-50 border-b border-red-200' : 'bg-blue-50 border-b border-blue-200'} px-6 py-4 rounded-t-xl`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 ${codingPopupMode === 'disable' ? 'bg-red-100' : 'bg-blue-100'} rounded-lg flex items-center justify-center`}>
+                    <Code className={`w-5 h-5 ${codingPopupMode === 'disable' ? 'text-red-600' : 'text-blue-600'}`} />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">
+                      {codingPopupMode === 'disable'
+                        ? 'Disable Coding Round?'
+                        : 'Enable Coding Round'}
+                    </h3>
+                    <p className={`text-sm ${codingPopupMode === 'disable' ? 'text-red-700' : 'text-blue-700'}`}>
+                      {codingPopupMode === 'disable'
+                        ? 'This will remove the coding assessment'
+                        : 'Select programming languages for the assessment'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                {codingPopupMode === 'disable' ? (
+                  <>
+                    <p className="text-gray-600 mb-4">
+                      Are you sure you want to disable the coding round? The following languages will be removed:
+                    </p>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {selectedCodingLanguages.map(lang => (
+                        <span key={lang} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm">
+                          {lang}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-gray-600 mb-4">
+                      Please select at least one programming language for the coding assessment.
+                    </p>
+                    {/* Language Selection */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Programming Languages <span className="text-red-500">*</span>
+                      </label>
+                      <div className="border border-gray-200 rounded-lg p-3 max-h-40 overflow-y-auto">
+                        <div className="flex flex-wrap gap-2">
+                          {programmingLanguages.map(lang => (
+                            <button
+                              key={lang}
+                              onClick={() => toggleLanguageSelection(lang)}
+                              className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                                selectedCodingLanguages.includes(lang)
+                                  ? 'bg-gray-800 text-white'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                            >
+                              {lang}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {selectedCodingLanguages.length > 0 && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Selected: {selectedCodingLanguages.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="bg-gray-50 px-6 py-4 rounded-b-xl flex gap-3">
+                <button
+                  onClick={handleCancelCodingAction}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmCodingAction}
+                  disabled={codingPopupMode === 'enable' && selectedCodingLanguages.length === 0}
+                  className={`flex-1 px-4 py-2 rounded-lg transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
+                    codingPopupMode === 'disable'
+                      ? 'bg-red-600 text-white hover:bg-red-700'
+                      : 'bg-gray-800 text-white hover:bg-gray-900'
+                  }`}
+                >
+                  {codingPopupMode === 'disable' ? 'Yes, Disable' : 'Enable Coding'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
