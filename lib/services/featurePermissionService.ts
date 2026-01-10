@@ -138,18 +138,20 @@ export const featurePermissionService = {
       const response = await api.get<any>('/users/limits/status');
       // Map the response to UserLimitsResponse format
       const data = response.data;
-      const maxUsers = data.max_users === 'Unlimited' ? -1 : (data.max_users || 5);
+      // max_users comes from Control Plane API - no hardcoded fallback
+      const maxUsers = data.max_users === 'Unlimited' ? -1 : (data.max_users ?? -1);
       const currentUsers = data.current_users || 0;
-      const remainingSeats = data.remaining_seats === 'Unlimited' ? -1 : (data.remaining_seats || 0);
+      const remainingSeats = data.remaining_seats === 'Unlimited' ? -1 : (data.remaining_seats ?? -1);
       const percentageUsed = data.percentage_used || 0;
+      const isUnlimited = maxUsers === -1;
 
       return {
         current_users: currentUsers,
         max_users: maxUsers,
         available_slots: remainingSeats,
         usage_percentage: percentageUsed,
-        is_at_limit: data.status === 'exceeded' || (maxUsers !== -1 && currentUsers >= maxUsers),
-        approaching_limit: data.status === 'warning' || percentageUsed >= 80,
+        is_at_limit: !isUnlimited && (data.status === 'exceeded' || currentUsers >= maxUsers),
+        approaching_limit: !isUnlimited && (data.status === 'warning' || percentageUsed >= 80),
         plan_name: data.plan_name || 'Unknown',
       };
     } catch (error) {
