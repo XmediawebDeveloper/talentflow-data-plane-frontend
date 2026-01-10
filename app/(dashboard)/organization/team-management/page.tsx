@@ -1,11 +1,12 @@
 'use client';
 
-import { Users, Plus, Briefcase, FileText, UserCheck, Info, Loader2, X, Search } from 'lucide-react';
+import { Users, Plus, Briefcase, FileText, UserCheck, Info, Loader2, X, Search, BarChart3 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import teamService, { Team, TeamStats } from '@/lib/services/teamService';
 import authService, { User } from '@/lib/services/authService';
 import userService, { ApiUser } from '@/lib/services/userService';
+import TeamUsageSummary from '@/components/usage/TeamUsageSummary';
 
 export default function TeamManagementPage() {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -27,6 +28,9 @@ export default function TeamManagementPage() {
   // RBAC02 Task #15: Team limit state
   const [maxTeams, setMaxTeams] = useState<number>(-1); // -1 = unlimited
   const [teamsEnabled, setTeamsEnabled] = useState<boolean>(true);
+
+  // Team-Level Usage Visibility: Tab state
+  const [activeTab, setActiveTab] = useState<'teams' | 'usage'>('teams');
 
   // Form state
   const [teamName, setTeamName] = useState('');
@@ -344,7 +348,7 @@ export default function TeamManagementPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Team Management</h1>
-              <p className="text-gray-600">Manage teams and invite new members</p>
+              <p className="text-gray-600">Manage teams, members, and view usage</p>
             </div>
             {canCreateTeams && (
               <div className="flex flex-col items-end gap-2">
@@ -373,6 +377,39 @@ export default function TeamManagementPage() {
           </div>
         </div>
 
+        {/* Team-Level Usage Visibility: Tabs */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab('teams')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+              activeTab === 'teams'
+                ? 'bg-gray-800 text-white'
+                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            Teams
+          </button>
+          <button
+            onClick={() => setActiveTab('usage')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+              activeTab === 'usage'
+                ? 'bg-gray-800 text-white'
+                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            Team Usage
+          </button>
+        </div>
+
+        {/* Team-Level Usage Visibility: Usage Tab Content */}
+        {activeTab === 'usage' ? (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <TeamUsageSummary userRole={currentUser?.role || 'standard_user'} />
+          </div>
+        ) : (
+          <>
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -531,6 +568,8 @@ export default function TeamManagementPage() {
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* Create Team Modal */}

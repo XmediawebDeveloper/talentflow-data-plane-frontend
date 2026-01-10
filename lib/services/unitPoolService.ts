@@ -36,20 +36,34 @@ export interface AllPoolsResponse {
   tenant_status: string | null;
 }
 
+// Failed & Abandoned Action Logging: All possible consumption statuses
+export type ConsumptionStatus =
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'INSUFFICIENT_UNITS'
+  | 'TENANT_SUSPENDED'
+  | 'TENANT_EXPIRED'
+  | 'BLOCKED'
+  | 'ABANDONED'      // User abandoned action mid-process
+  | 'INTERRUPTED';   // Connection/session interrupted
+
 export interface ConsumptionLogEntry {
   id: string;
   unit_type: UnitType;
   units_consumed: number;
-  status: 'SUCCESS' | 'INSUFFICIENT_UNITS' | 'TENANT_SUSPENDED' | 'TENANT_EXPIRED' | 'BLOCKED';
+  status: ConsumptionStatus;
   user_id: string;
   user_email: string | null;
   user_name: string | null;
   entity_type: string | null;
   entity_id: string | null;
   entity_name: string | null;
+  job_description_id: string | null;  // Resume Scoring Usage Logging
   balance_before: number | null;
   balance_after: number | null;
   failure_reason: string | null;
+  overall_score: number | null;  // Resume Scoring Usage Logging: Scoring result (0-100)
+  audit_log_id: string | null;  // Feature-Level Unit Deduction Recording: Link to audit entry
   created_at: string;
 }
 
@@ -133,6 +147,67 @@ export interface PaginatedResponse<T> {
   total: number;
   limit: number;
   offset: number;
+}
+
+// =========================================================================
+// USAGE TRANSPARENCY TYPES (Feature Usage Transparency Enforcement)
+// =========================================================================
+
+export type DeductionCategory = 'FULL' | 'PARTIAL' | 'NON_DEDUCTION';
+
+export interface UsageTransparencyEntry {
+  id: string;
+  unit_type: UnitType;
+  units_consumed: number;
+  status: ConsumptionStatus;
+  created_at: string;
+  user_email: string | null;
+  user_name: string | null;
+  entity_type: string | null;
+  entity_name: string | null;
+  balance_before: number | null;
+  balance_after: number | null;
+  is_partial_deduction: boolean;
+  is_non_deduction: boolean;
+  deduction_category: DeductionCategory;
+  // Full details
+  team_id: string | null;
+  team_name: string | null;
+  job_description_id: string | null;
+  candidate_id: string | null;
+  overall_score: number | null;
+}
+
+export interface UsageTransparencySummary {
+  by_unit_type: Record<UnitType, {
+    total_records: number;
+    total_units: number;
+    full_deductions: number;
+    partial_deductions: number;
+    non_deductions: number;
+  }>;
+  by_status: Record<ConsumptionStatus, number>;
+  by_category: Record<DeductionCategory, number>;
+}
+
+export interface UsageTransparencyResponse {
+  items: UsageTransparencyEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+  summary: UsageTransparencySummary;
+}
+
+export interface UsageTransparencySummaryResponse {
+  tenant_id: string;
+  period: {
+    start: string;
+    end: string;
+    days: number;
+  };
+  summary: UsageTransparencySummary;
+  total_records: number;
+  visibility_scope: 'own_consumption' | 'tenant_wide';
 }
 
 // Service implementation
@@ -255,6 +330,50 @@ export const unitPoolService = {
         entity_type: entityType,
         entity_id: entityId,
       });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Failed & Abandoned Action Logging: Log an abandoned action
+   * Called when user abandons action mid-process (closes browser, navigates away, cancels)
+   * No units are deducted.
+   */
+  async logAbandonedAction(request: {
+    unit_type: UnitType;
+    entity_type: string;
+    entity_id?: string;
+    entity_name?: string;
+    reason?: string;
+    job_description_id?: string;
+    candidate_id?: string;
+  }): Promise<{ success: boolean; log_id: string | null; status: string; units_consumed: number; message: string }> {
+    try {
+      const response = await api.post('/unit-pool/log-abandoned', request);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Failed & Abandoned Action Logging: Log an interrupted action
+   * Called when action is interrupted due to connection loss, session timeout, or system issues
+   * No units are deducted.
+   */
+  async logInterruptedAction(request: {
+    unit_type: UnitType;
+    entity_type: string;
+    entity_id?: string;
+    entity_name?: string;
+    reason?: string;
+    job_description_id?: string;
+    candidate_id?: string;
+  }): Promise<{ success: boolean; log_id: string | null; status: string; units_consumed: number; message: string }> {
+    try {
+      const response = await api.post('/unit-pool/log-interrupted', request);
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -421,6 +540,111 @@ export const unitPoolService = {
       throw handleApiError(error);
     }
   },
+
+  // =========================================================================
+  // EXPORT ENDPOINTS
+  // =========================================================================
+
+  /**
+   * Export consumption history as CSV or Excel
+   */
+  async exportConsumptionHistory(params?: {
+    format?: 'csv' | 'excel';
+    unit_type?: UnitType;
+    user_id?: string;
+    status?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<Blob> {
+    try {
+      const response = await api.get('/unit-pool/export/consumption-history', {
+        params: {
+          format: params?.format || 'csv',
+          unit_type: params?.unit_type,
+          user_id: params?.user_id,
+          status: params?.status,
+          start_date: params?.start_date,
+          end_date: params?.end_date,
+        },
+        responseType: 'blob',
+      });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Export usage summary as CSV or Excel
+   */
+  async exportUsageSummary(params?: {
+    format?: 'csv' | 'excel';
+    days?: number;
+  }): Promise<Blob> {
+    try {
+      const response = await api.get('/unit-pool/export/usage-summary', {
+        params: {
+          format: params?.format || 'csv',
+          days: params?.days || 30,
+        },
+        responseType: 'blob',
+      });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  // =========================================================================
+  // USAGE TRANSPARENCY ENDPOINTS (Feature Usage Transparency Enforcement)
+  // =========================================================================
+
+  /**
+   * Get detailed usage transparency data with deduction categories
+   * Shows full deductions (1.0), partial deductions (0.5), and non-deductions (0)
+   */
+  async getUsageTransparency(params?: {
+    unit_type?: UnitType;
+    start_date?: string;
+    end_date?: string;
+    include_non_deductions?: boolean;
+    include_partial_deductions?: boolean;
+    deduction_category?: DeductionCategory;
+    limit?: number;
+    offset?: number;
+  }): Promise<UsageTransparencyResponse> {
+    try {
+      const response = await api.get('/unit-pool/usage-transparency', {
+        params: {
+          unit_type: params?.unit_type,
+          start_date: params?.start_date,
+          end_date: params?.end_date,
+          include_non_deductions: params?.include_non_deductions ?? true,
+          include_partial_deductions: params?.include_partial_deductions ?? true,
+          deduction_category: params?.deduction_category,
+          limit: params?.limit || 100,
+          offset: params?.offset || 0,
+        },
+      });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Get usage transparency summary statistics
+   */
+  async getUsageTransparencySummary(days: number = 30): Promise<UsageTransparencySummaryResponse> {
+    try {
+      const response = await api.get('/unit-pool/usage-transparency/summary', {
+        params: { days },
+      });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
 };
 
 // Helper functions
@@ -447,6 +671,67 @@ export function getStatusColor(status: 'normal' | 'warning' | 'critical'): strin
     default:
       return 'text-green-600 bg-green-50';
   }
+}
+
+// =========================================================================
+// USAGE TRANSPARENCY HELPERS
+// =========================================================================
+
+export const DEDUCTION_CATEGORY_NAMES: Record<DeductionCategory, string> = {
+  FULL: 'Full Deduction',
+  PARTIAL: 'Partial Deduction',
+  NON_DEDUCTION: 'No Deduction',
+};
+
+export const DEDUCTION_CATEGORY_DESCRIPTIONS: Record<DeductionCategory, string> = {
+  FULL: '1.0 unit deducted - Completed action',
+  PARTIAL: '0.5 unit deducted - Partial completion',
+  NON_DEDUCTION: '0 units - Failed, abandoned, or insufficient',
+};
+
+export function getDeductionCategoryName(category: DeductionCategory): string {
+  return DEDUCTION_CATEGORY_NAMES[category] || category;
+}
+
+export function getDeductionCategoryColor(category: DeductionCategory): string {
+  switch (category) {
+    case 'FULL':
+      return 'text-green-700 bg-green-50 border-green-200';
+    case 'PARTIAL':
+      return 'text-amber-700 bg-amber-50 border-amber-200';
+    case 'NON_DEDUCTION':
+      return 'text-gray-700 bg-gray-50 border-gray-200';
+    default:
+      return 'text-gray-500 bg-gray-50 border-gray-200';
+  }
+}
+
+export function getConsumptionStatusColor(status: ConsumptionStatus): string {
+  switch (status) {
+    case 'SUCCESS':
+      return 'text-green-700 bg-green-50';
+    case 'FAILED':
+      return 'text-red-700 bg-red-50';
+    case 'INSUFFICIENT_UNITS':
+      return 'text-orange-700 bg-orange-50';
+    case 'TENANT_SUSPENDED':
+    case 'TENANT_EXPIRED':
+    case 'BLOCKED':
+      return 'text-red-800 bg-red-100';
+    case 'ABANDONED':
+      return 'text-yellow-700 bg-yellow-50';
+    case 'INTERRUPTED':
+      return 'text-purple-700 bg-purple-50';
+    default:
+      return 'text-gray-600 bg-gray-50';
+  }
+}
+
+export function formatUnitsConsumed(units: number): string {
+  if (units === 0) return '0';
+  if (units === 1) return '1.0';
+  if (units === 0.5) return '0.5';
+  return units.toFixed(1);
 }
 
 export default unitPoolService;
