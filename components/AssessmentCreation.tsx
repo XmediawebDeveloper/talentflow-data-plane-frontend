@@ -20,6 +20,7 @@ interface AssessmentCreationProps {
   onCreateNewJD?: () => void;
   onJobsRefresh?: () => void;
   topicSettings?: TopicSettings;
+  preSelectedJobId?: string;
 }
 
 interface SectionConfig {
@@ -29,10 +30,22 @@ interface SectionConfig {
   enabled: boolean;
 }
 
-export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings }: AssessmentCreationProps) {
+export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId }: AssessmentCreationProps) {
   const [step, setStep] = useState<'select-jd' | 'configure' | 'preview'>(('select-jd'));
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [duration, setDuration] = useState(30);
+
+  // Auto-select job if preSelectedJobId is provided
+  useEffect(() => {
+    if (preSelectedJobId && jobs.length > 0 && !selectedJob) {
+      const job = jobs.find(j => j.id === preSelectedJobId);
+      if (job) {
+        setSelectedJob(job);
+        setStep('configure');
+        console.log('[TalentFlow] Auto-selected JD for assessment:', job.title);
+      }
+    }
+  }, [preSelectedJobId, jobs, selectedJob]);
 
   // Initialize sections based on global topic settings
   const getInitialSections = (): SectionConfig[] => {
