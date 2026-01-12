@@ -99,7 +99,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
       {/* Header with Logo */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Image
@@ -124,7 +124,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
 
       {/* Progress Stepper */}
       <div className="bg-white border-b border-gray-100">
-        <div className="max-w-5xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-center gap-2">
             {steps.map((step, index) => (
               <div key={index} className="flex items-center">
@@ -156,7 +156,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
       </div>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Welcome Section */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">

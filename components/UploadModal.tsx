@@ -153,7 +153,14 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   };
 
   const handleRemoveFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setSelectedFiles(prev => {
+      const newFiles = prev.filter((_, i) => i !== index);
+      // Clear validation errors if removing files fixes the issue
+      if (activeTab === 'single' && newFiles.length <= 1) {
+        setValidationErrors([]);
+      }
+      return newFiles;
+    });
   };
 
   const handleUpload = () => {
@@ -319,6 +326,18 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
 
     // Final validation before upload
     const errors: FileValidationError[] = [];
+
+    // CRITICAL: Validate file count for single upload mode
+    if (activeTab === 'single' && selectedFiles.length > 1) {
+      errors.push({
+        fileName: '',
+        error: `Single upload accepts only 1 file. You have ${selectedFiles.length} files selected. Please remove extra files or use Bulk Upload.`,
+        type: 'limit'
+      });
+      setValidationErrors(errors);
+      return;
+    }
+
     const totalSizeMB = selectedFiles.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024);
     const availableStorageMB = storageLimitMB - storageUsedMB;
 
@@ -746,7 +765,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           </button>
           <button
             onClick={handleValidateAndUpload}
-            disabled={selectedFiles.length === 0 || isUploading || isCheckingQuota || (quotaInfo?.status === 'EXHAUSTED')}
+            disabled={selectedFiles.length === 0 || isUploading || isCheckingQuota || (quotaInfo?.status === 'EXHAUSTED') || validationErrors.length > 0}
             className="px-8 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isCheckingQuota ? (
@@ -767,6 +786,8 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               </>
             ) : quotaInfo?.status === 'EXHAUSTED' ? (
               'Quota Exhausted - Upgrade Plan'
+            ) : validationErrors.length > 0 ? (
+              'Fix Errors to Upload'
             ) : selectedFiles.length === 0
               ? 'Upload'
               : `Upload ${selectedFiles.length} Resume${selectedFiles.length !== 1 ? 's' : ''}`
