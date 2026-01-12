@@ -509,7 +509,34 @@ export default function MyResumesPage() {
             success: false,
             error: 'This resume already exists in the system.',
           };
-        } else {
+        }
+        // Check for validation errors (400 Bad Request)
+        else if (error?.response?.status === 400) {
+          const detail = error?.response?.data?.detail;
+
+          // Handle INVALID_RESUME error
+          if (detail?.error === 'INVALID_RESUME') {
+            return {
+              success: false,
+              error: detail?.message || 'The uploaded file does not appear to be a valid resume. It may be a scorecard, invoice, or other document type.',
+            };
+          }
+
+          // Handle NO_CONTENT error
+          if (detail?.error === 'NO_CONTENT') {
+            return {
+              success: false,
+              error: detail?.message || 'The resume file has no readable content. The file may be blank, image-only, or heavily formatted.',
+            };
+          }
+
+          // Handle other 400 errors
+          return {
+            success: false,
+            error: detail?.message || `Failed to upload ${files[0].name}`,
+          };
+        }
+        else {
           return { success: false, error: `Failed to upload ${files[0].name}` };
         }
       }
