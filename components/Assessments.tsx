@@ -20,9 +20,12 @@ interface AssessmentsProps {
   jobs: Job[];
   onOpenCandidateView?: () => void;
   onNavigateToJDCreation?: () => void;
+  autoOpenCreate?: boolean;
+  preSelectedJdId?: string;
+  preSelectedJdTitle?: string;
 }
 
-export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation }: AssessmentsProps) {
+export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle }: AssessmentsProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
   const [showCreation, setShowCreation] = useState(false);
@@ -87,6 +90,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     units_consumed: 0,
   });
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+
+  // Auto-open creation view if requested via query params
+  useEffect(() => {
+    if (autoOpenCreate) {
+      setShowCreation(true);
+      console.log('[TalentFlow] Auto-opening assessment creation for JD:', preSelectedJdId, preSelectedJdTitle);
+    }
+  }, [autoOpenCreate, preSelectedJdId, preSelectedJdTitle]);
 
   // Load all data in parallel on mount (faster than 3 separate useEffects)
   useEffect(() => {
@@ -485,6 +496,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         onCreateAssessment={handleCreateAssessment}
         onCreateNewJD={onNavigateToJDCreation}
         topicSettings={topicSettings}
+        preSelectedJobId={preSelectedJdId}
       />
     );
   }
