@@ -44,6 +44,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   const [assessmentData, setAssessmentData] = useState<StartAssessmentResponse | null>(null);
   const [results, setResults] = useState<AssessmentResult | null>(null);
   const [progress, setProgress] = useState({ answered: 0, total: 0, percent: 0 });
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
 
   // Refs for proctoring
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
@@ -393,7 +394,26 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   };
 
   // Proctoring functions
-  const startProctoring = () => {
+  const startProctoring = async () => {
+    // Initialize camera stream for video monitoring
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+      streamRef.current = stream;
+      setCameraStream(stream); // Update state to trigger re-render
+
+      // Set the video element's source to the stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      console.log('[PROCTORING] Camera stream initialized successfully');
+    } catch (err) {
+      console.error('[PROCTORING] Failed to initialize camera:', err);
+      // Continue without camera - proctoring will still track other events
+    }
+
     // Start heartbeat
     heartbeatRef.current = setInterval(async () => {
       try {
@@ -411,10 +431,23 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   };
 
   const stopProctoring = () => {
+    // Stop camera stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setCameraStream(null);
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    // Stop heartbeat
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
     }
+
+    // Remove event listeners
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     document.removeEventListener('copy', handleCopyAttempt);
     document.removeEventListener('paste', handlePasteAttempt);
@@ -528,7 +561,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
           onComplete={handleCompleteAssessment}
           onNavigate={handleNavigateToQuestion}
           videoRef={videoRef}
-          stream={streamRef.current}
+          stream={cameraStream}
         />
       );
 
