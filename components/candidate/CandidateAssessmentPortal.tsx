@@ -51,6 +51,9 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // Ref to track if we're in the process of starting assessment
+  const isStartingRef = useRef(false);
+
   // Enable refresh prevention during active assessment
   const isAssessmentActive = step === 'assessment' || step === 'scoring' || step === 'completing';
   useRefreshPrevention({
@@ -61,8 +64,14 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     },
   });
 
+  // Debug: Track step changes
+  useEffect(() => {
+    console.log('[DEBUG] Step changed to:', step);
+  }, [step]);
+
   // Load assessment info on mount
   useEffect(() => {
+    console.log('[DEBUG] Mount effect triggered - calling loadAssessmentInfo');
     loadAssessmentInfo();
     return () => {
       // Cleanup heartbeat and media streams
@@ -111,13 +120,29 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   }, [token]);
 
   const loadAssessmentInfo = async () => {
+    console.log('[DEBUG] loadAssessmentInfo called, current step:', step, 'isStarting:', isStartingRef.current);
+
+    // Skip if we're in the process of starting the assessment
+    if (isStartingRef.current) {
+      console.log('[DEBUG] Skipping loadAssessmentInfo - assessment is being started');
+      return;
+    }
+
     try {
       setStep('loading');
       const info = await candidateService.getAssessmentInfo(token);
+      console.log('[DEBUG] Assessment info received:', {
+        attempt_status: info.attempt_status,
+        can_resume: info.can_resume,
+        can_start: info.can_start,
+        consent_accepted: info.consent_accepted,
+        attempt_id: info.attempt_id
+      });
       setAssessmentInfo(info);
 
       // Determine initial step based on status
       if (info.attempt_status === 'completed') {
+        console.log('[DEBUG] Attempt status is COMPLETED - showing scoring screen');
         // Already completed, check if results are ready
         try {
           const resultData = await candidateService.getResults(token);
@@ -127,11 +152,13 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
             setStep('results');
           } else {
             // Results still processing, show scoring screen and poll
+            console.log('[DEBUG] Results not ready, setting step to scoring');
             setStep('scoring');
             pollForScoringResults();
           }
         } catch {
           // Results not ready, show scoring screen
+          console.log('[DEBUG] getResults failed, setting step to scoring');
           setStep('scoring');
           pollForScoringResults();
         }
@@ -190,6 +217,11 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   };
 
   const handleSystemCheckComplete = async () => {
+    console.log('[DEBUG] handleSystemCheckComplete started, current step:', step);
+    // Set flag to prevent loadAssessmentInfo from running during start
+    isStartingRef.current = true;
+    console.log('[DEBUG] Set isStartingRef to true');
+
     try {
       // Check if questions are already ready (from parallel generation)
       console.log('[PORTAL] System check complete, checking if questions are ready...');
@@ -199,14 +231,19 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       if (status.status === 'ready' && status.questions_ready) {
         // Questions are ready! Start immediately
         console.log('[PORTAL] Questions ready, starting assessment immediately');
+        console.log('[DEBUG] Setting step to generating_questions');
         setStep('generating_questions'); // Brief loading state
 
+        console.log('[DEBUG] Calling startAssessment API...');
         const response = await candidateService.startAssessment(token);
+        console.log('[DEBUG] startAssessment response:', response);
         setAssessmentData(response);
 
         if (!response.first_question || response.total_questions === 0) {
+          console.log('[DEBUG] No first question or 0 total questions - showing error');
           setError('Failed to load assessment questions. Please try again.');
           setStep('error');
+          isStartingRef.current = false;
           return;
         }
 
@@ -217,7 +254,9 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
           percent: 0
         });
 
+        console.log('[DEBUG] Setting step to assessment');
         setStep('assessment');
+        isStartingRef.current = false;
       } else if (status.status === 'generating') {
         // Still generating - show loading and poll until ready
         console.log('[PORTAL] Questions still generating, waiting...');
@@ -248,10 +287,12 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
               });
 
               setStep('assessment');
+              isStartingRef.current = false;
               return;
             } else if (checkStatus.status === 'failed') {
               setError('Question generation failed. Please try again.');
               setStep('error');
+              isStartingRef.current = false;
               return;
             }
           }
@@ -265,13 +306,16 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
               setCurrentQuestion(response.first_question);
               setProgress({ answered: 0, total: response.total_questions, percent: 0 });
               setStep('assessment');
+              isStartingRef.current = false;
             } else {
               setError('Question generation timed out. Please try again.');
               setStep('error');
+              isStartingRef.current = false;
             }
           } catch {
             setError('Question generation timed out. Please try again.');
             setStep('error');
+            isStartingRef.current = false;
           }
         };
 
@@ -298,11 +342,13 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         });
 
         setStep('assessment');
+        isStartingRef.current = false;
       }
     } catch (err) {
       console.error('[PORTAL] Error in handleSystemCheckComplete:', err);
       setError(err instanceof Error ? err.message : 'Failed to start assessment');
       setStep('error');
+      isStartingRef.current = false;
     }
   };
 

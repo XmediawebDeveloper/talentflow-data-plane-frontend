@@ -1,6 +1,6 @@
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { assessmentService } from '@/lib/services';
+import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import {
   calculateFinalResult,
   QuestionScore,
@@ -19,11 +19,13 @@ interface CandidateResult {
   id: string;
   name: string;
   email: string;
+  phone?: string;
+  inviteSource?: string;
   avatar?: string;
   score: number;
   totalScore: number;
   percentage: number;
-  status: 'Passed' | 'Failed' | 'Under Review';
+  status: 'Passed' | 'Failed' | 'Under Review' | 'In Progress';
   completedDate: string;
   duration: string;
   sections: SectionResult[];
@@ -57,7 +59,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [selectedDetailRound, setSelectedDetailRound] = useState<number | 'all'>('all'); // Round filter for detail view
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [apiStats, setApiStats] = useState<{ completed_count: number; passed_count: number; failed_count: number; average_score: number | null }>({ completed_count: 0, passed_count: 0, failed_count: 0, average_score: null });
+  const [apiStats, setApiStats] = useState<{ completed_count: number; passed_count: number; failed_count: number; in_progress_count: number; average_score: number | null }>({ completed_count: 0, passed_count: 0, failed_count: 0, in_progress_count: 0, average_score: null });
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
+
+  // NEW: Detailed result state
+  const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
 
   // AS-23: Search, Sort, and Pagination state
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,7 +74,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Passed' | 'Failed' | 'Under Review'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Passed' | 'Failed' | 'Under Review' | 'In Progress'>('all');
 
   // Fetch results from API
   useEffect(() => {
@@ -75,49 +84,66 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         const response = await assessmentService.listResults(assessmentId);
         if (response?.items) {
           // Map API response to component format
-          const mapped: CandidateResult[] = response.items.map((item: any, index: number) => ({
-            id: item.id,
-            name: item.candidate_name || 'Unknown',
-            email: item.candidate_email || '',
-            score: Math.round(Number(item.overall_score) || 0),
-            totalScore: 100,
-            percentage: Math.round(Number(item.overall_score) || 0),
-            status: item.passed === true ? 'Passed' : item.passed === false ? 'Failed' : 'Under Review',
-            completedDate: item.completed_at?.split('T')[0] || 'N/A',
-            duration: item.time_spent_seconds ? `${Math.round(item.time_spent_seconds / 60)} min` : 'N/A',
-            sections: [
-              {
-                name: 'HR Section',
-                score: Math.round(Number(item.hr_score) || 0),
-                totalScore: 100,
-                percentage: Math.round(Number(item.hr_score) || 0),
-                questions: []
-              },
-              {
-                name: 'Technical Section',
-                score: Math.round(Number(item.technical_score) || 0),
-                totalScore: 100,
-                percentage: Math.round(Number(item.technical_score) || 0),
-                questions: []
-              },
-              {
-                name: 'Coding Section',
-                score: Math.round(Number(item.coding_score) || 0),
-                totalScore: 100,
-                percentage: Math.round(Number(item.coding_score) || 0),
-                questions: []
-              }
-            ].filter(s => s.score > 0 || s.percentage > 0),
-            round: 1,
-            roundName: 'Round 1'
-          }));
+          const mapped: CandidateResult[] = response.items.map((item: any, index: number) => {
+            // Determine status
+            let status: 'Passed' | 'Failed' | 'Under Review' | 'In Progress' = 'Under Review';
+            if (item.status === 'completed') {
+              status = item.passed === true ? 'Passed' : item.passed === false ? 'Failed' : 'Under Review';
+            } else if (item.status === 'in_progress') {
+              status = 'In Progress';
+            } else if (item.passed === true) {
+              status = 'Passed';
+            } else if (item.passed === false) {
+              status = 'Failed';
+            }
+
+            return {
+              id: item.id,
+              name: item.candidate_name || 'Unknown',
+              email: item.candidate_email || '',
+              phone: item.candidate_phone || '',
+              inviteSource: item.invite_source || 'Manual',
+              score: Math.round(Number(item.overall_score) || 0),
+              totalScore: 100,
+              percentage: Math.round(Number(item.overall_score) || 0),
+              status,
+              completedDate: item.completed_at?.split('T')[0] || (item.started_at?.split('T')[0] || 'N/A'),
+              duration: item.time_spent_seconds ? `${Math.round(item.time_spent_seconds / 60)} min` : 'N/A',
+              sections: [
+                {
+                  name: 'HR Section',
+                  score: Math.round(Number(item.hr_score) || 0),
+                  totalScore: 100,
+                  percentage: Math.round(Number(item.hr_score) || 0),
+                  questions: []
+                },
+                {
+                  name: 'Technical Section',
+                  score: Math.round(Number(item.technical_score) || 0),
+                  totalScore: 100,
+                  percentage: Math.round(Number(item.technical_score) || 0),
+                  questions: []
+                },
+                {
+                  name: 'Coding Section',
+                  score: Math.round(Number(item.coding_score) || 0),
+                  totalScore: 100,
+                  percentage: Math.round(Number(item.coding_score) || 0),
+                  questions: []
+                }
+              ].filter(s => s.score > 0 || s.percentage > 0),
+              round: 1,
+              roundName: 'Round 1'
+            };
+          });
           setCandidateResults(mapped);
 
           // Set stats from API
           setApiStats({
-            completed_count: response.completed_count || mapped.length,
+            completed_count: response.completed_count || mapped.filter((c: CandidateResult) => c.status !== 'In Progress').length,
             passed_count: response.passed_count || mapped.filter((c: CandidateResult) => c.status === 'Passed').length,
             failed_count: response.failed_count || mapped.filter((c: CandidateResult) => c.status === 'Failed').length,
+            in_progress_count: response.in_progress_count || mapped.filter((c: CandidateResult) => c.status === 'In Progress').length,
             average_score: response.average_score ? Math.round(Number(response.average_score)) : null
           });
         }
@@ -133,13 +159,88 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     fetchResults();
   }, [assessmentId]);
 
+  // NEW: Fetch detailed results when a candidate is selected
+  useEffect(() => {
+    const fetchDetailedResults = async () => {
+      if (!selectedCandidate) {
+        setDetailedResult(null);
+        return;
+      }
+
+      setIsLoadingDetails(true);
+      setDetailsError(null);
+      try {
+        const details = await assessmentService.getResultDetails(assessmentId, selectedCandidate);
+        setDetailedResult(details);
+        // Set active tab based on available rounds
+        if (details.round_scores.length > 0) {
+          setActiveTab(details.round_scores[0].round_type);
+        }
+      } catch (error) {
+        console.error('Failed to fetch detailed results:', error);
+        setDetailsError('Failed to load detailed results. Please try again.');
+      } finally {
+        setIsLoadingDetails(false);
+      }
+    };
+
+    fetchDetailedResults();
+  }, [selectedCandidate, assessmentId]);
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Passed': return 'bg-green-100 text-green-800 border-green-200';
       case 'Failed': return 'bg-red-100 text-red-800 border-red-200';
       case 'Under Review': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'In Progress': return 'bg-blue-100 text-blue-800 border-blue-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  // Handle delete result
+  const handleDeleteResult = async (resultId: string, candidateName: string) => {
+    if (!confirm(`Are you sure you want to delete the result for ${candidateName}? This action cannot be undone.`)) {
+      return;
+    }
+    setIsDeleting(resultId);
+    try {
+      await assessmentService.deleteResult(assessmentId, resultId);
+      // Remove from local state
+      setCandidateResults(prev => prev.filter(c => c.id !== resultId));
+      // Update stats
+      const deletedCandidate = candidateResults.find(c => c.id === resultId);
+      if (deletedCandidate) {
+        setApiStats(prev => ({
+          ...prev,
+          completed_count: Math.max(0, prev.completed_count - (deletedCandidate.status !== 'In Progress' ? 1 : 0)),
+          passed_count: Math.max(0, prev.passed_count - (deletedCandidate.status === 'Passed' ? 1 : 0)),
+          failed_count: Math.max(0, prev.failed_count - (deletedCandidate.status === 'Failed' ? 1 : 0)),
+          in_progress_count: Math.max(0, prev.in_progress_count - (deletedCandidate.status === 'In Progress' ? 1 : 0)),
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to delete result:', error);
+      alert('Failed to delete result. Please try again.');
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
+  // Handle row selection
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedRows(candidateResults.map(c => c.id));
+    } else {
+      setSelectedRows([]);
+    }
+  };
+
+  const handleSelectRow = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedRows(prev => [...prev, id]);
+    } else {
+      setSelectedRows(prev => prev.filter(rowId => rowId !== id));
     }
   };
 
@@ -192,12 +293,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       filteredCandidates = filteredCandidates.filter(c => c.status === statusFilter);
     }
 
-    // Search filter (name or email)
+    // Search filter (name, email, or phone)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filteredCandidates = filteredCandidates.filter(c =>
         c.name.toLowerCase().includes(query) ||
-        c.email.toLowerCase().includes(query)
+        c.email.toLowerCase().includes(query) ||
+        (c.phone && c.phone.toLowerCase().includes(query))
       );
     }
 
@@ -232,13 +334,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     const availableRounds = Array.from(new Set(displayResults.map(c => c.round))).sort();
 
     // Use API stats if available, otherwise calculate from data
-    const avgScore = apiStats.average_score !== null
-      ? apiStats.average_score
-      : (filteredCandidates.length > 0
-        ? Math.round(filteredCandidates.reduce((sum, c) => sum + c.percentage, 0) / filteredCandidates.length)
-        : 0);
     const passedCount = candidateResults.length > 0 ? apiStats.passed_count : filteredCandidates.filter(c => c.status === 'Passed').length;
     const failedCount = candidateResults.length > 0 ? apiStats.failed_count : filteredCandidates.filter(c => c.status === 'Failed').length;
+    const inProgressCount = candidateResults.length > 0 ? apiStats.in_progress_count : filteredCandidates.filter(c => c.status === 'In Progress').length;
 
     return (
       <div className="flex-1 bg-gray-50 overflow-y-auto">
@@ -360,7 +458,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <div className="text-2xl text-gray-900">{displayResults.length}</div>
                 </div>
                 <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <User className="w-6 h-6 text-gray-800" />
+                  <Users className="w-6 h-6 text-gray-800" />
                 </div>
               </div>
             </div>
@@ -369,7 +467,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-gray-600 text-sm mb-1">Passed</div>
-                  <div className="text-2xl text-gray-900">{passedCount}</div>
+                  <div className="text-2xl text-green-600">{passedCount}</div>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <CheckCircle className="w-6 h-6 text-green-600" />
@@ -381,7 +479,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-gray-600 text-sm mb-1">Failed</div>
-                  <div className="text-2xl text-gray-900">{failedCount}</div>
+                  <div className="text-2xl text-red-600">{failedCount}</div>
                 </div>
                 <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
                   <XCircle className="w-6 h-6 text-red-600" />
@@ -392,11 +490,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-gray-600 text-sm mb-1">Avg. Score</div>
-                  <div className="text-2xl text-gray-900">{avgScore}%</div>
+                  <div className="text-gray-600 text-sm mb-1">Progressing</div>
+                  <div className="text-2xl text-blue-600">{inProgressCount}</div>
                 </div>
-                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-6 h-6 text-gray-800" />
+                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 text-blue-600" />
                 </div>
               </div>
             </div>
@@ -404,13 +502,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
           {/* AS-23: Search and Filter Bar */}
           <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
-            <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex flex-col md:flex-row gap-4 items-center">
               {/* Search Input */}
               <div className="flex-1 relative">
                 <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search by name or email..."
+                  placeholder="Search by name, email, or phone..."
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -422,40 +520,58 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
               {/* Status Filter */}
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Status:</span>
                 <select
                   value={statusFilter}
                   onChange={(e) => {
-                    setStatusFilter(e.target.value as 'all' | 'Passed' | 'Failed' | 'Under Review');
+                    setStatusFilter(e.target.value as 'all' | 'Passed' | 'Failed' | 'Under Review' | 'In Progress');
                     setCurrentPage(1);
                   }}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent"
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
                 >
-                  <option value="all">All Status</option>
+                  <option value="all">Assessment Status</option>
                   <option value="Passed">Passed</option>
                   <option value="Failed">Failed</option>
+                  <option value="In Progress">In Progress</option>
                   <option value="Under Review">Under Review</option>
                 </select>
               </div>
 
-              {/* Results count */}
-              <div className="flex items-center text-sm text-gray-600">
-                Showing {paginatedCandidates.length} of {totalItems} results
-              </div>
+              {/* Advanced Filters Button */}
+              <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm text-gray-700">
+                <SlidersHorizontal className="w-4 h-4" />
+                Advanced Filters
+              </button>
+
+              {/* Customize Columns Button */}
+              <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm text-gray-700">
+                <Columns3 className="w-4 h-4" />
+                Customize Columns
+              </button>
             </div>
           </div>
 
           {/* Candidates Results Table */}
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
               <h2 className="text-gray-900">Candidate Results</h2>
+              <div className="text-sm text-gray-500">
+                {selectedRows.length > 0 && `${selectedRows.length} selected`}
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
+                    <th className="px-4 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedRows.length === paginatedCandidates.length && paginatedCandidates.length > 0}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
+                      />
+                    </th>
                     <th
-                      className="text-left px-6 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
                       onClick={() => handleSort('name')}
                     >
                       <div className="flex items-center gap-1">
@@ -463,17 +579,30 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         <ArrowUpDown className={`w-3 h-3 ${sortField === 'name' ? 'text-gray-800' : 'text-gray-400'}`} />
                       </div>
                     </th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <Mail className="w-3 h-3" />
+                        Email
+                      </div>
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <Phone className="w-3 h-3" />
+                        Phone
+                      </div>
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-600">Invite Source</th>
                     <th
-                      className="text-center px-6 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
                       onClick={() => handleSort('score')}
                     >
                       <div className="flex items-center justify-center gap-1">
-                        Score
+                        Score %
                         <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-gray-800' : 'text-gray-400'}`} />
                       </div>
                     </th>
                     <th
-                      className="text-center px-6 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
                       onClick={() => handleSort('status')}
                     >
                       <div className="flex items-center justify-center gap-1">
@@ -482,7 +611,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       </div>
                     </th>
                     <th
-                      className="text-left px-6 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
                       onClick={() => handleSort('date')}
                     >
                       <div className="flex items-center gap-1">
@@ -490,16 +619,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         <ArrowUpDown className={`w-3 h-3 ${sortField === 'date' ? 'text-gray-800' : 'text-gray-400'}`} />
                       </div>
                     </th>
-                    <th className="text-center px-6 py-3 text-xs text-gray-600">Duration</th>
-                    <th className="text-center px-6 py-3 text-xs text-gray-600">Action</th>
+                    <th className="text-center px-4 py-3 text-xs text-gray-600">Duration</th>
+                    <th className="text-center px-4 py-3 text-xs text-gray-600">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {paginatedCandidates.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center">
+                      <td colSpan={10} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center">
-                          <User className="w-12 h-12 text-gray-300 mb-3" />
+                          <Users className="w-12 h-12 text-gray-300 mb-3" />
                           {searchQuery || statusFilter !== 'all' ? (
                             <>
                               <p className="text-gray-600 mb-1">No candidates match your search criteria</p>
@@ -516,53 +645,80 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </tr>
                   ) : (
                     paginatedCandidates.map((candidate) => (
-                      <tr key={candidate.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4">
+                      <tr key={candidate.id} className={`hover:bg-gray-50 transition-colors ${selectedRows.includes(candidate.id) ? 'bg-gray-50' : ''}`}>
+                        <td className="px-4 py-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedRows.includes(candidate.id)}
+                            onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
+                            className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
+                          />
+                        </td>
+                        <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-sm">
-                              {candidate.name.split(' ').map(n => n[0]).join('')}
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs">
+                              {candidate.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </div>
-                            <div>
-                              <div className="text-sm text-gray-900">{candidate.name}</div>
-                              <div className="text-xs text-gray-500">{candidate.email}</div>
-                            </div>
+                            <div className="text-sm text-gray-900 font-medium">{candidate.name}</div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <span className={`text-lg ${getScoreColor(candidate.percentage)}`}>
-                              {candidate.percentage}%
-                            </span>
-                            <span className="text-sm text-gray-500">
-                              ({candidate.score}/{candidate.totalScore})
-                            </span>
-                          </div>
+                        <td className="px-4 py-4">
+                          <div className="text-sm text-gray-600">{candidate.email}</div>
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-4 py-4">
+                          <div className="text-sm text-gray-600">{candidate.phone || '-'}</div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-700">
+                            {candidate.inviteSource || 'Manual'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span className={`text-lg font-semibold ${getScoreColor(candidate.percentage)}`}>
+                            {candidate.status === 'In Progress' ? '-' : `${candidate.percentage}%`}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center">
                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border ${getStatusColor(candidate.status)}`}>
                             {candidate.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-4">
                           <div className="flex items-center gap-2 text-sm text-gray-600">
                             <Calendar className="w-4 h-4" />
                             {candidate.completedDate}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-4 py-4 text-center">
                           <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
                             <Clock className="w-4 h-4" />
                             {candidate.duration}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <button
-                            onClick={() => setSelectedCandidate(candidate.id)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
-                          >
-                            <Award className="w-3 h-3" />
-                            View Details
-                          </button>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => setSelectedCandidate(candidate.id)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                              title="View Details"
+                            >
+                              <Award className="w-3 h-3" />
+                              View Details
+                            </button>
+                            <button
+                              onClick={() => handleDeleteResult(candidate.id, candidate.name)}
+                              disabled={isDeleting === candidate.id}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                              title="Delete"
+                            >
+                              {isDeleting === candidate.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3 h-3" />
+                              )}
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -924,169 +1080,305 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         {/* Detailed Answers */}
         <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-lg">
           <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5">
-            <h2 className="text-white">📝 Detailed Question Analysis</h2>
-            <p className="text-gray-100 text-sm mt-1">Review questions and answers for each section</p>
-          </div>
-
-          {/* Tab Navigation */}
-          <div className="border-b border-gray-200 bg-gray-50">
-            <div className="flex gap-2 px-6 py-3">
-              {selectedCandidateData?.sections.map((section, idx) => {
-                const tabKey = section.name.toLowerCase().replace(/\s+/g, '-');
-                const isActive = activeTab === tabKey;
-                
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveTab(tabKey)}
-                    className={`px-6 py-3 rounded-t-lg transition-all flex items-center gap-2 ${
-                      isActive
-                        ? 'bg-white text-gray-800 border-t-2 border-x border-gray-800 shadow-sm'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    <span className="font-medium">{section.name}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs ${
-                      isActive ? 'bg-gray-100 text-gray-900' : 'bg-gray-200 text-gray-600'
-                    }`}>
-                      {section.questions.length}
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-white">📝 Detailed Question Analysis</h2>
+                <p className="text-gray-100 text-sm mt-1">Review questions and answers for each section</p>
+              </div>
+              {/* Agent Status Badge */}
+              {detailedResult && (
+                <div className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
+                  detailedResult.scoring_status === 'completed'
+                    ? 'bg-green-500/20 text-green-100 border border-green-400/30'
+                    : detailedResult.scoring_status === 'processing'
+                    ? 'bg-yellow-500/20 text-yellow-100 border border-yellow-400/30'
+                    : 'bg-gray-500/20 text-gray-100 border border-gray-400/30'
+                }`}>
+                  {detailedResult.scoring_status === 'processing' && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
+                  {detailedResult.scoring_status === 'completed' && (
+                    <CheckCircle className="w-4 h-4" />
+                  )}
+                  {detailedResult.scoring_status === 'pending' && (
+                    <Clock className="w-4 h-4" />
+                  )}
+                  <span className="text-sm font-medium">
+                    {detailedResult.scoring_status === 'completed' && 'Scoring Complete'}
+                    {detailedResult.scoring_status === 'processing' && 'AI Agent Processing...'}
+                    {detailedResult.scoring_status === 'pending' && 'Scoring Pending'}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Tab Content */}
-          <div className="p-6">
-            {selectedCandidateData?.sections.map((section, sectionIdx) => {
-              const tabKey = section.name.toLowerCase().replace(/\s+/g, '-');
-              const isActiveTab = activeTab === tabKey;
+          {/* Loading State */}
+          {isLoadingDetails && (
+            <div className="p-12 text-center">
+              <Loader2 className="w-12 h-12 text-gray-400 mx-auto mb-4 animate-spin" />
+              <p className="text-gray-600">Loading detailed results...</p>
+            </div>
+          )}
 
-              if (!isActiveTab) return null;
+          {/* Error State */}
+          {detailsError && (
+            <div className="p-12 text-center">
+              <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+              <p className="text-red-600">{detailsError}</p>
+            </div>
+          )}
 
-              return (
-                <div key={sectionIdx} className="space-y-6">
-                  {/* Section Header */}
-                  <div className="flex items-center justify-between pb-4 border-b border-gray-200">
-                    <div>
-                      <h3 className="text-xl text-gray-900">{section.name}</h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {section.questions.length} question{section.questions.length !== 1 ? 's' : ''} • 
-                        <span className="ml-1">{section.score}/{section.totalScore} points</span>
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm text-gray-600 mb-1">Section Score</div>
-                      <div className={`text-3xl ${getScoreColor(section.percentage)}`}>
-                        {section.percentage}%
-                      </div>
-                    </div>
-                  </div>
+          {/* Agent Processing State */}
+          {detailedResult && detailedResult.scoring_status === 'processing' && (
+            <div className="p-8">
+              <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-xl p-8 text-center">
+                <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Loader2 className="w-10 h-10 text-yellow-600 animate-spin" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">AI Agent Processing Results</h3>
+                <p className="text-gray-600 mb-4">
+                  Our AI scoring agent is analyzing the candidate's responses. This typically takes 1-2 minutes.
+                </p>
+                <div className="flex items-center justify-center gap-2 text-sm text-yellow-700">
+                  <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                  <span>Processing in progress...</span>
+                </div>
+              </div>
+            </div>
+          )}
 
-                  {/* Questions */}
-                  {section.questions.length > 0 ? (
-                    <div className="space-y-6">
-                      {section.questions.map((q, qIdx) => (
-                        <div key={qIdx} className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors">
-                          {/* Question Header */}
-                          <div className="bg-gradient-to-r from-gray-50 to-gray-50 px-6 py-4 border-b border-gray-200">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <span className="px-3 py-1 bg-gray-800 text-white rounded-full text-xs font-medium">
-                                    Q{qIdx + 1}
-                                  </span>
-                                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                    q.type === 'coding' 
-                                      ? 'bg-gray-100 text-gray-900'
-                                      : q.type === 'multiple-choice'
-                                      ? 'bg-green-100 text-green-700'
-                                      : 'bg-gray-100 text-gray-900'
-                                  }`}>
-                                    {q.type === 'coding' ? '💻 Coding' : q.type === 'multiple-choice' ? '✓ MCQ' : '✍️ Text'}
-                                  </span>
-                                </div>
-                                <div className="text-gray-900 leading-relaxed">{q.question}</div>
-                              </div>
-                              <div className="ml-6 text-right flex-shrink-0">
-                                <div className="text-xs text-gray-600 mb-1">Score</div>
-                                <div className="flex items-center gap-2">
-                                  <div className={`text-2xl font-bold ${getScoreColor((q.score / q.maxScore) * 100)}`}>
-                                    {q.score}
-                                  </div>
-                                  <div className="text-gray-400">/</div>
-                                  <div className="text-xl text-gray-600">{q.maxScore}</div>
-                                </div>
-                                <div className={`text-xs mt-1 ${getScoreColor((q.score / q.maxScore) * 100)}`}>
-                                  {Math.round((q.score / q.maxScore) * 100)}%
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+          {/* Content when loaded */}
+          {detailedResult && detailedResult.scoring_status !== 'processing' && !isLoadingDetails && (
+            <>
+              {/* Tab Navigation */}
+              <div className="border-b border-gray-200 bg-gray-50">
+                <div className="flex gap-2 px-6 py-3">
+                  {detailedResult.round_scores.map((round, idx) => {
+                    const isActive = activeTab === round.round_type;
+                    const questionsForRound = detailedResult.question_evaluations.filter(
+                      q => q.round_type === round.round_type
+                    );
 
-                          {/* Question Content */}
-                          <div className="p-6 space-y-4">
-                            {/* Candidate's Answer */}
-                            <div>
-                              <div className="flex items-center gap-2 mb-3">
-                                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                  <User className="w-4 h-4 text-gray-800" />
-                                </div>
-                                <div className="text-sm font-medium text-gray-800">CANDIDATE'S ANSWER</div>
-                              </div>
-                              <div className={`rounded-lg p-4 ${
-                                q.type === 'coding' 
-                                  ? 'bg-gray-900 text-green-400 font-mono text-sm overflow-x-auto'
-                                  : 'bg-gray-50 text-gray-800'
-                              }`}>
-                                <div className={q.type === 'coding' ? 'whitespace-pre-wrap' : ''}>
-                                  {q.candidateAnswer}
-                                </div>
-                              </div>
-                            </div>
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => setActiveTab(round.round_type)}
+                        className={`px-6 py-3 rounded-t-lg transition-all flex items-center gap-2 ${
+                          isActive
+                            ? 'bg-white text-gray-800 border-t-2 border-x border-gray-800 shadow-sm'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        <span className="font-medium capitalize">{round.round_type} Round</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${
+                          isActive ? 'bg-gray-100 text-gray-900' : 'bg-gray-200 text-gray-600'
+                        }`}>
+                          {questionsForRound.length}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-                            {/* Correct Answer (if applicable) */}
-                            {q.correctAnswer && (
-                              <div>
-                                <div className="flex items-center gap-2 mb-3">
-                                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                    <CheckCircle className="w-4 h-4 text-green-600" />
-                                  </div>
-                                  <div className="text-sm font-medium text-green-900">CORRECT ANSWER</div>
-                                </div>
-                                <div className="bg-green-50 rounded-lg p-4">
-                                  <div className="text-gray-800">{q.correctAnswer}</div>
-                                </div>
-                              </div>
-                            )}
+              {/* Tab Content */}
+              <div className="p-6">
+                {detailedResult.round_scores.map((round, roundIdx) => {
+                  const isActiveTab = activeTab === round.round_type;
+                  if (!isActiveTab) return null;
 
-                            {/* AI Feedback */}
-                            <div>
-                              <div className="flex items-center gap-2 mb-3">
-                                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                  <FileText className="w-4 h-4 text-gray-800" />
-                                </div>
-                                <div className="text-sm font-medium text-gray-800">AI FEEDBACK & EVALUATION</div>
-                              </div>
-                              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                                <div className="text-gray-800 leading-relaxed">{q.feedback}</div>
-                              </div>
-                            </div>
+                  const questionsForRound = detailedResult.question_evaluations.filter(
+                    q => q.round_type === round.round_type
+                  );
+
+                  return (
+                    <div key={roundIdx} className="space-y-6">
+                      {/* Section Header */}
+                      <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+                        <div>
+                          <h3 className="text-xl text-gray-900 capitalize">{round.round_type} Round</h3>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''} •
+                            <span className="ml-1">{round.questions_correct}/{round.questions_total} correct</span>
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-600 mb-1">Section Score</div>
+                          <div className={`text-3xl ${getScoreColor(round.raw_score)}`}>
+                            {Math.round(round.raw_score)}%
                           </div>
                         </div>
-                      ))}
+                      </div>
+
+                      {/* Questions */}
+                      {questionsForRound.length > 0 ? (
+                        <div className="space-y-6">
+                          {questionsForRound.map((q, qIdx) => (
+                            <div key={qIdx} className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors">
+                              {/* Question Header */}
+                              <div className={`px-6 py-4 border-b border-gray-200 ${
+                                q.is_correct ? 'bg-green-50' : 'bg-red-50'
+                              }`}>
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-2">
+                                      <span className="px-3 py-1 bg-gray-800 text-white rounded-full text-xs font-medium">
+                                        Q{qIdx + 1}
+                                      </span>
+                                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                        q.question_type === 'coding'
+                                          ? 'bg-purple-100 text-purple-700'
+                                          : q.question_type === 'single_choice' || q.question_type === 'multiple_choice'
+                                          ? 'bg-blue-100 text-blue-700'
+                                          : 'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {q.question_type === 'coding' ? '💻 Coding'
+                                          : q.question_type === 'single_choice' ? '○ Single Choice'
+                                          : q.question_type === 'multiple_choice' ? '☑ Multiple Choice'
+                                          : '✍️ Text'}
+                                      </span>
+                                      {q.is_correct ? (
+                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Correct</span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">Incorrect</span>
+                                      )}
+                                    </div>
+                                    <div className="text-gray-900 leading-relaxed">{q.question_text}</div>
+                                  </div>
+                                  <div className="ml-6 text-right flex-shrink-0">
+                                    <div className="text-xs text-gray-600 mb-1">Score</div>
+                                    <div className="flex items-center gap-2">
+                                      <div className={`text-2xl font-bold ${getScoreColor((q.points_earned / q.points_possible) * 100)}`}>
+                                        {q.points_earned}
+                                      </div>
+                                      <div className="text-gray-400">/</div>
+                                      <div className="text-xl text-gray-600">{q.points_possible}</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Question Content */}
+                              <div className="p-6 space-y-4">
+                                {/* Candidate's Answer */}
+                                <div>
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                      <User className="w-4 h-4 text-gray-800" />
+                                    </div>
+                                    <div className="text-sm font-medium text-gray-800">CANDIDATE'S ANSWER</div>
+                                  </div>
+                                  <div className={`rounded-lg p-4 ${
+                                    q.question_type === 'coding'
+                                      ? 'bg-gray-900 text-green-400 font-mono text-sm overflow-x-auto'
+                                      : 'bg-gray-50 text-gray-800'
+                                  }`}>
+                                    {q.question_type === 'coding' ? (
+                                      <pre className="whitespace-pre-wrap">{q.candidate_code_submission || 'No code submitted'}</pre>
+                                    ) : q.candidate_selected_options && q.candidate_selected_options.length > 0 ? (
+                                      <div>
+                                        {q.candidate_selected_options.map((opt, i) => {
+                                          const option = q.options?.find(o => o.id === opt);
+                                          return (
+                                            <div key={i} className="flex items-center gap-2 mb-1">
+                                              <span className="text-gray-500">•</span>
+                                              <span>{option?.text || opt}</span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <p>{q.candidate_answer_text || 'No answer provided'}</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Correct Answer (for MCQ) */}
+                                {q.correct_answer && q.correct_answer.length > 0 && (
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <CheckCircle className="w-4 h-4 text-green-600" />
+                                      </div>
+                                      <div className="text-sm font-medium text-green-900">CORRECT ANSWER</div>
+                                    </div>
+                                    <div className="bg-green-50 rounded-lg p-4">
+                                      {q.correct_answer.map((opt, i) => {
+                                        const option = q.options?.find(o => o.id === opt);
+                                        return (
+                                          <div key={i} className="flex items-center gap-2 mb-1 text-green-800">
+                                            <CheckCircle className="w-4 h-4" />
+                                            <span>{option?.text || opt}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* AI Feedback */}
+                                {q.feedback && (
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <FileText className="w-4 h-4 text-gray-800" />
+                                      </div>
+                                      <div className="text-sm font-medium text-gray-800">AI FEEDBACK & EVALUATION</div>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                      <div className="text-gray-800 leading-relaxed">{q.feedback}</div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Strengths & Areas for Improvement */}
+                                {((q.strengths && q.strengths.length > 0) || (q.areas_for_improvement && q.areas_for_improvement.length > 0)) && (
+                                  <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+                                    {q.strengths && q.strengths.length > 0 && (
+                                      <div className="bg-green-50 rounded-lg p-4">
+                                        <div className="text-sm font-medium text-green-800 mb-2">Strengths</div>
+                                        <ul className="text-sm text-green-700 space-y-1">
+                                          {q.strengths.map((s, i) => (
+                                            <li key={i} className="flex items-start gap-2">
+                                              <CheckCircle className="w-3 h-3 mt-1 flex-shrink-0" />
+                                              {s}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
+                                    {q.areas_for_improvement && q.areas_for_improvement.length > 0 && (
+                                      <div className="bg-amber-50 rounded-lg p-4">
+                                        <div className="text-sm font-medium text-amber-800 mb-2">Areas for Improvement</div>
+                                        <ul className="text-sm text-amber-700 space-y-1">
+                                          {q.areas_for_improvement.map((a, i) => (
+                                            <li key={i} className="flex items-start gap-2">
+                                              <AlertCircle className="w-3 h-3 mt-1 flex-shrink-0" />
+                                              {a}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                          <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                          <p className="text-gray-600">No questions available for this section</p>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                      <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                      <p className="text-gray-600">No questions available for this section</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
