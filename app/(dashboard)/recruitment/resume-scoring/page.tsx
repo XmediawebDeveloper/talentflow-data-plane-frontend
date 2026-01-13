@@ -88,26 +88,50 @@ export default function ResumeScoringRoute() {
       console.log('[ResumeScoringRoute] Found batch_id:', batchIdParam);
       setPendingBatchId(batchIdParam);
 
-      // Read batch info from sessionStorage
-      try {
-        const storedData = sessionStorage.getItem('pendingScoringBatch');
-        if (storedData) {
-          const data = JSON.parse(storedData);
-          console.log('[ResumeScoringRoute] Found pending batch data:', data);
+      // Immediately fetch current batch status from API (don't wait for poll interval)
+      const fetchInitialStatus = async () => {
+        try {
+          const status = await scoringService.getBatchStatus(batchIdParam);
+          console.log('[ResumeScoringRoute] Initial batch status:', status);
           setBatchProgress({
-            jobId: data.jobId,
-            jobTitle: data.jobTitle,
-            total: data.totalResumes,
-            queued: data.totalResumes,
-            processing: 0,
-            completed: 0,
-            failed: 0,
+            jobId: status.jd_id,
+            jobTitle: status.jd_title,
+            total: status.total,
+            queued: status.queued,
+            processing: status.processing,
+            completed: status.completed,
+            failed: status.failed,
+            items: status.items?.map(item => ({
+              resumeId: item.resume_id,
+              candidateName: item.candidate_name || 'Unknown',
+              status: item.status,
+              score: item.overall_score,
+              errorMessage: item.error_message,
+            })),
           });
-          sessionStorage.removeItem('pendingScoringBatch');
+        } catch (e) {
+          console.error('[ResumeScoringRoute] Error fetching initial status:', e);
+          // Fallback to sessionStorage data if API fails
+          try {
+            const storedData = sessionStorage.getItem('pendingScoringBatch');
+            if (storedData) {
+              const data = JSON.parse(storedData);
+              setBatchProgress({
+                jobId: data.jobId,
+                jobTitle: data.jobTitle,
+                total: data.totalResumes,
+                queued: data.totalResumes,
+                processing: 0,
+                completed: 0,
+                failed: 0,
+              });
+            }
+          } catch (e2) {
+            console.error('[ResumeScoringRoute] Error reading stored data:', e2);
+          }
         }
-      } catch (e) {
-        console.error('[ResumeScoringRoute] Error reading batch data:', e);
-      }
+      };
+      fetchInitialStatus();
     }
 
     // Check for pending scoring data from my-resumes page (old sync method)
@@ -163,6 +187,14 @@ export default function ResumeScoringRoute() {
           console.log('[ResumeScoringRoute] Batch completed, stopping poll');
           clearInterval(pollInterval);
           setPendingBatchId(null);
+
+          // Clear the pending batch from sessionStorage now that scoring is done
+          try {
+            sessionStorage.removeItem('pendingScoringBatch');
+            console.log('[ResumeScoringRoute] Cleared pendingScoringBatch from sessionStorage');
+          } catch (e) {
+            console.error('[ResumeScoringRoute] Error clearing pendingScoringBatch:', e);
+          }
 
           // Reload scored history to show new results
           setTimeout(() => {

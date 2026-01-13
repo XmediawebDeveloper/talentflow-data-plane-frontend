@@ -105,6 +105,8 @@ export interface AssessmentAttemptResponse {
   invitation_id: string;
   candidate_name: string;
   candidate_email: string;
+  candidate_phone?: string;
+  invite_source?: string;
   assessment_title: string;
   jd_title: string;
   started_at?: string;
@@ -115,6 +117,7 @@ export interface AssessmentAttemptResponse {
   coding_score?: number;
   overall_score?: number;
   passed?: boolean;
+  status?: 'completed' | 'in_progress' | 'pending';
   ai_evaluation?: Record<string, any>;
 }
 
@@ -126,7 +129,54 @@ export interface AssessmentResultsListResponse {
   completed_count: number;
   passed_count: number;
   failed_count: number;
+  in_progress_count: number;
   average_score?: number;
+}
+
+// Detailed result response (for recruiter view)
+export interface QuestionEvaluation {
+  question_id: string;
+  round_type: string;
+  question_type: string;
+  question_text: string;
+  candidate_answer_text?: string;
+  candidate_selected_options?: string[];
+  candidate_code_submission?: string;
+  options?: { id: string; text: string }[];
+  correct_answer?: string[];
+  points_possible: number;
+  points_earned: number;
+  is_correct: boolean;
+  feedback?: string;
+  strengths?: string[];
+  areas_for_improvement?: string[];
+}
+
+export interface RoundScore {
+  round_type: string;
+  questions_total: number;
+  questions_correct: number;
+  raw_score: number;
+  weighted_score: number;
+  weightage_percent: number;
+}
+
+export interface DetailedResultResponse {
+  id: string;
+  assessment_id: string;
+  candidate_name: string;
+  candidate_email: string;
+  assessment_title: string;
+  started_at?: string;
+  completed_at?: string;
+  time_spent_seconds?: number;
+  overall_score?: number;
+  passed?: boolean;
+  scoring_status: 'pending' | 'processing' | 'completed';
+  round_scores: RoundScore[];
+  question_evaluations: QuestionEvaluation[];
+  candidate_insights?: Record<string, any>;
+  hiring_recommendation?: string;
 }
 
 // ==================== NEW API INTERFACES ====================
@@ -381,6 +431,7 @@ export const assessmentService = {
       score_min?: number;
       score_max?: number;
       search?: string;
+      status_filter?: 'completed' | 'in_progress' | 'pending';
       page?: number;
       page_size?: number;
     }
@@ -391,6 +442,31 @@ export const assessmentService = {
         { params }
       );
       return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Get detailed results for a specific candidate
+   */
+  async getResultDetails(assessmentId: string, resultId: string): Promise<DetailedResultResponse> {
+    try {
+      const response = await api.get<DetailedResultResponse>(
+        `/assessments/${assessmentId}/results/${resultId}`
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Delete a specific result/attempt
+   */
+  async deleteResult(assessmentId: string, resultId: string): Promise<void> {
+    try {
+      await api.delete(`/assessments/${assessmentId}/results/${resultId}`);
     } catch (error) {
       throw new Error(handleApiError(error));
     }

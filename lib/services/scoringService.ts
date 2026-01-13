@@ -56,6 +56,9 @@ export interface ScoringResponse {
   criteria_scores?: Record<string, { score: number; eligible: boolean; reasoning: string }>;
   unit_consumed: boolean;
   created_at: string;
+  // Scorecard PDF - auto-generated after scoring
+  scorecard_download_url?: string;
+  scorecard_ready?: boolean;
 }
 
 export interface ScoreDetailResponse extends ScoringResponse {
@@ -246,8 +249,24 @@ export const scoringService = {
   async exportScorecards(scoreIds: string[]): Promise<Blob> {
     try {
       const response = await api.post(
-        '/scoring/export/scorecard',
-        { score_ids: scoreIds },
+        '/scoring/scores/bulk-download',
+        scoreIds,
+        { responseType: 'blob' }
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Download single scorecard PDF
+   * Scorecard is auto-generated after scoring
+   */
+  async downloadScorecard(scoreId: string): Promise<Blob> {
+    try {
+      const response = await api.get(
+        `/scoring/scores/${scoreId}/download-pdf`,
         { responseType: 'blob' }
       );
       return response.data;

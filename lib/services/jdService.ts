@@ -99,6 +99,7 @@ export interface JDExtractedParams {
   salary_currency?: string;
   compensation_type?: 'yearly' | 'monthly' | 'hourly' | 'daily';
   must_have_comments?: string[];
+  nice_to_have_comments?: string[];
 }
 
 export interface JDGenerateResponse {
@@ -215,6 +216,41 @@ export interface JDDownstreamListResponse {
   total_pages: number;
   api_version: string;
   source: string;
+}
+
+// Assessment Results Types
+export interface AssessmentResultItem {
+  id: string;
+  invitation_id: string | null;
+  assessment_id: string | null;
+  assessment_title: string;
+  candidate_name: string;
+  candidate_email: string;
+  candidate_phone: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  time_spent_seconds: number | null;
+  hr_score: number | null;
+  technical_score: number | null;
+  coding_score: number | null;
+  overall_score: number | null;
+  passed: boolean | null;
+  status: 'completed' | 'in_progress' | 'pending';
+}
+
+export interface JDAssessmentResultsResponse {
+  items: AssessmentResultItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  completed_count: number;
+  passed_count: number;
+  failed_count: number;
+  in_progress_count: number;
+  pending_count: number;
+  average_score: number | null;
+  jd_title: string;
+  assessments_count: number;
 }
 
 // JD01 & JD03: Access Check Types
@@ -497,6 +533,25 @@ export const jdService = {
   async getAssessments(jdId: string) {
     try {
       const response = await api.get(`/jd/${jdId}/assessments`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Get assessment results for JD
+   * Returns all assessment results from all assessments linked to this JD
+   */
+  async getAssessmentResults(jdId: string, params?: {
+    status_filter?: 'completed' | 'in_progress' | 'pending';
+    passed?: boolean;
+    search?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<JDAssessmentResultsResponse> {
+    try {
+      const response = await api.get<JDAssessmentResultsResponse>(`/jd/${jdId}/assessment-results`, { params });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

@@ -16,7 +16,7 @@ import { AssessmentInterface } from './AssessmentInterface';
 import { ResultsScreen } from './ResultsScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { ErrorScreen } from './ErrorScreen';
-import { ScoringScreen } from './ScoringScreen';
+import { CompletedScreen } from './CompletedScreen';
 import { useRefreshPrevention } from '@/hooks/useRefreshPrevention';
 
 type AssessmentStep =
@@ -28,7 +28,7 @@ type AssessmentStep =
   | 'generating_questions'
   | 'assessment'
   | 'completing'
-  | 'scoring'
+  | 'completed'  // NEW: Shows completion message immediately
   | 'results';
 
 interface CandidateAssessmentPortalProps {
@@ -51,8 +51,39 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // ============================================
+  // CRITICAL REFS FOR BUG PREVENTION
+  // ============================================
+
+  // Ref to track current step (avoids stale closure issues)
+  const stepRef = useRef<AssessmentStep>('loading');
+
+  // Ref to track if assessment flow is active (blocks loadAssessmentInfo)
+  const isFlowActiveRef = useRef(false);
+
+  // Ref to track if we're in the process of starting assessment
+  const isStartingRef = useRef(false);
+
+  // Ref to track if component is mounted (prevents state updates after unmount)
+  const isMountedRef = useRef(true);
+
+  // ============================================
+  // SYNC STEP STATE WITH REF
+  // ============================================
+
+  // Custom setStep that updates both state and ref
+  const setStepSafe = useCallback((newStep: AssessmentStep) => {
+    if (!isMountedRef.current) {
+      console.log('[DEBUG] Ignoring setStep - component unmounted');
+      return;
+    }
+    console.log('[DEBUG] Setting step:', stepRef.current, '->', newStep);
+    stepRef.current = newStep;
+    setStep(newStep);
+  }, []);
+
   // Enable refresh prevention during active assessment
-  const isAssessmentActive = step === 'assessment' || step === 'scoring' || step === 'completing';
+  const isAssessmentActive = step === 'assessment' || step === 'completing' || step === 'completed';
   useRefreshPrevention({
     enabled: isAssessmentActive,
     message: 'You have an ongoing assessment. Leaving this page will end your session.',
@@ -61,16 +92,48 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     },
   });
 
-  // Load assessment info on mount
+  // ============================================
+  // LIFECYCLE EFFECTS
+  // ============================================
+
+  // Track step changes and manage refs
   useEffect(() => {
-    loadAssessmentInfo();
+    console.log('[DEBUG] Step changed to:', step);
+    stepRef.current = step;
+
+    // Reset flags when reaching terminal states or assessment
+    if (step === 'assessment') {
+      console.log('[DEBUG] Step is assessment - resetting isStartingRef');
+      isStartingRef.current = false;
+    }
+
+    // Mark flow as inactive when reaching terminal states
+    if (step === 'completed' || step === 'results' || step === 'error') {
+      console.log('[DEBUG] Reached terminal state - resetting isFlowActiveRef');
+      isFlowActiveRef.current = false;
+    }
+  }, [step]);
+
+  // Component mount/unmount tracking
+  useEffect(() => {
+    isMountedRef.current = true;
+    console.log('[DEBUG] Component mounted');
+
     return () => {
+      isMountedRef.current = false;
+      console.log('[DEBUG] Component unmounting');
       // Cleanup heartbeat and media streams
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
+  }, []);
+
+  // Load assessment info on mount
+  useEffect(() => {
+    console.log('[DEBUG] Mount effect triggered - calling loadAssessmentInfo');
+    loadAssessmentInfo();
   }, [token]);
 
   // Setup proctoring when assessment starts
@@ -83,86 +146,117 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     };
   }, [step]);
 
-  // Poll for scoring results - keeps polling until results are ready
-  const pollForScoringResults = useCallback(() => {
-    const pollInterval = 2000; // Poll every 2 seconds
-
-    const poll = setInterval(async () => {
-      try {
-        const resultData = await candidateService.getResults(token);
-        // Only show results when they are complete and valid
-        if (resultData &&
-            resultData.overall_score !== undefined &&
-            !isNaN(resultData.overall_score) &&
-            resultData.candidate_name) {
-          clearInterval(poll);
-          setResults(resultData);
-          setStep('results');
-          return;
-        }
-      } catch {
-        // Not ready yet - continue polling
-      }
-      // Keep polling - never show error, candidate waits until evaluation completes
-    }, pollInterval);
-
-    // Return cleanup function
-    return () => clearInterval(poll);
-  }, [token]);
+  // ============================================
+  // LOAD ASSESSMENT INFO - WITH MULTIPLE GUARDS
+  // ============================================
 
   const loadAssessmentInfo = async () => {
+    // GUARD 1: Check if flow is active (using ref for reliable check)
+    if (isFlowActiveRef.current) {
+      console.log('[DEBUG] BLOCKED loadAssessmentInfo - flow is active (isFlowActiveRef)');
+      return;
+    }
+
+    // GUARD 2: Check if assessment is being started
+    if (isStartingRef.current) {
+      console.log('[DEBUG] BLOCKED loadAssessmentInfo - assessment is being started (isStartingRef)');
+      return;
+    }
+
+    // GUARD 3: Check current step using REF (not state - avoids stale closure)
+    const currentStep = stepRef.current;
+    const activeFlowSteps: AssessmentStep[] = [
+      'system_check',
+      'generating_questions',
+      'assessment',
+      'completing',
+      'completed'
+    ];
+
+    if (activeFlowSteps.includes(currentStep)) {
+      console.log('[DEBUG] BLOCKED loadAssessmentInfo - currently in active step:', currentStep);
+      return;
+    }
+
+    console.log('[DEBUG] loadAssessmentInfo ALLOWED - current step:', currentStep);
+
     try {
-      setStep('loading');
+      setStepSafe('loading');
       const info = await candidateService.getAssessmentInfo(token);
+
+      if (!isMountedRef.current) return;
+
+      console.log('[DEBUG] Assessment info received:', {
+        attempt_status: info.attempt_status,
+        can_resume: info.can_resume,
+        can_start: info.can_start,
+        consent_accepted: info.consent_accepted,
+        attempt_id: info.attempt_id
+      });
       setAssessmentInfo(info);
 
       // Determine initial step based on status
       if (info.attempt_status === 'completed') {
-        // Already completed, check if results are ready
+        console.log('[DEBUG] Attempt status is COMPLETED');
+        // Already completed - show completed screen or results
         try {
           const resultData = await candidateService.getResults(token);
-          // Check if results are actually ready (not processing)
+          if (!isMountedRef.current) return;
+
           if (resultData && resultData.overall_score !== undefined && !isNaN(resultData.overall_score)) {
             setResults(resultData);
-            setStep('results');
+            setStepSafe('results');
           } else {
-            // Results still processing, show scoring screen and poll
-            setStep('scoring');
-            pollForScoringResults();
+            // Results not ready - show completed screen
+            setStepSafe('completed');
           }
         } catch {
-          // Results not ready, show scoring screen
-          setStep('scoring');
-          pollForScoringResults();
+          // Results not ready - show completed screen
+          if (isMountedRef.current) {
+            setStepSafe('completed');
+          }
         }
       } else if (info.can_resume) {
         // Can resume existing attempt
+        console.log('[DEBUG] Can resume - fetching current question');
         const question = await candidateService.getCurrentQuestion(token);
+        if (!isMountedRef.current) return;
+
         setCurrentQuestion(question);
         setProgress({
           answered: question.question_number - 1,
           total: question.total_questions,
           percent: Math.round(((question.question_number - 1) / question.total_questions) * 100)
         });
-        setStep('assessment');
+        setStepSafe('assessment');
       } else if (!info.consent_accepted) {
         // Need to accept consent FIRST
-        setStep('consent');
+        setStepSafe('consent');
       } else if (info.can_start) {
         // Consent accepted, show landing/preview
-        setStep('landing');
+        setStepSafe('landing');
       } else {
         // Cannot start (expired, etc)
         setError(info.message || 'This assessment is not available');
-        setStep('error');
+        setStepSafe('error');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load assessment');
-      setStep('error');
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Failed to load assessment');
+        setStepSafe('error');
+      }
     }
   };
 
+  // ============================================
+  // ASSESSMENT FLOW HANDLERS
+  // ============================================
+
   const handleBeginClick = async () => {
+    // Mark flow as active IMMEDIATELY
+    isFlowActiveRef.current = true;
+    console.log('[DEBUG] handleBeginClick - marking flow as active');
+
     try {
       // Trigger question generation in background BEFORE system check
       console.log('[PORTAL] Triggering background question generation...');
@@ -170,11 +264,11 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       console.log('[PORTAL] Question generation started, proceeding to system check');
 
       // Proceed to system check while questions generate in parallel
-      setStep('system_check');
+      setStepSafe('system_check');
     } catch (err) {
       console.error('[PORTAL] Failed to prepare assessment:', err);
       // Still proceed to system check - questions will be generated on start if prepare failed
-      setStep('system_check');
+      setStepSafe('system_check');
     }
   };
 
@@ -183,13 +277,20 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       await candidateService.acceptConsent(token);
       setAssessmentInfo(prev => prev ? { ...prev, consent_accepted: true } : null);
       // After consent accepted, show landing/preview page
-      setStep('landing');
+      setStepSafe('landing');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to accept consent');
     }
   };
 
   const handleSystemCheckComplete = async () => {
+    console.log('[DEBUG] handleSystemCheckComplete started');
+
+    // Set BOTH flags to prevent ANY interference
+    isStartingRef.current = true;
+    isFlowActiveRef.current = true;
+    console.log('[DEBUG] Set isStartingRef=true, isFlowActiveRef=true');
+
     try {
       // Check if questions are already ready (from parallel generation)
       console.log('[PORTAL] System check complete, checking if questions are ready...');
@@ -199,14 +300,22 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       if (status.status === 'ready' && status.questions_ready) {
         // Questions are ready! Start immediately
         console.log('[PORTAL] Questions ready, starting assessment immediately');
-        setStep('generating_questions'); // Brief loading state
+        setStepSafe('generating_questions'); // Brief loading state
 
+        console.log('[DEBUG] Calling startAssessment API...');
         const response = await candidateService.startAssessment(token);
+
+        if (!isMountedRef.current) return;
+
+        console.log('[DEBUG] startAssessment response:', response);
         setAssessmentData(response);
 
         if (!response.first_question || response.total_questions === 0) {
+          console.log('[DEBUG] No first question or 0 total questions - showing error');
           setError('Failed to load assessment questions. Please try again.');
-          setStep('error');
+          setStepSafe('error');
+          isStartingRef.current = false;
+          isFlowActiveRef.current = false;
           return;
         }
 
@@ -217,26 +326,36 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
           percent: 0
         });
 
-        setStep('assessment');
+        console.log('[DEBUG] Setting step to assessment');
+        setStepSafe('assessment');
+        // isStartingRef will be reset in useEffect when step becomes 'assessment'
+
       } else if (status.status === 'generating') {
         // Still generating - show loading and poll until ready
         console.log('[PORTAL] Questions still generating, waiting...');
-        setStep('generating_questions');
+        setStepSafe('generating_questions');
 
         // Poll for completion
         const pollForReady = async () => {
           for (let i = 0; i < 30; i++) {  // Max 60 seconds (30 * 2s)
+            if (!isMountedRef.current) return;
+
             await new Promise(resolve => setTimeout(resolve, 2000));
             const checkStatus = await candidateService.getGenerationStatus(token);
 
             if (checkStatus.status === 'ready' && checkStatus.questions_ready) {
               console.log('[PORTAL] Questions now ready!');
               const response = await candidateService.startAssessment(token);
+
+              if (!isMountedRef.current) return;
+
               setAssessmentData(response);
 
               if (!response.first_question || response.total_questions === 0) {
                 setError('Failed to load assessment questions. Please try again.');
-                setStep('error');
+                setStepSafe('error');
+                isStartingRef.current = false;
+                isFlowActiveRef.current = false;
                 return;
               }
 
@@ -247,11 +366,13 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
                 percent: 0
               });
 
-              setStep('assessment');
+              setStepSafe('assessment');
               return;
             } else if (checkStatus.status === 'failed') {
               setError('Question generation failed. Please try again.');
-              setStep('error');
+              setStepSafe('error');
+              isStartingRef.current = false;
+              isFlowActiveRef.current = false;
               return;
             }
           }
@@ -260,18 +381,27 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
           console.log('[PORTAL] Generation timeout, trying to start anyway');
           try {
             const response = await candidateService.startAssessment(token);
+
+            if (!isMountedRef.current) return;
+
             setAssessmentData(response);
             if (response.first_question) {
               setCurrentQuestion(response.first_question);
               setProgress({ answered: 0, total: response.total_questions, percent: 0 });
-              setStep('assessment');
+              setStepSafe('assessment');
             } else {
               setError('Question generation timed out. Please try again.');
-              setStep('error');
+              setStepSafe('error');
+              isStartingRef.current = false;
+              isFlowActiveRef.current = false;
             }
           } catch {
-            setError('Question generation timed out. Please try again.');
-            setStep('error');
+            if (isMountedRef.current) {
+              setError('Question generation timed out. Please try again.');
+              setStepSafe('error');
+              isStartingRef.current = false;
+              isFlowActiveRef.current = false;
+            }
           }
         };
 
@@ -279,14 +409,19 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       } else {
         // Not started or failed - trigger generation now (fallback to old flow)
         console.log('[PORTAL] Generation not started, using fallback flow');
-        setStep('generating_questions');
+        setStepSafe('generating_questions');
 
         const response = await candidateService.startAssessment(token);
+
+        if (!isMountedRef.current) return;
+
         setAssessmentData(response);
 
         if (!response.first_question || response.total_questions === 0) {
           setError('Failed to generate assessment questions. Please try again.');
-          setStep('error');
+          setStepSafe('error');
+          isStartingRef.current = false;
+          isFlowActiveRef.current = false;
           return;
         }
 
@@ -297,12 +432,16 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
           percent: 0
         });
 
-        setStep('assessment');
+        setStepSafe('assessment');
       }
     } catch (err) {
       console.error('[PORTAL] Error in handleSystemCheckComplete:', err);
-      setError(err instanceof Error ? err.message : 'Failed to start assessment');
-      setStep('error');
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Failed to start assessment');
+        setStepSafe('error');
+        isStartingRef.current = false;
+        isFlowActiveRef.current = false;
+      }
     }
   };
 
@@ -331,56 +470,37 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     return response;
   };
 
+  // ============================================
+  // COMPLETION HANDLER - NEW FLOW
+  // ============================================
+
   const handleCompleteAssessment = async () => {
     try {
-      setStep('completing');
+      console.log('[DEBUG] handleCompleteAssessment called');
+      setStepSafe('completing');
 
-      // Try to call complete endpoint (may not be needed if already completed in /answer)
+      // Call complete endpoint to trigger scoring in background
       try {
         await candidateService.completeAssessment(token);
-      } catch {
-        // Ignore if already completed
+        console.log('[DEBUG] completeAssessment API called successfully');
+      } catch (err) {
+        // Ignore if already completed - scoring will still run
+        console.log('[DEBUG] completeAssessment error (may be already completed):', err);
       }
 
-      // Show scoring in progress
-      setStep('scoring');
+      // IMMEDIATELY show completed screen - NO waiting for scoring
+      // Scoring runs in background on the server
+      console.log('[DEBUG] Showing completed screen immediately');
+      setStepSafe('completed');
 
-      // Poll for results (scoring happens in background) - keeps polling until ready
-      const pollInterval = 2000; // 2 seconds
-
-      const pollForResults = async (): Promise<boolean> => {
-        try {
-          const resultData = await candidateService.getResults(token);
-          // Only show results when they are complete and valid
-          if (resultData &&
-              resultData.overall_score !== undefined &&
-              !isNaN(resultData.overall_score) &&
-              resultData.candidate_name) {
-            setResults(resultData);
-            setStep('results');
-            return true;
-          }
-        } catch {
-          // Results not ready yet - continue polling
-        }
-        return false;
-      };
-
-      // First attempt
-      if (await pollForResults()) return;
-
-      // Poll continuously until results are ready - no timeout, candidate waits
-      const poll = setInterval(async () => {
-        if (await pollForResults()) {
-          clearInterval(poll);
-        }
-        // Keep polling - never show error, candidate waits until evaluation completes
-      }, pollInterval);
+      // Reset flow active flag since we're done
+      isFlowActiveRef.current = false;
 
     } catch (err) {
-      // Only show error for actual submission failures, not scoring delays
+      console.error('[PORTAL] Error in handleCompleteAssessment:', err);
       setError(err instanceof Error ? err.message : 'Failed to complete assessment');
-      setStep('error');
+      setStepSafe('error');
+      isFlowActiveRef.current = false;
     }
   };
 
@@ -393,7 +513,10 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     }
   };
 
-  // Proctoring functions
+  // ============================================
+  // PROCTORING FUNCTIONS
+  // ============================================
+
   const startProctoring = async () => {
     // Initialize camera stream for video monitoring
     try {
@@ -402,16 +525,14 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         audio: true
       });
       streamRef.current = stream;
-      setCameraStream(stream); // Update state to trigger re-render
+      setCameraStream(stream);
 
-      // Set the video element's source to the stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
       console.log('[PROCTORING] Camera stream initialized successfully');
     } catch (err) {
       console.error('[PROCTORING] Failed to initialize camera:', err);
-      // Continue without camera - proctoring will still track other events
     }
 
     // Start heartbeat
@@ -421,7 +542,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       } catch (err) {
         console.error('Heartbeat failed:', err);
       }
-    }, 30000); // Every 30 seconds
+    }, 30000);
 
     // Setup event listeners for violations
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -431,7 +552,6 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   };
 
   const stopProctoring = () => {
-    // Stop camera stream
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
@@ -441,13 +561,11 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       videoRef.current.srcObject = null;
     }
 
-    // Stop heartbeat
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
     }
 
-    // Remove event listeners
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     document.removeEventListener('copy', handleCopyAttempt);
     document.removeEventListener('paste', handlePasteAttempt);
@@ -455,40 +573,43 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   };
 
   const handleVisibilityChange = useCallback(() => {
-    if (document.hidden && step === 'assessment') {
+    if (document.hidden && stepRef.current === 'assessment') {
       candidateService.reportProctorEvent(token, {
         event_type: 'tab_switch'
       }).catch(console.error);
     }
-  }, [token, step]);
+  }, [token]);
 
   const handleCopyAttempt = useCallback((e: ClipboardEvent) => {
-    if (step === 'assessment') {
+    if (stepRef.current === 'assessment') {
       e.preventDefault();
       candidateService.reportProctorEvent(token, {
         event_type: 'copy_attempt'
       }).catch(console.error);
     }
-  }, [token, step]);
+  }, [token]);
 
   const handlePasteAttempt = useCallback((e: ClipboardEvent) => {
-    if (step === 'assessment' && currentQuestion?.round_type !== 'coding') {
+    if (stepRef.current === 'assessment' && currentQuestion?.round_type !== 'coding') {
       e.preventDefault();
       candidateService.reportProctorEvent(token, {
         event_type: 'paste_attempt'
       }).catch(console.error);
     }
-  }, [token, step, currentQuestion]);
+  }, [token, currentQuestion]);
 
   const handleWindowBlur = useCallback(() => {
-    if (step === 'assessment') {
+    if (stepRef.current === 'assessment') {
       candidateService.reportProctorEvent(token, {
         event_type: 'window_blur'
       }).catch(console.error);
     }
-  }, [token, step]);
+  }, [token]);
 
-  // Render based on current step
+  // ============================================
+  // RENDER
+  // ============================================
+
   switch (step) {
     case 'loading':
       return <LoadingScreen message="Loading assessment..." />;
@@ -497,7 +618,12 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       return (
         <ErrorScreen
           message={error || 'An error occurred'}
-          onRetry={loadAssessmentInfo}
+          onRetry={() => {
+            // Reset all flags before retry
+            isFlowActiveRef.current = false;
+            isStartingRef.current = false;
+            loadAssessmentInfo();
+          }}
         />
       );
 
@@ -516,7 +642,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
           onAccept={handleConsentAccept}
           onDecline={() => {
             setError('You must accept the terms and conditions to proceed with the assessment.');
-            setStep('error');
+            setStepSafe('error');
           }}
         />
       );
@@ -526,7 +652,10 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         <SystemCheck
           token={token}
           onComplete={handleSystemCheckComplete}
-          onBack={() => setStep('landing')}
+          onBack={() => {
+            isFlowActiveRef.current = false;
+            setStepSafe('landing');
+          }}
         />
       );
 
@@ -539,7 +668,6 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       );
 
     case 'assessment':
-      // Ensure currentQuestion is loaded before rendering
       if (!currentQuestion) {
         return (
           <LoadingScreen
@@ -573,8 +701,14 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         />
       );
 
-    case 'scoring':
-      return <ScoringScreen />;
+    case 'completed':
+      // NEW: Show completion message - scoring runs in background
+      return (
+        <CompletedScreen
+          assessmentTitle={assessmentInfo?.title}
+          candidateName={assessmentInfo?.candidate_name}
+        />
+      );
 
     case 'results':
       return (

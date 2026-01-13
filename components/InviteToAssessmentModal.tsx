@@ -1,13 +1,16 @@
-import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, FileText, Users, Upload, Database, Target } from 'lucide-react';
-import { useState } from 'react';
+import { X, Mail, Plus, Trash2, Send, CheckCircle, FileText, AlertTriangle, Loader2, ArrowLeft, Clock, Sliders, Brain, Code, Users, Sparkles } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
+import { assessmentService } from '@/lib/services/assessmentService';
+import { jdService } from '@/lib/services';
 
 interface InviteToAssessmentModalProps {
   onClose: () => void;
   jobTitle: string;
   jobId: string;
   candidate?: {
-    candidateName: string;
+    name?: string;
+    candidateName?: string;
     email: string;
   };
 }
@@ -20,61 +23,130 @@ interface CandidateEmail {
   resumeId?: string;
 }
 
-interface Resume {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  position: string;
-  experience: string;
-  skills: string[];
-}
-
 interface Assessment {
   id: string;
   title: string;
-  duration: string;
-  questions: number;
-  sections: number;
+  duration_minutes: number;
+  status: string;
+  hr_enabled: boolean;
+  technical_enabled: boolean;
+  coding_enabled: boolean;
 }
 
+interface SectionConfig {
+  name: 'HR' | 'Technical' | 'Coding';
+  percentage: number;
+  topics: string[];
+  enabled: boolean;
+}
+
+type ModalView = 'loading' | 'no-assessment' | 'invite' | 'create-assessment';
+
 export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, candidate }: InviteToAssessmentModalProps) {
-  const [inputMode, setInputMode] = useState<'manual' | 'database'>('manual');
+  const [view, setView] = useState<ModalView>('loading');
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [selectedAssessment, setSelectedAssessment] = useState<string>('');
+  const [isLoadingAssessments, setIsLoadingAssessments] = useState(true);
+
+  // Candidate state
+  const candidateName = candidate?.name || candidate?.candidateName || '';
   const [candidates, setCandidates] = useState<CandidateEmail[]>(
-    candidate 
-      ? [{ id: '1', name: candidate.candidateName, email: candidate.email, source: 'manual' }]
+    candidateName && candidate?.email
+      ? [{ id: '1', name: candidateName, email: candidate.email, source: 'manual' }]
       : [{ id: '1', name: '', email: '', source: 'manual' }]
   );
-  const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedAssessment, setSelectedAssessment] = useState<string>('');
-  
-  // Mock resume database
-  const [resumeDatabase] = useState<Resume[]>([
-    { id: 'r1', name: 'Sarah Johnson', email: 'sarah.j@email.com', phone: '+1-555-0123', position: 'Senior Developer', experience: '5 years', skills: ['React', 'TypeScript', 'Node.js'] },
-    { id: 'r2', name: 'Michael Chen', email: 'mchen@email.com', phone: '+1-555-0124', position: 'Full Stack Engineer', experience: '3 years', skills: ['Python', 'Django', 'React'] },
-    { id: 'r3', name: 'Emily Rodriguez', email: 'emily.r@email.com', phone: '+1-555-0125', position: 'Frontend Developer', experience: '4 years', skills: ['Vue.js', 'JavaScript', 'CSS'] },
-    { id: 'r4', name: 'David Kim', email: 'dkim@email.com', phone: '+1-555-0126', position: 'Backend Developer', experience: '6 years', skills: ['Java', 'Spring Boot', 'MySQL'] },
-    { id: 'r5', name: 'Jessica Martinez', email: 'jmartinez@email.com', phone: '+1-555-0127', position: 'DevOps Engineer', experience: '5 years', skills: ['Docker', 'Kubernetes', 'AWS'] },
-    { id: 'r6', name: 'Robert Taylor', email: 'rtaylor@email.com', phone: '+1-555-0128', position: 'Data Scientist', experience: '4 years', skills: ['Python', 'Machine Learning', 'TensorFlow'] },
-    { id: 'r7', name: 'John Doe', email: 'john.doe@email.com', phone: '+1-555-0129', position: 'Senior Java Developer', experience: '7 years', skills: ['Java', 'Spring Boot', 'AWS'] },
-    { id: 'r8', name: 'Jane Smith', email: 'jane.smith@email.com', phone: '+1-555-0130', position: 'Python Developer', experience: '4 years', skills: ['Python', 'Django', 'PostgreSQL'] },
-  ]);
-  
-  // Mock assessments linked to this JD
-  const [assessments] = useState<Assessment[]>([
-    { id: 'a1', title: 'Technical Screening - Senior Developer', duration: '45 mins', questions: 25, sections: 3 },
-    { id: 'a2', title: 'Full Stack Developer Assessment', duration: '60 mins', questions: 30, sections: 4 },
-    { id: 'a3', title: 'Coding Challenge - Advanced', duration: '90 mins', questions: 15, sections: 2 },
-  ]);
-  
-  const [customMessage, setCustomMessage] = useState(
-    `Hi [Candidate Name],\n\nYou have been invited to complete an assessment for the position of ${jobTitle}.\n\nThis assessment is an important part of our recruitment process and will help us understand your skills and experience better.\n\nPlease click the link below to access the assessment.\n\nBest regards,\nTalentFlow Recruitment Team`
-  );
+
+  // Invite state
   const [expiryDays, setExpiryDays] = useState(7);
-  const [sendCopy, setSendCopy] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // Duplicate invitation popup state
+  const [showDuplicateError, setShowDuplicateError] = useState(false);
+  const [duplicateEmails, setDuplicateEmails] = useState<string[]>([]);
+
+  // Assessment Creation State
+  const [assessmentStep, setAssessmentStep] = useState<'configure' | 'preview'>('configure');
+  const [sections, setSections] = useState<SectionConfig[]>([
+    { name: 'HR', percentage: 20, topics: [], enabled: true },
+    { name: 'Technical', percentage: 80, topics: [], enabled: true },
+    { name: 'Coding', percentage: 0, topics: [], enabled: false },
+  ]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedAssessment, setGeneratedAssessment] = useState<any>(null);
+  const [jdData, setJdData] = useState<any>(null);
+  const [selectedCodingLanguages, setSelectedCodingLanguages] = useState<string[]>([]);
+
+  const programmingLanguages = [
+    'Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'C#', 'Go',
+    'Rust', 'Ruby', 'PHP', 'Swift', 'Kotlin', 'Scala', 'R', 'SQL'
+  ];
+
+  // Fetch assessments for this JD on mount
+  useEffect(() => {
+    fetchAssessments();
+  }, [jobId]);
+
+  const fetchAssessments = async () => {
+    setIsLoadingAssessments(true);
+    try {
+      const response = await assessmentService.list({ jd_id: jobId });
+      const activeAssessments = response.items.filter(
+        (a: any) => a.status === 'published' || a.status === 'active' || a.status === 'draft'
+      );
+      setAssessments(activeAssessments);
+
+      if (activeAssessments.length === 0) {
+        setView('no-assessment');
+      } else {
+        setView('invite');
+        // Auto-select if only one assessment
+        if (activeAssessments.length === 1) {
+          setSelectedAssessment(activeAssessments[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch assessments:', error);
+      setView('no-assessment');
+    } finally {
+      setIsLoadingAssessments(false);
+    }
+  };
+
+  // Fetch JD data when entering create-assessment view
+  const fetchJDData = async () => {
+    try {
+      const jd = await jdService.get(jobId);
+      setJdData(jd);
+
+      // Configure sections based on JD
+      const jdRequiresCoding = jd.coding_required === true;
+      const hasLanguages = jd.supported_languages && jd.supported_languages.length > 0;
+
+      if (jdRequiresCoding && hasLanguages) {
+        setSections([
+          { name: 'HR', percentage: 20, topics: [], enabled: true },
+          { name: 'Technical', percentage: 70, topics: [], enabled: true },
+          { name: 'Coding', percentage: 10, topics: [], enabled: true },
+        ]);
+        setSelectedCodingLanguages(jd.supported_languages);
+      } else {
+        setSections([
+          { name: 'HR', percentage: 20, topics: [], enabled: true },
+          { name: 'Technical', percentage: 80, topics: [], enabled: true },
+          { name: 'Coding', percentage: 0, topics: [], enabled: false },
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch JD:', error);
+    }
+  };
+
+  const handleStartCreateAssessment = () => {
+    fetchJDData();
+    setView('create-assessment');
+    setAssessmentStep('configure');
+  };
 
   const addCandidate = () => {
     setCandidates([...candidates, { id: Date.now().toString(), name: '', email: '', source: 'manual' }]);
@@ -87,116 +159,582 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   };
 
   const updateCandidate = (id: string, field: 'name' | 'email', value: string) => {
-    setCandidates(candidates.map(c => 
+    setCandidates(candidates.map(c =>
       c.id === id ? { ...c, [field]: value } : c
     ));
   };
-  
-  // Handle resume selection from database
-  const toggleResumeSelection = (resumeId: string) => {
-    setSelectedResumes(prev =>
-      prev.includes(resumeId)
-        ? prev.filter(id => id !== resumeId)
-        : [...prev, resumeId]
-    );
-  };
-  
-  // Add selected resumes to candidates list
-  const handleAddFromDatabase = () => {
-    const selectedResumeData = resumeDatabase.filter(r => selectedResumes.includes(r.id));
-    const newCandidates = selectedResumeData.map(resume => ({
-      id: Date.now().toString() + Math.random(),
-      name: resume.name,
-      email: resume.email,
-      source: 'database' as const,
-      resumeId: resume.id
-    }));
-    
-    // Filter out manual entries with empty fields
-    const validManualCandidates = candidates.filter(c => 
-      c.source === 'manual' && c.name.trim() && c.email.trim()
-    );
-    
-    setCandidates([...validManualCandidates, ...newCandidates]);
-    setSelectedResumes([]);
-    setInputMode('manual');
-  };
-  
-  // Filter resumes based on search query
-  const filteredResumes = resumeDatabase.filter(resume =>
-    resume.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    resume.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    resume.position.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
-  const handleSend = () => {
+  const handleSendInvitations = async () => {
     if (!selectedAssessment) {
-      alert('Please select an assessment');
+      toast.error({ title: 'Select Assessment', description: 'Please select an assessment first' });
       return;
     }
-    
+
+    const validCandidates = candidates.filter(c => c.name.trim() && c.email.trim() && c.email.includes('@'));
+    if (validCandidates.length === 0) {
+      toast.error({ title: 'No Valid Candidates', description: 'Please add at least one candidate with valid name and email' });
+      return;
+    }
+
     setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setShowSuccess(true);
-      
-      // ✅ ASSESSMENT SENT SUCCESS FEEDBACK
-      toast.success({
-        title: 'Assessment invitations sent!',
-        description: `${candidates.length} candidate${candidates.length > 1 ? 's' : ''} will receive the assessment for ${jobTitle}`,
-        action: {
-          label: 'View Assessments',
-          onClick: () => {
-            // Navigate to assessments page
-            toast.info('Navigating to assessments...');
+    try {
+      const results = await Promise.allSettled(
+        validCandidates.map(candidate =>
+          assessmentService.invite(selectedAssessment, {
+            candidate_name: candidate.name,
+            candidate_email: candidate.email,
+          })
+        )
+      );
+
+      // Check for duplicate errors (409 Conflict)
+      const duplicates: string[] = [];
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const error = result.reason;
+          const is409Error = error?.response?.status === 409 ||
+                            error?.message?.includes('status code 409') ||
+                            error?.message?.includes('already been invited') ||
+                            error?.message?.includes('DUPLICATE_INVITATION');
+          if (is409Error) {
+            duplicates.push(validCandidates[index].email);
           }
         }
       });
-      
-      setTimeout(() => {
-        setShowSuccess(false);
-        onClose();
-      }, 2000);
-    }, 1500);
+
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+
+      if (duplicates.length > 0 && successful === 0) {
+        setDuplicateEmails(duplicates);
+        setShowDuplicateError(true);
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (duplicates.length > 0 && successful > 0) {
+        setShowSuccess(true);
+        toast.warning({
+          title: 'Partial Success',
+          description: `${successful} sent, ${duplicates.length} already invited: ${duplicates.join(', ')}`,
+        });
+        setTimeout(() => {
+          setShowSuccess(false);
+          onClose();
+        }, 3000);
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (successful > 0) {
+        setShowSuccess(true);
+        toast.success({
+          title: 'Invitations Sent!',
+          description: `${successful} invitation${successful > 1 ? 's' : ''} sent successfully`,
+        });
+
+        setTimeout(() => {
+          setShowSuccess(false);
+          onClose();
+        }, 2000);
+      } else {
+        toast.error({ title: 'Failed to Send', description: 'Could not send invitations. Please try again.' });
+      }
+    } catch (error: any) {
+      console.error('Failed to send invitations:', error);
+      toast.error({ title: 'Error', description: error.message || 'Failed to send invitations' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const isValid = 
-    candidates.every(c => c.name.trim() && c.email.trim() && c.email.includes('@')) &&
+  // Assessment Creation Functions
+  const updatePercentage = (sectionName: string, value: number) => {
+    setSections(sections.map(s =>
+      s.name === sectionName ? { ...s, percentage: Math.max(0, Math.min(100, value)) } : s
+    ));
+  };
+
+  const toggleSection = (sectionName: string) => {
+    // Don't allow toggling coding if JD doesn't support it
+    if (sectionName === 'Coding' && !jdData?.coding_required) return;
+
+    setSections(sections.map(s =>
+      s.name === sectionName ? { ...s, enabled: !s.enabled } : s
+    ));
+  };
+
+  const getTotalPercentage = () => {
+    return sections.filter(s => s.enabled).reduce((acc, s) => acc + s.percentage, 0);
+  };
+
+  const handleGenerateAssessment = async () => {
+    if (getTotalPercentage() !== 100) {
+      toast.error({ title: 'Invalid Configuration', description: 'Section percentages must total 100%' });
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const enabledSections = sections.filter(s => s.enabled);
+
+      const assessmentData = {
+        jd_id: jobId,
+        title: `Assessment for ${jobTitle}`,
+        description: `AI-generated assessment for ${jobTitle}`,
+        duration_minutes: 30,
+        hr_enabled: enabledSections.some(s => s.name === 'HR'),
+        hr_percentage: sections.find(s => s.name === 'HR')?.percentage || 0,
+        hr_topics: sections.find(s => s.name === 'HR')?.topics || [],
+        technical_enabled: enabledSections.some(s => s.name === 'Technical'),
+        technical_percentage: sections.find(s => s.name === 'Technical')?.percentage || 0,
+        technical_topics: sections.find(s => s.name === 'Technical')?.topics || [],
+        coding_enabled: enabledSections.some(s => s.name === 'Coding'),
+        coding_percentage: sections.find(s => s.name === 'Coding')?.percentage || 0,
+        coding_topics: sections.find(s => s.name === 'Coding')?.topics || [],
+        coding_languages: selectedCodingLanguages,
+      };
+
+      const response = await assessmentService.create(assessmentData);
+      setGeneratedAssessment(response);
+      setAssessmentStep('preview');
+
+      toast.success({ title: 'Assessment Created', description: 'Assessment configuration saved successfully' });
+    } catch (error: any) {
+      console.error('Failed to create assessment:', error);
+      toast.error({ title: 'Error', description: error.message || 'Failed to create assessment' });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handlePublishAssessment = async () => {
+    if (!generatedAssessment?.id) return;
+
+    try {
+      await assessmentService.publish(generatedAssessment.id);
+      toast.success({ title: 'Assessment Published', description: 'You can now invite candidates' });
+
+      // Refresh assessments and switch to invite view
+      await fetchAssessments();
+      setSelectedAssessment(generatedAssessment.id);
+      setView('invite');
+    } catch (error: any) {
+      console.error('Failed to publish assessment:', error);
+      toast.error({ title: 'Error', description: error.message || 'Failed to publish assessment' });
+    }
+  };
+
+  const isValid =
+    candidates.some(c => c.name.trim() && c.email.trim() && c.email.includes('@')) &&
     selectedAssessment !== '';
 
   const selectedAssessmentData = assessments.find(a => a.id === selectedAssessment);
-  const assessmentLink = selectedAssessmentData
-    ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://talentflow.app'}/assessment/${selectedAssessmentData.id}`
-    : '';
+  const totalPercentage = getTotalPercentage();
+  const isPercentageValid = totalPercentage === 100;
 
+  // Success Screen
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8 text-center">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-10 h-10 text-green-600" />
           </div>
-          <h3 className="text-gray-900 mb-2">Assessment Invitations Sent!</h3>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">Invitations Sent!</h3>
           <p className="text-gray-600 text-sm">
-            {candidates.length} candidate{candidates.length > 1 ? 's' : ''} will receive the assessment for {jobTitle}
+            {candidates.filter(c => c.name.trim() && c.email.trim()).length} candidate{candidates.length > 1 ? 's' : ''} will receive the assessment invitation
           </p>
         </div>
       </div>
     );
   }
 
+  // Duplicate Invitation Error Screen
+  if (showDuplicateError) {
+    return (
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-10 h-10 text-amber-600" />
+            </div>
+            <h3 className="text-gray-900 text-lg font-medium mb-2">Invitation Already Sent</h3>
+            <p className="text-gray-600 text-sm">
+              {duplicateEmails.length === 1 ? (
+                <>An invitation has already been sent to <span className="font-medium text-gray-800">{duplicateEmails[0]}</span> for this assessment.</>
+              ) : (
+                <>Invitations have already been sent to the following emails for this assessment:</>
+              )}
+            </p>
+            {duplicateEmails.length > 1 && (
+              <div className="mt-2 p-2 bg-amber-50 rounded-lg">
+                {duplicateEmails.map((email, idx) => (
+                  <p key={idx} className="text-sm font-medium text-amber-800">{email}</p>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <p className="text-sm text-gray-700 mb-2">You can:</p>
+            <ul className="text-sm text-gray-600 space-y-1">
+              <li>• Try a <span className="font-medium">different email address</span></li>
+              <li>• Send invitation for a <span className="font-medium">different assessment</span></li>
+              <li>• Check the candidate&apos;s existing invitation status in Assessment Results</li>
+            </ul>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setShowDuplicateError(false);
+                setDuplicateEmails([]);
+              }}
+              className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+            >
+              Try Different Email
+            </button>
+            <button
+              onClick={() => {
+                setShowDuplicateError(false);
+                setDuplicateEmails([]);
+                onClose();
+              }}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading Screen
+  if (view === 'loading' || isLoadingAssessments) {
+    return (
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8 text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-gray-600 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Assessments...</h3>
+          <p className="text-gray-500 text-sm">Checking for existing assessments</p>
+        </div>
+      </div>
+    );
+  }
+
+  // No Assessment Screen - With blur background
+  if (view === 'no-assessment') {
+    return (
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">No Assessment Found</h2>
+                <p className="text-amber-100 text-sm">{jobTitle}</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 text-center">
+            <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FileText className="w-10 h-10 text-amber-600" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Assessment Created</h3>
+            <p className="text-gray-600 mb-6">
+              There is no assessment configured for this job description yet.
+              Create an assessment first to invite candidates.
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleStartCreateAssessment}
+                className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg hover:from-green-700 hover:to-teal-700 transition-colors flex items-center justify-center gap-2 font-medium"
+              >
+                <Sparkles className="w-5 h-5" />
+                Create Assessment
+              </button>
+              <button
+                onClick={onClose}
+                className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Create Assessment Screen - Inline Configuration
+  if (view === 'create-assessment') {
+    return (
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setView('no-assessment')}
+                className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                <Sliders className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">Configure Assessment</h2>
+                <p className="text-purple-100 text-sm">{jobTitle}</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {assessmentStep === 'configure' && (
+              <div className="space-y-6">
+                {/* Duration Info */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">Fixed Duration: 30 minutes</p>
+                    <p className="text-xs text-blue-700">All assessments are standardized to 30 minutes</p>
+                  </div>
+                </div>
+
+                {/* Sections Configuration */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Assessment Sections</h3>
+                  <div className="space-y-4">
+                    {sections.map((section) => {
+                      const isCodingLocked = section.name === 'Coding' && !jdData?.coding_required;
+                      const Icon = section.name === 'HR' ? Users : section.name === 'Technical' ? Brain : Code;
+                      const colorClass = section.name === 'HR' ? 'blue' : section.name === 'Technical' ? 'purple' : 'green';
+
+                      return (
+                        <div
+                          key={section.name}
+                          className={`border rounded-xl p-4 transition-all ${
+                            section.enabled
+                              ? `border-${colorClass}-200 bg-${colorClass}-50/50`
+                              : 'border-gray-200 bg-gray-50 opacity-60'
+                          } ${isCodingLocked ? 'cursor-not-allowed' : ''}`}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                section.enabled ? `bg-${colorClass}-100` : 'bg-gray-200'
+                              }`}>
+                                <Icon className={`w-5 h-5 ${section.enabled ? `text-${colorClass}-600` : 'text-gray-400'}`} />
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-gray-900">{section.name} Round</h4>
+                                <p className="text-xs text-gray-500">
+                                  {section.name === 'HR' && 'Behavioral & cultural fit questions'}
+                                  {section.name === 'Technical' && 'Domain knowledge & problem solving'}
+                                  {section.name === 'Coding' && (isCodingLocked ? 'Enable in JD settings to unlock' : 'Live coding challenges')}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {section.enabled && (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    value={section.percentage}
+                                    onChange={(e) => updatePercentage(section.name, parseInt(e.target.value) || 0)}
+                                    className="w-16 px-2 py-1 border border-gray-300 rounded-lg text-center text-sm"
+                                    min="0"
+                                    max="100"
+                                  />
+                                  <span className="text-sm text-gray-500">%</span>
+                                </div>
+                              )}
+                              <button
+                                onClick={() => !isCodingLocked && toggleSection(section.name)}
+                                disabled={isCodingLocked}
+                                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                                  isCodingLocked
+                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    : section.enabled
+                                      ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                }`}
+                              >
+                                {section.enabled ? 'Disable' : 'Enable'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Percentage Validation */}
+                <div className={`p-4 rounded-lg ${isPercentageValid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`font-medium ${isPercentageValid ? 'text-green-700' : 'text-red-700'}`}>
+                      Total: {totalPercentage}%
+                    </span>
+                    {!isPercentageValid && (
+                      <span className="text-sm text-red-600">Must equal 100%</span>
+                    )}
+                    {isPercentageValid && (
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Coding Languages (if coding enabled) */}
+                {sections.find(s => s.name === 'Coding')?.enabled && (
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-2">Programming Languages</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {programmingLanguages.slice(0, 8).map((lang) => (
+                        <button
+                          key={lang}
+                          onClick={() => {
+                            if (selectedCodingLanguages.includes(lang)) {
+                              setSelectedCodingLanguages(selectedCodingLanguages.filter(l => l !== lang));
+                            } else {
+                              setSelectedCodingLanguages([...selectedCodingLanguages, lang]);
+                            }
+                          }}
+                          className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                            selectedCodingLanguages.includes(lang)
+                              ? 'bg-green-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {lang}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {assessmentStep === 'preview' && generatedAssessment && (
+              <div className="space-y-6">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                  <div>
+                    <p className="font-medium text-green-900">Assessment Created Successfully!</p>
+                    <p className="text-sm text-green-700">Review and publish to start inviting candidates</p>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">{generatedAssessment.title}</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-500">Duration:</span>
+                      <span className="ml-2 font-medium">{generatedAssessment.duration_minutes} minutes</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Status:</span>
+                      <span className="ml-2 px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">Draft</span>
+                    </div>
+                    {generatedAssessment.hr_enabled && (
+                      <div>
+                        <span className="text-gray-500">HR Round:</span>
+                        <span className="ml-2 font-medium">{generatedAssessment.hr_percentage}%</span>
+                      </div>
+                    )}
+                    {generatedAssessment.technical_enabled && (
+                      <div>
+                        <span className="text-gray-500">Technical Round:</span>
+                        <span className="ml-2 font-medium">{generatedAssessment.technical_percentage}%</span>
+                      </div>
+                    )}
+                    {generatedAssessment.coding_enabled && (
+                      <div>
+                        <span className="text-gray-500">Coding Round:</span>
+                        <span className="ml-2 font-medium">{generatedAssessment.coding_percentage}%</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+            <button
+              onClick={() => assessmentStep === 'preview' ? setAssessmentStep('configure') : setView('no-assessment')}
+              className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              {assessmentStep === 'preview' ? 'Back to Configure' : 'Cancel'}
+            </button>
+
+            {assessmentStep === 'configure' ? (
+              <button
+                onClick={handleGenerateAssessment}
+                disabled={!isPercentageValid || isGenerating}
+                className="px-6 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Create Assessment
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={handlePublishAssessment}
+                className="px-6 py-2 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg hover:from-green-700 hover:to-teal-700 transition-colors flex items-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Publish & Continue to Invite
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Invite Screen (Main) - With blur background
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-gray-800 px-6 py-5 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-green-600 to-teal-600 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
               <Mail className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-white">Invite Candidates for Assessment</h2>
+              <h2 className="text-lg font-semibold text-white">Invite Candidates</h2>
               <p className="text-green-100 text-sm">{jobTitle}</p>
             </div>
           </div>
@@ -209,321 +747,114 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {/* Job Info Banner */}
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center">
-                <Target className="w-6 h-6 text-white" />
-              </div>
-              <div className="flex-1">
-                <div className="text-gray-900 mb-1">{jobTitle}</div>
-                <div className="text-sm text-gray-600">
-                  Job ID: {jobId}
-                </div>
-              </div>
-            </div>
-          </div>
-
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Assessment Selection */}
-          <div className="mb-6">
-            <label className="text-gray-900 mb-2 block">Select Assessment *</label>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select Assessment *</label>
             <select
               value={selectedAssessment}
               onChange={(e) => setSelectedAssessment(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
             >
-              <option value="">-- Choose an assessment linked to this job --</option>
+              <option value="">-- Choose an assessment --</option>
               {assessments.map((assessment) => (
                 <option key={assessment.id} value={assessment.id}>
-                  {assessment.title} • {assessment.duration} • {assessment.questions} questions
+                  {assessment.title} • {assessment.duration_minutes} min • {assessment.status}
                 </option>
               ))}
             </select>
-            <p className="text-xs text-gray-500 mt-1">
-              Only assessments linked to this job description are available
-            </p>
-          </div>
-
-          {/* Candidate Selection */}
-          <div className="mb-6">
-            {/* Mode Switcher */}
-            <div className="flex items-center justify-between mb-4">
-              <label className="text-gray-900">Select Candidates *</label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setInputMode('manual')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
-                    inputMode === 'manual'
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <Upload className="w-4 h-4" />
-                  Type Manually
-                </button>
-                <button
-                  onClick={() => setInputMode('database')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
-                    inputMode === 'database'
-                      ? 'bg-gray-800 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <Database className="w-4 h-4" />
-                  Select from Database
-                </button>
-              </div>
-            </div>
-
-            {/* Manual Input Mode */}
-            {inputMode === 'manual' && (
-              <>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm text-gray-600">Enter candidate details manually</p>
-                  <button
-                    onClick={addCandidate}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Candidate
-                  </button>
-                </div>
-                
-                <div className="space-y-3">
-                  {candidates.map((candidate, index) => (
-                    <div key={candidate.id} className={`flex items-center gap-3 p-4 border rounded-lg ${
-                      candidate.source === 'database'
-                        ? 'bg-gray-50 border-gray-300'
-                        : 'bg-gray-50 border-gray-200'
-                    }`}>
-                      {candidate.source === 'database' && (
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-                            <Database className="w-4 h-4 text-white" />
-                          </div>
-                        </div>
-                      )}
-                      <div className="flex-1 grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-xs text-gray-600 mb-1 block">Full Name</label>
-                          <input
-                            type="text"
-                            value={candidate.name}
-                            onChange={(e) => updateCandidate(candidate.id, 'name', e.target.value)}
-                            placeholder="e.g., John Doe"
-                            readOnly={candidate.source === 'database'}
-                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                              candidate.source === 'database' ? 'bg-gray-100 cursor-not-allowed' : ''
-                            }`}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-600 mb-1 block">Email Address</label>
-                          <input
-                            type="email"
-                            value={candidate.email}
-                            onChange={(e) => updateCandidate(candidate.id, 'email', e.target.value)}
-                            placeholder="e.g., john.doe@email.com"
-                            readOnly={candidate.source === 'database'}
-                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                              candidate.source === 'database' ? 'bg-gray-100 cursor-not-allowed' : ''
-                            }`}
-                          />
-                        </div>
-                      </div>
-                      {(candidates.length > 1 || candidate.source === 'database') && (
-                        <button
-                          onClick={() => removeCandidate(candidate.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* Database Selection Mode */}
-            {inputMode === 'database' && (
-              <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-4">
-                {/* Search */}
-                <div className="mb-4">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by name, email, or position..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  />
-                </div>
-
-                {/* Resume List */}
-                <div className="max-h-96 overflow-y-auto space-y-2 mb-4">
-                  {filteredResumes.map((resume) => (
-                    <div
-                      key={resume.id}
-                      onClick={() => toggleResumeSelection(resume.id)}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                        selectedResumes.includes(resume.id)
-                          ? 'bg-gray-100 border-gray-800'
-                          : 'bg-white border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 mt-1">
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                            selectedResumes.includes(resume.id)
-                              ? 'bg-gray-800 border-gray-800'
-                              : 'bg-white border-gray-300'
-                          }`}>
-                            {selectedResumes.includes(resume.id) && (
-                              <CheckCircle className="w-4 h-4 text-white" />
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="text-gray-900 font-medium">{resume.name}</div>
-                            <div className="text-xs text-gray-500">{resume.experience}</div>
-                          </div>
-                          <div className="text-sm text-gray-600 mb-2">{resume.email}</div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs text-gray-500">{resume.position}</span>
-                            <span className="text-xs text-gray-400">•</span>
-                            <span className="text-xs text-gray-500">{resume.phone}</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {resume.skills.slice(0, 3).map((skill, idx) => (
-                              <span key={idx} className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
-                                {skill}
-                              </span>
-                            ))}
-                            {resume.skills.length > 3 && (
-                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                                +{resume.skills.length - 3} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex items-center justify-between pt-4 border-t border-gray-300">
-                  <div className="text-sm text-gray-800">
-                    {selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected
-                  </div>
-                  <button
-                    onClick={handleAddFromDatabase}
-                    disabled={selectedResumes.length === 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                  >
-                    <Users className="w-4 h-4" />
-                    Add Selected Candidates
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Assessment Link (Only shown when assessment is selected) */}
-          {selectedAssessment && (
-            <div className="mb-6">
-              <label className="text-gray-900 mb-2 block">Assessment Link</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={assessmentLink}
-                  readOnly
-                  className="flex-1 px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-600"
-                />
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(assessmentLink);
-                    alert('Link copied to clipboard!');
-                  }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-                >
-                  <Copy className="w-4 h-4" />
-                  Copy
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                This unique link will be included in the email invitation
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-xs text-gray-500">
+                {assessments.length} assessment{assessments.length !== 1 ? 's' : ''} available for this job
               </p>
-            </div>
-          )}
-
-          {/* Custom Message */}
-          <div className="mb-6">
-            <label className="text-gray-900 mb-2 block">Email Message</label>
-            <textarea
-              value={customMessage}
-              onChange={(e) => setCustomMessage(e.target.value)}
-              rows={6}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Use [Candidate Name] as a placeholder - it will be replaced with each candidate's name
-            </p>
-          </div>
-
-          {/* Settings */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div>
-              <label className="text-gray-900 mb-2 block">Link Expiry</label>
-              <select
-                value={expiryDays}
-                onChange={(e) => setExpiryDays(Number(e.target.value))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              <button
+                onClick={handleStartCreateAssessment}
+                className="text-xs text-green-600 hover:text-green-700 flex items-center gap-1"
               >
-                <option value={1}>1 day</option>
-                <option value={3}>3 days</option>
-                <option value={7}>7 days</option>
-                <option value={14}>14 days</option>
-                <option value={30}>30 days</option>
-                <option value={0}>No expiry</option>
-              </select>
-            </div>
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={sendCopy}
-                  onChange={(e) => setSendCopy(e.target.checked)}
-                  className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                />
-                <span className="text-sm text-gray-700">Send me a copy</span>
-              </label>
+                <Plus className="w-3 h-3" />
+                Create New Assessment
+              </button>
             </div>
           </div>
 
-          {/* Email Preview */}
+          {/* Candidates */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-medium text-gray-700">Candidates *</label>
+              <button
+                onClick={addCandidate}
+                className="text-sm text-green-600 hover:text-green-700 flex items-center gap-1"
+              >
+                <Plus className="w-4 h-4" />
+                Add Candidate
+              </button>
+            </div>
+            <div className="space-y-3">
+              {candidates.map((cand) => (
+                <div key={cand.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex-1 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Full Name</label>
+                      <input
+                        type="text"
+                        value={cand.name}
+                        onChange={(e) => updateCandidate(cand.id, 'name', e.target.value)}
+                        placeholder="John Doe"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Email Address</label>
+                      <input
+                        type="email"
+                        value={cand.email}
+                        onChange={(e) => updateCandidate(cand.id, 'email', e.target.value)}
+                        placeholder="john.doe@email.com"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  {candidates.length > 1 && (
+                    <button
+                      onClick={() => removeCandidate(cand.id)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Expiry Settings */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Link Expiry</label>
+            <select
+              value={expiryDays}
+              onChange={(e) => setExpiryDays(Number(e.target.value))}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            >
+              <option value={1}>1 day</option>
+              <option value={3}>3 days</option>
+              <option value={7}>7 days</option>
+              <option value={14}>14 days</option>
+              <option value={30}>30 days</option>
+            </select>
+          </div>
+
+          {/* Preview */}
           {selectedAssessment && (
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-lg p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Mail className="w-5 h-5 text-gray-600" />
-                <h3 className="text-gray-900">Email Preview</h3>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="font-medium text-green-800">Ready to Send</span>
               </div>
-              <div className="bg-white rounded-lg border border-gray-300 p-4 text-sm">
-                <div className="mb-4 pb-4 border-b border-gray-200">
-                  <div className="text-xs text-gray-500 mb-1">Subject:</div>
-                  <div className="text-gray-900">Assessment Invitation: {selectedAssessmentData?.title} - {jobTitle}</div>
-                </div>
-                <div className="whitespace-pre-wrap text-gray-700 mb-4">
-                  {customMessage.replace('[Candidate Name]', candidates[0]?.name || '[Candidate Name]')}
-                </div>
-                <div className="bg-green-600 text-white px-6 py-3 rounded-lg text-center inline-block">
-                  Start Assessment
-                </div>
-                <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500">
-                  This link will expire in {expiryDays > 0 ? `${expiryDays} day${expiryDays > 1 ? 's' : ''}` : 'never'}
-                </div>
+              <div className="text-sm text-green-700 space-y-1">
+                <p><strong>Assessment:</strong> {selectedAssessmentData?.title}</p>
+                <p><strong>Duration:</strong> {selectedAssessmentData?.duration_minutes} minutes</p>
+                <p><strong>Recipients:</strong> {candidates.filter(c => c.name.trim() && c.email.trim()).length} candidate(s)</p>
+                <p><strong>Expires in:</strong> {expiryDays} day{expiryDays > 1 ? 's' : ''}</p>
               </div>
             </div>
           )}
@@ -532,7 +863,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
         {/* Footer */}
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
           <div className="text-sm text-gray-600">
-            {candidates.length} candidate{candidates.length > 1 ? 's' : ''} will receive this invitation
+            {candidates.filter(c => c.name.trim() && c.email.trim()).length} candidate{candidates.length !== 1 ? 's' : ''} will receive invitations
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -542,13 +873,13 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
               Cancel
             </button>
             <button
-              onClick={handleSend}
+              onClick={handleSendInvitations}
               disabled={!isValid || isSubmitting}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg hover:from-green-700 hover:to-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSubmitting ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   Sending...
                 </>
               ) : (
