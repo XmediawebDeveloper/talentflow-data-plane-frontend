@@ -2,7 +2,10 @@
 
 import { Building2, Save, Globe, Mail, Phone, MapPin, Users, Calendar, Edit2, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
+import authService from '@/lib/services/authService';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -26,6 +29,7 @@ interface OrganizationProfile {
 }
 
 export default function CompanyProfilePage() {
+  const router = useRouter();
   const { tenant } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,6 +54,29 @@ export default function CompanyProfilePage() {
 
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
+
+  // Permission guard - check if user has access to Company Profile
+  useEffect(() => {
+    const checkPermission = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser();
+
+        // Check if user has permission to access Company Profile
+        const hasPermission = currentUser.role === 'tenant_admin' || currentUser.permissions?.can_manage_settings;
+
+        if (!hasPermission) {
+          toast.error('You do not have permission to access Company Profile');
+          router.push('/dashboard');
+          return;
+        }
+      } catch (error) {
+        console.error('Permission check failed:', error);
+        router.push('/dashboard');
+      }
+    };
+
+    checkPermission();
+  }, [router]);
 
   // Fetch organization profile on mount
   useEffect(() => {

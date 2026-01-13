@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Search,
   Plus,
@@ -16,6 +17,7 @@ import {
   Link2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
 import { RoleListItem, Permission } from '@/lib/types/rbac';
@@ -55,6 +57,10 @@ const MODULE_DISPLAY_NAMES: Record<string, string> = {
   settings: 'Settings',
   users: 'Users',
   roles: 'Roles',
+  // RBAC03: Billing Manager modules
+  billing: 'Billing & Subscriptions',
+  invoices: 'Invoices & Payments',
+  usage: 'Usage & Quotas',
 };
 
 // Group permissions by module
@@ -81,7 +87,7 @@ const groupPermissionsByModule = (permissions: Permission[]): PermissionGroup[] 
   });
 
   // Return groups in a specific order
-  const moduleOrder = ['jd', 'resumes', 'internal_db', 'assessments', 'analytics', 'settings', 'users', 'roles'];
+  const moduleOrder = ['jd', 'resumes', 'internal_db', 'assessments', 'analytics', 'billing', 'invoices', 'usage', 'settings', 'users', 'roles'];
   return moduleOrder
     .filter(mod => groups[mod])
     .map(mod => groups[mod]);
@@ -236,6 +242,7 @@ const mockUsers: ApiUser[] = [
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 export default function UserManagement() {
+  const router = useRouter();
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -270,6 +277,29 @@ export default function UserManagement() {
 
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
+
+  // Permission guard - check if user has access to User Management
+  useEffect(() => {
+    const checkPermission = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser();
+
+        // Check if user has permission to access User Management
+        const hasPermission = currentUser.role === 'tenant_admin' || currentUser.permissions?.can_manage_users;
+
+        if (!hasPermission) {
+          toast.error('You do not have permission to access User Management');
+          router.push('/dashboard');
+          return;
+        }
+      } catch (error) {
+        console.error('Permission check failed:', error);
+        router.push('/dashboard');
+      }
+    };
+
+    checkPermission();
+  }, [router]);
 
   // Load users, roles, and permissions
   useEffect(() => {

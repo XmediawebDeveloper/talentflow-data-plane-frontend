@@ -2,6 +2,7 @@
 
 import { Users, Plus, Briefcase, FileText, UserCheck, Info, Loader2, X, Search, BarChart3 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import teamService, { Team, TeamStats } from '@/lib/services/teamService';
 import authService, { User } from '@/lib/services/authService';
@@ -9,6 +10,7 @@ import userService, { ApiUser } from '@/lib/services/userService';
 import TeamUsageSummary from '@/components/usage/TeamUsageSummary';
 
 export default function TeamManagementPage() {
+  const router = useRouter();
   const [teams, setTeams] = useState<Team[]>([]);
   const [stats, setStats] = useState<TeamStats>({
     total_teams: 0,
@@ -39,6 +41,30 @@ export default function TeamManagementPage() {
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [teamLeadId, setTeamLeadId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Permission guard - check if user has access
+  useEffect(() => {
+    const checkPermission = async () => {
+      try {
+        const user = await authService.getCurrentUser();
+        setCurrentUser(user);
+
+        // Check if user has permission to access Team Management
+        const hasPermission = user.role === 'tenant_admin' || user.permissions?.can_manage_users;
+
+        if (!hasPermission) {
+          toast.error('You do not have permission to access Team Management');
+          router.push('/dashboard');
+          return;
+        }
+      } catch (error) {
+        console.error('Permission check failed:', error);
+        router.push('/dashboard');
+      }
+    };
+
+    checkPermission();
+  }, [router]);
 
   // Fetch teams, stats, and current user on mount
   useEffect(() => {

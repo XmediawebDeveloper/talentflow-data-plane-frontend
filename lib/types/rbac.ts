@@ -123,6 +123,10 @@ export const PERMISSION_MODULES: Record<string, string> = {
   settings: 'Settings',
   users: 'Users',
   roles: 'Roles',
+  // RBAC03: Billing Manager modules
+  billing: 'Billing & Subscriptions',
+  invoices: 'Invoices & Payments',
+  usage: 'Usage & Quotas',
 };
 
 // Permission actions
