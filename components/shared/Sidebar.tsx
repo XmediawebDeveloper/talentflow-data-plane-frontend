@@ -128,15 +128,14 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       ]
     },
 
-    // ORGANIZATION - Admin only
+    // ORGANIZATION
     {
       id: 'organization',
       label: 'ORGANIZATION',
-      adminOnly: true,
       items: [
         { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', adminOnly: true },
         { id: 'team-management', label: 'Team Management', icon: Users, href: '/organization/team-management', adminOnly: true },
-        { id: 'user-management', label: 'User Management', icon: UserCog, href: '/organization/user-management', adminOnly: true },
+        { id: 'user-management', label: 'User Management', icon: UserCog, href: '/organization/user-management', permission: 'canManageUsers' },
         { id: 'role-management', label: 'Role Management', icon: Shield, href: '/organization/role-management', adminOnly: true },
       ]
     },
@@ -153,7 +152,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       ]
     },
 
-    // SUBSCRIPTION & BILLING - Admin only
+    // SUBSCRIPTION & BILLING - Admin only (no RBAC permissions yet)
     {
       id: 'subscription',
       label: 'SUBSCRIPTION & BILLING',
@@ -168,18 +167,17 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       ]
     },
 
-    // SETTINGS - Admin only
+    // SETTINGS - Mixed permission and admin-only
     {
       id: 'settings',
       label: 'SETTINGS',
-      adminOnly: true,
       items: [
-        { id: 'general-settings', label: 'General Settings', icon: Settings, href: '/settings/general-settings', adminOnly: true },
+        { id: 'general-settings', label: 'General Settings', icon: Settings, href: '/settings/general-settings', permission: 'canManageSettings' },
         { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', adminOnly: true },
         { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', adminOnly: true },
-        { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', adminOnly: true },
-        { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', adminOnly: true },
-        { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', adminOnly: true },
+        { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canManageSettings' },
+        { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' },
+        { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'canManageSettings' },
       ]
     },
 
