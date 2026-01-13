@@ -326,135 +326,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     toast.error(`AI Matching failed: ${error}`);
   };
 
-  // Mock assessment results data
-  const mockAssessmentResults = [
-    {
-      id: 'ar-1',
-      candidateName: 'Sarah Johnson',
-      email: 'sarah.johnson@email.com',
-      phone: '+1 (555) 123-4567',
-      assessmentName: 'Senior Software Engineer Assessment',
-      totalScore: 92,
-      maxScore: 100,
-      scorePercentage: 92,
-      passFail: 'Pass' as const,
-      completedDate: '2025-12-01',
-      completionTime: '45',
-      aiSummary: 'Excellent performance across all assessment rounds. Strong technical knowledge and problem-solving skills demonstrated. Candidate shows deep understanding of system design principles and best coding practices.',
-      roundScores: [
-        { roundName: 'Technical Round 1', score: 90, maxScore: 100, passFail: 'Pass' as const },
-        { roundName: 'Technical Round 2', score: 95, maxScore: 100, passFail: 'Pass' as const },
-        { roundName: 'System Design', score: 91, maxScore: 100, passFail: 'Pass' as const }
-      ],
-      invitedDate: '2025-11-28',
-      invitedBy: 'Alex Morgan'
-    },
-    {
-      id: 'ar-2',
-      candidateName: 'Michael Chen',
-      email: 'michael.chen@email.com',
-      phone: '+1 (555) 234-5678',
-      assessmentName: 'Senior Software Engineer Assessment',
-      totalScore: 78,
-      maxScore: 100,
-      scorePercentage: 78,
-      passFail: 'Pass' as const,
-      completedDate: '2025-12-02',
-      completionTime: '52',
-      aiSummary: 'Good overall performance with particularly strong showing in system design. Some areas for improvement in advanced algorithms, but solid foundational knowledge and practical experience evident.',
-      roundScores: [
-        { roundName: 'Technical Round 1', score: 75, maxScore: 100, passFail: 'Pass' as const },
-        { roundName: 'Technical Round 2', score: 72, maxScore: 100, passFail: 'Pass' as const },
-        { roundName: 'System Design', score: 87, maxScore: 100, passFail: 'Pass' as const }
-      ],
-      invitedDate: '2025-11-29',
-      invitedBy: 'Jessica Lee'
-    },
-    {
-      id: 'ar-3',
-      candidateName: 'Emily Rodriguez',
-      email: 'emily.rodriguez@email.com',
-      phone: '+1 (555) 345-6789',
-      assessmentName: 'Senior Software Engineer Assessment',
-      totalScore: 88,
-      maxScore: 100,
-      scorePercentage: 88,
-      passFail: 'Pass' as const,
-      completedDate: '2025-11-30',
-      completionTime: '48',
-      aiSummary: 'Strong technical competency demonstrated across all rounds. Excellent problem-solving approach with clear communication. Shows good understanding of scalability and performance optimization.',
-      roundScores: [
-        { roundName: 'Technical Round 1', score: 85, maxScore: 100, passFail: 'Pass' as const },
-        { roundName: 'Technical Round 2', score: 90, maxScore: 100, passFail: 'Pass' as const },
-        { roundName: 'System Design', score: 89, maxScore: 100, passFail: 'Pass' as const }
-      ],
-      invitedDate: '2025-11-27',
-      invitedBy: 'Alex Morgan'
-    },
-    {
-      id: 'ar-4',
-      candidateName: 'David Kim',
-      email: 'david.kim@email.com',
-      phone: '+1 (555) 456-7890',
-      assessmentName: 'Senior Software Engineer Assessment',
-      totalScore: 42,
-      maxScore: 100,
-      scorePercentage: 42,
-      passFail: 'Fail' as const,
-      completedDate: '2025-12-01',
-      completionTime: '38',
-      aiSummary: 'Performance below passing threshold. Gaps identified in advanced technical concepts and system design principles. Would benefit from additional training in core areas before reconsideration.',
-      roundScores: [
-        { roundName: 'Technical Round 1', score: 45, maxScore: 100, passFail: 'Fail' as const },
-        { roundName: 'Technical Round 2', score: 40, maxScore: 100, passFail: 'Fail' as const },
-        { roundName: 'System Design', score: 41, maxScore: 100, passFail: 'Fail' as const }
-      ],
-      invitedDate: '2025-11-29',
-      invitedBy: 'Jessica Lee'
-    },
-    {
-      id: 'ar-5',
-      candidateName: 'Amanda White',
-      email: 'amanda.white@email.com',
-      phone: '+1 (555) 567-8901',
-      assessmentName: 'Senior Software Engineer Assessment',
-      totalScore: 95,
-      maxScore: 100,
-      scorePercentage: 95,
-      passFail: 'Pass' as const,
-      completedDate: '2025-11-29',
-      completionTime: '42',
-      aiSummary: 'Outstanding performance. Exceptional technical depth and breadth of knowledge. Demonstrates expert-level understanding of complex system architecture and advanced problem-solving capabilities.',
-      roundScores: [
-        { roundName: 'Technical Round 1', score: 96, maxScore: 100, passFail: 'Pass' as const },
-        { roundName: 'Technical Round 2', score: 94, maxScore: 100, passFail: 'Pass' as const },
-        { roundName: 'System Design', score: 95, maxScore: 100, passFail: 'Pass' as const }
-      ],
-      invitedDate: '2025-11-26',
-      invitedBy: 'Alex Morgan'
-    },
-    {
-      id: 'ar-6',
-      candidateName: 'Robert Taylor',
-      email: 'robert.taylor@email.com',
-      phone: '+1 (555) 678-9012',
-      assessmentName: 'Senior Software Engineer Assessment',
-      totalScore: 55,
-      maxScore: 100,
-      scorePercentage: 55,
-      passFail: 'Fail' as const,
-      completedDate: '2025-12-02',
-      completionTime: '35',
-      aiSummary: 'Below expected level for senior role. Shows basic understanding but lacks depth in critical areas. Performance indicates need for more experience before attempting senior-level positions.',
-      roundScores: [
-        { roundName: 'Technical Round 1', score: 58, maxScore: 100, passFail: 'Fail' as const },
-        { roundName: 'Technical Round 2', score: 52, maxScore: 100, passFail: 'Fail' as const },
-        { roundName: 'System Design', score: 55, maxScore: 100, passFail: 'Fail' as const }
-      ],
-      invitedDate: '2025-11-30',
-      invitedBy: 'Jessica Lee'
-    }
-  ];
+  // Assessment results - empty until real data is fetched from API
+  const assessmentResults: any[] = [];
 
   const handleAddApplications = () => {
     setShowAddApplicantsMenu(false);
@@ -877,7 +750,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-200 text-gray-600'
             }`}>
-              {mockAssessmentResults.length}
+              {assessmentResults.length}
             </span>
             {activeTab === 'assessment-results' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
@@ -1235,7 +1108,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       {activeTab === 'assessment-results' && (
         <div className="mt-0">
           <AssessmentResultsTable
-            results={mockAssessmentResults}
+            results={assessmentResults}
             jobTitle={job.title}
             jobId={job.id}
             onViewResultDetail={(result) => {

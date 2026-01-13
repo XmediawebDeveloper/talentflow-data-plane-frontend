@@ -74,12 +74,12 @@ export default function BulkActionsBar({
                   />
                   {/* Dropdown menu - opens DOWNWARD */}
                   <div className="absolute top-full mt-2 left-0 w-56 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 max-h-64 overflow-y-auto z-50">
-                    {folders.length === 0 || folders.filter(f => f.id !== 'all').length === 0 ? (
+                    {folders.length === 0 || folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId)).length === 0 ? (
                       <div className="px-4 py-3 text-sm text-gray-500 text-center">
                         No folders available
                       </div>
                     ) : (
-                      folders.filter(f => f.id !== 'all').map(folder => (
+                      folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId)).map(folder => (
                         <button
                           key={folder.id}
                           onClick={() => {

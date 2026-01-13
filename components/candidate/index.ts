@@ -7,6 +7,7 @@ export { AssessmentInterface } from './AssessmentInterface';
 export { ResultsScreen } from './ResultsScreen';
 export { LoadingScreen } from './LoadingScreen';
 export { ErrorScreen } from './ErrorScreen';
+export { CompletedScreen } from './CompletedScreen';
 
 // Question View Components
 export { HRQuestionView } from './questions/HRQuestionView';

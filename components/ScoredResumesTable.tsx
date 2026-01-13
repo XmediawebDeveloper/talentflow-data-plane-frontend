@@ -1,7 +1,9 @@
-import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
 import InviteToAssessmentModal from './InviteToAssessmentModal';
+import { scoringService } from '@/lib/services/scoringService';
 
 interface ScoredResume {
   id: string;
@@ -39,6 +41,7 @@ interface ScoredResumesTableProps {
   onViewCandidate?: (resume: ScoredResume) => void;
   selectedResumes?: string[];
   onSelectResume?: (resumeId: string) => void;
+  onSelectAll?: (resumeIds: string[]) => void;
 }
 
 export default function ScoredResumesTable({
@@ -48,7 +51,8 @@ export default function ScoredResumesTable({
   availableUnits = 10,
   onViewCandidate,
   selectedResumes: externalSelectedResumes = [],
-  onSelectResume
+  onSelectResume,
+  onSelectAll
 }: ScoredResumesTableProps) {
   const [showColumnModal, setShowColumnModal] = useState(false);
   const [internalSelectedResumes, setInternalSelectedResumes] = useState<string[]>([]);
@@ -120,10 +124,32 @@ export default function ScoredResumesTable({
   const uniqueRecruiters = Array.from(new Set(resumes.map(r => r.scoredBy)));
 
   const handleSelectAll = () => {
-    if (selectedResumes.length === filteredResumes.length) {
-      setSelectedResumes([]);
+    if (onSelectAll) {
+      // External control with onSelectAll prop
+      if (selectedResumes.length === filteredResumes.length) {
+        onSelectAll([]);  // Deselect all
+      } else {
+        onSelectAll(filteredResumes.map(r => r.id));  // Select all
+      }
+    } else if (onSelectResume) {
+      // External control without onSelectAll - toggle each item
+      const allSelected = selectedResumes.length === filteredResumes.length;
+      filteredResumes.forEach(resume => {
+        const isSelected = selectedResumes.includes(resume.id);
+        // Toggle: if all selected, deselect; if not all selected, select unselected ones
+        if (allSelected && isSelected) {
+          onSelectResume(resume.id);  // Deselect
+        } else if (!allSelected && !isSelected) {
+          onSelectResume(resume.id);  // Select
+        }
+      });
     } else {
-      setSelectedResumes(filteredResumes.map(r => r.id));
+      // Internal control
+      if (selectedResumes.length === filteredResumes.length) {
+        setSelectedResumes([]);
+      } else {
+        setSelectedResumes(filteredResumes.map(r => r.id));
+      }
     }
   };
 
@@ -161,16 +187,54 @@ export default function ScoredResumesTable({
     alert(`Excel export initiated!\n\nJob: ${jobTitle}\nRecords: ${dataToExport.length}\nColumns: ${enabledColumns.length}\n\n(Mock export - would download Excel file)`);
   };
 
-  const handleDownloadScorecard = (resumeId: string) => {
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [bulkDownloading, setBulkDownloading] = useState(false);
+
+  const handleDownloadScorecard = async (resumeId: string) => {
     const resume = resumes.find(r => r.id === resumeId);
-    console.log('Downloading scorecard for:', resume);
-    alert(`Scorecard PDF download initiated for:\n\n${resume?.candidateName}\n\n(Mock download - would download PDF file)`);
+    if (!resume) return;
+
+    setDownloadingId(resumeId);
+    try {
+      const blob = await scoringService.downloadScorecard(resumeId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${resume.candidateName.replace(/\s+/g, '_')}_Screening_Report.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success('Scorecard downloaded successfully');
+    } catch (error) {
+      console.error('Error downloading scorecard:', error);
+      toast.error('Failed to download scorecard');
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
-  const handleDownloadBulkScorecards = () => {
-    const selectedData = resumes.filter(r => selectedResumes.includes(r.id));
-    console.log('Downloading bulk scorecards:', selectedData);
-    alert(`Bulk scorecard download initiated!\n\n${selectedData.length} scorecards will be compressed into ZIP file\n\n(Mock download - would download ZIP file)`);
+  const handleDownloadBulkScorecards = async () => {
+    if (selectedResumes.length === 0) return;
+
+    setBulkDownloading(true);
+    try {
+      const blob = await scoringService.exportScorecards(selectedResumes);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `TalentFlow_Scorecards_${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success(`${selectedResumes.length} scorecards downloaded`);
+    } catch (error) {
+      console.error('Error downloading bulk scorecards:', error);
+      toast.error('Failed to download scorecards');
+    } finally {
+      setBulkDownloading(false);
+    }
   };
 
   const clearFilters = () => {
@@ -228,10 +292,15 @@ export default function ScoredResumesTable({
             <>
               <button
                 onClick={handleDownloadBulkScorecards}
-                className="px-4 py-2 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2"
+                disabled={bulkDownloading}
+                className="px-4 py-2 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Download className="w-4 h-4" />
-                Download Scorecards ({selectedResumes.length})
+                {bulkDownloading ? (
+                  <Loader className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                {bulkDownloading ? 'Downloading...' : `Download Scorecards (${selectedResumes.length})`}
               </button>
               <button
                 onClick={handleExportExcel}
@@ -775,9 +844,20 @@ export default function ScoredResumesTable({
                   e.stopPropagation();
                   handleDownloadScorecard(resume.id);
                 }}
-                className="w-full px-4 py-2 text-sm text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                disabled={downloadingId === resume.id}
+                className="w-full px-4 py-2 text-sm text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                Download Scorecard
+                {downloadingId === resume.id ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    Downloading...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Download Scorecard
+                  </>
+                )}
               </button>
             </div>
           </div>

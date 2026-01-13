@@ -1032,6 +1032,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         mustHaveSkills: extraction.mustHaveSkills.length + ' skills',
         mustHaveComments: extraction.mustHaveComments.length + ' comments',
         niceToHaveSkills: extraction.niceToHaveSkills.length + ' skills',
+        niceToHaveComments: extraction.niceToHaveComments.length + ' comments',
         employmentType: extraction.employmentType,
         workModel: extraction.workModel,
         salaryRange: `${extraction.salaryFrom}-${extraction.salaryTo}`,
@@ -2296,9 +2297,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                         </p>
                       </div>
                       {/* JD07: Helper text for minimal prompt */}
-                      <p className="text-xs text-gray-500 mt-1">
+                      {/* <p className="text-xs text-gray-500 mt-1">
                         Enter a job title or a minimal prompt – AI will generate the full JD
-                      </p>
+                      </p> */}
                     </div>
 
                     <div>
@@ -2329,9 +2330,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                           {aiPrompt.length}/{VALIDATION.AI_PROMPT.max}
                         </p>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        💡 Tip: {editingId ? 'Add any changes or additional requirements to regenerate the JD' : 'Include details like experience level, key skills, responsibilities, location, team size, or any specific requirements'}
-                      </p>
+                      {!editingId && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          💡 Tip: Describe the role, team size, or any specific requirements
+                        </p>
+                      )}
                     </div>
 
                     {/* Quota Warning */}

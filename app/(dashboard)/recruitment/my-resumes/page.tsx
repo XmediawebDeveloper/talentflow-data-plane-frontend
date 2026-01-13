@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive } from 'lucide-react';
 import ResumeTable from '@/components/ResumeTable';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
@@ -19,6 +19,42 @@ import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeS
 import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
+
+// Helper function to format date in IST (UTC+5:30)
+const formatDateIST = (dateString: string | null | undefined): string => {
+  if (!dateString) return '-';
+  try {
+    const date = new Date(dateString);
+    // Format in IST timezone
+    return date.toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return '-';
+  }
+};
+
+// Helper function to format date with time in IST
+const formatDateTimeIST = (dateString: string | null | undefined): string => {
+  if (!dateString) return '-';
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return '-';
+  }
+};
 
 export default function MyResumesPage() {
   const router = useRouter();
@@ -54,6 +90,10 @@ export default function MyResumesPage() {
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
   const [publishedJobs, setPublishedJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
+
+  // ZIP download confirmation modal state
+  const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -230,26 +270,83 @@ export default function MyResumesPage() {
   const handleBulkDownload = async () => {
     if (selectedResumes.length === 0) return;
 
-    toast.loading(`Downloading ${selectedResumes.length} resume(s)...`, { id: 'bulk-download' });
+    // If more than 1 resume selected, show confirmation popup
+    if (selectedResumes.length > 1) {
+      setIsZipDownloadModalOpen(true);
+      return;
+    }
 
+    // For single resume, download directly
+    toast.loading('Downloading resume...', { id: 'bulk-download' });
     try {
-      for (const resumeId of selectedResumes) {
-        const resume = resumes.find(r => r.id === resumeId);
-        const blob = await resumeService.download(resumeId);
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${resume?.name || 'resume'}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }
-      toast.success(`${selectedResumes.length} resume(s) downloaded`, { id: 'bulk-download' });
+      const resumeId = selectedResumes[0];
+      const resume = resumes.find(r => r.id === resumeId);
+      const blob = await resumeService.download(resumeId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${resume?.name || 'resume'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Resume downloaded', { id: 'bulk-download' });
       setSelectedResumes([]);
     } catch (error) {
       console.error('Download failed:', error);
-      toast.error('Failed to download resumes', { id: 'bulk-download' });
+      toast.error('Failed to download resume', { id: 'bulk-download' });
+    }
+  };
+
+  // Handle ZIP download of multiple resumes
+  const handleZipDownload = async () => {
+    if (selectedResumes.length === 0) return;
+
+    setIsDownloadingZip(true);
+    toast.loading(`Preparing ${selectedResumes.length} resumes for download...`, { id: 'zip-download' });
+
+    try {
+      // Dynamically import fflate to avoid SSR issues
+      const { zipSync, strToU8 } = await import('fflate');
+
+      const files: { [key: string]: Uint8Array } = {};
+
+      // Download each resume and add to ZIP
+      for (let i = 0; i < selectedResumes.length; i++) {
+        const resumeId = selectedResumes[i];
+        const resume = resumes.find(r => r.id === resumeId);
+        const fileName = `resumes/${resume?.name || `resume_${i + 1}`}.pdf`;
+
+        try {
+          const blob = await resumeService.download(resumeId);
+          const arrayBuffer = await blob.arrayBuffer();
+          files[fileName] = new Uint8Array(arrayBuffer);
+        } catch (err) {
+          console.error(`Failed to download ${fileName}:`, err);
+        }
+      }
+
+      // Generate ZIP file
+      const zipped = zipSync(files);
+      const zipBlob = new Blob([zipped], { type: 'application/zip' });
+
+      const url = window.URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `resumes_${new Date().toISOString().split('T')[0]}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success(`${selectedResumes.length} resumes downloaded as ZIP`, { id: 'zip-download' });
+      setSelectedResumes([]);
+      setIsZipDownloadModalOpen(false);
+    } catch (error) {
+      console.error('ZIP download failed:', error);
+      toast.error('Failed to create ZIP file', { id: 'zip-download' });
+    } finally {
+      setIsDownloadingZip(false);
     }
   };
 
@@ -868,7 +965,7 @@ export default function MyResumesPage() {
             onApplyToJob={handleApplyToJob}
             onDownload={handleBulkDownload}
             onDelete={() => handleDeleteResumes(selectedResumes)}
-            folders={folders.filter(f => f.id !== 'all')}
+            folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
           />
         )}
 
@@ -949,7 +1046,7 @@ export default function MyResumesPage() {
                 setSelectedFolder(folderId);
                 setIsUploadModalOpen(true);
               }}
-              resumes={filteredResumes}
+              resumes={resumes}
               width={folderTreeWidth}
               onWidthChange={setFolderTreeWidth}
             />
@@ -963,7 +1060,7 @@ export default function MyResumesPage() {
               onApplyToJob={(resume) => console.log('Apply to job:', resume)}
               onDelete={(id) => handleDelete(id)}
               onMoveToFolder={handleMoveToFolder}
-              folders={folders.filter(f => f.id !== 'all')}
+              folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
               onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
               highlightQuery={appliedSearchQuery}
             />
@@ -1179,7 +1276,7 @@ export default function MyResumesPage() {
                             </div>
                             {/* Upload Date */}
                             <div className="text-sm text-gray-600">
-                              {resume.uploadDate ? new Date(resume.uploadDate).toLocaleDateString() : '-'}
+                              {formatDateIST(resume.uploadDate)}
                             </div>
                             {/* Uploaded By */}
                             <div className="text-sm text-gray-600 truncate">{resume.uploadedBy || '-'}</div>
@@ -1251,7 +1348,7 @@ export default function MyResumesPage() {
 
       {isUploadModalOpen && (
         <UploadModal
-          folders={folders.filter(f => f.id !== 'all')}
+          folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
           tenant={null}
           targetFolder={selectedFolder !== 'all' ? selectedFolder || undefined : undefined}
           onClose={() => setIsUploadModalOpen(false)}
@@ -1292,6 +1389,70 @@ export default function MyResumesPage() {
           onClose={() => setIsApplyToJobModalOpen(false)}
           onApply={handleApplyToJobSubmit}
         />
+      )}
+
+      {/* ZIP Download Confirmation Modal */}
+      {isZipDownloadModalOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200"
+            onClick={() => !isDownloadingZip && setIsZipDownloadModalOpen(false)}
+          />
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="flex items-center gap-4 p-6 border-b border-gray-200">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                  <Archive className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Download as ZIP</h3>
+                  <p className="text-sm text-gray-500">Multiple files selected</p>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                <p className="text-gray-700">
+                  You have selected <span className="font-semibold text-gray-900">{selectedResumes.length} candidates</span>.
+                </p>
+                <p className="text-gray-600 mt-2">
+                  Do you want to download all selected resumes as a ZIP file?
+                </p>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200">
+                <button
+                  onClick={() => setIsZipDownloadModalOpen(false)}
+                  disabled={isDownloadingZip}
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleZipDownload}
+                  disabled={isDownloadingZip}
+                  className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDownloadingZip ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Preparing...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Continue
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Upload History Sheet (Slide-in Panel) */}
@@ -1494,7 +1655,7 @@ export default function MyResumesPage() {
                                         {record.date && (
                                           <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                                             <Calendar className="w-3 h-3" />
-                                            {new Date(record.date).toLocaleString()}
+                                            {formatDateTimeIST(record.date)}
                                           </span>
                                         )}
                                       </div>

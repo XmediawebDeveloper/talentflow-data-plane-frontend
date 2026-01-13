@@ -108,21 +108,19 @@ export default function ResumeTable({
   const someSelected = selectedResumes.length > 0 && !allSelected;
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
-
-    if (diffHours < 24) return `${diffHours} hours ago`;
-    if (diffHours < 48) return 'Yesterday';
-
-    // Display in IST timezone
-    return date.toLocaleDateString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+    if (!dateString) return '-';
+    try {
+      const date = new Date(dateString);
+      // Always display in IST timezone format
+      return date.toLocaleDateString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch {
+      return '-';
+    }
   };
 
   // Handle showing version history - fetch versions from backend

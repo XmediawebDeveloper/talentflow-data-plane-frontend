@@ -169,7 +169,7 @@ export default function SelectSourceModal({
 
   // Render folder tree
   const renderFolderTree = (parentId?: string, level: number = 0) => {
-    const childFolders = folders.filter(f => f.parent_id === parentId);
+    const childFolders = folders.filter(f => f.parent_id === parentId && !(f.name.toLowerCase() === 'root' && !f.parent_id));
 
     return childFolders.map(folder => {
       const isExpanded = expandedFolders.includes(folder.id);

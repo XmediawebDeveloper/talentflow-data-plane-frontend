@@ -147,7 +147,7 @@ export const aiMatchService = {
         jd_id: jdId,
         search_query: options?.searchQuery,
         min_similarity: options?.minSimilarity ?? 0.5,
-        limit: options?.limit ?? 50,
+        limit: options?.limit ?? 9,  // Default to top 9 ranked candidates
       });
 
       const session = response.data;
@@ -173,7 +173,7 @@ export const aiMatchService = {
       const response = await api.post<AIMatchSessionResponse>('/ai-match/run', {
         search_query: searchQuery,
         min_similarity: options?.minSimilarity ?? 0.5,
-        limit: options?.limit ?? 50,
+        limit: options?.limit ?? 9,  // Default to top 9 ranked candidates
       });
 
       const session = response.data;
