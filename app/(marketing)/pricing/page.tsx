@@ -402,164 +402,103 @@ export default function PricingPage() {
           </div>
         )}
 
-        {/* Trial Package - Separate Section */}
-        {(() => {
-          const trialPlan = plans.find(p =>
-            p.name.toLowerCase().includes('trial') ||
-            p.name.toLowerCase().includes('free')
-          );
-          if (!trialPlan && !freeTrial) return null;
+        {/* Billing Toggle */}
+        <div className="flex items-center justify-center gap-4 mb-16">
+          <span className={`text-lg ${!isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
+            Monthly
+          </span>
+          <button
+            onClick={() => setIsYearly(!isYearly)}
+            className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ${
+              isYearly
+                ? "bg-gray-800"
+                : "bg-gray-300 dark:bg-gray-600"
+            }`}
+            aria-label="Toggle billing period"
+          >
+            <span
+              className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                isYearly ? "translate-x-6" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <span className={`text-lg ${isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
+            Yearly
+          </span>
+          <Badge className="bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+            Save {yearlyDiscountPercent}%
+          </Badge>
+        </div>
 
-          const trialDays = freeTrial?.trial_days || trialPlan?.trialDays || 14;
-          const trialFeatures = freeTrial?.features || trialPlan?.quotas;
+        {/* Pricing Cards - Including Trial Plans */}
+        {(() => {
+          // Create a free trial plan card if freeTrial config exists
+          const freeTrialCard: DisplayPlan | null = freeTrial ? {
+            id: 'free-trial',
+            name: 'Free Trial',
+            description: `${freeTrial.trial_days} days free • No credit card required`,
+            basePrice: 0,
+            monthlyPrice: 0,
+            yearlyPrice: 0,
+            yearlyFullPrice: 0,
+            billingPeriod: 'TRIAL',
+            currency: 'INR',
+            icon: Sparkles,
+            gradient: 'from-gray-600 to-gray-700',
+            popular: false,
+            features: freeTrial.trial_includes || [],
+            trialDays: freeTrial.trial_days,
+            quotas: {
+              max_jobs: freeTrial.features.MAX_JOBS,
+              max_seats: freeTrial.features.MAX_SEATS,
+              AS: freeTrial.features.ASSESSMENTS,
+              AIU: freeTrial.features.AI_INTERVIEW,
+              RS: freeTrial.features.RESUME_SCORING,
+              RU: freeTrial.features.RESUME_STORAGE,
+            }
+          } : null;
+
+          // Combine free trial card with other plans
+          const allPlans = freeTrialCard ? [freeTrialCard, ...plans] : plans;
+
+          // Sort plans: trial/free first, then by display order
+          const sortedPlans = [...allPlans].sort((a, b) => {
+            const aIsTrial = a.id === 'free-trial' || a.name.toLowerCase().includes('trial') || a.name.toLowerCase().includes('free');
+            const bIsTrial = b.id === 'free-trial' || b.name.toLowerCase().includes('trial') || b.name.toLowerCase().includes('free');
+            if (aIsTrial && !bIsTrial) return -1;
+            if (!aIsTrial && bIsTrial) return 1;
+            if (a.popular && !b.popular) return -1;
+            if (!a.popular && b.popular) return 1;
+            return 0;
+          });
 
           return (
-            <div className="mb-16">
-              <div className="max-w-2xl mx-auto">
-                <Card className="relative p-8 border-2 border-gray-800 dark:border-gray-600 bg-gray-50 dark:bg-gray-800">
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-gray-800 text-white px-4 py-1">
-                      Try Free
-                    </Badge>
-                  </div>
-
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center">
-                        <Sparkles className="w-7 h-7 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                          Free Trial
-                        </h3>
-                        <p className="text-gray-600 dark:text-gray-400">
-                          {trialDays} days free • No credit card required
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                      <div className="text-center">
-                        <span className="text-4xl font-bold text-gray-800 dark:text-gray-200">Free</span>
-                      </div>
-                      <Link
-                        href={trialPlan ? `/signup?plan=${encodePlanId(trialPlan.id)}` : "/signup"}
-                        className="inline-block px-8 py-3 bg-gray-800 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors whitespace-nowrap"
-                      >
-                        Start Free Trial
-                      </Link>
-                    </div>
-                  </div>
-
-                  {/* Trial Features Grid */}
-                  {trialFeatures && (
-                    <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        {(trialFeatures.MAX_SEATS || trialFeatures.max_seats) && (
-                          <div className="flex items-center gap-2">
-                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
-                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.MAX_SEATS || trialFeatures.max_seats} Team Members</span>
-                          </div>
-                        )}
-                        {(trialFeatures.MAX_JOBS || trialFeatures.max_jobs) && (
-                          <div className="flex items-center gap-2">
-                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
-                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.MAX_JOBS || trialFeatures.max_jobs} Job Postings</span>
-                          </div>
-                        )}
-                        {(trialFeatures.RESUME_STORAGE || trialFeatures.RU) && (
-                          <div className="flex items-center gap-2">
-                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
-                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.RESUME_STORAGE || trialFeatures.RU} Resume Storage</span>
-                          </div>
-                        )}
-                        {(trialFeatures.RESUME_SCORING || trialFeatures.RS) && (
-                          <div className="flex items-center gap-2">
-                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
-                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.RESUME_SCORING || trialFeatures.RS} Resume Scoring</span>
-                          </div>
-                        )}
-                        {(trialFeatures.ASSESSMENTS || trialFeatures.AS) && (
-                          <div className="flex items-center gap-2">
-                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
-                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.ASSESSMENTS || trialFeatures.AS} Assessments</span>
-                          </div>
-                        )}
-                        {(trialFeatures.AI_INTERVIEW || trialFeatures.AIU) && (
-                          <div className="flex items-center gap-2">
-                            <Check className="w-4 h-4 text-gray-700 dark:text-gray-300" />
-                            <span className="text-gray-700 dark:text-gray-300">{trialFeatures.AI_INTERVIEW || trialFeatures.AIU} AI Interviews</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </Card>
-              </div>
-
-              {/* Divider */}
-              <div className="flex items-center gap-6 max-w-xl mx-auto mt-12">
-                <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600" />
-                <span className="text-gray-500 dark:text-gray-400 font-medium">Or choose a paid plan</span>
-                <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600" />
-              </div>
-
-              {/* Billing Toggle - Below Trial Package */}
-              <div className="flex items-center justify-center gap-4 mt-8">
-                <span className={`text-lg ${!isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
-                  Monthly
-                </span>
-                <button
-                  onClick={() => setIsYearly(!isYearly)}
-                  className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ${
-                    isYearly
-                      ? "bg-gray-800"
-                      : "bg-gray-300 dark:bg-gray-600"
-                  }`}
-                  aria-label="Toggle billing period"
-                >
-                  <span
-                    className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                      isYearly ? "translate-x-6" : "translate-x-0"
-                    }`}
-                  />
-                </button>
-                <span className={`text-lg ${isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
-                  Yearly
-                </span>
-                <Badge className="bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                  Save {yearlyDiscountPercent}%
-                </Badge>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Pricing Cards - Excluding Trial/Free Plans */}
-        {(() => {
-          const paidPlans = plans.filter(p =>
-            !p.name.toLowerCase().includes('trial') &&
-            !p.name.toLowerCase().includes('free')
-          );
-          return (
-            <div className={`grid gap-8 max-w-6xl mx-auto items-stretch ${
-              paidPlans.length === 1 ? 'md:grid-cols-1 max-w-md' :
-              paidPlans.length === 2 ? 'md:grid-cols-2 max-w-3xl' :
-              paidPlans.length <= 3 ? 'md:grid-cols-3' :
+            <div className={`grid gap-8 max-w-6xl mx-auto ${
+              sortedPlans.length === 1 ? 'md:grid-cols-1 max-w-md' :
+              sortedPlans.length === 2 ? 'md:grid-cols-2 max-w-3xl' :
+              sortedPlans.length <= 3 ? 'md:grid-cols-3' :
               'md:grid-cols-2 lg:grid-cols-3'
-            }`}>
-          {paidPlans.map((plan) => {
+            }`} style={{ gridAutoRows: '1fr' }}>
+          {sortedPlans.map((plan) => {
             const Icon = plan.icon;
+            const isTrialPlan = plan.id === 'free-trial' || plan.name.toLowerCase().includes('trial') || plan.name.toLowerCase().includes('free');
             return (
               <div key={plan.id} className="flex">
               <Card
                 className={`relative p-8 flex flex-col w-full ${
-                  plan.popular
-                    ? "border-2 border-gray-800 shadow-xl scale-105"
+                  plan.popular || isTrialPlan
+                    ? "border-2 border-gray-800 shadow-xl"
                     : "border border-gray-200 dark:border-gray-700"
                 }`}
               >
-                {plan.popular && (
+                {isTrialPlan && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-gray-800 text-white px-4 py-1">
+                      Free Trial
+                    </Badge>
+                  </div>
+                )}
+                {plan.popular && !isTrialPlan && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                     <Badge className="bg-gray-800 text-white px-4 py-1">
                       Most Popular
@@ -579,7 +518,11 @@ export default function PricingPage() {
                 </p>
 
                 <div className="mb-6">
-                  {(isYearly ? plan.yearlyPrice : plan.monthlyPrice) ? (
+                  {isTrialPlan && (!plan.monthlyPrice || plan.monthlyPrice === 0) ? (
+                    <div className="text-4xl font-bold text-gray-900 dark:text-white">
+                      Free
+                    </div>
+                  ) : (isYearly ? plan.yearlyPrice : plan.monthlyPrice) ? (
                     <>
                       <div className="flex items-baseline gap-1">
                         <span className="text-4xl font-bold text-gray-900 dark:text-white">
@@ -612,10 +555,10 @@ export default function PricingPage() {
                   )}
                 </div>
 
-                {/* Quotas Section - Show values >= 1, multiply by 12 for yearly */}
+                {/* Quotas Section - Show values >= 1, multiply by 12 for yearly (except trial) */}
                 {plan.quotas && (
                   <div className="mb-6">
-                    {isYearly && (
+                    {isYearly && !isTrialPlan && (
                       <p className="text-xs text-green-600 dark:text-green-400 mb-2 font-medium">
                         Annual plan includes 12× monthly quotas
                       </p>
@@ -624,7 +567,7 @@ export default function PricingPage() {
                       {plan.quotas.max_seats !== undefined && plan.quotas.max_seats >= 1 && (
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-gray-900 dark:text-white">
-                            {isYearly ? (plan.quotas.max_seats * 12).toLocaleString() : plan.quotas.max_seats}
+                            {isYearly && !isTrialPlan ? (plan.quotas.max_seats * 12).toLocaleString() : plan.quotas.max_seats}
                           </span>
                           <span className="text-gray-600 dark:text-gray-400">Team Members</span>
                         </div>
@@ -632,7 +575,7 @@ export default function PricingPage() {
                       {plan.quotas.max_jobs !== undefined && plan.quotas.max_jobs >= 1 && (
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-gray-900 dark:text-white">
-                            {isYearly ? (plan.quotas.max_jobs * 12).toLocaleString() : plan.quotas.max_jobs}
+                            {isYearly && !isTrialPlan ? (plan.quotas.max_jobs * 12).toLocaleString() : plan.quotas.max_jobs}
                           </span>
                           <span className="text-gray-600 dark:text-gray-400">Job Postings</span>
                         </div>
@@ -640,7 +583,7 @@ export default function PricingPage() {
                       {plan.quotas.RU !== undefined && plan.quotas.RU >= 1 && (
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-gray-900 dark:text-white">
-                            {isYearly ? (plan.quotas.RU * 12).toLocaleString() : plan.quotas.RU.toLocaleString()}
+                            {isYearly && !isTrialPlan ? (plan.quotas.RU * 12).toLocaleString() : plan.quotas.RU.toLocaleString()}
                           </span>
                           <span className="text-gray-600 dark:text-gray-400">Resume Uploads</span>
                         </div>
@@ -648,7 +591,7 @@ export default function PricingPage() {
                       {plan.quotas.RS !== undefined && plan.quotas.RS >= 1 && (
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-gray-900 dark:text-white">
-                            {isYearly ? (plan.quotas.RS * 12).toLocaleString() : plan.quotas.RS.toLocaleString()}
+                            {isYearly && !isTrialPlan ? (plan.quotas.RS * 12).toLocaleString() : plan.quotas.RS.toLocaleString()}
                           </span>
                           <span className="text-gray-600 dark:text-gray-400">Resume Searches</span>
                         </div>
@@ -656,7 +599,7 @@ export default function PricingPage() {
                       {plan.quotas.AS !== undefined && plan.quotas.AS >= 1 && (
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-gray-900 dark:text-white">
-                            {isYearly ? (plan.quotas.AS * 12).toLocaleString() : plan.quotas.AS.toLocaleString()}
+                            {isYearly && !isTrialPlan ? (plan.quotas.AS * 12).toLocaleString() : plan.quotas.AS.toLocaleString()}
                           </span>
                           <span className="text-gray-600 dark:text-gray-400">Assessments</span>
                         </div>
@@ -664,7 +607,7 @@ export default function PricingPage() {
                       {plan.quotas.AIU !== undefined && plan.quotas.AIU >= 1 && (
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-gray-900 dark:text-white">
-                            {isYearly ? (plan.quotas.AIU * 12).toLocaleString() : plan.quotas.AIU.toLocaleString()}
+                            {isYearly && !isTrialPlan ? (plan.quotas.AIU * 12).toLocaleString() : plan.quotas.AIU.toLocaleString()}
                           </span>
                           <span className="text-gray-600 dark:text-gray-400">AI Interviews</span>
                         </div>
@@ -678,7 +621,7 @@ export default function PricingPage() {
                       {plan.quotas.total_resume_storage !== undefined && plan.quotas.total_resume_storage >= 1 && (
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-gray-900 dark:text-white">
-                            {isYearly ? (plan.quotas.total_resume_storage * 12).toLocaleString() : plan.quotas.total_resume_storage.toLocaleString()}
+                            {isYearly && !isTrialPlan ? (plan.quotas.total_resume_storage * 12).toLocaleString() : plan.quotas.total_resume_storage.toLocaleString()}
                           </span>
                           <span className="text-gray-600 dark:text-gray-400">Resume Storage</span>
                         </div>
@@ -706,14 +649,14 @@ export default function PricingPage() {
 
                 {/* Button - Fixed at bottom */}
                 <Link
-                  href={plan.basePrice ? `/signup?plan=${encodePlanId(plan.id)}` : "/contact"}
+                  href={isTrialPlan ? "/signup" : (plan.basePrice ? `/signup?plan=${encodePlanId(plan.id)}` : "/contact")}
                   className={`block w-full h-12 rounded-lg font-medium text-center leading-[48px] transition-all ${
-                    plan.popular
+                    plan.popular || isTrialPlan
                       ? "bg-gray-800 text-white hover:bg-gray-700"
                       : "border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                   }`}
                 >
-                  {plan.basePrice ? "Choose Plan" : "Contact Sales"}
+                  {isTrialPlan ? "Start with Trial Plan" : (plan.basePrice ? "Choose Plan" : "Contact Sales")}
                 </Link>
               </Card>
               </div>

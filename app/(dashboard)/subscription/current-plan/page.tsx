@@ -252,16 +252,20 @@ const formatDate = (dateString: string): string => {
   });
 };
 
-const getStatusBadge = (status: string, paymentStatus?: string, trialDays: number = 14) => {
+const getStatusBadge = (status?: string, paymentStatus?: string, trialDays?: number) => {
   if (paymentStatus === 'pending') {
     return { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Pending Payment', icon: Clock };
+  }
+
+  if (!status) {
+    return { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Unknown', icon: AlertCircle };
   }
 
   switch (status.toLowerCase()) {
     case 'active':
       return { bg: 'bg-green-100', text: 'text-green-700', label: 'Active', icon: CheckCircle };
     case 'trial':
-      return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: `Free Trial (${trialDays} days)`, icon: Clock };
+      return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: trialDays ? `Free Trial (${trialDays} days)` : 'Free Trial', icon: Clock };
     case 'pending_payment':
       return { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Pending Payment', icon: Clock };
     case 'suspended':
@@ -271,7 +275,7 @@ const getStatusBadge = (status: string, paymentStatus?: string, trialDays: numbe
     case 'locked':
       return { bg: 'bg-red-100', text: 'text-red-700', label: 'Account Locked', icon: Lock };
     default:
-      return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Free Trial', icon: Clock };
+      return { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Unknown', icon: AlertCircle };
   }
 };
 
@@ -425,19 +429,19 @@ function CurrentPlanContent() {
           const ftData = freeTrialResult.data || freeTrialResult;
           console.log('[CurrentPlan] Free trial API response:', ftData);
 
-          // Use API data for trial settings (use ?? to preserve 0 values)
+          // Use API data only for trial settings
           trialSettings = {
             id: ftData.id,
-            trial_days: ftData.trial_days ?? 14,
+            trial_days: ftData.trial_days,
             features: {
-              MAX_JOBS: ftData.features?.MAX_JOBS ?? 5,
-              MAX_SEATS: ftData.features?.MAX_SEATS ?? 2,
-              ASSESSMENTS: ftData.features?.ASSESSMENTS ?? 10,
-              AI_INTERVIEW: ftData.features?.AI_INTERVIEW ?? 10,
-              RESUME_SCORING: ftData.features?.RESUME_SCORING ?? 100,
-              RESUME_STORAGE: ftData.features?.RESUME_STORAGE ?? 100,
+              MAX_JOBS: ftData.features?.MAX_JOBS,
+              MAX_SEATS: ftData.features?.MAX_SEATS,
+              ASSESSMENTS: ftData.features?.ASSESSMENTS,
+              AI_INTERVIEW: ftData.features?.AI_INTERVIEW,
+              RESUME_SCORING: ftData.features?.RESUME_SCORING,
+              RESUME_STORAGE: ftData.features?.RESUME_STORAGE,
             },
-            trial_includes: ftData.trial_includes || ['Resume Storage', 'Resume Scoring', 'Assessments', 'AI Interviews'],
+            trial_includes: ftData.trial_includes || [],
           };
           setFreeTrialSettings(trialSettings);
         }
@@ -445,25 +449,7 @@ function CurrentPlanContent() {
         console.log('[CurrentPlan] Could not fetch free trial settings:', ftError);
       }
 
-      // Fallback: Build trial settings from quota data if API failed
-      if (!trialSettings && quotaData?.quotas) {
-        const q = quotaData.quotas;
-        // Get trial days remaining from API response
-        const trialDaysRemaining = quotaData.trial_info?.days_remaining ?? 14;
-        trialSettings = {
-          trial_days: trialDaysRemaining,
-          features: {
-            MAX_JOBS: q.max_jobs?.subscription?.limit === 'unlimited' ? 999 : (q.max_jobs?.subscription?.limit || 10),
-            MAX_SEATS: q.max_seats?.subscription?.limit === 'unlimited' ? 999 : (q.max_seats?.subscription?.limit || 5),
-            ASSESSMENTS: q.AS?.subscription?.limit === 'unlimited' ? 999 : (q.AS?.subscription?.limit || 50),
-            AI_INTERVIEW: q.AIU?.subscription?.limit === 'unlimited' ? 999 : (q.AIU?.subscription?.limit || 25),
-            RESUME_SCORING: q.RS?.subscription?.limit === 'unlimited' ? 999 : (q.RS?.subscription?.limit || 100),
-            RESUME_STORAGE: q.RU?.subscription?.limit === 'unlimited' ? 999 : (q.RU?.subscription?.limit || 100),
-          },
-          trial_includes: ['Resume Storage', 'Resume Scoring', 'Assessments', 'AI Interviews'],
-        };
-        setFreeTrialSettings(trialSettings);
-      }
+      // No fallback - use only free trial API data
 
       if (quotaData?.quotas) {
 
@@ -471,9 +457,9 @@ function CurrentPlanContent() {
         const quotas = quotaData.quotas;
         const isTrial = quotaData.is_trial === true;
 
-        // For FREE TRIAL: Get dates from trial_info
-        const trialStartDate = quotaData.trial_info?.trial_start_date || null;
-        const trialEndDate = quotaData.trial_info?.trial_end_date || null;
+        // For FREE TRIAL: Get dates from root level (backend returns trial_start_date/trial_end_date at root)
+        const trialStartDate = quotaData.trial_start_date || quotaData.trial_info?.trial_start_date || null;
+        const trialEndDate = quotaData.trial_end_date || quotaData.trial_info?.trial_end_date || null;
 
         // For PAID PLAN: Get dates from root level (plan_start_date, plan_expiry_date) or billing_period
         const planStartDate = quotaData.plan_start_date || quotaData.billing_period?.start || null;
@@ -489,22 +475,22 @@ function CurrentPlanContent() {
           ...prev!,
           current_plan_name: quotaData.plan_name || prev?.current_plan_name,
           current_plan_id: quotaData.plan_info?.plan_id || prev?.current_plan_id,
-          subscription_status: isTrial ? 'trial' : (quotaData.subscription_status || 'active'),
-          status: isTrial ? 'trial' : (quotaData.subscription_status || 'active'),
+          subscription_status: isTrial ? 'trial' : (quotaData.subscription_status || prev?.subscription_status),
+          status: isTrial ? 'trial' : (quotaData.subscription_status || prev?.status),
           // Set trial dates if available
           trial_start_date: trialStartDate || prev?.trial_start_date,
           trial_end_date: trialEndDate || prev?.trial_end_date,
           // Set plan dates if available (keep existing if API doesn't return new ones)
           plan_start_date: planStartDate || prev?.plan_start_date,
           plan_expiry_date: planEndDate || prev?.plan_expiry_date,
-          // Update quota limits - use free trial API data for trial users, otherwise use quota-status
-          max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : (quotas?.max_seats?.subscription?.limit || prev?.max_seats || 5),
-          max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : (quotas?.max_jobs?.subscription?.limit || prev?.max_jobs || 10),
-          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : (quotas?.RU?.subscription?.limit || prev?.max_resume_uploads || 100),
-          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : (quotas?.RS?.subscription?.limit || prev?.max_resume_searches || 100),
-          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : (quotas?.AS?.subscription?.limit || prev?.max_assessments || 50),
-          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : (quotas?.AIU?.subscription?.limit || prev?.max_ai_interviews || 25),
-          storage_limit_gb: quotas?.storage_gb?.subscription?.limit || prev?.storage_limit_gb || 10,
+          // Update quota limits - use free trial API data for trial users, otherwise use quota-status (API only)
+          max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : (quotas?.max_seats?.subscription?.limit || prev?.max_seats),
+          max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : (quotas?.max_jobs?.subscription?.limit || prev?.max_jobs),
+          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : (quotas?.RU?.subscription?.limit || prev?.max_resume_uploads),
+          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : (quotas?.RS?.subscription?.limit || prev?.max_resume_searches),
+          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : (quotas?.AS?.subscription?.limit || prev?.max_assessments),
+          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : (quotas?.AIU?.subscription?.limit || prev?.max_ai_interviews),
+          storage_limit_gb: quotas?.storage_gb?.subscription?.limit || prev?.storage_limit_gb,
         }));
 
         console.log('[CurrentPlan] isTrial:', isTrial, 'trialSettings:', trialSettings?.features);
@@ -529,11 +515,8 @@ function CurrentPlanContent() {
         } else if (quotaData.subscription_status) {
           setQuotaSubscriptionStatus(quotaData.subscription_status);
           console.log('[CurrentPlan] Setting subscription_status from quota:', quotaData.subscription_status);
-        } else {
-          // Paid plan without explicit status - assume active
-          setQuotaSubscriptionStatus('active');
-          console.log('[CurrentPlan] Setting subscription_status as active (paid plan)');
         }
+        // No fallback - use only API data
       }
 
       // Fetch plan settings (yearly discount, database extra charge)
@@ -543,8 +526,8 @@ function CurrentPlanContent() {
           const planSettingsResult = await planSettingsResponse.json();
           const settings = planSettingsResult.data || planSettingsResult;
           setPlanSettings({
-            yearlyDiscountPercentage: settings.yearlyDiscountPercentage || 0,
-            databasePerTenantMonthlyPrice: settings.databasePerTenantMonthlyPrice || 0,
+            yearlyDiscountPercentage: settings.yearlyDiscountPercentage,
+            databasePerTenantMonthlyPrice: settings.databasePerTenantMonthlyPrice,
           });
           console.log('[CurrentPlan] Plan settings:', settings);
         }
@@ -643,8 +626,8 @@ function CurrentPlanContent() {
             name: plan.plan_name,
             description: plan.description,
             price: plan.base_price > 0 ? plan.base_price : null,
-            currency: plan.currency || 'INR',
-            billingPeriod: plan.billing_period || 'ANNUAL',
+            currency: plan.currency,
+            billingPeriod: plan.billing_period,
             icon: getIconForPlan(plan.plan_name, plan.plan_tier),
             gradient: getGradientForPlan(plan.plan_name, plan.plan_tier),
             popular: plan.is_featured || false,
@@ -849,7 +832,7 @@ function CurrentPlanContent() {
     setModalStep('isolation');
     setIsolationType('schema'); // Default to schema (checkbox unchecked)
     setIsNewTenant(false); // Always use existing
-    setIsYearly(true); // Always yearly in popup
+    // Keep the current billing period toggle state (isYearly remains as-is)
     setTransactionResult(null);
     setError(null);
     setShowPaymentModal(true);
@@ -1042,21 +1025,22 @@ function CurrentPlanContent() {
                            companySettings?.payment_status === 'pending';
   const isLocked = companySettings?.status?.toLowerCase() === 'locked';
   const isActive = companySettings?.status?.toLowerCase() === 'active';
-  const statusBadge = getStatusBadge(companySettings?.status || 'trial', companySettings?.payment_status, freeTrialSettings?.trial_days || 14);
+  const statusBadge = getStatusBadge(companySettings?.status, companySettings?.payment_status, freeTrialSettings?.trial_days);
   const StatusIcon = statusBadge.icon;
 
-  // For trial users, use days_remaining from API (via freeTrialSettings)
+  // Calculate remaining days from API dates only
+  // For trial users, calculate from trial_end_date
   // For paid users, calculate from plan expiry date
   const trialDaysRemaining = isOnTrial
-    ? (freeTrialSettings?.trial_days ?? (companySettings?.trial_end_date ? getDaysRemaining(companySettings.trial_end_date) : 14))
-    : (companySettings?.plan_expiry_date ? getDaysRemaining(companySettings.plan_expiry_date) : 0);
+    ? (companySettings?.trial_end_date ? getDaysRemaining(companySettings.trial_end_date) : undefined)
+    : (companySettings?.plan_expiry_date ? getDaysRemaining(companySettings.plan_expiry_date) : undefined);
 
-  // Calculate prices for payment
+  // Calculate prices for payment (API data only)
   const calculatePrices = () => {
     const basePrice = selectedPlanForPayment?.price || 0;
-    const discountPercent = planSettings?.yearlyDiscountPercentage || 20;
+    const discountPercent = planSettings?.yearlyDiscountPercentage || 0;
     const monthlyPrice = basePrice;
-    const yearlyPrice = Math.round(basePrice * 12 * (1 - discountPercent / 100));
+    const yearlyPrice = discountPercent > 0 ? Math.round(basePrice * 12 * (1 - discountPercent / 100)) : basePrice * 12;
     const yearlyFullPrice = basePrice * 12;
     const planPrice = isYearly ? yearlyPrice : monthlyPrice;
     const dbExtraCharge = isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) : 0;
@@ -1173,12 +1157,12 @@ function CurrentPlanContent() {
                 {isLocked
                   ? 'Your account is locked. Please select a plan and complete payment.'
                   : isOnTrial
-                    ? `You are on a Free Trial - ${trialDaysRemaining} days remaining`
+                    ? `You are on a Free Trial${trialDaysRemaining ? ` - ${trialDaysRemaining} days remaining` : ''}`
                     : isActive
-                      ? `You are on the ${(companySettings?.current_plan_name || currentPlan?.name || 'Unknown').replace(/\s*\([^)]*\)\s*$/, '')} plan`
+                      ? `You are on the ${(companySettings?.current_plan_name || currentPlan?.name || '').replace(/\s*\([^)]*\)\s*$/, '')} plan`
                       : isPendingPayment
                         ? 'Complete payment to activate your selected plan'
-                        : `You are on the ${(companySettings?.current_plan_name || 'Unknown').replace(/\s*\([^)]*\)\s*$/, '')} plan`
+                        : companySettings?.current_plan_name ? `You are on the ${companySettings.current_plan_name.replace(/\s*\([^)]*\)\s*$/, '')} plan` : ''
                 }
               </p>
             </div>
@@ -1191,7 +1175,7 @@ function CurrentPlanContent() {
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-600 mb-1">Plan</p>
               <p className="text-xl font-semibold text-gray-900">
-                {(companySettings?.current_plan_name || (isOnTrial ? 'Free Trial' : 'No Plan')).replace(/\s*\([^)]*\)\s*$/, '')}
+                {companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || (isOnTrial ? 'Free Trial' : '')}
               </p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
@@ -1204,7 +1188,7 @@ function CurrentPlanContent() {
                 ) : currentPlan?.price ? (
                   <>{formatCurrency(currentPlan.price, currentPlan.currency)}</>
                 ) : (
-                  'Custom'
+                  '-'
                 )}
               </p>
             </div>
@@ -1464,26 +1448,54 @@ function CurrentPlanContent() {
                   You have a pending upgrade queued. Cancel it above or apply it now to select a different plan.
                 </p>
               )}
+
+              {/* Billing Period Toggle */}
+              <div className="flex items-center justify-center gap-4 mt-6">
+                <span className={`text-lg ${!isYearly ? "text-gray-900 font-medium" : "text-gray-500"}`}>
+                  Monthly
+                </span>
+                <button
+                  onClick={() => setIsYearly(!isYearly)}
+                  className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ${
+                    isYearly
+                      ? "bg-gray-800"
+                      : "bg-gray-300"
+                  }`}
+                  aria-label="Toggle billing period"
+                >
+                  <span
+                    className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                      isYearly ? "translate-x-6" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+                <span className={`text-lg ${isYearly ? "text-gray-900 font-medium" : "text-gray-500"}`}>
+                  Yearly
+                </span>
+                <Badge className="bg-gray-100 text-gray-700">
+                  Save {planSettings?.yearlyDiscountPercentage || 10}%
+                </Badge>
+              </div>
             </div>
-            <div className={`grid gap-8 pt-8 ${
+            <div className={`grid gap-8 pt-8 max-w-6xl mx-auto ${
               plans.length === 1 ? 'md:grid-cols-1 max-w-md' :
               plans.length === 2 ? 'md:grid-cols-2 max-w-3xl' :
               'md:grid-cols-3'
-            }`}>
+            }`} style={{ gridAutoRows: '1fr' }}>
               {plans.map((plan) => {
                 const Icon = plan.icon;
                 const isSelectedPending = isPendingPayment && companySettings?.selected_plan_id === plan.numericId;
 
                 return (
+                  <div key={plan.id} className="flex">
                   <Card
-                    key={plan.id}
-                    className={`relative p-8 flex flex-col h-full ${
+                    className={`relative p-8 flex flex-col w-full ${
                       isSelectedPending
                         ? "border-2 border-orange-500 shadow-xl"
                         : plan.isCurrent
                           ? "border-2 border-gray-600 shadow-xl"
                           : plan.popular
-                            ? "border-2 border-gray-800 shadow-xl scale-105"
+                            ? "border-2 border-gray-800 shadow-xl"
                             : "border border-gray-200"
                     }`}
                   >
@@ -1518,11 +1530,33 @@ function CurrentPlanContent() {
 
                     <div className="mb-6">
                       {plan.price ? (
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-4xl font-bold text-gray-900">
-                            {formatCurrency(plan.price, plan.currency)}
-                          </span>
-                          <span className="text-gray-500 text-sm">/month</span>
+                        <div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-4xl font-bold text-gray-900">
+                              {formatCurrency(
+                                isYearly
+                                  ? Math.round(plan.price * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 0) / 100))
+                                  : plan.price,
+                                plan.currency
+                              )}
+                            </span>
+                            <span className="text-gray-500 text-sm">
+                              {isYearly ? '/year' : '/month'}
+                            </span>
+                          </div>
+                          {isYearly && planSettings?.yearlyDiscountPercentage && (
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="text-sm text-gray-400 line-through">
+                                {formatCurrency(plan.price * 12, plan.currency)}
+                              </span>
+                              <span className="text-sm text-green-600 font-medium">
+                                Save {formatCurrency(
+                                  plan.price * 12 - Math.round(plan.price * 12 * (1 - planSettings.yearlyDiscountPercentage / 100)),
+                                  plan.currency
+                                )}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="text-4xl font-bold text-gray-900">Custom</div>
@@ -1624,6 +1658,7 @@ function CurrentPlanContent() {
                       )}
                     </button>
                   </Card>
+                  </div>
                 );
               })}
             </div>
