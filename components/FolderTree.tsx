@@ -184,18 +184,21 @@ export default function FolderTree({
               <Plus className="w-4 h-4" />
               Create Subfolder
             </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setRenameValue(folder.name);
-                setRenamingFolderId(folder.id);
-                setShowFolderMenu(null);
-              }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
-            >
-              <Edit2 className="w-4 h-4" />
-              Rename Folder
-            </button>
+            {/* Only show rename option if not root folder */}
+            {!(folder.name.toLowerCase() === 'root' && !folder.parentId) && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setRenameValue(folder.name);
+                  setRenamingFolderId(folder.id);
+                  setShowFolderMenu(null);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+              >
+                <Edit2 className="w-4 h-4" />
+                Rename Folder
+              </button>
+            )}
             {/* Only show delete option if not root folder */}
             {!(folder.name.toLowerCase() === 'root' && !folder.parentId) && (
               <>

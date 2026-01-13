@@ -91,7 +91,7 @@ export default function ResumeSelectionModal({
   };
 
   const renderFolderTree = (parentId?: string, level: number = 0) => {
-    const childFolders = folders.filter(f => f.parentId === parentId);
+    const childFolders = folders.filter(f => f.parentId === parentId && !(f.name.toLowerCase() === 'root' && !f.parentId));
     
     return childFolders.map(folder => {
       const isExpanded = expandedFolders.includes(folder.id);

@@ -686,7 +686,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                 >
                   <option value="">Choose folder...</option>
-                  {folders.filter(f => f.id !== 'all').map(folder => (
+                  {folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId)).map(folder => (
                     <option key={folder.id} value={folder.id}>
                       {folder.name}
                     </option>

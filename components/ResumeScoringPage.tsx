@@ -11,6 +11,7 @@ import ScoringJobProgressModal, { JobScoringProgress } from './ScoringJobProgres
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import api from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
+import { toast } from 'sonner';
 
 // Types
 interface Job {
@@ -421,47 +422,24 @@ export default function ResumeScoringPage({
   // Bulk download scorecards as ZIP
   const handleBulkDownloadScorecards = async () => {
     if (selectedScoredResumes.length === 0) {
-      alert('Please select at least one candidate to download scorecards');
+      toast.error('Please select at least one candidate to download scorecards');
       return;
     }
 
     setIsBulkDownloading(true);
+    toast.loading(`Preparing ${selectedScoredResumes.length} scorecard(s) for download...`, { id: 'bulk-scorecard-download' });
 
     try {
       console.log('[BulkDownload] Downloading scorecards for:', selectedScoredResumes);
 
-      // Get token from localStorage
-      const token = localStorage.getItem('accessToken');
-      if (!token) {
-        alert('Please login to download scorecards');
-        return;
-      }
-
-      // Call the backend API to get ZIP
-      const response = await fetch('https://talentflowdata.api.mo.vc/api/v1/scoring/scores/bulk-download', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(selectedScoredResumes),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        console.error('[BulkDownload] Failed:', response.status, errorData);
-        alert(`Failed to download scorecards: ${errorData?.detail || response.statusText}`);
-        return;
-      }
-
-      // Get the ZIP blob
-      const blob = await response.blob();
+      // Use the scoring service to export scorecards
+      const blob = await scoringService.exportScorecards(selectedScoredResumes);
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `TalentFlow_Scorecards_${new Date().getTime()}.zip`;
+      a.download = `TalentFlow_Scorecards_${new Date().toISOString().split('T')[0]}.zip`;
       document.body.appendChild(a);
       a.click();
 
@@ -470,13 +448,13 @@ export default function ResumeScoringPage({
       document.body.removeChild(a);
 
       console.log('[BulkDownload] ZIP downloaded successfully');
-      alert(`Successfully downloaded ${selectedScoredResumes.length} scorecards as ZIP file`);
+      toast.success(`Successfully downloaded ${selectedScoredResumes.length} scorecard(s)`, { id: 'bulk-scorecard-download' });
 
       // Clear selection
       setSelectedScoredResumes([]);
     } catch (error) {
       console.error('[BulkDownload] Error:', error);
-      alert('Failed to download scorecards. Please try again.');
+      toast.error('Failed to download scorecards. Please try again.', { id: 'bulk-scorecard-download' });
     } finally {
       setIsBulkDownloading(false);
     }
@@ -708,6 +686,9 @@ export default function ResumeScoringPage({
                 ? prev.filter(id => id !== resumeId)
                 : [...prev, resumeId]
             );
+          }}
+          onSelectAll={(resumeIds) => {
+            setSelectedScoredResumes(resumeIds);
           }}
         />
 

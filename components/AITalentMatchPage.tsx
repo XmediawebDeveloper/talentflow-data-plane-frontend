@@ -9,6 +9,7 @@ import ResumeVersionsModal from './ResumeVersionsModal';
 import { recordUsage } from '@/lib/services/usageTrackingService';
 import { MatchedCandidate } from '@/lib/services/aiMatchService';
 import api from '@/lib/services/api';
+import { scoringService } from '@/lib/services/scoringService';
 
 interface Job {
   id: string;
@@ -167,14 +168,16 @@ export default function AITalentMatchPage({
       const existingMatch = matchHistory.find(h => h.jobId === preselectedJobId);
 
       if (existingMatch && existingMatch.matchedCandidates.length > 0) {
-        // Show existing results
+        // Show existing results from history
         setSelectedHistoryItem(existingMatch);
         setMatchedCandidates(existingMatch.matchedCandidates);
         setViewMode('results');
       } else {
-        // No results yet - show empty results view
-        setMatchedCandidates([]);
+        // No results in history - but don't clear matchedCandidates if we just completed a match
+        // (matchHistory prop is stale until page refresh, but matchedCandidates state has fresh results)
         setViewMode('results');
+        // Only clear if we don't already have results in state (avoids clearing just-completed match results)
+        setMatchedCandidates(prev => prev.length > 0 ? prev : []);
       }
 
       // Update URL to persist state on refresh
@@ -220,12 +223,15 @@ export default function AITalentMatchPage({
   const handleRunAIMatch = (jobId?: string) => {
     const jobToMatch = jobId || selectedJob;
     if (!jobToMatch) return;
-    
+
+    // Mark that we're in an active matching session to prevent URL effect interference
+    isMatchingInProgress.current = true;
+
     // Set the selected job if provided
     if (jobId && jobId !== selectedJob) {
       setSelectedJob(jobId);
     }
-    
+
     // Show matching progress panel
     setShowMatchingPanel(true);
   };
@@ -250,10 +256,11 @@ export default function AITalentMatchPage({
     // Update URL to show results view
     updateUrlParams({ jdId: selectedJob, view: 'results' });
 
-    // Clear matching flag after a short delay to allow state to settle
+    // Clear matching flag after a longer delay to allow state and URL to fully settle
+    // This prevents the URL effect from interfering with the just-set matchedCandidates
     setTimeout(() => {
       isMatchingInProgress.current = false;
-    }, 100);
+    }, 500);
 
     // Track usage - POST /api/v1/external/usage/record (RS - talent match uses resume scoring quota)
     recordUsage({
@@ -293,7 +300,7 @@ export default function AITalentMatchPage({
     }
   };
 
-  const handleSubmitToScoring = () => {
+  const handleSubmitToScoring = async () => {
     if (selectedCandidates.length === 0) {
       alert('Please select at least one candidate to score');
       return;
@@ -306,7 +313,6 @@ export default function AITalentMatchPage({
     // Get selected candidates data
     const selected = currentCandidates.filter(c => selectedCandidates.includes(c.id));
     const resumeIds = selected.map(c => c.resumeId);
-    const resumeNames = selected.map(c => c.name);
 
     // Get the job ID and title
     const jobId = selectedJob || selectedHistoryItem?.jobId;
@@ -317,17 +323,25 @@ export default function AITalentMatchPage({
       return;
     }
 
-    // Store in sessionStorage in the format expected by resume scoring page
-    const pendingScoringData = {
-      jobId,
-      jobTitle,
-      resumeIds,
-      resumeNames,
-    };
-    sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingScoringData));
+    try {
+      // Start async bulk scoring via Celery (background processing)
+      const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
-    // Navigate to resume scoring page with start_scoring=true to trigger auto-scoring
-    router.push('/recruitment/resume-scoring?start_scoring=true');
+      // Store batch info for the resume-scoring page to poll
+      const scoringData = {
+        batchId: response.batch_id,
+        jobId: response.jd_id,
+        jobTitle: response.jd_title,
+        totalResumes: response.total_resumes,
+      };
+      sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
+
+      // Navigate to resume scoring page with batch_id to show progress
+      router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
+    } catch (error: any) {
+      console.error('Failed to start scoring:', error);
+      alert(error.message || 'Failed to start scoring');
+    }
   };
 
   const getFilteredCandidates = (): MatchedCandidateWithVersions[] => {

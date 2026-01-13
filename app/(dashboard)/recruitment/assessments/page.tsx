@@ -1,13 +1,29 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Assessments from '@/components/Assessments';
 import { jdService } from '@/lib/services/jdService';
 import { Job } from '@/lib/types/types';
 
 export default function AssessmentsRoute() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Check if we should auto-open create mode with a pre-selected JD
+  const autoCreate = searchParams.get('create') === 'true';
+  const preSelectedJdId = searchParams.get('jd_id');
+  const preSelectedJdTitle = searchParams.get('jd_title');
+
+  // Clear query params after reading (to prevent re-triggering on refresh)
+  useEffect(() => {
+    if (autoCreate) {
+      // Clear query params from URL without triggering a navigation
+      router.replace('/recruitment/assessments', { scroll: false });
+    }
+  }, [autoCreate, router]);
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -53,5 +69,12 @@ export default function AssessmentsRoute() {
     );
   }
 
-  return <Assessments jobs={jobs} />;
+  return (
+    <Assessments
+      jobs={jobs}
+      autoOpenCreate={autoCreate}
+      preSelectedJdId={preSelectedJdId || undefined}
+      preSelectedJdTitle={preSelectedJdTitle ? decodeURIComponent(preSelectedJdTitle) : undefined}
+    />
+  );
 }

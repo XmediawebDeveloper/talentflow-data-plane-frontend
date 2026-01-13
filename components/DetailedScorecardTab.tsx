@@ -131,8 +131,10 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
   // Try to use criteriaScores object from API
   else if (resume.criteriaScores && Object.keys(resume.criteriaScores).length > 0) {
     criteriaScores = Object.entries(resume.criteriaScores).map(([key, value]: [string, any]) => {
+      // Skip if value is null/undefined
+      if (!value || typeof value !== 'object') return null;
       // API returns scores 0-10, convert to rating directly
-      const rawScore = value.score || 0;
+      const rawScore = value.score ?? 0;
       const rating = rawScore <= 10 ? Math.round(rawScore) : convertToRating(rawScore);
       const displayName = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
       // Determine if essential based on key or is_essential flag
@@ -144,7 +146,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
         criteriaType: isEssential ? 'Required' : 'Preferred',
         aiReasoning: value.reasoning || generateReasoning(key, rawScore <= 10 ? rawScore * 10 : rawScore)
       };
-    });
+    }).filter((item): item is NonNullable<typeof item> => item !== null);
   }
   // Fallback to detailedScores - REMOVED static data, only show if real API data exists
   else {
