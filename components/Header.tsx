@@ -23,30 +23,42 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [quotaData, setQuotaData] = useState<any>(null);
   const [loadingQuota, setLoadingQuota] = useState(true);
 
-  // Fetch quota status from API - re-fetch when user changes
+  // Fetch quota status from API
+  const fetchQuotaStatus = async () => {
+    if (!user) {
+      setQuotaData(null);
+      setLoadingQuota(false);
+      return;
+    }
+
+    setLoadingQuota(true);
+    try {
+      const response = await api.get('/usage/quota-status');
+      if (response.data?.status === 'success') {
+        setQuotaData(response.data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch quota status:', error);
+    } finally {
+      setLoadingQuota(false);
+    }
+  };
+
+  // Re-fetch when user changes
   useEffect(() => {
-    const fetchQuotaStatus = async () => {
-      if (!user) {
-        setQuotaData(null);
-        setLoadingQuota(false);
-        return;
-      }
-
-      setLoadingQuota(true);
-      try {
-        const response = await api.get('/usage/quota-status');
-        if (response.data?.status === 'success') {
-          setQuotaData(response.data.data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch quota status:', error);
-      } finally {
-        setLoadingQuota(false);
-      }
-    };
-
     fetchQuotaStatus();
   }, [user?.id]);
+
+  // Listen for plan changes to refresh quota data
+  useEffect(() => {
+    const handlePlanChange = () => {
+      console.log('[Header] Plan changed, refreshing quota...');
+      fetchQuotaStatus();
+    };
+
+    window.addEventListener('planChanged', handlePlanChange);
+    return () => window.removeEventListener('planChanged', handlePlanChange);
+  }, [user]);
   
   // Calculate total units (RU + RS + AS + AIU + max_jobs + max_seats)
   const calculateTotalUnits = () => {

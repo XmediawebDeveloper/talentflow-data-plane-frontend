@@ -100,11 +100,66 @@ export class JDStreamClient {
       const decoder = new TextDecoder();
       let buffer = '';
 
+      // Helper function to process SSE lines
+      const processLine = (line: string): boolean => {
+        if (line.startsWith('data: ')) {
+          const jsonStr = line.slice(6); // Remove 'data: ' prefix
+
+          try {
+            const data: SSEEvent = JSON.parse(jsonStr);
+
+            switch (data.type) {
+              case 'connected':
+                console.log('[Stream] Server acknowledged');
+                break;
+
+              case 'chunk':
+                callbacks.onChunk?.(data.content);
+                break;
+
+              case 'title':
+                callbacks.onTitle?.(data.content);
+                break;
+
+              case 'complete':
+                console.log('[Stream] Generation complete');
+                callbacks.onComplete?.({
+                  title: data.title,
+                  description: data.description,
+                  extracted_params: data.extracted_params
+                });
+                return true; // Signal completion
+
+              case 'error':
+                console.error('[Stream] Server error:', data.message);
+                callbacks.onError?.(data.message);
+                throw new Error(data.message);
+            }
+          } catch (err) {
+            if (err instanceof Error && err.message.includes('error')) {
+              throw err; // Re-throw server errors
+            }
+            console.warn('[Stream] Failed to parse message:', jsonStr);
+          }
+        }
+        return false;
+      };
+
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) {
-          console.log('[Stream] Stream ended');
+          console.log('[Stream] Stream ended, processing remaining buffer');
+          // Process any remaining data in buffer when stream ends
+          if (buffer.trim()) {
+            const remainingLines = buffer.split('\n');
+            for (const line of remainingLines) {
+              if (processLine(line)) {
+                return; // Complete event was found
+              }
+            }
+          }
+          console.log('[Stream] No complete event in remaining buffer');
           break;
         }
 
@@ -116,45 +171,8 @@ export class JDStreamClient {
         buffer = lines.pop() || ''; // Keep incomplete line in buffer
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const jsonStr = line.slice(6); // Remove 'data: ' prefix
-
-            try {
-              const data: SSEEvent = JSON.parse(jsonStr);
-
-              switch (data.type) {
-                case 'connected':
-                  console.log('[Stream] Server acknowledged');
-                  break;
-
-                case 'chunk':
-                  callbacks.onChunk?.(data.content);
-                  break;
-
-                case 'title':
-                  callbacks.onTitle?.(data.content);
-                  break;
-
-                case 'complete':
-                  console.log('[Stream] Generation complete');
-                  callbacks.onComplete?.({
-                    title: data.title,
-                    description: data.description,
-                    extracted_params: data.extracted_params
-                  });
-                  return; // Success!
-
-                case 'error':
-                  console.error('[Stream] Server error:', data.message);
-                  callbacks.onError?.(data.message);
-                  throw new Error(data.message);
-              }
-            } catch (err) {
-              if (err instanceof Error && err.message.includes('error')) {
-                throw err; // Re-throw server errors
-              }
-              console.warn('[Stream] Failed to parse message:', jsonStr);
-            }
+          if (processLine(line)) {
+            return; // Complete event was found
           }
         }
       }
