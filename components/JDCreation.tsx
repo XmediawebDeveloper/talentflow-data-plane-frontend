@@ -1056,6 +1056,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         must_have_skills: extraction.mustHaveSkills,
         nice_to_have_skills: extraction.niceToHaveSkills,
         must_have_comments: extraction.mustHaveComments,
+        nice_to_have_comments: extraction.niceToHaveComments,
         education_requirements: extraction.education ? { degree: extraction.education } : undefined,
         experience_min: hasExpMin ? params.experience_min : undefined,
         experience_max: hasExpMax ? params.experience_max : undefined,
@@ -1704,6 +1705,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
+        nice_to_have_comments: extractedData.niceToHaveComments,
         allow_overqualified: extractedData.allowOverqualified,
         // JD11: Include certifications and domain_keywords in data sync
         certifications: extractedData.certifications,
@@ -1946,6 +1948,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
+        nice_to_have_comments: extractedData.niceToHaveComments,
         allow_overqualified: extractedData.allowOverqualified,
         // JD11: Include certifications and domain_keywords in data sync
         certifications: extractedData.certifications,
