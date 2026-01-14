@@ -2688,13 +2688,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               <button
                 onClick={handleNext}
                 disabled={
+                  isStreaming ||
                   isExtracting ||
                   !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
                   (mode === 'ai' ? !generatedJD : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max))
                 }
                 className="flex items-center gap-2 bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isExtracting ? 'Extracting...' : 'Next: Extract Skills'}
+                {isStreaming ? 'Generating...' : isExtracting ? 'Extracting...' : 'Next: Extract Skills'}
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
