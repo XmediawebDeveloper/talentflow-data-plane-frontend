@@ -82,7 +82,21 @@ interface DisplayPlan {
   popular: boolean;
   features: string[];
   quotas?: PlanQuotas;
+  // Separate quotas for monthly and annual - from API directly
+  monthlyQuotas?: PlanQuotas;
+  annualQuotas?: PlanQuotas;
+  // Discount percentage from API
+  discountPercentage?: number;
   isCurrent: boolean;
+  // Track which billing period is current (for button state based on toggle)
+  isCurrentMonthly: boolean;
+  isCurrentAnnual: boolean;
+  // New fields for monthly/annual plan variants
+  monthlyPlanId?: number;
+  annualPlanId?: number;
+  monthlyPrice?: number | null;
+  annualPrice?: number | null;
+  planSlug: string;
 }
 
 interface CompanySettings {
@@ -629,40 +643,83 @@ function CurrentPlanContent() {
         throw new Error('Failed to fetch plans');
       }
       const plansResult = await plansResponse.json();
-      const plansData: ApiPlan[] = plansResult.data || plansResult;
 
-      const transformedPlans: DisplayPlan[] = plansData
-        .filter(plan => plan.is_active && plan.is_public)
-        .sort((a, b) => {
-          if (a.display_order !== b.display_order) {
-            return (a.display_order || 0) - (b.display_order || 0);
-          }
-          return a.base_price - b.base_price;
-        })
-        .map((plan) => {
-          const featureNames = plan.features
+      // Handle new API structure: { data: { plans: [...] } } with billing_options
+      const plansArray = plansResult.data?.plans || plansResult.plans || [];
+
+      interface GroupedPlan {
+        plan_name: string;
+        plan_slug: string;
+        plan_tier: string;
+        description: string;
+        trial_period_days?: number;
+        billing_options: {
+          monthly?: ApiPlan;
+          annual?: ApiPlan;
+        };
+      }
+
+      const transformedPlans: DisplayPlan[] = (Array.isArray(plansArray) ? plansArray : [])
+        .map((groupedPlan: GroupedPlan) => {
+          const monthly = groupedPlan.billing_options?.monthly;
+          const annual = groupedPlan.billing_options?.annual;
+
+          // Use monthly plan as base, fallback to annual if no monthly
+          const basePlan = monthly || annual;
+          if (!basePlan) return null;
+
+          // Skip if neither monthly nor annual is active/public
+          if (!monthly?.is_active && !annual?.is_active) return null;
+          if (!monthly?.is_public && !annual?.is_public) return null;
+
+          const featureNames = basePlan.features
             ?.filter(f => f.is_enabled)
             ?.map(f => f.feature_name) || [];
 
-          const isCurrent =
-            (settings?.current_plan_id !== undefined && Number(settings.current_plan_id) === Number(plan.id)) ||
-            (settings?.current_plan_name?.toLowerCase() === plan.plan_name.toLowerCase());
+          // Check if monthly or annual plan is the current plan
+          const isCurrentMonthly = settings?.current_plan_id !== undefined &&
+            Number(settings.current_plan_id) === Number(monthly?.id);
+          const isCurrentAnnual = settings?.current_plan_id !== undefined &&
+            Number(settings.current_plan_id) === Number(annual?.id);
+          const isCurrent = isCurrentMonthly || isCurrentAnnual ||
+            (settings?.current_plan_name?.toLowerCase() === groupedPlan.plan_name.toLowerCase());
 
           return {
-            id: String(plan.id),
-            numericId: plan.id,
-            name: plan.plan_name,
-            description: plan.description,
-            price: plan.base_price > 0 ? plan.base_price : null,
-            currency: plan.currency,
-            billingPeriod: plan.billing_period,
-            icon: getIconForPlan(plan.plan_name, plan.plan_tier),
-            gradient: getGradientForPlan(plan.plan_name, plan.plan_tier),
-            popular: plan.is_featured || false,
+            id: String(basePlan.id),
+            numericId: basePlan.id,
+            name: groupedPlan.plan_name,
+            description: groupedPlan.description,
+            price: monthly?.base_price ?? null,
+            currency: basePlan.currency,
+            billingPeriod: basePlan.billing_period,
+            icon: getIconForPlan(groupedPlan.plan_name, groupedPlan.plan_tier),
+            gradient: getGradientForPlan(groupedPlan.plan_name, groupedPlan.plan_tier),
+            popular: basePlan.is_featured || false,
             features: featureNames,
-            quotas: plan.quotas,
+            quotas: basePlan.quotas,
+            // Store separate quotas for monthly and annual from API
+            monthlyQuotas: monthly?.quotas,
+            annualQuotas: annual?.quotas,
+            // Discount percentage from API
+            discountPercentage: (groupedPlan as any).discount_percentage ?? annual?.discount_percentage,
             isCurrent,
+            // Track which billing period is current
+            isCurrentMonthly,
+            isCurrentAnnual,
+            // Monthly/annual variants from billing_options
+            monthlyPlanId: monthly?.id,
+            annualPlanId: annual?.id,
+            monthlyPrice: monthly?.base_price ?? null,
+            annualPrice: annual?.base_price ?? null,
+            planSlug: groupedPlan.plan_slug,
           };
+        })
+        .filter((plan): plan is DisplayPlan => plan !== null)
+        .sort((a, b) => {
+          // Sort by price (monthly price as baseline)
+          const orderA = a.monthlyPrice || 0;
+          const orderB = b.monthlyPrice || 0;
+          return orderA - orderB;
         });
 
       setPlans(transformedPlans);
@@ -892,9 +949,21 @@ function CurrentPlanContent() {
       const token = localStorage.getItem('accessToken');
       const apiUrl = `${API_URL}/subscription/${tenantId}/select-plan`;
 
-      // Request body per API spec
+      // Request body per API spec - use correct plan_id based on billing period
+      const planId = isYearly
+        ? (selectedPlanForPayment.annualPlanId || selectedPlanForPayment.numericId)
+        : (selectedPlanForPayment.monthlyPlanId || selectedPlanForPayment.numericId);
+
+      console.log('[SelectPlan] Plan IDs available:', {
+        monthlyPlanId: selectedPlanForPayment.monthlyPlanId,
+        annualPlanId: selectedPlanForPayment.annualPlanId,
+        numericId: selectedPlanForPayment.numericId,
+        isYearly,
+        selectedPlanId: planId,
+      });
+
       const requestBody = {
-        plan_id: selectedPlanForPayment.numericId,
+        plan_id: planId,
         schema_per_tenant: isolationType === 'schema',
         database_per_tenant: isolationType === 'database',
         external_transaction_id: transactionId,
@@ -990,11 +1059,16 @@ function CurrentPlanContent() {
               storage_limit_gb: selectedPlanForPayment.quotas?.storage_gb || prev?.storage_limit_gb || 5,
             }));
 
-            // Update the plans to mark the new one as current
-            setPlans(prevPlans => prevPlans.map(p => ({
-              ...p,
-              isCurrent: p.numericId === selectedPlanForPayment.numericId,
-            })));
+            // Update the plans to mark the new one as current based on billing toggle
+            setPlans(prevPlans => prevPlans.map(p => {
+              const isThisPlan = p.numericId === selectedPlanForPayment.numericId;
+              return {
+                ...p,
+                isCurrent: isThisPlan,
+                isCurrentMonthly: isThisPlan && !isYearly,
+                isCurrentAnnual: isThisPlan && isYearly,
+              };
+            }));
           }
         }
 
@@ -1066,18 +1140,16 @@ function CurrentPlanContent() {
     ? (companySettings?.trial_end_date ? getDaysRemaining(companySettings.trial_end_date) : undefined)
     : (companySettings?.plan_expiry_date ? getDaysRemaining(companySettings.plan_expiry_date) : undefined);
 
-  // Calculate prices for payment (API data only)
+  // Calculate prices for payment (using actual API prices)
   const calculatePrices = () => {
-    const basePrice = selectedPlanForPayment?.price || 0;
-    const discountPercent = planSettings?.yearlyDiscountPercentage || 0;
-    const monthlyPrice = basePrice;
-    const yearlyPrice = discountPercent > 0 ? Math.round(basePrice * 12 * (1 - discountPercent / 100)) : basePrice * 12;
-    const yearlyFullPrice = basePrice * 12;
+    const monthlyPrice = selectedPlanForPayment?.monthlyPrice || 0;
+    const yearlyPrice = selectedPlanForPayment?.annualPrice || 0;
+    const yearlyFullPrice = monthlyPrice * 12;
     const planPrice = isYearly ? yearlyPrice : monthlyPrice;
     const dbExtraCharge = isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) : 0;
     const dbChargeTotal = isYearly ? dbExtraCharge * 12 : dbExtraCharge;
     const totalAmount = planPrice + dbChargeTotal;
-    return { basePrice, monthlyPrice, yearlyPrice, yearlyFullPrice, planPrice, dbExtraCharge, dbChargeTotal, totalAmount };
+    return { basePrice: monthlyPrice, monthlyPrice, yearlyPrice, yearlyFullPrice, planPrice, dbExtraCharge, dbChargeTotal, totalAmount };
   };
 
   if (isLoading) {
@@ -1480,7 +1552,7 @@ function CurrentPlanContent() {
                 </p>
               )}
 
-              {/* Billing Period Toggle */}
+              {/* Billing Period Toggle - No common discount, each plan shows its own */}
               <div className="flex items-center justify-center gap-4 mt-6">
                 <span className={`text-lg ${!isYearly ? "text-gray-900 font-medium" : "text-gray-500"}`}>
                   Monthly
@@ -1503,9 +1575,6 @@ function CurrentPlanContent() {
                 <span className={`text-lg ${isYearly ? "text-gray-900 font-medium" : "text-gray-500"}`}>
                   Yearly
                 </span>
-                <Badge className="bg-gray-100 text-gray-700">
-                  Save {planSettings?.yearlyDiscountPercentage || 10}%
-                </Badge>
               </div>
             </div>
             <div className={`grid gap-8 pt-8 max-w-6xl mx-auto ${
@@ -1516,6 +1585,8 @@ function CurrentPlanContent() {
               {plans.map((plan) => {
                 const Icon = plan.icon;
                 const isSelectedPending = isPendingPayment && companySettings?.selected_plan_id === plan.numericId;
+                // Check if this plan matches current subscription for the selected billing toggle
+                const isCurrentForToggle = (plan.isCurrentMonthly && !isYearly) || (plan.isCurrentAnnual && isYearly);
 
                 return (
                   <div key={plan.id} className="flex">
@@ -1523,7 +1594,7 @@ function CurrentPlanContent() {
                     className={`relative p-8 flex flex-col w-full ${
                       isSelectedPending
                         ? "border-2 border-orange-500 shadow-xl"
-                        : plan.isCurrent
+                        : isCurrentForToggle
                           ? "border-2 border-gray-600 shadow-xl"
                           : plan.popular
                             ? "border-2 border-gray-800 shadow-xl"
@@ -1537,14 +1608,14 @@ function CurrentPlanContent() {
                         </Badge>
                       </div>
                     )}
-                    {plan.isCurrent && !isSelectedPending && (
+                    {isCurrentForToggle && !isSelectedPending && (
                       <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                         <Badge className="bg-gray-700 text-white px-4 py-1">
                           Current Plan
                         </Badge>
                       </div>
                     )}
-                    {plan.popular && !plan.isCurrent && !isSelectedPending && (
+                    {plan.popular && !isCurrentForToggle && !isSelectedPending && (
                       <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                         <Badge className="bg-gray-800 text-white px-4 py-1">
                           Most Popular
@@ -1560,14 +1631,14 @@ function CurrentPlanContent() {
                     <p className="text-gray-600 mb-6 min-h-[48px]">{plan.description}</p>
 
                     <div className="mb-6">
-                      {plan.price ? (
+                      {(plan.monthlyPrice || plan.annualPrice) ? (
                         <div>
                           <div className="flex items-baseline gap-1">
                             <span className="text-4xl font-bold text-gray-900">
                               {formatCurrency(
                                 isYearly
-                                  ? Math.round(plan.price * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 0) / 100))
-                                  : plan.price,
+                                  ? (plan.annualPrice || 0)
+                                  : (plan.monthlyPrice || 0),
                                 plan.currency
                               )}
                             </span>
@@ -1575,18 +1646,33 @@ function CurrentPlanContent() {
                               {isYearly ? '/year' : '/month'}
                             </span>
                           </div>
-                          {isYearly && planSettings?.yearlyDiscountPercentage && (
-                            <div className="mt-1 flex items-center gap-2">
+                          {/* Show strikethrough price and discount badge when viewing yearly */}
+                          {isYearly && plan.monthlyPrice && plan.annualPrice && (plan.monthlyPrice * 12) > plan.annualPrice && (
+                            <div className="flex items-center gap-2 mt-1">
                               <span className="text-sm text-gray-400 line-through">
-                                {formatCurrency(plan.price * 12, plan.currency)}
+                                {formatCurrency(plan.monthlyPrice * 12, plan.currency)}
                               </span>
-                              <span className="text-sm text-green-600 font-medium">
-                                Save {formatCurrency(
-                                  plan.price * 12 - Math.round(plan.price * 12 * (1 - planSettings.yearlyDiscountPercentage / 100)),
-                                  plan.currency
-                                )}
-                              </span>
+                              {plan.discountPercentage && plan.discountPercentage > 0 && (
+                                <span className="inline-block px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                                  Save {Math.round(plan.discountPercentage)}%
+                                </span>
+                              )}
                             </div>
+                          )}
+                          {/* Show monthly equivalent hint when viewing yearly */}
+                          {isYearly && plan.monthlyPrice && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {formatCurrency(plan.monthlyPrice, plan.currency)}/month if billed monthly
+                            </p>
+                          )}
+                          {/* Show yearly option hint when viewing monthly */}
+                          {!isYearly && plan.annualPrice && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              or {formatCurrency(plan.annualPrice, plan.currency)}/year
+                              {plan.discountPercentage && plan.discountPercentage > 0 && (
+                                <span className="text-green-600"> (Save {Math.round(plan.discountPercentage)}%)</span>
+                              )}
+                            </p>
                           )}
                         </div>
                       ) : (
@@ -1594,55 +1680,64 @@ function CurrentPlanContent() {
                       )}
                     </div>
 
-                    {/* Quotas Section */}
-                    {plan.quotas && (
-                      <div className="mb-6">
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          {plan.quotas.max_seats !== undefined && plan.quotas.max_seats >= 1 && (
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-gray-900">{plan.quotas.max_seats}</span>
-                              <span className="text-gray-600">Team Members</span>
-                            </div>
-                          )}
-                          {plan.quotas.max_jobs !== undefined && plan.quotas.max_jobs >= 1 && (
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-gray-900">{plan.quotas.max_jobs}</span>
-                              <span className="text-gray-600">Job Postings</span>
-                            </div>
-                          )}
-                          {plan.quotas.RU !== undefined && plan.quotas.RU >= 1 && (
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-gray-900">{plan.quotas.RU.toLocaleString()}</span>
-                              <span className="text-gray-600">Resume Uploads</span>
-                            </div>
-                          )}
-                          {plan.quotas.RS !== undefined && plan.quotas.RS >= 1 && (
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-gray-900">{plan.quotas.RS.toLocaleString()}</span>
-                              <span className="text-gray-600">Resume Searches</span>
-                            </div>
-                          )}
-                          {plan.quotas.AS !== undefined && plan.quotas.AS >= 1 && (
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-gray-900">{plan.quotas.AS.toLocaleString()}</span>
-                              <span className="text-gray-600">Assessments</span>
-                            </div>
-                          )}
-                          {plan.quotas.AIU !== undefined && plan.quotas.AIU >= 1 && (
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-gray-900">{plan.quotas.AIU.toLocaleString()}</span>
-                              <span className="text-gray-600">AI Interviews</span>
-                            </div>
-                          )}
-                          {plan.quotas.storage_gb !== undefined && plan.quotas.storage_gb >= 1 && (
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-gray-900">{plan.quotas.storage_gb}GB</span>
-                              <span className="text-gray-600">Storage</span>
-                            </div>
-                          )}
+                    {/* Quotas Section - Use API values directly based on billing toggle */}
+                    {(() => {
+                      // Use correct quotas based on billing toggle - all values from API directly
+                      const displayQuotas = isYearly
+                        ? (plan.annualQuotas || plan.quotas)
+                        : (plan.monthlyQuotas || plan.quotas);
+
+                      if (!displayQuotas) return null;
+
+                      return (
+                        <div className="mb-6">
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            {displayQuotas.max_seats !== undefined && displayQuotas.max_seats >= 1 && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900">{displayQuotas.max_seats.toLocaleString()}</span>
+                                <span className="text-gray-600">Team Members</span>
+                              </div>
+                            )}
+                            {displayQuotas.max_jobs !== undefined && displayQuotas.max_jobs >= 1 && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900">{displayQuotas.max_jobs.toLocaleString()}</span>
+                                <span className="text-gray-600">Job Postings</span>
+                              </div>
+                            )}
+                            {displayQuotas.RU !== undefined && displayQuotas.RU >= 1 && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900">{displayQuotas.RU.toLocaleString()}</span>
+                                <span className="text-gray-600">Resume Uploads</span>
+                              </div>
+                            )}
+                            {displayQuotas.RS !== undefined && displayQuotas.RS >= 1 && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900">{displayQuotas.RS.toLocaleString()}</span>
+                                <span className="text-gray-600">Resume Searches</span>
+                              </div>
+                            )}
+                            {displayQuotas.AS !== undefined && displayQuotas.AS >= 1 && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900">{displayQuotas.AS.toLocaleString()}</span>
+                                <span className="text-gray-600">Assessments</span>
+                              </div>
+                            )}
+                            {displayQuotas.AIU !== undefined && displayQuotas.AIU >= 1 && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900">{displayQuotas.AIU.toLocaleString()}</span>
+                                <span className="text-gray-600">AI Interviews</span>
+                              </div>
+                            )}
+                            {displayQuotas.storage_gb !== undefined && displayQuotas.storage_gb >= 1 && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900">{displayQuotas.storage_gb}GB</span>
+                                <span className="text-gray-600">Storage</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Features Section */}
                     {plan.features.length > 0 && (
@@ -1661,9 +1756,9 @@ function CurrentPlanContent() {
 
                     <button
                       onClick={() => handleChoosePlan(plan)}
-                      disabled={plan.isCurrent || isSelectingPlan || isSelectedPending || !plan.price || queuedUpgrades.length > 0}
+                      disabled={isCurrentForToggle || isSelectingPlan || isSelectedPending || !plan.price || queuedUpgrades.length > 0}
                       className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 mt-auto ${
-                        plan.isCurrent || isSelectedPending
+                        isCurrentForToggle || isSelectedPending
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                           : queuedUpgrades.length > 0
                             ? "bg-amber-100 text-amber-600 cursor-not-allowed"
@@ -1674,7 +1769,7 @@ function CurrentPlanContent() {
                                 : "border border-gray-300 text-gray-700 hover:bg-gray-50"
                       }`}
                     >
-                      {plan.isCurrent ? (
+                      {isCurrentForToggle ? (
                         'Current Plan'
                       ) : isSelectedPending ? (
                         'Pending Payment'
@@ -1739,42 +1834,43 @@ function CurrentPlanContent() {
                       <span className="font-medium text-gray-900">{selectedPlanForPayment?.name}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Monthly Price:</span>
+                      <span className="text-gray-600">{isYearly ? 'Annual Price:' : 'Monthly Price:'}</span>
                       <span className="font-medium text-gray-900">
-                        {formatCurrency(selectedPlanForPayment?.price || 0, selectedPlanForPayment?.currency || 'INR')}
+                        {formatCurrency(
+                          isYearly
+                            ? (selectedPlanForPayment?.annualPrice || 0)
+                            : (selectedPlanForPayment?.monthlyPrice || 0),
+                          selectedPlanForPayment?.currency || 'INR'
+                        )}
                       </span>
                     </div>
-                    {isolationType === 'database' && !isYearly && (
+                    {isolationType === 'database' && (
                       <div className="flex justify-between text-amber-700">
-                        <span>Database Isolation Fee:</span>
+                        <span>Database Isolation Fee{isYearly ? ' (12 months)' : ''}:</span>
                         <span className="font-medium">
-                          +{formatCurrency(planSettings?.databasePerTenantMonthlyPrice || 5000, selectedPlanForPayment?.currency || 'INR')}/month
+                          +{formatCurrency(
+                            isYearly
+                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12
+                              : (planSettings?.databasePerTenantMonthlyPrice || 5000),
+                            selectedPlanForPayment?.currency || 'INR'
+                          )}
                         </span>
                       </div>
                     )}
-                    {isYearly && (
-                      <>
-                        <div className="flex justify-between pt-2 border-t border-gray-200 text-green-700">
-                          <span className="flex items-center gap-1">
-                            <Crown className="w-4 h-4" />
-                            Annual Plan ({planSettings?.yearlyDiscountPercentage || 20}% off):
-                          </span>
-                          <span className="font-medium">
-                            {formatCurrency(
-                              Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 20) / 100)),
-                              selectedPlanForPayment?.currency || 'INR'
-                            )}
-                          </span>
-                        </div>
-                        {isolationType === 'database' && (
-                          <div className="flex justify-between text-amber-700">
-                            <span>Database Isolation Fee (12 months):</span>
-                            <span className="font-medium">
-                              +{formatCurrency((planSettings?.databasePerTenantMonthlyPrice || 5000) * 12, selectedPlanForPayment?.currency || 'INR')}
-                            </span>
-                          </div>
-                        )}
-                      </>
+                    {isYearly && selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice &&
+                     (selectedPlanForPayment.monthlyPrice * 12) > selectedPlanForPayment.annualPrice && (
+                      <div className="flex justify-between pt-2 border-t border-gray-200 text-green-700">
+                        <span className="flex items-center gap-1">
+                          <Crown className="w-4 h-4" />
+                          Annual Savings:
+                        </span>
+                        <span className="font-medium">
+                          {formatCurrency(
+                            (selectedPlanForPayment.monthlyPrice * 12) - selectedPlanForPayment.annualPrice,
+                            selectedPlanForPayment?.currency || 'INR'
+                          )}
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1792,17 +1888,18 @@ function CurrentPlanContent() {
                       <span className="font-bold text-2xl">
                         {formatCurrency(
                           isYearly
-                            ? Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 10) / 100)) +
+                            ? (selectedPlanForPayment?.annualPrice || 0) +
                               (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
-                            : (selectedPlanForPayment?.price || 0) + (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0),
+                            : (selectedPlanForPayment?.monthlyPrice || 0) +
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
                       </span>
-                      {isYearly && (
+                      {isYearly && selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice &&
+                       (selectedPlanForPayment.monthlyPrice * 12) > selectedPlanForPayment.annualPrice && (
                         <p className="text-xs text-green-400">
                           You save {formatCurrency(
-                            ((selectedPlanForPayment?.price || 0) * 12) -
-                            Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 10) / 100)),
+                            (selectedPlanForPayment.monthlyPrice * 12) - selectedPlanForPayment.annualPrice,
                             selectedPlanForPayment?.currency || 'INR'
                           )}
                         </p>
@@ -1811,29 +1908,28 @@ function CurrentPlanContent() {
                   </div>
                 </div>
 
-                {/* Annual Plan Offer Checkbox */}
-                <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
-                  isYearly ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:bg-gray-50'
-                }`}>
-                  <input
-                    type="checkbox"
-                    checked={isYearly}
-                    onChange={(e) => setIsYearly(e.target.checked)}
-                    className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Crown className="w-5 h-5 text-green-600" />
-                      <span className="font-medium text-gray-900">Annual Plan</span>
-                      <Badge className="bg-green-100 text-green-700 text-xs">
-                        Save {planSettings?.yearlyDiscountPercentage || 20}%
-                      </Badge>
+                {/* Annual Plan Offer Checkbox - Uses API prices directly */}
+                {selectedPlanForPayment?.annualPrice && (
+                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
+                    isYearly ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:bg-gray-50'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={isYearly}
+                      onChange={(e) => setIsYearly(e.target.checked)}
+                      className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <Crown className="w-5 h-5 text-green-600" />
+                        <span className="font-medium text-gray-900">Annual Plan</span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {formatCurrency(selectedPlanForPayment.annualPrice, selectedPlanForPayment.currency)}/year
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Pay for 12 months, get {planSettings?.yearlyDiscountPercentage || 20}% discount + 12× quotas
-                    </p>
-                  </div>
-                </label>
+                  </label>
+                )}
 
                 {/* Dedicated Database Checkbox - Available for both Monthly and Annual */}
                 <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
@@ -1876,9 +1972,10 @@ function CurrentPlanContent() {
                       <CreditCard className="w-5 h-5" />
                       Pay {formatCurrency(
                         isYearly
-                          ? Math.round((selectedPlanForPayment?.price || 0) * 12 * (1 - (planSettings?.yearlyDiscountPercentage || 10) / 100)) +
+                          ? (selectedPlanForPayment?.annualPrice || 0) +
                             (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
-                          : (selectedPlanForPayment?.price || 0) + (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0),
+                          : (selectedPlanForPayment?.monthlyPrice || 0) +
+                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0),
                         selectedPlanForPayment?.currency || 'INR'
                       )}
                     </>
