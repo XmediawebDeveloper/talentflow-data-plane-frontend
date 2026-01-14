@@ -1135,6 +1135,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         must_have_skills: extraction.mustHaveSkills,
         nice_to_have_skills: extraction.niceToHaveSkills,
         must_have_comments: extraction.mustHaveComments,
+        nice_to_have_comments: extraction.niceToHaveComments,
         education_requirements: extraction.education ? { degree: extraction.education } : undefined,
         experience_min: hasExpMin ? params.experience_min : undefined,
         experience_max: hasExpMax ? params.experience_max : undefined,
@@ -1783,6 +1784,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
+        nice_to_have_comments: extractedData.niceToHaveComments,
         allow_overqualified: extractedData.allowOverqualified,
         // JD11: Include certifications and domain_keywords in data sync
         certifications: extractedData.certifications,
@@ -2025,6 +2027,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
+        nice_to_have_comments: extractedData.niceToHaveComments,
         allow_overqualified: extractedData.allowOverqualified,
         // JD11: Include certifications and domain_keywords in data sync
         certifications: extractedData.certifications,
@@ -2424,7 +2427,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                           <p className="text-sm font-medium text-red-800">Job Quota Exceeded</p>
                           <p className="text-xs text-red-600">
                             You have reached your maximum job posting limit.{' '}
-                            <a href="/subscription/plans" className="underline font-medium">Upgrade your plan</a> to create more jobs.
+                            <a href="/subscription" className="underline font-medium">Upgrade your plan</a> to create more jobs.
                           </p>
                         </div>
                       </div>
@@ -2688,13 +2691,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               <button
                 onClick={handleNext}
                 disabled={
+                  isStreaming ||
                   isExtracting ||
                   !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
                   (mode === 'ai' ? !generatedJD : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max))
                 }
                 className="flex items-center gap-2 bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isExtracting ? 'Extracting...' : 'Next: Extract Skills'}
+                {isStreaming ? 'Generating...' : isExtracting ? 'Extracting...' : 'Next: Extract Skills'}
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
