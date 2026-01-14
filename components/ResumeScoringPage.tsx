@@ -186,6 +186,13 @@ export default function ResumeScoringPage({
         setSelectedHistoryItem(historyItem);
         setViewMode('details');
 
+        // Save to localStorage so we can restore this view later
+        try {
+          localStorage.setItem('lastViewedScoringJdId', initialJdId);
+        } catch (e) {
+          console.error('Failed to save last viewed JD:', e);
+        }
+
         // If show_progress is requested, open the job progress modal
         if (initialShowProgress) {
           console.log('[ResumeScoringPage] Show progress requested, opening progress modal');
@@ -203,6 +210,21 @@ export default function ResumeScoringPage({
         }
       } else {
         console.log('[ResumeScoringPage] No history item found for JD:', initialJdId);
+      }
+    } else if (!initialJdId && scoredHistory.length > 0) {
+      // No JD specified in URL - try to restore last viewed JD from localStorage
+      try {
+        const lastViewedJdId = localStorage.getItem('lastViewedScoringJdId');
+        if (lastViewedJdId) {
+          const historyItem = scoredHistory.find(item => item.jobId === lastViewedJdId);
+          if (historyItem) {
+            console.log('[ResumeScoringPage] Restoring last viewed JD from localStorage:', historyItem.jobTitle);
+            setSelectedHistoryItem(historyItem);
+            setViewMode('details');
+          }
+        }
+      } catch (e) {
+        console.error('Failed to restore last viewed JD:', e);
       }
     }
   }, [initialJdId, scoredHistory, initialShowProgress]);
@@ -1078,6 +1100,12 @@ export default function ResumeScoringPage({
                         onClick={() => {
                           setSelectedHistoryItem(item);
                           setViewMode('details');
+                          // Save to localStorage for persistence
+                          try {
+                            localStorage.setItem('lastViewedScoringJdId', item.jobId);
+                          } catch (e) {
+                            console.error('Failed to save last viewed JD:', e);
+                          }
                           router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                         }}
                       >
@@ -1129,20 +1157,26 @@ export default function ResumeScoringPage({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Show progress for this specific job
+                            // Show COMPLETED progress for this specific job - don't re-score
                             const jobProgress: JobScoringProgress[] = [{
                               jobId: item.jobId,
                               jobTitle: item.jobTitle,
                               total: item.totalScored,
                               queued: 0,
                               inProgress: 0,
-                              completed: item.scoredResumes.length,
-                              failed: item.totalScored - item.scoredResumes.length,
+                              completed: item.totalScored, // All completed
+                              failed: 0,
+                              items: item.scoredResumes.map(resume => ({
+                                resumeId: resume.id,
+                                candidateName: resume.candidateName,
+                                status: 'completed' as const,
+                                score: resume.matchScore,
+                              })),
                             }];
                             setJobProgressData(jobProgress);
                             setShowJobProgressModal(true);
                           }}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-1.5"
+                          className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-1.5"
                         >
                           <Eye className="w-4 h-4" />
                           View Progress
@@ -1151,6 +1185,12 @@ export default function ResumeScoringPage({
                           onClick={() => {
                             setSelectedHistoryItem(item);
                             setViewMode('details');
+                            // Save to localStorage for persistence
+                            try {
+                              localStorage.setItem('lastViewedScoringJdId', item.jobId);
+                            } catch (e) {
+                              console.error('Failed to save last viewed JD:', e);
+                            }
                             router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
                           className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium"
@@ -1298,20 +1338,26 @@ export default function ResumeScoringPage({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Show progress for this specific job
+                            // Show COMPLETED progress for this specific job - don't re-score
                             const jobProgress: JobScoringProgress[] = [{
                               jobId: item.jobId,
                               jobTitle: item.jobTitle,
                               total: item.totalScored,
                               queued: 0,
                               inProgress: 0,
-                              completed: item.scoredResumes.length,
-                              failed: item.totalScored - item.scoredResumes.length,
+                              completed: item.totalScored, // All completed
+                              failed: 0,
+                              items: item.scoredResumes.map(resume => ({
+                                resumeId: resume.id,
+                                candidateName: resume.candidateName,
+                                status: 'completed' as const,
+                                score: resume.matchScore,
+                              })),
                             }];
                             setJobProgressData(jobProgress);
                             setShowJobProgressModal(true);
                           }}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-1.5 justify-center"
+                          className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-1.5 justify-center"
                         >
                           <Eye className="w-4 h-4" />
                           View Progress
@@ -1320,6 +1366,12 @@ export default function ResumeScoringPage({
                           onClick={() => {
                             setSelectedHistoryItem(item);
                             setViewMode('details');
+                            // Save to localStorage for persistence
+                            try {
+                              localStorage.setItem('lastViewedScoringJdId', item.jobId);
+                            } catch (e) {
+                              console.error('Failed to save last viewed JD:', e);
+                            }
                             router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
                           className="text-gray-800 hover:text-gray-900 text-sm font-medium flex items-center gap-1 justify-center cursor-pointer"
