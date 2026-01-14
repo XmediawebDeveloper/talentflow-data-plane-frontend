@@ -211,7 +211,7 @@ export default function PricingPage() {
         setIsLoading(true);
         setError(null);
 
-        const response = await fetch(`${API_URL}/subscription/public/plans`, {
+        const response = await fetch(`${API_URL}/subscription/public
           signal: abortController.signal
         });
 

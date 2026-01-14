@@ -111,7 +111,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
         setError(null);
 
         // Use public endpoint that doesn't require authentication
-        const response = await fetch(`${ADMIN_API_URL}/subscription/public/plans`);
+        const response = await fetch(`${ADMIN_API_URL}/subscription/public`);
 
         if (!response.ok) {
           throw new Error(`Failed to fetch plans: ${response.status}`);
