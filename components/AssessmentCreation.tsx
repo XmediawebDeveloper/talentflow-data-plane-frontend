@@ -1,5 +1,6 @@
 import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import { assessmentService, jdService } from '@/lib/services';
 import JDCreation from '@/components/JDCreation';
@@ -31,21 +32,57 @@ interface SectionConfig {
 }
 
 export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId }: AssessmentCreationProps) {
-  const [step, setStep] = useState<'select-jd' | 'configure' | 'preview'>(('select-jd'));
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Read initial step from URL, default to 'select-jd'
+  const urlStep = searchParams.get('step') as 'select-jd' | 'configure' | 'preview' | null;
+  const urlJdId = searchParams.get('jd_id');
+
+  const [step, setStepState] = useState<'select-jd' | 'configure' | 'preview'>(urlStep || 'select-jd');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [duration, setDuration] = useState(30);
 
-  // Auto-select job if preSelectedJobId is provided
+  // Helper function to update step and URL
+  const setStep = (newStep: 'select-jd' | 'configure' | 'preview', jobId?: string) => {
+    setStepState(newStep);
+    const params = new URLSearchParams();
+
+    // When going back to select-jd, clear all params
+    if (newStep === 'select-jd') {
+      router.push('/recruitment/assessments/create', { scroll: false });
+      return;
+    }
+
+    params.set('step', newStep);
+    if (jobId || selectedJob?.id) {
+      params.set('jd_id', jobId || selectedJob?.id || '');
+    }
+    const queryString = params.toString();
+    router.push(`/recruitment/assessments/create${queryString ? `?${queryString}` : ''}`, { scroll: false });
+  };
+
+  // Navigate to JD creation page
+  const handleCreateNewJD = () => {
+    router.push('/recruitment/jd-creation?from=assessment');
+  };
+
+  // Auto-select job if preSelectedJobId or urlJdId is provided
   useEffect(() => {
-    if (preSelectedJobId && jobs.length > 0 && !selectedJob) {
-      const job = jobs.find(j => j.id === preSelectedJobId);
+    const jdIdToSelect = preSelectedJobId || urlJdId;
+    if (jdIdToSelect && jobs.length > 0 && !selectedJob) {
+      const job = jobs.find(j => j.id === jdIdToSelect);
       if (job) {
         setSelectedJob(job);
-        setStep('configure');
+        if (urlStep === 'configure' || urlStep === 'preview') {
+          setStepState(urlStep);
+        } else {
+          setStep('configure', job.id);
+        }
         console.log('[TalentFlow] Auto-selected JD for assessment:', job.title);
       }
     }
-  }, [preSelectedJobId, jobs, selectedJob]);
+  }, [preSelectedJobId, urlJdId, jobs, selectedJob, urlStep]);
 
   // Initialize sections based on global topic settings
   const getInitialSections = (): SectionConfig[] => {
@@ -219,7 +256,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       ]);
       setSelectedCodingLanguages([]);
     }
-    setStep('configure');
+    setStep('configure', job.id);
   };
 
   const updatePercentage = (sectionName: string, value: number) => {
@@ -419,7 +456,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   </p>
                 </div>
                 <button
-                  onClick={() => setShowJDCreation(true)}
+                  onClick={handleCreateNewJD}
                   className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
@@ -546,7 +583,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     <p>No published jobs available</p>
                     <p className="text-sm mt-1">Create and publish a Job first to create assessments</p>
                     <button
-                      onClick={() => setShowJDCreation(true)}
+                      onClick={handleCreateNewJD}
                       className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 mx-auto"
                     >
                       <Plus className="w-4 h-4" />

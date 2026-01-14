@@ -97,7 +97,8 @@ export function MultiLanguageCodeEditor({
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'problem' | 'output'>('problem');
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
-  const [showInputPanel, setShowInputPanel] = useState(false);
+  // Auto-show input panel if no sample_input is available (so users can provide test input)
+  const [showInputPanel, setShowInputPanel] = useState(!question.sample_input);
   const [fontSize, setFontSize] = useState(14);
   const editorRef = useRef<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -202,7 +203,28 @@ export function MultiLanguageCodeEditor({
       const compilerLang = langConfig?.compilerName || selectedLanguage;
 
       // Use custom input or sample input
+      // If input panel is shown, use custom input; otherwise use sample_input
       const inputToUse = showInputPanel ? customInput : (question.sample_input || '');
+
+      // Check if code expects input but none is provided
+      const codeExpectsInput = detectsInputRequired(code, selectedLanguage);
+      if (codeExpectsInput && !inputToUse.trim()) {
+        // Show warning but still run - user might have modified code to not need input
+        console.warn('[CODE_EXEC] Warning: Code appears to expect input but none provided');
+        setExecutionOutput({
+          success: false,
+          error: 'Your code expects input (e.g., Scanner, input(), cin, etc.) but no input was provided.\n\nPlease enter test input in the "Input" panel below and try again.',
+        });
+        setIsRunning(false);
+        // Auto-show input panel so user can enter input
+        if (!showInputPanel) {
+          setShowInputPanel(true);
+        }
+        return;
+      }
+
+      // Log input for debugging (helpful when diagnosing input issues)
+      console.log('[CODE_EXEC] Running with input:', inputToUse ? `"${inputToUse.substring(0, 50)}..."` : '(empty)');
 
       const result = await candidateService.executeCode(compilerLang, code, inputToUse);
 

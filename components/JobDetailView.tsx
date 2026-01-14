@@ -18,6 +18,7 @@ import ResumeDetailView from './ResumeDetailView';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import { Resume } from '@/lib/types/types';
 import { scoringService } from '@/lib/services/scoringService';
+import { assessmentService } from '@/lib/services/assessmentService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import { toast } from 'sonner';
 
@@ -110,6 +111,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // AI Talent Match panel state
   const [showAIMatchPanel, setShowAIMatchPanel] = useState(false);
 
+  // Assessment results state
+  const [assessmentResults, setAssessmentResults] = useState<any[]>([]);
+  const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
+
   // Fetch JD History when modal opens
   useEffect(() => {
     if (showJDHistory && job.id) {
@@ -121,6 +126,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   useEffect(() => {
     if (job.id) {
       fetchScoredResumes();
+    }
+  }, [job.id]);
+
+  // Fetch assessment results on component mount
+  useEffect(() => {
+    if (job.id) {
+      fetchAssessmentResults();
     }
   }, [job.id]);
 
@@ -245,6 +257,98 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     }
   };
 
+  // Fetch assessment results for this JD
+  const fetchAssessmentResults = async () => {
+    setLoadingAssessmentResults(true);
+    try {
+      // First, get all assessments for this JD
+      const assessmentsResponse = await assessmentService.list({ jd_id: job.id, page_size: 100 });
+      const assessments = assessmentsResponse.items || [];
+
+      // For each assessment, get the completed results
+      const allResults: any[] = [];
+      for (const assessment of assessments) {
+        try {
+          const resultsResponse = await assessmentService.listResults(assessment.id, { page_size: 100 });
+          const results = resultsResponse.items || [];
+
+          // Add assessment context to each result and map to expected format
+          results.forEach((result: any) => {
+            // Calculate score percentage
+            const overallScore = result.overall_score ?? 0;
+            const maxScore = 100;
+            const scorePercentage = Math.round(overallScore);
+
+            // Calculate completion time in minutes
+            const completionTime = result.time_spent_seconds
+              ? Math.round(result.time_spent_seconds / 60).toString()
+              : 'N/A';
+
+            // Build round scores array
+            const roundScores: { roundName: string; score: number; maxScore: number; passFail: 'Pass' | 'Fail' }[] = [];
+            if (result.hr_score !== null && result.hr_score !== undefined) {
+              roundScores.push({
+                roundName: 'HR',
+                score: Math.round(result.hr_score * 10),
+                maxScore: 100,
+                passFail: result.hr_score >= 7 ? 'Pass' : 'Fail'
+              });
+            }
+            if (result.technical_score !== null && result.technical_score !== undefined) {
+              roundScores.push({
+                roundName: 'Technical',
+                score: Math.round(result.technical_score * 10),
+                maxScore: 100,
+                passFail: result.technical_score >= 7 ? 'Pass' : 'Fail'
+              });
+            }
+            if (result.coding_score !== null && result.coding_score !== undefined) {
+              roundScores.push({
+                roundName: 'Coding',
+                score: Math.round(result.coding_score * 10),
+                maxScore: 100,
+                passFail: result.coding_score >= 7 ? 'Pass' : 'Fail'
+              });
+            }
+
+            allResults.push({
+              id: result.id,
+              candidateName: result.candidate_name || 'Unknown',
+              email: result.candidate_email || '',
+              phone: result.candidate_phone || '',
+              assessmentName: result.assessment_title || assessment.title,
+              assessmentId: assessment.id,
+              totalScore: scorePercentage,
+              maxScore: maxScore,
+              scorePercentage: scorePercentage,
+              passFail: result.passed ? 'Pass' : 'Fail',
+              completedDate: result.completed_at
+                ? new Date(result.completed_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                : 'In Progress',
+              completionTime: completionTime,
+              aiSummary: result.ai_evaluation?.summary || 'Assessment completed.',
+              roundScores: roundScores,
+              invitedDate: result.started_at
+                ? new Date(result.started_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                : 'N/A',
+              invitedBy: result.invite_source || 'System',
+              status: result.status || (result.completed_at ? 'completed' : 'in_progress'),
+            });
+          });
+        } catch (err) {
+          console.warn(`Failed to fetch results for assessment ${assessment.id}:`, err);
+        }
+      }
+
+      setAssessmentResults(allResults);
+    } catch (error) {
+      console.error('Failed to fetch assessment results:', error);
+      setAssessmentResults([]);
+    } finally {
+      setLoadingAssessmentResults(false);
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results'>('overview');
 
   useEffect(() => {
@@ -325,9 +429,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     setShowAIMatchPanel(false);
     toast.error(`AI Matching failed: ${error}`);
   };
-
-  // Assessment results - empty until real data is fetched from API
-  const assessmentResults: any[] = [];
 
   const handleAddApplications = () => {
     setShowAddApplicantsMenu(false);
