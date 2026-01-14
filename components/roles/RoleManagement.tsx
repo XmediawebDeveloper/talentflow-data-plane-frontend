@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Search,
   Plus,
@@ -17,6 +18,7 @@ import {
   Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
 import {
   Permission,
@@ -65,6 +67,7 @@ const mockPermissions: Permission[] = [
 type TabType = 'roles' | 'audit';
 
 export default function RoleManagement() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('roles');
   const [roles, setRoles] = useState<RoleListItem[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -94,6 +97,29 @@ export default function RoleManagement() {
     acc[perm.module].push(perm);
     return acc;
   }, {} as Record<string, Permission[]>);
+
+  // Permission guard - check if user has access to Role Management
+  useEffect(() => {
+    const checkPermission = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser();
+
+        // Check if user has permission to access Role Management
+        const hasPermission = currentUser.role === 'tenant_admin' || currentUser.permissions?.can_manage_users;
+
+        if (!hasPermission) {
+          toast.error('You do not have permission to access Role Management');
+          router.push('/dashboard');
+          return;
+        }
+      } catch (error) {
+        console.error('Permission check failed:', error);
+        router.push('/dashboard');
+      }
+    };
+
+    checkPermission();
+  }, [router]);
 
   // Load data
   useEffect(() => {

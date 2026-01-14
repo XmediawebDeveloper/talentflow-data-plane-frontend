@@ -154,7 +154,7 @@ const formatCurrency = (amount: number | undefined | null, currency: string): st
     'GBP': '£',
   };
   const symbol = currencySymbols[currency] || currency + ' ';
-  return `${symbol}${amount.toLocaleString()}`;
+  return symbol + amount.toLocaleString();
 };
 
 
@@ -185,7 +185,7 @@ export default function PricingPage() {
 
     const fetchPlanSettings = async (): Promise<number> => {
       try {
-        const response = await fetch(`${API_URL}/addons/plan-settings`, {
+        const response = await fetch(API_URL + "/addons/plan-settings", {
           signal: abortController.signal
         });
 
@@ -211,12 +211,12 @@ export default function PricingPage() {
         setIsLoading(true);
         setError(null);
 
-        const response = await fetch(`${API_URL}/subscription/public/plans`, {
+        const response = await fetch(API_URL + "/subscription/public-plans", {
           signal: abortController.signal
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to fetch plans: ${response.status}`);
+          throw new Error("Failed to fetch plans: " + response.status);
         }
 
         const result = await response.json();
@@ -279,12 +279,12 @@ export default function PricingPage() {
         setAddonsLoading(true);
         setAddonsError(null);
 
-        const response = await fetch(`${API_URL}/addons?active_only=false&public_only=false`, {
+        const response = await fetch(API_URL + "/addons?active_only=false&public_only=false", {
           signal: abortController.signal
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to fetch addons: ${response.status}`);
+          throw new Error("Failed to fetch addons: " + response.status);
         }
 
         const result = await response.json();
@@ -308,7 +308,7 @@ export default function PricingPage() {
 
     const fetchFreeTrial = async () => {
       try {
-        const response = await fetch(`${API_URL}/addons/free-trial`, {
+        const response = await fetch(API_URL + "/addons/free-trial", {
           signal: abortController.signal
         });
 
@@ -436,7 +436,7 @@ export default function PricingPage() {
           const freeTrialCard: DisplayPlan | null = freeTrial ? {
             id: 'free-trial',
             name: 'Free Trial',
-            description: `${freeTrial.trial_days} days free • No credit card required`,
+            description: freeTrial.trial_days + " days free • No credit card required",
             basePrice: 0,
             monthlyPrice: 0,
             yearlyPrice: 0,
@@ -649,7 +649,7 @@ export default function PricingPage() {
 
                 {/* Button - Fixed at bottom */}
                 <Link
-                  href={isTrialPlan ? "/signup" : (plan.basePrice ? `/signup?plan=${encodePlanId(plan.id)}` : "/contact")}
+                  href={isTrialPlan ? "/signup" : (plan.basePrice ? "/signup?plan=" + encodePlanId(plan.id) : "/contact")}
                   className={`block w-full h-12 rounded-lg font-medium text-center leading-[48px] transition-all ${
                     plan.popular || isTrialPlan
                       ? "bg-gray-800 text-white hover:bg-gray-700"

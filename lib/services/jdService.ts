@@ -388,6 +388,50 @@ export const jdService = {
   },
 
   /**
+   * Generate JD with AI using SSE streaming for real-time text display
+   */
+  async generateStream(
+    prompt: string,
+    callbacks: {
+      onChunk: (content: string) => void;
+      onTitle?: (title: string) => void;
+      onComplete: (data: JDGenerateResponse) => void;
+      onError: (message: string) => void;
+    }
+  ): Promise<void> {
+    try {
+      const { getTokens } = await import('./api');
+      const { accessToken } = getTokens();
+
+      if (!accessToken) {
+        throw new Error('Not authenticated');
+      }
+
+      const { JDStreamClient } = await import('../utils/sseClient');
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+      const client = new JDStreamClient(apiBaseUrl, accessToken);
+
+      await client.stream(prompt, {
+        onConnected: () => {
+          console.log('[JD Service] Stream connected');
+        },
+        onChunk: callbacks.onChunk,
+        onTitle: callbacks.onTitle,
+        onComplete: (data) => {
+          callbacks.onComplete({
+            title: data.title,
+            description: data.description,
+            extracted_params: data.extracted_params
+          });
+        },
+        onError: callbacks.onError
+      });
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Extract parameters from JD using LLM
    */
   async extractParams(id: string): Promise<JDExtractedParams> {
