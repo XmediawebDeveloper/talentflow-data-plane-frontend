@@ -340,7 +340,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const [generatedJD, setGeneratedJD] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEditingJD, setIsEditingJD] = useState(false);
-  
+
+  // Streaming state
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamedContent, setStreamedContent] = useState('');
+  const [streamError, setStreamError] = useState<string | null>(null);
+
   // Step 2: Extracted Data
   const [extractedData, setExtractedData] = useState<ExtractedData>({
     mustHaveSkills: [],
@@ -644,99 +649,173 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     return () => document.removeEventListener('click', handleClick, true);
   }, [hasUnsavedChanges, isPublished]);
 
+  // Cleanup streaming connection on unmount
+  useEffect(() => {
+    return () => {
+      if (isStreaming) {
+        console.log('[TalentFlow] Component unmounting, cleaning up streaming');
+        setIsStreaming(false);
+        setStreamedContent('');
+      }
+    };
+  }, []);
+
   const handleGenerateJD = async () => {
     // Note: Quota check moved to publish action - generation doesn't consume quota
     setIsGenerating(true);
+    setIsStreaming(true);
+    setStreamedContent('');
+    setStreamError(null);
+    setGeneratedJD(''); // Clear previous content
+
+    const prompt = `${jobTitle}${aiPrompt ? ` - ${aiPrompt}` : ''}`;
+
+    // Helper function to process extracted params
+    const processExtractedParams = (params: any) => {
+      // Map experience - prioritize explicit min/max values over level mapping
+      let expValue = '';
+
+      // First try to use experience_min and experience_max (more accurate)
+      if (params.experience_min !== null && params.experience_min !== undefined) {
+        if (params.experience_max !== null && params.experience_max !== undefined) {
+          expValue = `${params.experience_min}-${params.experience_max}`;
+        } else {
+          expValue = `${params.experience_min}+`;
+        }
+      } else if (params.experience_max !== null && params.experience_max !== undefined) {
+        expValue = `0-${params.experience_max}`;
+      }
+
+      // Fall back to experience_level mapping if no min/max
+      if (!expValue && params.experience_level) {
+        const levelMap: Record<string, string> = {
+          'entry': '0-2',
+          'junior': '2-5',
+          'mid': '5-7',
+          'senior': '7-10',
+          'architect': '10+',
+          'management': '10+',
+        };
+        const normalizedLevel = params.experience_level.toLowerCase().replace(/[^a-z]/g, '');
+        expValue = levelMap[normalizedLevel] || '';
+      }
+
+      console.log('[TalentFlow] AI Generation - extracted coding fields:', {
+        coding_required: params.coding_required,
+        suggested_languages: params.suggested_languages
+      });
+
+      setExtractedData(prev => ({
+        ...prev,
+        mustHaveSkills: params.must_have_skills || [],
+        mustHaveComments: params.must_have_comments || [],
+        niceToHaveSkills: params.nice_to_have_skills || [],
+        education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
+        experience: expValue || prev.experience,
+        industryType: params.industry_type?.toLowerCase() || '',
+        employmentType: prev.employmentType,
+        workModel: prev.workModel,
+        salaryFrom: params.salary_min ? params.salary_min.toString() : '',
+        salaryTo: params.salary_max ? params.salary_max.toString() : '',
+        compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || 'yearly',
+        locations: (params.locations || []).map((loc: any) => ({
+          city: loc.city || '',
+          radius: '50'
+        })),
+        allowOverqualified: false,
+        codingRequired: params.coding_required === true,
+        suggestedLanguages: params.suggested_languages || [],
+      }));
+    };
+
+    // Fallback function for non-streaming
+    const fallbackToNonStreaming = async (prompt: string) => {
+      try {
+        console.log('[TalentFlow] Falling back to non-streaming API');
+        const response = await jdService.generate(prompt);
+
+        if (response?.description) {
+          if (response.title) {
+            setJobTitle(response.title);
+          }
+          setGeneratedJD(response.description);
+
+          if (response.extracted_params) {
+            processExtractedParams(response.extracted_params);
+          }
+
+          toast.success({
+            title: 'JD Generated Successfully',
+            description: 'AI has created a comprehensive job description.'
+          });
+        } else {
+          throw new Error('No description in response');
+        }
+      } catch (error) {
+        console.error('[TalentFlow] Fallback generation failed:', error);
+        toast.error({
+          title: 'Generation Failed',
+          description: 'Could not generate JD. Please check your connection and try again.'
+        });
+        throw error;
+      }
+    };
 
     try {
-      // Call real API for AI JD generation
-      const prompt = `${jobTitle}${aiPrompt ? ` - ${aiPrompt}` : ''}`;
-      const response = await jdService.generate(prompt);
+      // Try streaming first
+      await jdService.generateStream(prompt, {
+        onChunk: (content: string) => {
+          // Accumulate markdown chunks progressively and display them
+          setStreamedContent((prev) => prev + content);
 
-      if (response?.description) {
-        // Update job title if AI provided one
-        if (response.title) {
-          setJobTitle(response.title);
-        }
-        setGeneratedJD(response.description);
+          // Update the displayed JD content progressively (like ChatGPT)
+          setGeneratedJD((prev) => prev + content);
+        },
+        onTitle: (title: string) => {
+          // Update title if provided
+          if (title) {
+            setJobTitle(title);
+          }
+        },
+        onComplete: (response) => {
+          // Set final content
+          if (response?.description) {
+            setGeneratedJD(response.description);
 
-        // If extracted_params are returned, pre-populate the extracted data
-        if (response.extracted_params) {
-          const params = response.extracted_params;
-
-          // Map experience - prioritize explicit min/max values over level mapping
-          let expValue = '';
-
-          // First try to use experience_min and experience_max (more accurate)
-          if (params.experience_min !== null && params.experience_min !== undefined) {
-            if (params.experience_max !== null && params.experience_max !== undefined) {
-              expValue = `${params.experience_min}-${params.experience_max}`;
-            } else {
-              expValue = `${params.experience_min}+`;
+            // Process extracted params
+            if (response.extracted_params) {
+              processExtractedParams(response.extracted_params);
             }
-          } else if (params.experience_max !== null && params.experience_max !== undefined) {
-            expValue = `0-${params.experience_max}`;
-          }
 
-          // Fall back to experience_level mapping if no min/max
-          if (!expValue && params.experience_level) {
-            const levelMap: Record<string, string> = {
-              'entry': '0-2',
-              'junior': '2-5',
-              'mid': '5-7',
-              'senior': '7-10',
-              'architect': '10+',
-              'management': '10+',
-            };
-            // Handle various formats like "mid", "Mid", "Mid Level", "mid-level"
-            const normalizedLevel = params.experience_level.toLowerCase().replace(/[^a-z]/g, '');
-            expValue = levelMap[normalizedLevel] || '';
+            toast.success({
+              title: 'JD Generated Successfully',
+              description: 'AI has created a comprehensive job description.'
+            });
           }
+          setIsStreaming(false);
+        },
+        onError: (message: string) => {
+          console.error('[TalentFlow] Stream error:', message);
+          setStreamError(message);
+          setIsStreaming(false);
 
-          console.log('[TalentFlow] AI Generation - extracted coding fields:', {
-            coding_required: params.coding_required,
-            suggested_languages: params.suggested_languages
+          // Fall back to non-streaming
+          fallbackToNonStreaming(prompt).catch(() => {
+            // Error already handled in fallback function
           });
-
-          setExtractedData(prev => ({
-            ...prev,
-            mustHaveSkills: params.must_have_skills || [],
-            mustHaveComments: params.must_have_comments || [],
-            niceToHaveSkills: params.nice_to_have_skills || [],
-            education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
-            experience: expValue || prev.experience,
-            industryType: params.industry_type?.toLowerCase() || '',
-            employmentType: prev.employmentType,  // Keep existing value
-            workModel: prev.workModel,  // Keep existing value
-            salaryFrom: params.salary_min ? params.salary_min.toString() : '',
-            salaryTo: params.salary_max ? params.salary_max.toString() : '',
-            compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || 'yearly',
-            locations: (params.locations || []).map((loc: any) => ({
-              city: loc.city || '',
-              radius: '50'
-            })),
-            allowOverqualified: false,
-            // Coding assessment fields from AI extraction
-            codingRequired: params.coding_required === true,
-            suggestedLanguages: params.suggested_languages || [],
-          }));
         }
+      });
+    } catch (streamErr) {
+      console.error('[TalentFlow] Streaming failed, falling back:', streamErr);
+      setIsStreaming(false);
 
-        toast.success({
-          title: 'JD Generated Successfully',
-          description: 'AI has created a comprehensive job description.'
-        });
-      } else {
-        throw new Error('No description in response');
-      }
-    } catch (error) {
-      console.error('[TalentFlow] API JD generation failed:', error);
-      toast.error({
-        title: 'Generation Failed',
-        description: 'Could not generate JD. Please check your connection and try again.'
+      // Fall back to non-streaming API
+      await fallbackToNonStreaming(prompt).catch(() => {
+        // Error already handled in fallback function
       });
     } finally {
       setIsGenerating(false);
+      setIsStreaming(false);
     }
   };
 
@@ -1056,6 +1135,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         must_have_skills: extraction.mustHaveSkills,
         nice_to_have_skills: extraction.niceToHaveSkills,
         must_have_comments: extraction.mustHaveComments,
+        nice_to_have_comments: extraction.niceToHaveComments,
         education_requirements: extraction.education ? { degree: extraction.education } : undefined,
         experience_min: hasExpMin ? params.experience_min : undefined,
         experience_max: hasExpMax ? params.experience_max : undefined,
@@ -1704,6 +1784,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
+        nice_to_have_comments: extractedData.niceToHaveComments,
         allow_overqualified: extractedData.allowOverqualified,
         // JD11: Include certifications and domain_keywords in data sync
         certifications: extractedData.certifications,
@@ -1946,6 +2027,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
+        nice_to_have_comments: extractedData.niceToHaveComments,
         allow_overqualified: extractedData.allowOverqualified,
         // JD11: Include certifications and domain_keywords in data sync
         certifications: extractedData.certifications,
@@ -2500,7 +2582,36 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 </div>
 
                 {mode === 'ai' ? (
-                  generatedJD ? (
+                  isStreaming ? (
+                    // Show streaming content in real-time
+                    <div className="relative">
+                      <div className="h-[600px] overflow-y-auto px-6 py-4 border border-gray-300 rounded-md bg-white markdown-content">
+                        {generatedJD ? (
+                          <ReactMarkdown>{generatedJD}</ReactMarkdown>
+                        ) : (
+                          <div className="flex items-center justify-center h-full">
+                            <div className="text-center">
+                              <Loader2 className="w-12 h-12 mx-auto mb-4 text-blue-600 animate-spin" />
+                              <p className="text-gray-600 font-medium">AI is generating your job description...</p>
+                              <p className="text-sm text-gray-500 mt-2">This may take a few seconds</p>
+                            </div>
+                          </div>
+                        )}
+                        {generatedJD && (
+                          <div className="flex items-center gap-2 mt-4 text-blue-600 border-t pt-4">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span className="text-sm font-medium">Generating...</span>
+                          </div>
+                        )}
+                      </div>
+                      {streamError && (
+                        <div className="flex items-center gap-2 p-3 mt-2 bg-red-50 text-red-700 rounded-md border border-red-200">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                          <span className="text-sm">{streamError}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : generatedJD ? (
                     <div className="relative">
                       {/* Toggle Edit/View Button */}
                       <div className="absolute top-2 right-2 z-10">
@@ -2580,13 +2691,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               <button
                 onClick={handleNext}
                 disabled={
+                  isStreaming ||
                   isExtracting ||
                   !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
                   (mode === 'ai' ? !generatedJD : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max))
                 }
                 className="flex items-center gap-2 bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isExtracting ? 'Extracting...' : 'Next: Extract Skills'}
+                {isStreaming ? 'Generating...' : isExtracting ? 'Extracting...' : 'Next: Extract Skills'}
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>

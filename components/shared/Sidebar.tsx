@@ -102,9 +102,9 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'recruitment',
       label: 'RECRUITMENT',
       items: [
-        { id: 'job-openings', label: 'Job Descriptions', icon: Briefcase, href: '/recruitment/job-openings', permission: 'canCreateJD' },
-        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permission: 'canViewResumes' },
-        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permission: 'canViewResumes' },
+        { id: 'job-openings', label: 'Job Descriptions', icon: Briefcase, href: '/recruitment/job-openings', permission: 'can_create_jd' },
+        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permission: 'can_view_resumes' },
+        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permission: 'can_view_resumes' },
       ]
     },
 
@@ -113,8 +113,8 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'resume-management',
       label: 'RESUME MANAGEMENT',
       items: [
-        { id: 'my-resumes', label: 'My Resumes', icon: Users, href: '/recruitment/my-resumes', permission: 'canUploadResumes' },
-        { id: 'resume-database', label: 'Internal Database', icon: Database, href: '/recruitment/resume-database', permission: 'canAccessInternalDB' },
+        { id: 'my-resumes', label: 'My Resumes', icon: Users, href: '/recruitment/my-resumes', permission: 'can_upload_resumes' },
+        { id: 'resume-database', label: 'Internal Database', icon: Database, href: '/recruitment/resume-database', permission: 'can_access_internal_db' },
       ]
     },
 
@@ -123,8 +123,8 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'evaluation',
       label: 'EVALUATION',
       items: [
-        { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permission: 'canCreateAssessments' },
-        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permission: 'canViewResumes' },
+        { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permission: 'can_create_assessments' },
+        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permission: 'can_view_resumes' },
       ]
     },
 
@@ -133,51 +133,49 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'organization',
       label: 'ORGANIZATION',
       items: [
-        { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', adminOnly: true },
-        { id: 'team-management', label: 'Team Management', icon: Users, href: '/organization/team-management', adminOnly: true },
-        { id: 'user-management', label: 'User Management', icon: UserCog, href: '/organization/user-management', permission: 'canManageUsers' },
-        { id: 'role-management', label: 'Role Management', icon: Shield, href: '/organization/role-management', adminOnly: true },
+        { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', permission: 'can_manage_settings' },
+        { id: 'team-management', label: 'Team Management', icon: Users, href: '/organization/team-management', permission: 'can_manage_users' },
+        { id: 'user-management', label: 'User Management', icon: UserCog, href: '/organization/user-management', permission: 'can_manage_users' },
+        { id: 'role-management', label: 'Role Management', icon: Shield, href: '/organization/role-management', permission: 'can_manage_users' },
       ]
     },
 
-    // MASTERS - Admin only
+    // MASTERS - Settings permission required
     {
       id: 'masters',
       label: 'MASTERS',
-      adminOnly: true,
       items: [
-        { id: 'experience-levels', label: 'Experience Levels', icon: Clock, href: '/masters/experience-levels', adminOnly: true },
-        { id: 'education-levels', label: 'Education Levels', icon: GraduationCap, href: '/masters/education-levels', adminOnly: true },
-        { id: 'industry-types', label: 'Industry Types', icon: Factory, href: '/masters/industry-types', adminOnly: true },
+        { id: 'experience-levels', label: 'Experience Levels', icon: Clock, href: '/masters/experience-levels', permission: 'can_manage_settings' },
+        { id: 'education-levels', label: 'Education Levels', icon: GraduationCap, href: '/masters/education-levels', permission: 'can_manage_settings' },
+        { id: 'industry-types', label: 'Industry Types', icon: Factory, href: '/masters/industry-types', permission: 'can_manage_settings' },
       ]
     },
 
-    // SUBSCRIPTION & BILLING - Admin only (no RBAC permissions yet)
+    // SUBSCRIPTION & BILLING - RBAC03: Billing Manager access
     {
       id: 'subscription',
       label: 'SUBSCRIPTION & BILLING',
-      adminOnly: true,
       items: [
-        { id: 'current-plan', label: 'Current Plan', icon: CreditCard, href: '/subscription/current-plan', adminOnly: true },
-        { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', adminOnly: true },
-        { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', adminOnly: true },
-        { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', adminOnly: true },
-        { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', adminOnly: true },
-        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', adminOnly: true },
+        { id: 'current-plan', label: 'Current Plan', icon: CreditCard, href: '/subscription/current-plan', permission: 'can_view_billing' },
+        { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', permission: 'can_view_usage' },
+        { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', permission: 'can_view_billing' },
+        { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', permission: 'can_view_invoices' },
+        { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', permission: 'can_view_invoices' },
+        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', permission: 'can_view_invoices' },
       ]
     },
 
-    // SETTINGS - Mixed permission and admin-only
+    // SETTINGS - Permission-based access
     {
       id: 'settings',
       label: 'SETTINGS',
       items: [
-        { id: 'general-settings', label: 'General Settings', icon: Settings, href: '/settings/general-settings', permission: 'canManageSettings' },
-        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', adminOnly: true },
-        { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', adminOnly: true },
-        { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canManageSettings' },
-        { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' },
-        { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'canManageSettings' },
+        { id: 'general-settings', label: 'General Settings', icon: Settings, href: '/settings/general-settings', permission: 'can_manage_settings' },
+        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'can_manage_users' },
+        { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'can_manage_settings' },
+        { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'can_manage_settings' },
+        { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'can_manage_settings' },
+        { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'can_manage_settings' },
       ]
     },
 
@@ -186,19 +184,18 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'reports',
       label: 'REPORTS & ANALYTICS',
       items: [
-        { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, href: '/reports/team-usage', adminOnly: true },
-        { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, href: '/reports/performance-reports', permission: 'canViewAnalytics' },
+        { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, href: '/reports/team-usage', permission: 'can_view_analytics' },
+        { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, href: '/reports/performance-reports', permission: 'can_view_analytics' },
       ]
     },
 
-    // AUDITS & TRAIL - Admin only
+    // AUDITS & TRAIL - Permission-based access
     {
       id: 'audits',
       label: 'AUDITS & TRAIL',
-      adminOnly: true,
       items: [
-        { id: 'audit-trail', label: 'Audit Trail', icon: ScrollText, href: '/audits/trail', adminOnly: true },
-        { id: 'activity-logs', label: 'Activity Logs', icon: Activity, href: '/audits/activity', adminOnly: true },
+        { id: 'audit-trail', label: 'Audit Trail', icon: ScrollText, href: '/audits/trail', permission: 'can_view_analytics' },
+        { id: 'activity-logs', label: 'Activity Logs', icon: Activity, href: '/audits/activity', permission: 'can_view_analytics' },
       ]
     },
 

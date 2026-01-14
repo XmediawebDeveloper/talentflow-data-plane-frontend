@@ -45,6 +45,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
   const [totalUnits, setTotalUnits] = useState<number>(10); // Total subscription limit
+  const [isUnlimited, setIsUnlimited] = useState<boolean>(false); // Track if quota is unlimited
+  const [quotaPercentage, setQuotaPercentage] = useState<number>(0); // Percentage of quota used
 
   // Proctoring settings from API
   const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings | null>(null);
@@ -188,14 +190,30 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           // Get subscription limit (total units)
           const subLimit = quotas.AS.subscription?.limit || 10;
           const addonRemaining = quotas.AS.addon?.remaining || 0;
-          const totalLimit = (typeof subLimit === 'number' ? subLimit : 10) + addonRemaining;
-          setTotalUnits(totalLimit);
+          const used = quotas.AS.subscription?.used || 0;
 
-          // Get remaining units (total_remaining is limit - used + addon)
-          const remaining = quotas.AS.total_remaining ?? (totalLimit - (quotas.AS.subscription?.used || 0));
-          setAvailableUnits(remaining);
+          // Check if unlimited
+          const unlimited = subLimit === -1 || subLimit === 'unlimited';
+          setIsUnlimited(unlimited);
 
-          console.log('[TalentFlow] Quota loaded: limit=', totalLimit, 'remaining=', remaining);
+          if (unlimited) {
+            setTotalUnits(-1);
+            setAvailableUnits(-1);
+            setQuotaPercentage(0);
+          } else {
+            const totalLimit = (typeof subLimit === 'number' ? subLimit : 10) + addonRemaining;
+            setTotalUnits(totalLimit);
+
+            // Get remaining units (total_remaining is limit - used + addon)
+            const remaining = quotas.AS.total_remaining ?? (totalLimit - used);
+            setAvailableUnits(remaining);
+
+            // Calculate percentage used
+            const percentage = totalLimit > 0 ? (used / totalLimit) * 100 : 0;
+            setQuotaPercentage(percentage);
+          }
+
+          console.log('[TalentFlow] Quota loaded: limit=', subLimit, 'remaining=', quotas.AS.total_remaining, 'unlimited=', unlimited);
         }
       } else {
         console.log('[TalentFlow] Failed to load quota:', quotaResult.reason);
@@ -332,6 +350,38 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Use API assessments only (no local state needed - all assessments are saved to DB)
   const assessments = apiAssessments;
 
+  // Reload quota from API
+  const reloadQuota = async () => {
+    try {
+      const quotaResponse = await api.get('/usage/quota-status');
+      const quotas = quotaResponse.data?.data?.quotas;
+      if (quotas?.AS) {
+        const subLimit = quotas.AS.subscription?.limit || 10;
+        const addonRemaining = quotas.AS.addon?.remaining || 0;
+        const used = quotas.AS.subscription?.used || 0;
+
+        // Check if unlimited
+        const unlimited = subLimit === -1 || subLimit === 'unlimited';
+        setIsUnlimited(unlimited);
+
+        if (unlimited) {
+          setTotalUnits(-1);
+          setAvailableUnits(-1);
+          setQuotaPercentage(0);
+        } else {
+          const totalLimit = (typeof subLimit === 'number' ? subLimit : 10) + addonRemaining;
+          setTotalUnits(totalLimit);
+          const remaining = quotas.AS.total_remaining ?? (totalLimit - used);
+          setAvailableUnits(remaining);
+          const percentage = totalLimit > 0 ? (used / totalLimit) * 100 : 0;
+          setQuotaPercentage(percentage);
+        }
+      }
+    } catch (error) {
+      console.log('[TalentFlow] Failed to reload quota:', error);
+    }
+  };
+
   // Reload stats from API
   const reloadStats = async () => {
     try {
@@ -403,13 +453,31 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       } else {
         setApiAssessments([]);
       }
-      // Also reload stats
-      await reloadStats();
+      // Also reload stats and quota
+      await Promise.all([reloadStats(), reloadQuota()]);
     } catch (error) {
       console.log('[TalentFlow] Failed to reload assessments:', error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Check quota before opening creation modal
+  const handleOpenCreation = async () => {
+    // If unlimited, allow creation
+    if (isUnlimited) {
+      setShowCreation(true);
+      return;
+    }
+
+    // Check if quota is available
+    if (availableUnits !== null && availableUnits <= 0) {
+      alert('Assessment quota exhausted. Please upgrade your plan or purchase add-on credits to continue.');
+      return;
+    }
+
+    // Open creation modal
+    setShowCreation(true);
   };
 
   const handleCreateAssessment = async (assessment: any) => {
@@ -622,11 +690,45 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Available Units Badge - shows remaining units (total - consumed) */}
-            {totalUnits > 0 && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg border border-gray-200">
-                <span className="text-sm text-gray-600">Available Units</span>
-                <span className="text-sm font-semibold text-gray-900">{Math.max(0, totalUnits - stats.units_consumed)}</span>
+            {/* Assessment Quota Badge with color coding */}
+            {availableUnits !== null && (
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 shadow-sm ${
+                isUnlimited
+                  ? 'bg-green-50 border-green-300'
+                  : availableUnits === 0
+                  ? 'bg-red-50 border-red-300'
+                  : availableUnits <= 2
+                  ? 'bg-orange-50 border-orange-300'
+                  : 'bg-gray-50 border-gray-200'
+              }`}>
+                <Zap className={`w-4 h-4 ${
+                  isUnlimited
+                    ? 'text-green-600'
+                    : availableUnits === 0
+                    ? 'text-red-600'
+                    : availableUnits <= 2
+                    ? 'text-orange-600'
+                    : 'text-gray-600'
+                }`} />
+                <div className="flex flex-col">
+                  <span className="text-xs text-gray-500 font-medium">Assessment Quota</span>
+                  <div className="flex items-center gap-1">
+                    {isUnlimited ? (
+                      <span className="text-sm font-bold text-green-700">Unlimited</span>
+                    ) : (
+                      <>
+                        <span className={`text-sm font-bold ${
+                          availableUnits === 0
+                            ? 'text-red-700'
+                            : availableUnits <= 2
+                            ? 'text-orange-700'
+                            : 'text-gray-900'
+                        }`}>{availableUnits}</span>
+                        <span className="text-xs text-gray-500">/ {totalUnits} available</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
             {onOpenCandidateView && (
@@ -639,14 +741,67 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </button>
             )}
             <button
-              onClick={() => setShowCreation(true)}
-              className="flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-lg hover:bg-gray-900 transition-colors shadow-sm"
+              onClick={handleOpenCreation}
+              disabled={!isUnlimited && availableUnits !== null && availableUnits <= 0}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg transition-colors shadow-sm ${
+                !isUnlimited && availableUnits !== null && availableUnits <= 0
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-800 text-white hover:bg-gray-900'
+              }`}
             >
               <Sparkles className="w-5 h-5" />
               Create AI Assessment
             </button>
           </div>
         </div>
+
+        {/* Low Quota Warning Banner */}
+        {!isUnlimited && availableUnits !== null && availableUnits > 0 && availableUnits <= 3 && (
+          <div className="mb-6 bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-orange-200 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-orange-700" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-orange-900 mb-1">Low Assessment Quota</h3>
+                <p className="text-sm text-orange-800">
+                  You have only <span className="font-bold">{availableUnits}</span> assessment unit{availableUnits !== 1 ? 's' : ''} remaining out of {totalUnits}.
+                  {' '}Consider purchasing add-on credits to avoid interruptions.
+                </p>
+              </div>
+              <button
+                onClick={() => window.location.href = '/subscription/usage-quotas'}
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 transition-colors"
+              >
+                Add Credits
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Quota Exhausted Banner */}
+        {!isUnlimited && availableUnits !== null && availableUnits <= 0 && (
+          <div className="mb-6 bg-red-50 border-2 border-red-300 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-200 flex items-center justify-center flex-shrink-0">
+                <Lock className="w-5 h-5 text-red-700" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-red-900 mb-1">Assessment Quota Exhausted</h3>
+                <p className="text-sm text-red-800">
+                  You have used all {totalUnits} assessment units in your current plan. Purchase add-on credits or upgrade your plan to create more assessments.
+                </p>
+              </div>
+              <button
+                onClick={() => window.location.href = '/subscription/usage-quotas'}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add Credits
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* AI-Powered Assessments Banner */}
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
