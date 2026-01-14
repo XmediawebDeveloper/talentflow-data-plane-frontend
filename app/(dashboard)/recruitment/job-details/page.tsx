@@ -256,7 +256,7 @@ function JobDetailsContent() {
           <p className="text-gray-600 mb-4">Job not found</p>
           <button
             onClick={handleBack}
-            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+            className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800"
           >
             Back to Jobs
           </button>
@@ -291,7 +291,7 @@ function JobDetailsContent() {
                   setShowDisableModal(false);
                   setJobToDisable(null);
                 }}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors font-medium"
               >
                 Cancel
               </button>

@@ -293,7 +293,7 @@ export default function ResumeViewPage() {
           </div>
           <button
             onClick={handleApplyToJob}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm shadow-md"
+            className="flex items-center gap-2 px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm shadow-md"
           >
             <Send className="w-4 h-4" />
             Apply to Job
@@ -358,7 +358,7 @@ export default function ResumeViewPage() {
                 {/* Tags */}
                 <div className="flex flex-wrap gap-2">
                   {resume.skills?.slice(0, 8).map((skill, index) => (
-                    <span key={index} className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs border border-blue-200">
+                    <span key={index} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs border border-gray-300">
                       {skill}
                     </span>
                   ))}
@@ -387,8 +387,8 @@ export default function ResumeViewPage() {
               </div>
               <div className="space-y-6">
                 {detailedResume.experience.map((exp, index) => (
-                  <div key={index} className="relative pl-6 pb-6 border-l-2 border-blue-200 last:pb-0">
-                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-blue-600 border-2 border-white"></div>
+                  <div key={index} className="relative pl-6 pb-6 border-l-2 border-gray-300 last:pb-0">
+                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gray-600 border-2 border-white"></div>
                     <div className="mb-3">
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -445,7 +445,7 @@ export default function ResumeViewPage() {
               </div>
               <div className="space-y-4">
                 {detailedResume.education.map((edu, index) => (
-                  <div key={index} className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                  <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                     <h4 className="font-semibold text-gray-900 mb-2">{edu.degree}</h4>
                     {edu.school && <div className="text-gray-700 mb-1">{edu.school}</div>}
                     <div className="flex items-center gap-4 text-sm text-gray-600">
@@ -465,7 +465,7 @@ export default function ResumeViewPage() {
                         <span className="text-purple-700">GPA: {edu.gpa}</span>
                       )}
                       {edu.honors && (
-                        <span className="px-2 py-0.5 bg-purple-600 text-white rounded text-xs">
+                        <span className="px-2 py-0.5 bg-gray-600 text-white rounded text-xs">
                           {edu.honors}
                         </span>
                       )}
@@ -490,7 +490,7 @@ export default function ResumeViewPage() {
                   <h4 className="font-medium text-gray-900 mb-4">Technical Skills</h4>
                   <div className="flex flex-wrap gap-2">
                     {detailedResume.skills.technical.map((skill, index) => (
-                      <span key={index} className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm border border-blue-200">
+                      <span key={index} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-300">
                         {skill}
                       </span>
                     ))}
@@ -504,7 +504,7 @@ export default function ResumeViewPage() {
                   <h4 className="font-medium text-gray-900 mb-4">Soft Skills</h4>
                   <div className="flex flex-wrap gap-2">
                     {detailedResume.skills.soft.map((skill, index) => (
-                      <span key={index} className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-sm border border-green-200">
+                      <span key={index} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-300">
                         {skill}
                       </span>
                     ))}
@@ -555,7 +555,7 @@ export default function ResumeViewPage() {
               </div>
               <div className="grid grid-cols-3 gap-4">
                 {detailedResume.languages.map((lang, index) => (
-                  <div key={index} className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-center">
+                  <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
                     <div className="font-medium text-gray-900 mb-1">{lang.name}</div>
                     <div className="text-sm text-indigo-700">{lang.proficiency}</div>
                   </div>
@@ -570,7 +570,7 @@ export default function ResumeViewPage() {
               <div className="flex items-center gap-2 mb-6">
                 <History className="w-5 h-5 text-blue-600" />
                 <h3 className="text-lg font-semibold text-gray-900">Version History</h3>
-                <span className="px-2.5 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">
+                <span className="px-2.5 py-0.5 bg-gray-200 text-gray-700 rounded-full text-xs">
                   {resume.versions.length} version{resume.versions.length !== 1 ? 's' : ''}
                 </span>
               </div>
@@ -578,13 +578,13 @@ export default function ResumeViewPage() {
                 {resume.versions.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()).map((version, index) => (
                   <div key={version.id} className={`p-4 rounded-lg border-2 transition-all ${
                     index === 0
-                      ? 'bg-blue-50 border-blue-200'
+                      ? 'bg-gray-50 border-gray-300'
                       : 'bg-gray-50 border-gray-200'
                   }`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3 flex-1">
                         <div className={`p-2 rounded-lg ${
-                          index === 0 ? 'bg-blue-100' : 'bg-gray-100'
+                          index === 0 ? 'bg-gray-200' : 'bg-gray-100'
                         }`}>
                           <FileText className={`w-4 h-4 ${
                             index === 0 ? 'text-blue-600' : 'text-gray-600'
@@ -594,7 +594,7 @@ export default function ResumeViewPage() {
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-sm font-medium text-gray-900 truncate">{version.name}</span>
                             {index === 0 && (
-                              <span className="px-2 py-0.5 bg-blue-600 text-white rounded text-xs flex-shrink-0">
+                              <span className="px-2 py-0.5 bg-gray-600 text-white rounded text-xs flex-shrink-0">
                                 Latest
                               </span>
                             )}
@@ -627,7 +627,7 @@ export default function ResumeViewPage() {
                         }}
                         className={`p-2 rounded-md transition-colors ${
                           index === 0
-                            ? 'text-blue-600 hover:bg-blue-100'
+                            ? 'text-gray-700 hover:bg-gray-200'
                             : 'text-gray-600 hover:bg-gray-200'
                         }`}
                         title="Download this version"
@@ -773,7 +773,7 @@ export default function ResumeViewPage() {
               </div>
               <div className="text-center">
                 <div className="text-xs text-gray-500 mb-1">Status</div>
-                <div className="inline-flex items-center px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
+                <div className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
                   Active
                 </div>
               </div>

@@ -1458,10 +1458,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     setValidationErrors(errors);
 
     if (missingFields.length > 0) {
-      toast({
+      toast.error({
         title: 'Missing Required Fields',
         description: `Please complete: ${missingFields.join(', ')}`,
-        variant: 'error',
       });
       return;
     }

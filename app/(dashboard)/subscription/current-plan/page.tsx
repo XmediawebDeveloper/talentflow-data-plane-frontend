@@ -319,7 +319,18 @@ function CurrentPlanContent() {
   const encodedPlanFromUrl = searchParams.get('plan');
 
   const [plans, setPlans] = useState<DisplayPlan[]>([]);
-  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
+  const [companySettings, setCompanySettings] = useState<CompanySettings>({
+    current_plan_name: 'Free Trial',
+    subscription_status: 'trial',
+    status: 'trial',
+    max_seats: 5,
+    max_jobs: 5,
+    max_resume_uploads: 100,
+    max_resume_searches: 100,
+    max_assessments: 10,
+    max_ai_interviews: 10,
+    storage_limit_gb: 5,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSelectingPlan, setIsSelectingPlan] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -366,7 +377,7 @@ function CurrentPlanContent() {
   const [currentPlanCurrency, setCurrentPlanCurrency] = useState<string>('INR');
   const [currentPlanBillingPeriod, setCurrentPlanBillingPeriod] = useState<string>('MONTHLY');
   // Subscription status from quota-status API (source of truth for plan status)
-  const [quotaSubscriptionStatus, setQuotaSubscriptionStatus] = useState<string | null>(null);
+  const [quotaSubscriptionStatus, setQuotaSubscriptionStatus] = useState<string>('trial'); // Default to trial for new users
 
   // Queued upgrades state
   const [queuedUpgrades, setQueuedUpgrades] = useState<QueuedUpgrade[]>([]);
@@ -463,13 +474,40 @@ function CurrentPlanContent() {
         console.log('[CurrentPlan] Could not fetch free trial settings:', ftError);
       }
 
-      // No fallback - use only free trial API data
+      // Check is_trial from quota-status API (handle both boolean and string)
+      const isTrial = quotaData?.is_trial === true || quotaData?.is_trial === 'true' || quotaData?.quota_source === 'FREE_TRIAL';
 
-      if (quotaData?.quotas) {
+      // Set subscription status early (even if quotas are missing)
+      if (isTrial) {
+        setQuotaSubscriptionStatus('trial');
+        console.log('[CurrentPlan] Setting subscription_status as trial (is_trial detected)');
+      } else if (quotaData?.subscription_status) {
+        setQuotaSubscriptionStatus(quotaData.subscription_status);
+        console.log('[CurrentPlan] Setting subscription_status from quota:', quotaData.subscription_status);
+      }
+
+      // If quota-status API failed, set default trial state
+      if (!quotaData) {
+        console.log('[CurrentPlan] Quota-status API failed, setting default trial state');
+        setQuotaSubscriptionStatus('trial');
+        setCompanySettings(prev => ({
+          ...prev!,
+          current_plan_name: 'Free Trial',
+          subscription_status: 'trial',
+          status: 'trial',
+          max_seats: trialSettings?.features?.MAX_SEATS || 5,
+          max_jobs: trialSettings?.features?.MAX_JOBS || 5,
+          max_resume_uploads: trialSettings?.features?.RESUME_STORAGE || 100,
+          max_resume_searches: trialSettings?.features?.RESUME_SCORING || 100,
+          max_assessments: trialSettings?.features?.ASSESSMENTS || 10,
+          max_ai_interviews: trialSettings?.features?.AI_INTERVIEW || 10,
+        }));
+      }
+
+      if (quotaData?.quotas || quotaData) {
 
         // Update company settings with data from quota-status API
-        const quotas = quotaData.quotas;
-        const isTrial = quotaData.is_trial === true;
+        const quotas = quotaData.quotas || {};
 
         // For FREE TRIAL: Get dates from root level (backend returns trial_start_date/trial_end_date at root)
         const trialStartDate = quotaData.trial_start_date || quotaData.trial_info?.trial_start_date || null;
@@ -487,7 +525,8 @@ function CurrentPlanContent() {
 
         setCompanySettings(prev => ({
           ...prev!,
-          current_plan_name: quotaData.plan_name || prev?.current_plan_name,
+          // For trial users, always show "Free Trial" as plan name
+          current_plan_name: isTrial ? 'Free Trial' : (quotaData.plan_name || prev?.current_plan_name),
           current_plan_id: quotaData.plan_info?.plan_id || prev?.current_plan_id,
           subscription_status: isTrial ? 'trial' : (quotaData.subscription_status || prev?.subscription_status),
           status: isTrial ? 'trial' : (quotaData.subscription_status || prev?.status),
@@ -520,17 +559,6 @@ function CurrentPlanContent() {
         if (quotaData.plan_info?.billing_period) {
           setCurrentPlanBillingPeriod(quotaData.plan_info.billing_period);
         }
-
-        // Store subscription status from quota-status API (source of truth)
-        // is_trial is the definitive way to know if user is on trial
-        if (isTrial) {
-          setQuotaSubscriptionStatus('trial');
-          console.log('[CurrentPlan] Setting subscription_status as trial (is_trial=true)');
-        } else if (quotaData.subscription_status) {
-          setQuotaSubscriptionStatus(quotaData.subscription_status);
-          console.log('[CurrentPlan] Setting subscription_status from quota:', quotaData.subscription_status);
-        }
-        // No fallback - use only API data
       }
 
       // Fetch plan settings (yearly discount, database extra charge)
@@ -758,6 +786,8 @@ function CurrentPlanContent() {
         // Refresh data
         await fetchData();
         await fetchQueuedUpgrades();
+        // Notify Header component to refresh quota/plan display
+        window.dispatchEvent(new CustomEvent('planChanged'));
       } else {
         setError(data.detail || 'Failed to apply upgrade');
       }
@@ -1044,6 +1074,9 @@ function CurrentPlanContent() {
 
         // Refresh data after upgrade
         await fetchData();
+
+        // Notify Header component to refresh quota/plan display
+        window.dispatchEvent(new CustomEvent('planChanged'));
       } else {
         setError(data.detail || data.message || 'Failed to upgrade plan');
       }
@@ -1091,10 +1124,8 @@ function CurrentPlanContent() {
   const currentPlan = plans.find(p => p.isCurrent);
   const selectedPlan = plans.find(p => p.numericId === companySettings?.selected_plan_id);
   // Use quota-status API as source of truth for subscription status
-  const isOnTrial = quotaSubscriptionStatus
-    ? quotaSubscriptionStatus.toLowerCase() === 'trial'
-    : (companySettings?.status?.toLowerCase() === 'trial' ||
-       companySettings?.subscription_status?.toLowerCase() === 'trial');
+  // quotaSubscriptionStatus defaults to 'trial' and is updated by API response
+  const isOnTrial = quotaSubscriptionStatus.toLowerCase() === 'trial';
   const isPendingPayment = companySettings?.subscription_status?.toLowerCase() === 'pending_payment' ||
                            companySettings?.payment_status === 'pending';
   const isLocked = companySettings?.status?.toLowerCase() === 'locked';

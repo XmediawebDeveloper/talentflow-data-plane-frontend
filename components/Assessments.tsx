@@ -2,6 +2,7 @@
 
 import { Plus, Clock, Users, CheckCircle, FileText, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import AssessmentCreation from './AssessmentCreation';
 import AssessmentResults from './AssessmentResults';
 import ShareAssessmentModal from './ShareAssessmentModal';
@@ -26,6 +27,7 @@ interface AssessmentsProps {
 }
 
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle }: AssessmentsProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
   const [showCreation, setShowCreation] = useState(false);
@@ -96,10 +98,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Auto-open creation view if requested via query params
   useEffect(() => {
     if (autoOpenCreate) {
-      setShowCreation(true);
-      console.log('[TalentFlow] Auto-opening assessment creation for JD:', preSelectedJdId, preSelectedJdTitle);
+      // Navigate to create page with query params
+      const params = new URLSearchParams();
+      if (preSelectedJdId) params.set('jd_id', preSelectedJdId);
+      if (preSelectedJdTitle) params.set('jd_title', preSelectedJdTitle);
+      const queryString = params.toString();
+      router.push(`/recruitment/assessments/create${queryString ? `?${queryString}` : ''}`);
+      console.log('[TalentFlow] Auto-navigating to assessment creation for JD:', preSelectedJdId, preSelectedJdTitle);
     }
-  }, [autoOpenCreate, preSelectedJdId, preSelectedJdTitle]);
+  }, [autoOpenCreate, preSelectedJdId, preSelectedJdTitle, router]);
 
   // Load all data in parallel on mount (faster than 3 separate useEffects)
   useEffect(() => {
@@ -462,11 +469,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  // Check quota before opening creation modal
+  // Check quota before navigating to creation page
   const handleOpenCreation = async () => {
     // If unlimited, allow creation
     if (isUnlimited) {
-      setShowCreation(true);
+      router.push('/recruitment/assessments/create');
       return;
     }
 
@@ -476,8 +483,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
 
-    // Open creation modal
-    setShowCreation(true);
+    // Navigate to creation page
+    router.push('/recruitment/assessments/create');
   };
 
   const handleCreateAssessment = async (assessment: any) => {
@@ -1574,7 +1581,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No assessments yet</h3>
                 <p className="text-gray-600 mb-4">Create your first AI-powered assessment to start evaluating candidates</p>
                 <button
-                  onClick={() => setShowCreation(true)}
+                  onClick={() => router.push('/recruitment/assessments/create')}
                   className="inline-flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-lg hover:bg-gray-900 transition-colors"
                 >
                   <Sparkles className="w-5 h-5" />
@@ -1587,10 +1594,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {filteredAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
-                    onClick={() => {
-                      setSelectedAssessmentForDetails(assessment);
-                      setShowDetailsView(true);
-                    }}
+                    onClick={() => router.push(`/recruitment/assessments/${assessment.id}`)}
                     className="p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
                   >
                     {/* Grid Card Header */}
@@ -1668,9 +1672,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         Share
                       </button>
                       <button
-                        onClick={() => {
-                          setSelectedAssessmentForResults(assessment);
-                          setShowResults(true);
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/recruitment/assessments/${assessment.id}/results`);
                         }}
                         className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-xs"
                       >
@@ -1784,10 +1788,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {filteredAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
-                    onClick={() => {
-                      setSelectedAssessmentForDetails(assessment);
-                      setShowDetailsView(true);
-                    }}
+                    onClick={() => router.push(`/recruitment/assessments/${assessment.id}`)}
                     className="p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
                   >
                     <div className="flex items-center justify-between">
@@ -1850,9 +1851,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                         {/* View Results Button */}
                         <button
-                          onClick={() => {
-                            setSelectedAssessmentForResults(assessment);
-                            setShowResults(true);
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/recruitment/assessments/${assessment.id}/results`);
                           }}
                           className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-xs"
                         >
