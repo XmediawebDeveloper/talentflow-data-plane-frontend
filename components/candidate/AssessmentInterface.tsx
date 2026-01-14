@@ -89,18 +89,52 @@ export function AssessmentInterface({
 
   // Global assessment timer (30 minutes)
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
-    const startTime = new Date(startedAt).getTime();
+    // CRITICAL: Ensure startedAt is parsed as UTC by appending 'Z' if missing
+    // Server sends ISO timestamps without timezone indicator, which JS interprets as local time
+    const utcStartedAt = startedAt.endsWith('Z') ? startedAt : startedAt + 'Z';
+    const startTime = new Date(utcStartedAt).getTime();
     const totalDuration = durationMinutes * 60; // Convert to seconds
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    console.log('[TIMER] Calculating initial time:', {
+      startedAt,
+      utcStartedAt,
+      startTime,
+      now: Date.now(),
+      elapsed,
+      totalDuration,
+      remaining: Math.max(0, totalDuration - elapsed)
+    });
     return Math.max(0, totalDuration - elapsed);
   });
   const [isGlobalTimeExpired, setIsGlobalTimeExpired] = useState(false);
   const globalTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Track if component has been mounted for at least a short time
+  // This prevents immediate completion due to timing/parsing issues
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Initialize after a brief delay to prevent immediate auto-complete
+  useEffect(() => {
+    const initTimeout = setTimeout(() => {
+      setIsInitialized(true);
+      console.log('[TIMER] Component initialized, auto-complete protection disabled');
+    }, 1500); // 1.5 second grace period
+
+    return () => clearTimeout(initTimeout);
+  }, []); // Only run once on mount
+
   // Global timer countdown - runs independently of question timer
   useEffect(() => {
+    // CRITICAL: Don't auto-complete until component is initialized
+    // This prevents immediate completion due to timestamp parsing issues
+    if (!isInitialized) {
+      console.log('[TIMER] Waiting for initialization before starting timer...');
+      return;
+    }
+
     if (globalTimeRemaining <= 0 || isGlobalTimeExpired) {
       if (!isGlobalTimeExpired) {
+        console.log('[TIMER] Time expired! Triggering auto-complete');
         setIsGlobalTimeExpired(true);
         // Auto-submit entire assessment when global timer expires
         onComplete();
@@ -111,6 +145,7 @@ export function AssessmentInterface({
     globalTimerRef.current = setInterval(() => {
       setGlobalTimeRemaining(prev => {
         if (prev <= 1) {
+          console.log('[TIMER] Timer reached zero during countdown');
           setIsGlobalTimeExpired(true);
           // Auto-submit entire assessment
           onComplete();
@@ -125,7 +160,7 @@ export function AssessmentInterface({
         clearInterval(globalTimerRef.current);
       }
     };
-  }, [globalTimeRemaining, isGlobalTimeExpired, onComplete]);
+  }, [globalTimeRemaining, isGlobalTimeExpired, onComplete, isInitialized]);
 
   // Track when all questions are answered
   useEffect(() => {
