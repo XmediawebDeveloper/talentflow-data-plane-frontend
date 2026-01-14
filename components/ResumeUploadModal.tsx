@@ -421,7 +421,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                       ) : filesExceedQuota ? (
                         <>You can only upload {quotaRemaining} more resume{quotaRemaining !== 1 ? 's' : ''}. You've selected {validFiles.length}. </>
                       ) : null}
-                      <a href="/subscription/plans" className="underline font-medium">Upgrade your plan</a> to upload more resumes.
+                      <a href="/subscription" className="underline font-medium">Upgrade your plan</a> to upload more resumes.
                     </p>
                   </div>
                 </div>

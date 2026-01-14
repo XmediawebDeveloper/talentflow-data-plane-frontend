@@ -2427,7 +2427,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                           <p className="text-sm font-medium text-red-800">Job Quota Exceeded</p>
                           <p className="text-xs text-red-600">
                             You have reached your maximum job posting limit.{' '}
-                            <a href="/subscription/plans" className="underline font-medium">Upgrade your plan</a> to create more jobs.
+                            <a href="/subscription" className="underline font-medium">Upgrade your plan</a> to create more jobs.
                           </p>
                         </div>
                       </div>
