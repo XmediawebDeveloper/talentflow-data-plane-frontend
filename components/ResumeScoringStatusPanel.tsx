@@ -69,6 +69,17 @@ interface ResumeScoringStatusPanelProps {
   onMinimize?: () => void;
 }
 
+// Storage key for scoring batch persistence
+const SCORING_BATCH_STORAGE_KEY = 'talentflow_scoring_batch';
+
+interface StoredScoringBatch {
+  jobId: string;
+  jobTitle: string;
+  startTime: number;
+  resumeIds: string[];
+  status: 'in_progress' | 'completed';
+}
+
 export default function ResumeScoringStatusPanel({
   resumes,
   onComplete,
@@ -85,8 +96,43 @@ export default function ResumeScoringStatusPanel({
       attemptHistory: []
     }))
   );
-  const [startTime] = useState(Date.now());
-  const [elapsedTime, setElapsedTime] = useState(0);
+
+  // Initialize startTime from localStorage or create new one (persists across minimize/maximize)
+  const [startTime] = useState(() => {
+    try {
+      const storedBatch = localStorage.getItem(SCORING_BATCH_STORAGE_KEY);
+      if (storedBatch) {
+        const parsed: StoredScoringBatch = JSON.parse(storedBatch);
+        // Only use stored time if it's for the same job and still in progress
+        if (parsed.jobId === jobId && parsed.status === 'in_progress') {
+          console.log('[Scoring] Restored start time from localStorage:', parsed.startTime);
+          return parsed.startTime;
+        }
+      }
+    } catch (e) {
+      console.error('[Scoring] Error reading from localStorage:', e);
+    }
+    // Create new start time and store it
+    const newStartTime = Date.now();
+    try {
+      const batchData: StoredScoringBatch = {
+        jobId,
+        jobTitle,
+        startTime: newStartTime,
+        resumeIds: resumes.map(r => r.id),
+        status: 'in_progress'
+      };
+      localStorage.setItem(SCORING_BATCH_STORAGE_KEY, JSON.stringify(batchData));
+      console.log('[Scoring] Stored new start time in localStorage:', newStartTime);
+    } catch (e) {
+      console.error('[Scoring] Error writing to localStorage:', e);
+    }
+    return newStartTime;
+  });
+  const [elapsedTime, setElapsedTime] = useState(() => {
+    // Calculate initial elapsed time based on stored start time
+    return Math.floor((Date.now() - startTime) / 1000);
+  });
   const [selectedForRetry, setSelectedForRetry] = useState<string[]>([]);
   const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -290,6 +336,14 @@ export default function ResumeScoringStatusPanel({
           };
         });
 
+        // Clear localStorage since scoring is complete
+        try {
+          localStorage.removeItem(SCORING_BATCH_STORAGE_KEY);
+          console.log('[Scoring] Cleared scoring batch from localStorage');
+        } catch (e) {
+          console.error('[Scoring] Error clearing localStorage:', e);
+        }
+
         // Auto-close popup immediately when all scoring completes
         onComplete(scoredResults);
       }
@@ -403,6 +457,14 @@ export default function ResumeScoringStatusPanel({
       strengths: resume.strengths || [],
       gaps: resume.gaps || [],
     }));
+
+    // Clear localStorage since scoring is complete (even with errors)
+    try {
+      localStorage.removeItem(SCORING_BATCH_STORAGE_KEY);
+      console.log('[Scoring] Cleared scoring batch from localStorage (with errors)');
+    } catch (e) {
+      console.error('[Scoring] Error clearing localStorage:', e);
+    }
 
     onComplete(scoredResults);
   };

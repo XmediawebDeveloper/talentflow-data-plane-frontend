@@ -73,6 +73,7 @@ interface EditingJDData {
   status?: 'draft' | 'published' | 'archived';
   creation_stage: 'create' | 'extract' | 'review';
   creation_method?: 'manual' | 'ai_generated';
+  ai_prompt?: string;  // Original AI prompt used to generate JD
   must_have_skills?: string[];
   nice_to_have_skills?: string[];
   education_requirements?: { degree?: string };
@@ -560,6 +561,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           description: description,
           creation_stage: 'create' as const,
           creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
+          ai_prompt: mode === 'ai' ? aiPrompt : undefined,  // Save AI prompt
         };
 
         let savedJd;
@@ -1132,6 +1134,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         description: jdText,
         creation_stage: 'extract' as const,
         creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
+        ai_prompt: mode === 'ai' ? aiPrompt : undefined,  // Save AI prompt
         must_have_skills: extraction.mustHaveSkills,
         nice_to_have_skills: extraction.niceToHaveSkills,
         must_have_comments: extraction.mustHaveComments,
@@ -1588,6 +1591,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         description: generatedJD || manualJD,
         creation_stage: 'review' as const,
         creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
+        ai_prompt: mode === 'ai' ? aiPrompt : undefined,  // Save AI prompt
         must_have_skills: extractedData.mustHaveSkills,
         nice_to_have_skills: extractedData.niceToHaveSkills,
         must_have_comments: extractedData.mustHaveComments,
@@ -1799,6 +1803,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           };
         }),
         creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
+        ai_prompt: mode === 'ai' ? aiPrompt : undefined,  // Save AI prompt
       };
 
       console.log('[DEBUG] handleConfirmPublish - editingId:', editingId, 'isEditingDraft:', isEditingDraft);
@@ -2043,6 +2048,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           };
         }),
         creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
+        ai_prompt: mode === 'ai' ? aiPrompt : undefined,  // Save AI prompt
       };
 
       // Update existing JD or create new one
@@ -2151,9 +2157,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       setJobTitle(editingJD.title);
       setGeneratedJD(editingJD.description);
 
-      // Populate AI prompt field with existing description in edit mode
+      // Populate AI prompt field with saved ai_prompt (not description)
       if (editingJD.creation_method === 'ai_generated') {
-        setAiPrompt(editingJD.description || '');
+        setAiPrompt(editingJD.ai_prompt || '');  // Use saved AI prompt
       } else if (editingJD.creation_method === 'manual') {
         setManualJD(editingJD.description || '');
       }
