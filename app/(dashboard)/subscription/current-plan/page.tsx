@@ -288,6 +288,10 @@ const getStatusBadge = (status?: string, paymentStatus?: string, trialDays?: num
       return { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Expired', icon: XCircle };
     case 'locked':
       return { bg: 'bg-red-100', text: 'text-red-700', label: 'Account Locked', icon: Lock };
+    case 'error':
+      return { bg: 'bg-red-100', text: 'text-red-700', label: 'Unable to load', icon: AlertCircle };
+    case 'loading':
+      return { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Loading...', icon: Clock };
     default:
       return { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Unknown', icon: AlertCircle };
   }
@@ -319,18 +323,7 @@ function CurrentPlanContent() {
   const encodedPlanFromUrl = searchParams.get('plan');
 
   const [plans, setPlans] = useState<DisplayPlan[]>([]);
-  const [companySettings, setCompanySettings] = useState<CompanySettings>({
-    current_plan_name: 'Free Trial',
-    subscription_status: 'trial',
-    status: 'trial',
-    max_seats: 5,
-    max_jobs: 5,
-    max_resume_uploads: 100,
-    max_resume_searches: 100,
-    max_assessments: 10,
-    max_ai_interviews: 10,
-    storage_limit_gb: 5,
-  });
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSelectingPlan, setIsSelectingPlan] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -377,7 +370,7 @@ function CurrentPlanContent() {
   const [currentPlanCurrency, setCurrentPlanCurrency] = useState<string>('INR');
   const [currentPlanBillingPeriod, setCurrentPlanBillingPeriod] = useState<string>('MONTHLY');
   // Subscription status from quota-status API (source of truth for plan status)
-  const [quotaSubscriptionStatus, setQuotaSubscriptionStatus] = useState<string>('trial'); // Default to trial for new users
+  const [quotaSubscriptionStatus, setQuotaSubscriptionStatus] = useState<string>('loading'); // Will be updated by API response
 
   // Queued upgrades state
   const [queuedUpgrades, setQueuedUpgrades] = useState<QueuedUpgrade[]>([]);
@@ -481,27 +474,31 @@ function CurrentPlanContent() {
       if (isTrial) {
         setQuotaSubscriptionStatus('trial');
         console.log('[CurrentPlan] Setting subscription_status as trial (is_trial detected)');
-      } else if (quotaData?.subscription_status) {
-        setQuotaSubscriptionStatus(quotaData.subscription_status);
-        console.log('[CurrentPlan] Setting subscription_status from quota:', quotaData.subscription_status);
+      } else if (quotaData) {
+        // Not on trial - set to active (or use API status if available)
+        const status = quotaData.subscription_status || 'active';
+        setQuotaSubscriptionStatus(status);
+        console.log('[CurrentPlan] Setting subscription_status as:', status, '(is_trial:', quotaData.is_trial, ')');
       }
 
-      // If quota-status API failed, set default trial state
+      // If quota-status API failed, set error state instead of defaulting to trial
       if (!quotaData) {
-        console.log('[CurrentPlan] Quota-status API failed, setting default trial state');
-        setQuotaSubscriptionStatus('trial');
+        console.log('[CurrentPlan] Quota-status API failed, setting error state');
+        setQuotaSubscriptionStatus('error');
         setCompanySettings(prev => ({
-          ...prev!,
-          current_plan_name: 'Free Trial',
-          subscription_status: 'trial',
-          status: 'trial',
-          max_seats: trialSettings?.features?.MAX_SEATS || 5,
-          max_jobs: trialSettings?.features?.MAX_JOBS || 5,
-          max_resume_uploads: trialSettings?.features?.RESUME_STORAGE || 100,
-          max_resume_searches: trialSettings?.features?.RESUME_SCORING || 100,
-          max_assessments: trialSettings?.features?.ASSESSMENTS || 10,
-          max_ai_interviews: trialSettings?.features?.AI_INTERVIEW || 10,
-        }));
+          ...(prev || {}),
+          current_plan_name: 'Unable to load plan',
+          subscription_status: 'error',
+          status: 'error',
+          max_seats: 0,
+          max_jobs: 0,
+          max_resume_uploads: 0,
+          max_resume_searches: 0,
+          max_assessments: 0,
+          max_ai_interviews: 0,
+          storage_limit_gb: 0,
+        } as CompanySettings));
+        setError('Unable to load subscription data. Please try again later.');
       }
 
       if (quotaData?.quotas || quotaData) {
@@ -524,12 +521,12 @@ function CurrentPlanContent() {
         console.log('[CurrentPlan] Setting dates in state - trial_start:', trialStartDate, 'trial_end:', trialEndDate, 'plan_start:', planStartDate, 'plan_expiry:', planEndDate);
 
         setCompanySettings(prev => ({
-          ...prev!,
+          ...(prev || {}),
           // For trial users, always show "Free Trial" as plan name
           current_plan_name: isTrial ? 'Free Trial' : (quotaData.plan_name || prev?.current_plan_name),
           current_plan_id: quotaData.plan_info?.plan_id || prev?.current_plan_id,
-          subscription_status: isTrial ? 'trial' : (quotaData.subscription_status || prev?.subscription_status),
-          status: isTrial ? 'trial' : (quotaData.subscription_status || prev?.status),
+          subscription_status: isTrial ? 'trial' : (quotaData.subscription_status || 'active'),
+          status: isTrial ? 'trial' : (quotaData.subscription_status || 'active'),
           // Set trial dates if available
           trial_start_date: trialStartDate || prev?.trial_start_date,
           trial_end_date: trialEndDate || prev?.trial_end_date,
@@ -537,14 +534,14 @@ function CurrentPlanContent() {
           plan_start_date: planStartDate || prev?.plan_start_date,
           plan_expiry_date: planEndDate || prev?.plan_expiry_date,
           // Update quota limits - use free trial API data for trial users, otherwise use quota-status (API only)
-          max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : (quotas?.max_seats?.subscription?.limit || prev?.max_seats),
-          max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : (quotas?.max_jobs?.subscription?.limit || prev?.max_jobs),
-          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : (quotas?.RU?.subscription?.limit || prev?.max_resume_uploads),
-          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : (quotas?.RS?.subscription?.limit || prev?.max_resume_searches),
-          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : (quotas?.AS?.subscription?.limit || prev?.max_assessments),
-          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : (quotas?.AIU?.subscription?.limit || prev?.max_ai_interviews),
-          storage_limit_gb: quotas?.storage_gb?.subscription?.limit || prev?.storage_limit_gb,
-        }));
+          max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : (quotas?.max_seats?.subscription?.limit || prev?.max_seats || 0),
+          max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : (quotas?.max_jobs?.subscription?.limit || prev?.max_jobs || 0),
+          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : (quotas?.RU?.subscription?.limit || prev?.max_resume_uploads || 0),
+          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : (quotas?.RS?.subscription?.limit || prev?.max_resume_searches || 0),
+          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : (quotas?.AS?.subscription?.limit || prev?.max_assessments || 0),
+          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : (quotas?.AIU?.subscription?.limit || prev?.max_ai_interviews || 0),
+          storage_limit_gb: quotas?.storage_gb?.subscription?.limit || prev?.storage_limit_gb || 0,
+        } as CompanySettings));
 
         console.log('[CurrentPlan] isTrial:', isTrial, 'trialSettings:', trialSettings?.features);
 
@@ -1129,8 +1126,9 @@ function CurrentPlanContent() {
   const isPendingPayment = companySettings?.subscription_status?.toLowerCase() === 'pending_payment' ||
                            companySettings?.payment_status === 'pending';
   const isLocked = companySettings?.status?.toLowerCase() === 'locked';
-  const isActive = companySettings?.status?.toLowerCase() === 'active';
-  const statusBadge = getStatusBadge(companySettings?.status, companySettings?.payment_status, freeTrialSettings?.trial_days);
+  const isActive = quotaSubscriptionStatus.toLowerCase() === 'active';
+  // Use quotaSubscriptionStatus as source of truth for status badge
+  const statusBadge = getStatusBadge(quotaSubscriptionStatus, companySettings?.payment_status, freeTrialSettings?.trial_days);
   const StatusIcon = statusBadge.icon;
 
   // Calculate remaining days from API dates only
@@ -1278,7 +1276,7 @@ function CurrentPlanContent() {
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-600 mb-1">Plan</p>
               <p className="text-xl font-semibold text-gray-900">
-                {companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || (isOnTrial ? 'Free Trial' : '')}
+                {isOnTrial ? 'Free Trial' : (companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || '-')}
               </p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">

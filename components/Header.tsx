@@ -22,6 +22,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [showHelpMenu, setShowHelpMenu] = useState(false);
   const [quotaData, setQuotaData] = useState<any>(null);
   const [loadingQuota, setLoadingQuota] = useState(true);
+  const [quotaError, setQuotaError] = useState<boolean>(false);
 
   // Fetch quota status from API
   const fetchQuotaStatus = async () => {
@@ -32,13 +33,19 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     }
 
     setLoadingQuota(true);
+    setQuotaError(false);
     try {
       const response = await api.get('/usage/quota-status');
       if (response.data?.status === 'success') {
         setQuotaData(response.data.data);
+        setQuotaError(false);
+      } else {
+        setQuotaError(true);
       }
     } catch (error) {
       console.error('Failed to fetch quota status:', error);
+      setQuotaError(true);
+      setQuotaData(null);
     } finally {
       setLoadingQuota(false);
     }
@@ -84,7 +91,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   };
 
   const totalUnits = calculateTotalUnits();
-  const planName = quotaData?.plan_name || 'Professional Plan';
+  const planName = loadingQuota ? 'Loading...' : quotaError ? 'Unable to load' : (quotaData?.plan_name || 'No plan data');
   const usagePercentage = totalUnits.limit > 0 ? ((totalUnits.used / totalUnits.limit) * 100) : 0;
 
   const roleLabels = {

@@ -262,6 +262,9 @@ export default function UserManagement() {
 
   // RBAC01: User limits hook
   const { limits, isAtLimit, canAddUsers, refresh: refreshLimits } = useUserLimits();
+
+  // Refresh trigger for SeatQuotaCard
+  const [seatQuotaRefreshTrigger, setSeatQuotaRefreshTrigger] = useState(0);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [editRoleDropdownOpen, setEditRoleDropdownOpen] = useState(false);
@@ -531,6 +534,7 @@ export default function UserManagement() {
       toast.success('User created successfully');
       resetCreateModal();
       refreshLimits(); // Refresh user limits count
+      setSeatQuotaRefreshTrigger(prev => prev + 1); // Refresh SeatQuotaCard
       loadUsers();
     } catch (error: any) {
       console.error('Error creating user:', error);
@@ -599,6 +603,7 @@ export default function UserManagement() {
 
       toast.success('User deactivated successfully');
       refreshLimits(); // Refresh user limits count
+      setSeatQuotaRefreshTrigger(prev => prev + 1); // Refresh SeatQuotaCard
       loadUsers();
     } catch (error: any) {
       console.error('Error deactivating user:', error);
@@ -631,6 +636,7 @@ export default function UserManagement() {
 
       toast.success(user.is_active ? 'User deactivated' : 'User activated');
       refreshLimits(); // Refresh user limits count
+      setSeatQuotaRefreshTrigger(prev => prev + 1); // Refresh SeatQuotaCard
       loadUsers();
     } catch (error: any) {
       console.error('Error toggling user status:', error);
@@ -745,7 +751,11 @@ export default function UserManagement() {
         <div className="mt-6 space-y-4">
           <UserLimits compact onAddSeatsClick={() => {}} />
           {/* Addon card - only shows when quota exhausted */}
-          <SeatQuotaCard onRefresh={() => { loadUsers(); refreshLimits(); }} compact />
+          <SeatQuotaCard
+            onRefresh={() => { loadUsers(); refreshLimits(); }}
+            compact
+            refreshTrigger={seatQuotaRefreshTrigger}
+          />
         </div>
       </div>
 

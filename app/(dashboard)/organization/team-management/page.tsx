@@ -42,47 +42,70 @@ export default function TeamManagementPage() {
   const [teamLeadId, setTeamLeadId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Permission guard - check if user has access
+  // Single useEffect for initial data fetch and permission check
   useEffect(() => {
-    const checkPermission = async () => {
+    let isMounted = true;
+
+    const initializePage = async () => {
+      setIsLoading(true);
       try {
-        const user = await authService.getCurrentUser();
-        setCurrentUser(user);
+        // Fetch all data in parallel - getCurrentUser only once
+        const [userData, teamsData, statsData, teamConfig] = await Promise.all([
+          authService.getCurrentUser(),
+          teamService.getTeams(),
+          teamService.getTeamStats(),
+          teamService.getTeamConfig(),
+        ]);
 
-        // Check if user has permission to access Team Management
-        const hasPermission = user.role === 'tenant_admin' || user.permissions?.can_manage_users;
+        if (!isMounted) return;
 
+        // Check permission
+        const hasPermission = userData.role === 'tenant_admin' || userData.permissions?.can_manage_users;
         if (!hasPermission) {
           toast.error('You do not have permission to access Team Management');
           router.push('/dashboard');
           return;
         }
-      } catch (error) {
-        console.error('Permission check failed:', error);
-        router.push('/dashboard');
+
+        setCurrentUser(userData);
+        setTeams(teamsData);
+        setStats(statsData);
+        setTeamsEnabled(teamConfig.teams_enabled);
+        setMaxTeams(teamConfig.max_teams);
+      } catch (error: any) {
+        console.error('Error fetching data:', error);
+        if (!isMounted) return;
+        toast.error('Failed to load teams data');
+        // Set empty state on error
+        setTeams([]);
+        setStats({
+          total_teams: 0,
+          total_members: 0,
+          avg_members_per_team: 0,
+        });
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
-    checkPermission();
-  }, [router]);
+    initializePage();
 
-  // Fetch teams, stats, and current user on mount
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
 
   const fetchInitialData = async () => {
     setIsLoading(true);
     try {
-      // Fetch current user, teams, stats, and team config from API
-      const [userData, teamsData, statsData, teamConfig] = await Promise.all([
-        authService.getCurrentUser(),
+      const [teamsData, statsData, teamConfig] = await Promise.all([
         teamService.getTeams(),
         teamService.getTeamStats(),
         teamService.getTeamConfig(),
       ]);
 
-      setCurrentUser(userData);
       setTeams(teamsData);
       setStats(statsData);
       setTeamsEnabled(teamConfig.teams_enabled);
@@ -90,52 +113,12 @@ export default function TeamManagementPage() {
     } catch (error: any) {
       console.error('Error fetching data:', error);
       toast.error('Failed to load teams data');
-
-      // Fallback to mock data for development
-      const mockTeams: Team[] = [
-        {
-          id: '1',
-          name: 'Engineering Recruitment',
-          description: 'Team 1',
-          members: [
-            { id: '1', name: 'Sarah Johnson', email: 'sarah@company.com', initials: 'SJ' },
-            { id: '2', name: 'Michael Chen', email: 'michael@company.com', initials: 'MC' },
-            { id: '3', name: 'David Kim', email: 'david@company.com', initials: 'DK' },
-            { id: '4', name: 'Jessica Martinez', email: 'jessica@company.com', initials: 'JM' },
-          ],
-          member_count: 4,
-          active_jobs_count: 24,
-          resumes_count: 156,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          name: 'Product Recruitment',
-          description: 'Team 2',
-          members: [
-            { id: '5', name: 'Sarah Johnson', email: 'sarah@company.com', initials: 'SJ' },
-            { id: '6', name: 'Emma Rodriguez', email: 'emma@company.com', initials: 'ER' },
-            { id: '7', name: 'David Kim', email: 'david@company.com', initials: 'DK' },
-          ],
-          member_count: 3,
-          active_jobs_count: 14,
-          resumes_count: 91,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ];
-
-      const mockStats: TeamStats = {
-        total_teams: mockTeams.length,
-        total_members: mockTeams.reduce((acc, team) => acc + team.member_count, 0),
-        avg_members_per_team: mockTeams.length > 0
-          ? mockTeams.reduce((acc, team) => acc + team.member_count, 0) / mockTeams.length
-          : 0,
-      };
-
-      setTeams(mockTeams);
-      setStats(mockStats);
+      setTeams([]);
+      setStats({
+        total_teams: 0,
+        total_members: 0,
+        avg_members_per_team: 0,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -600,7 +583,7 @@ export default function TeamManagementPage() {
 
       {/* Create Team Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
@@ -764,7 +747,7 @@ export default function TeamManagementPage() {
 
       {/* View Details Modal */}
       {showViewDetailsModal && selectedTeam && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
@@ -879,7 +862,7 @@ export default function TeamManagementPage() {
 
       {/* Manage Team Modal */}
       {showManageTeamModal && selectedTeam && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
