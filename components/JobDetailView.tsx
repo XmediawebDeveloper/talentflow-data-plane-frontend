@@ -18,6 +18,7 @@ import ResumeDetailView from './ResumeDetailView';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import { Resume } from '@/lib/types/types';
 import { scoringService } from '@/lib/services/scoringService';
+import { assessmentService } from '@/lib/services/assessmentService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import { toast } from 'sonner';
 
@@ -110,6 +111,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // AI Talent Match panel state
   const [showAIMatchPanel, setShowAIMatchPanel] = useState(false);
 
+  // Assessment results state
+  const [assessmentResults, setAssessmentResults] = useState<any[]>([]);
+  const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
+
   // Fetch JD History when modal opens
   useEffect(() => {
     if (showJDHistory && job.id) {
@@ -121,6 +126,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   useEffect(() => {
     if (job.id) {
       fetchScoredResumes();
+    }
+  }, [job.id]);
+
+  // Fetch assessment results on component mount
+  useEffect(() => {
+    if (job.id) {
+      fetchAssessmentResults();
     }
   }, [job.id]);
 
@@ -245,6 +257,98 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     }
   };
 
+  // Fetch assessment results for this JD
+  const fetchAssessmentResults = async () => {
+    setLoadingAssessmentResults(true);
+    try {
+      // First, get all assessments for this JD
+      const assessmentsResponse = await assessmentService.list({ jd_id: job.id, page_size: 100 });
+      const assessments = assessmentsResponse.items || [];
+
+      // For each assessment, get the completed results
+      const allResults: any[] = [];
+      for (const assessment of assessments) {
+        try {
+          const resultsResponse = await assessmentService.listResults(assessment.id, { page_size: 100 });
+          const results = resultsResponse.items || [];
+
+          // Add assessment context to each result and map to expected format
+          results.forEach((result: any) => {
+            // Calculate score percentage
+            const overallScore = result.overall_score ?? 0;
+            const maxScore = 100;
+            const scorePercentage = Math.round(overallScore);
+
+            // Calculate completion time in minutes
+            const completionTime = result.time_spent_seconds
+              ? Math.round(result.time_spent_seconds / 60).toString()
+              : 'N/A';
+
+            // Build round scores array
+            const roundScores: { roundName: string; score: number; maxScore: number; passFail: 'Pass' | 'Fail' }[] = [];
+            if (result.hr_score !== null && result.hr_score !== undefined) {
+              roundScores.push({
+                roundName: 'HR',
+                score: Math.round(result.hr_score * 10),
+                maxScore: 100,
+                passFail: result.hr_score >= 7 ? 'Pass' : 'Fail'
+              });
+            }
+            if (result.technical_score !== null && result.technical_score !== undefined) {
+              roundScores.push({
+                roundName: 'Technical',
+                score: Math.round(result.technical_score * 10),
+                maxScore: 100,
+                passFail: result.technical_score >= 7 ? 'Pass' : 'Fail'
+              });
+            }
+            if (result.coding_score !== null && result.coding_score !== undefined) {
+              roundScores.push({
+                roundName: 'Coding',
+                score: Math.round(result.coding_score * 10),
+                maxScore: 100,
+                passFail: result.coding_score >= 7 ? 'Pass' : 'Fail'
+              });
+            }
+
+            allResults.push({
+              id: result.id,
+              candidateName: result.candidate_name || 'Unknown',
+              email: result.candidate_email || '',
+              phone: result.candidate_phone || '',
+              assessmentName: result.assessment_title || assessment.title,
+              assessmentId: assessment.id,
+              totalScore: scorePercentage,
+              maxScore: maxScore,
+              scorePercentage: scorePercentage,
+              passFail: result.passed ? 'Pass' : 'Fail',
+              completedDate: result.completed_at
+                ? new Date(result.completed_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                : 'In Progress',
+              completionTime: completionTime,
+              aiSummary: result.ai_evaluation?.summary || 'Assessment completed.',
+              roundScores: roundScores,
+              invitedDate: result.started_at
+                ? new Date(result.started_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                : 'N/A',
+              invitedBy: result.invite_source || 'System',
+              status: result.status || (result.completed_at ? 'completed' : 'in_progress'),
+            });
+          });
+        } catch (err) {
+          console.warn(`Failed to fetch results for assessment ${assessment.id}:`, err);
+        }
+      }
+
+      setAssessmentResults(allResults);
+    } catch (error) {
+      console.error('Failed to fetch assessment results:', error);
+      setAssessmentResults([]);
+    } finally {
+      setLoadingAssessmentResults(false);
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results'>('overview');
 
   useEffect(() => {
@@ -325,9 +429,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     setShowAIMatchPanel(false);
     toast.error(`AI Matching failed: ${error}`);
   };
-
-  // Assessment results - empty until real data is fetched from API
-  const assessmentResults: any[] = [];
 
   const handleAddApplications = () => {
     setShowAddApplicantsMenu(false);
@@ -565,7 +666,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             {/* AI Talent Match Button */}
             <button
               onClick={handleAITalentMatch}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-md hover:from-purple-700 hover:to-blue-700 transition-colors shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors shadow-sm"
             >
               <Sparkles className="w-4 h-4" />
               AI Talent Match
@@ -630,7 +731,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
                       job.usageStatus?.is_used
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gray-700 text-white hover:bg-gray-800'
                     }`}
                     title={job.usageStatus?.is_used ? job.usageStatus.edit_restriction_reason : 'Edit this job description'}
                   >
@@ -677,7 +778,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {onEnable && isTenantAdmin && (
                   <button
                     onClick={() => onEnable(job)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center gap-2"
+                    className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all flex items-center gap-2"
                     title="Re-enable this JD (Tenant Admin only)"
                   >
                     <CheckCircle className="w-4 h-4" />
@@ -887,7 +988,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               {/* Invite for Assessment */}
               <button
                 onClick={() => setShowInviteToAssessmentModal(true)}
-                className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-md hover:from-green-700 hover:to-teal-700 transition-colors shadow-sm text-left flex items-center gap-2"
+                className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors shadow-sm text-left flex items-center gap-2"
               >
                 <Mail className="w-4 h-4" />
                 <span>Invite for Assessment</span>
@@ -902,7 +1003,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     onNavigateToAITalentMatch(job.id);
                   }
                 }}
-                className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
+                className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white hover:bg-gray-800 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
               >
                 <Sparkles className="w-4 h-4" />
                 <span>AI Talent Match Results</span>
@@ -911,7 +1012,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               {/* View JD History */}
               <button
                 onClick={() => setShowJDHistory(true)}
-                className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
+                className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white hover:bg-gray-800 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
               >
                 <History className="w-4 h-4" />
                 <span>View JD History</span>
@@ -1164,14 +1265,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden">
             {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 flex items-center justify-between">
+            <div className="bg-gray-800 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
                   <History className="w-6 h-6 text-white" />
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold text-white">Job Description History</h2>
-                  <p className="text-sm text-indigo-100">{job.title}</p>
+                  <p className="text-sm text-gray-300">{job.title}</p>
                 </div>
               </div>
               <button
@@ -1203,7 +1304,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <p className="text-sm text-gray-600">
                   Complete timeline of all published versions
                 </p>
-                <span className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full font-medium">
+                <span className="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-full font-medium">
                   {jdHistory.length} Version{jdHistory.length !== 1 ? 's' : ''}
                 </span>
               </div>
@@ -1211,7 +1312,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               {/* Timeline */}
               <div className="relative">
                 {/* Vertical Line */}
-                <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gradient-to-b from-indigo-200 via-purple-200 to-transparent"></div>
+                <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
 
                 {/* Timeline Items */}
                 <div className="space-y-6">
@@ -1228,30 +1329,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       'refresh': RefreshCw,
                     }[item.icon] || History;
 
-                    // Color mapping
-                    const colorClasses = {
-                      blue: 'bg-blue-500 border-blue-600',
-                      green: 'bg-green-500 border-green-600',
-                      purple: 'bg-purple-500 border-purple-600',
-                      red: 'bg-red-500 border-red-600',
-                      orange: 'bg-orange-500 border-orange-600',
-                    }[item.color] || 'bg-gray-500 border-gray-600';
-
-                    const bgColorClasses = {
-                      blue: 'bg-blue-50 border-blue-200',
-                      green: 'bg-green-50 border-green-200',
-                      purple: 'bg-purple-50 border-purple-200',
-                      red: 'bg-red-50 border-red-200',
-                      orange: 'bg-orange-50 border-orange-200',
-                    }[item.color] || 'bg-gray-50 border-gray-200';
-
-                    const textColorClasses = {
-                      blue: 'text-blue-900',
-                      green: 'text-green-900',
-                      purple: 'text-purple-900',
-                      red: 'text-red-900',
-                      orange: 'text-orange-900',
-                    }[item.color] || 'text-gray-900';
+                    // Color mapping - All grey theme
+                    const colorClasses = 'bg-gray-600 border-gray-700';
+                    const bgColorClasses = 'bg-gray-50 border-gray-200';
+                    const textColorClasses = 'text-gray-900';
 
                     return (
                       <div key={item.id} className="relative flex gap-6">
@@ -1261,7 +1342,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                             <IconComponent className="w-5 h-5 text-white" />
                           </div>
                           {isFirst && (
-                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-600 rounded-full border-2 border-white"></div>
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-700 rounded-full border-2 border-white"></div>
                           )}
                         </div>
 
@@ -1278,7 +1359,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                                   {item.description}
                                 </p>
                               </div>
-                              <span className={`text-xs ${item.color === 'blue' ? 'bg-blue-200 text-blue-800' : item.color === 'green' ? 'bg-green-200 text-green-800' : item.color === 'purple' ? 'bg-purple-200 text-purple-800' : item.color === 'red' ? 'bg-red-200 text-red-800' : 'bg-orange-200 text-orange-800'} px-2 py-1 rounded-full font-medium whitespace-nowrap`}>
+                              <span className="text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded-full font-medium whitespace-nowrap">
                                 {item.date}
                               </span>
                             </div>
@@ -1290,7 +1371,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                                 <ul className="space-y-1">
                                   {item.changes.map((change, idx) => (
                                     <li key={idx} className="text-sm text-gray-700 flex items-start gap-2">
-                                      <span className="text-indigo-600 mt-1">•</span>
+                                      <span className="text-gray-600 mt-1">•</span>
                                       <span>{change}</span>
                                     </li>
                                   ))}
@@ -1300,7 +1381,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
                             {/* Performed By Info */}
                             <div className="flex items-center gap-3 pt-3 border-t border-gray-200">
-                              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center">
+                              <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
                                 <User className="w-4 h-4 text-white" />
                               </div>
                               <div className="flex-1">
@@ -1330,7 +1411,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               </p>
               <button
                 onClick={() => setShowJDHistory(false)}
-                className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-sm"
+                className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm"
               >
                 Close
               </button>

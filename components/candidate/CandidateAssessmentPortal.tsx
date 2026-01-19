@@ -335,9 +335,11 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         console.log('[PORTAL] Questions still generating, waiting...');
         setStepSafe('generating_questions');
 
-        // Poll for completion
+        // Poll for completion with auto-retry on failure
         const pollForReady = async () => {
-          for (let i = 0; i < 30; i++) {  // Max 60 seconds (30 * 2s)
+          let hasRetriedGeneration = false;  // Track if we've already retried
+
+          for (let i = 0; i < 45; i++) {  // Max 90 seconds (45 * 2s) - increased from 60s
             if (!isMountedRef.current) return;
 
             await new Promise(resolve => setTimeout(resolve, 2000));
@@ -369,6 +371,20 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
               setStepSafe('assessment');
               return;
             } else if (checkStatus.status === 'failed') {
+              // Auto-retry once on generation failure
+              if (!hasRetriedGeneration) {
+                console.log('[PORTAL] Generation failed, triggering auto-retry...');
+                hasRetriedGeneration = true;
+                try {
+                  await candidateService.prepareAssessment(token);
+                  console.log('[PORTAL] Auto-retry triggered, continuing to poll...');
+                  // Continue polling - don't exit loop
+                  continue;
+                } catch (retryErr) {
+                  console.error('[PORTAL] Auto-retry failed:', retryErr);
+                }
+              }
+              // Show error only after retry also failed
               setError('Question generation failed. Please try again.');
               setStepSafe('error');
               isStartingRef.current = false;

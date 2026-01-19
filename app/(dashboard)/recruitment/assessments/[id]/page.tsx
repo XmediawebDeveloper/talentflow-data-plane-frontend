@@ -1,0 +1,167 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import AssessmentDetailsView from '@/components/AssessmentDetailsView';
+import ShareAssessmentModal from '@/components/ShareAssessmentModal';
+import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
+import AssessmentEditModal from '@/components/AssessmentEditModal';
+import { assessmentService } from '@/lib/services';
+
+export default function AssessmentDetailsPage() {
+  const params = useParams();
+  const router = useRouter();
+  const assessmentId = params.id as string;
+
+  const [assessment, setAssessment] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Modal states
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  const fetchAssessment = async () => {
+    try {
+      setIsLoading(true);
+      const response = await assessmentService.get(assessmentId);
+
+      if (response) {
+        // Map API response to the format expected by AssessmentDetailsView
+        const rawStatus = (response.status || 'draft').toLowerCase();
+        const mapped = {
+          id: response.id,
+          title: response.title,
+          description: response.description,
+          type: response.technical_enabled ? 'Technical' : response.hr_enabled ? 'Behavioral' : 'Aptitude',
+          duration: `${response.duration_minutes} min`,
+          duration_minutes: response.duration_minutes,
+          questions: (response.hr_enabled ? 10 : 0) + (response.technical_enabled ? 10 : 0) + (response.coding_enabled ? 5 : 0),
+          candidates: response.invitations_count || 0,
+          invitations_count: response.invitations_count || 0,
+          completed_count: response.completed_count || 0,
+          passed_count: response.passed_count || 0,
+          average_score: response.average_score,
+          pass_rate: response.pass_rate,
+          status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
+          passRate: response.completed_count > 0 ? `${Math.round((response.passed_count / response.completed_count) * 100)}%` : 'N/A',
+          created: response.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+          job: { title: response.jd_title || 'General Assessment', department: 'Engineering' },
+          jd_id: response.jd_id,
+          jd_title: response.jd_title,
+          // Section configuration
+          hr_enabled: response.hr_enabled,
+          hr_percentage: response.hr_percentage,
+          hr_topics: response.hr_topics,
+          technical_enabled: response.technical_enabled,
+          technical_percentage: response.technical_percentage,
+          technical_topics: response.technical_topics,
+          coding_enabled: response.coding_enabled,
+          coding_percentage: response.coding_percentage,
+          coding_topics: response.coding_topics,
+          coding_languages: response.coding_languages,
+          proctoring_enabled: response.proctoring_enabled,
+          created_by_name: response.created_by_name,
+          published_at: response.published_at,
+          created_at: response.created_at,
+          updated_at: response.updated_at,
+        };
+        setAssessment(mapped);
+      } else {
+        setError('Assessment not found');
+      }
+    } catch (err: any) {
+      console.error('[TalentFlow] Failed to fetch assessment:', err);
+      setError(err.message || 'Failed to load assessment');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (assessmentId) {
+      fetchAssessment();
+    }
+  }, [assessmentId]);
+
+  const handleBack = () => {
+    router.push('/recruitment/assessments');
+  };
+
+  const handleViewResults = () => {
+    router.push(`/recruitment/assessments/${assessmentId}/results`);
+  };
+
+  const handleEditSave = async (updatedData: any) => {
+    try {
+      await assessmentService.update(assessmentId, updatedData);
+      setShowEditModal(false);
+      fetchAssessment(); // Refresh data
+    } catch (err) {
+      console.error('[TalentFlow] Failed to update assessment:', err);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (error || !assessment) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <div className="text-red-500 text-lg">{error || 'Assessment not found'}</div>
+        <button
+          onClick={handleBack}
+          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+        >
+          Back to Assessments
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <AssessmentDetailsView
+        assessment={assessment}
+        onBack={handleBack}
+        onEdit={() => setShowEditModal(true)}
+        onPreview={() => setShowPreviewModal(true)}
+        onShare={() => setShowShareModal(true)}
+        onViewResults={handleViewResults}
+        onRefresh={fetchAssessment}
+      />
+
+      {/* Modals */}
+      {showShareModal && (
+        <ShareAssessmentModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          assessment={assessment}
+        />
+      )}
+
+      {showPreviewModal && (
+        <AssessmentPreviewModal
+          isOpen={showPreviewModal}
+          onClose={() => setShowPreviewModal(false)}
+          assessment={assessment}
+        />
+      )}
+
+      {showEditModal && (
+        <AssessmentEditModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          assessment={assessment}
+          onSave={handleEditSave}
+        />
+      )}
+    </>
+  );
+}
