@@ -1,0 +1,168 @@
+import Link from "next/link";
+
+export function Footer() {
+  return (
+    <footer className="bg-gray-900 text-white py-12 transition-colors duration-300 border-t border-gray-800">
+      <div className="container mx-auto max-w-[1440px] px-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+          <div>
+            <Link
+              href="/"
+              className="flex items-center mb-4 hover:opacity-80 transition-opacity"
+            >
+             <img
+              src="/logos/talent_flow_logo.png"
+              alt="TalentFlow"
+              className="h-10 w-auto"
+            />
+            </Link>
+            <p className="text-gray-400 text-sm leading-relaxed">
+              AI-powered recruitment solutions for agencies, companies, and
+              freelance recruiters.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-4">Product</h4>
+            <ul className="space-y-2 text-sm">
+              <li>
+                <Link
+                  href="/features"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Features
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/pricing"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Pricing
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/how-it-works"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  How It Works
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/demo"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Request Demo
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-4">Company</h4>
+            <ul className="space-y-2 text-sm">
+              <li>
+                <Link
+                  href="/about"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  About Us
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/contact"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Contact
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/faq"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  FAQ
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/careers"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Careers
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-4">Legal</h4>
+            <ul className="space-y-2 text-sm">
+              <li>
+                <Link
+                  href="/privacy"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/terms"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Terms of Service
+                </Link>
+              </li>
+              <li>
+                <a
+                  href="#"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Cookie Policy
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  GDPR Compliance
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-700 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+          <p className="text-gray-400 text-sm">
+            &copy; 2025 BusinessIntegra. All rights reserved.
+          </p>
+          <div className="flex items-center gap-6">
+            <a
+              href="#"
+              className="text-gray-400 hover:text-white transition-colors text-sm"
+            >
+              LinkedIn
+            </a>
+            <a
+              href="#"
+              className="text-gray-400 hover:text-white transition-colors text-sm"
+            >
+              Twitter
+            </a>
+            <a
+              href="#"
+              className="text-gray-400 hover:text-white transition-colors text-sm"
+            >
+              Facebook
+            </a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}

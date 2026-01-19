@@ -1,0 +1,593 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  ArrowLeft,
+  MapPin,
+  Calendar,
+  Clock,
+  Users,
+  Building2,
+  Briefcase,
+  DollarSign,
+  GraduationCap,
+  Award,
+  Code,
+  Eye,
+  Edit2,
+  Trash2,
+  CheckCircle,
+  Ban,
+  RefreshCw,
+  Copy,
+  Download,
+  Share2,
+  FileText,
+  Target,
+  ClipboardList,
+  TrendingUp,
+  Activity,
+  UserCheck,
+  UserX,
+  Loader2,
+  ExternalLink,
+  MoreHorizontal
+} from 'lucide-react';
+import { jdService, JDResponse } from '@/lib/services/jdService';
+import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
+
+type TabType = 'overview' | 'scored-resumes' | 'assessment-results';
+
+export default function JobDetailsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const jobId = searchParams.get('id');
+
+  const [job, setJob] = useState<JDResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
+
+  useEffect(() => {
+    if (jobId) {
+      fetchJobDetails();
+    }
+  }, [jobId]);
+
+  const fetchJobDetails = async () => {
+    if (!jobId) return;
+    setLoading(true);
+    try {
+      const data = await jdService.getById(jobId);
+      setJob(data);
+    } catch (error) {
+      console.error('Failed to fetch job details:', error);
+      toast.error('Failed to load job details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!jobId) return;
+    try {
+      await jdService.updateStatus(jobId, newStatus);
+      toast.success(`Job status updated to ${newStatus}`);
+      fetchJobDetails();
+    } catch (error) {
+      toast.error('Failed to update status');
+    }
+  };
+
+  const handleCopy = () => {
+    if (job) {
+      const text = `${job.title}\n\n${job.description}`;
+      navigator.clipboard.writeText(text);
+      toast.success('Job description copied to clipboard');
+    }
+  };
+
+  const handleDownload = () => {
+    if (job) {
+      const content = `
+Job Title: ${job.title}
+Department: ${job.department || 'N/A'}
+Employment Type: ${job.employment_type || 'N/A'}
+Experience: ${job.experience_min || 0} - ${job.experience_max || 0} years
+
+Description:
+${job.description}
+
+Must Have Skills:
+${job.must_have_skills?.join(', ') || 'N/A'}
+
+Nice to Have Skills:
+${job.nice_to_have_skills?.join(', ') || 'N/A'}
+
+Certifications:
+${job.certifications?.join(', ') || 'N/A'}
+      `.trim();
+
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${job.title.replace(/\s+/g, '_')}_JD.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Job description downloaded');
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  const getStatusBadge = (status: string) => {
+    const configs: Record<string, { bg: string; text: string; label: string }> = {
+      published: { bg: 'bg-green-100', text: 'text-green-700', label: 'Published' },
+      draft: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Draft' },
+      closed: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Closed' },
+      disabled: { bg: 'bg-red-100', text: 'text-red-700', label: 'Disabled' },
+      archived: { bg: 'bg-gray-100', text: 'text-gray-500', label: 'Archived' },
+    };
+    const config = configs[status] || configs.draft;
+    return (
+      <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.bg} ${config.text}`}>
+        {config.label}
+      </span>
+    );
+  };
+
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: FileText },
+    { id: 'scored-resumes', label: 'Scored Resumes', icon: Target },
+    { id: 'assessment-results', label: 'Assessment Results', icon: ClipboardList },
+  ];
+
+  // Mock data for recent activity
+  const recentActivity = [
+    { id: 1, action: 'New application received', user: 'John Smith', time: '2 hours ago', type: 'application' },
+    { id: 2, action: 'Resume scored', user: 'Sarah Johnson', time: '4 hours ago', type: 'score' },
+    { id: 3, action: 'Assessment completed', user: 'Mike Wilson', time: '1 day ago', type: 'assessment' },
+    { id: 4, action: 'New application received', user: 'Emily Brown', time: '2 days ago', type: 'application' },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
+        <span className="ml-3 text-gray-600">Loading job details...</span>
+      </div>
+    );
+  }
+
+  if (!job) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Briefcase className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Job not found</h3>
+          <button
+            onClick={() => router.push('/recruitment/job-openings')}
+            className="text-gray-800 hover:underline"
+          >
+            Back to Job Openings
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 bg-gray-50 overflow-y-auto">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-8 py-4">
+        <div className="max-w-7xl mx-auto">
+          <button
+            onClick={() => router.push('/recruitment/job-openings')}
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Job Openings
+          </button>
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-2xl font-semibold text-gray-900">{job.title}</h1>
+                {getStatusBadge(job.status)}
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-500">
+                {job.department && (
+                  <span className="flex items-center gap-1">
+                    <Building2 className="w-4 h-4" />
+                    {job.department}
+                  </span>
+                )}
+                {job.location && (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="w-4 h-4" />
+                    {job.location}
+                  </span>
+                )}
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-4 h-4" />
+                  Created {formatDate(job.created_at)}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopy}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Copy"
+              >
+                <Copy className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleDownload}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Download"
+              >
+                <Download className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => router.push(`/recruitment/jd-creation?id=${job.id}&edit=true`)}
+                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Edit2 className="w-4 h-4" />
+                Edit
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white border-b border-gray-200 px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center gap-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as TabType)}
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? 'text-gray-800 border-gray-800'
+                    : 'text-gray-600 border-transparent hover:text-gray-900'
+                }`}
+              >
+                <tab.icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-8 py-6">
+        <div className="grid grid-cols-3 gap-6">
+          {/* Main Content */}
+          <div className="col-span-2 space-y-6">
+            {activeTab === 'overview' && (
+              <>
+                {/* Job Description */}
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Description</h2>
+                  <div className="markdown-content text-gray-700 leading-relaxed">
+                    <ReactMarkdown>{job.description || ''}</ReactMarkdown>
+                  </div>
+                </div>
+
+                {/* Requirements */}
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Requirements</h2>
+
+                  {/* Experience */}
+                  <div className="mb-6">
+                    <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-gray-400" />
+                      Experience
+                    </h3>
+                    <p className="text-gray-600">
+                      {job.experience_min && job.experience_max
+                        ? `${job.experience_min} - ${job.experience_max} years`
+                        : job.experience_min
+                        ? `${job.experience_min}+ years`
+                        : 'Not specified'}
+                    </p>
+                  </div>
+
+                  {/* Must Have Skills */}
+                  {job.must_have_skills && job.must_have_skills.length > 0 && (
+                    <div className="mb-6">
+                      <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        Must Have Skills
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {job.must_have_skills.map((skill, index) => (
+                          <span key={index} className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-sm">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Nice to Have Skills */}
+                  {job.nice_to_have_skills && job.nice_to_have_skills.length > 0 && (
+                    <div className="mb-6">
+                      <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                        <Target className="w-4 h-4 text-gray-700" />
+                        Nice to Have Skills
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {job.nice_to_have_skills.map((skill, index) => (
+                          <span key={index} className="px-3 py-1 bg-gray-50 text-gray-900 rounded-full text-sm">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Certifications */}
+                  {job.certifications && job.certifications.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                        <Award className="w-4 h-4 text-gray-700" />
+                        Certifications
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {job.certifications.map((cert, index) => (
+                          <span key={index} className="px-3 py-1 bg-gray-50 text-gray-900 rounded-full text-sm">
+                            {cert}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Job Details Grid */}
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Details</h2>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <Briefcase className="w-5 h-5 text-gray-400" />
+                      <div>
+                        <p className="text-xs text-gray-500">Employment Type</p>
+                        <p className="text-sm font-medium text-gray-900">{job.employment_type || 'Not specified'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <MapPin className="w-5 h-5 text-gray-400" />
+                      <div>
+                        <p className="text-xs text-gray-500">Remote Type</p>
+                        <p className="text-sm font-medium text-gray-900">{job.remote_type || 'Not specified'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <TrendingUp className="w-5 h-5 text-gray-400" />
+                      <div>
+                        <p className="text-xs text-gray-500">Job Level</p>
+                        <p className="text-sm font-medium text-gray-900">{job.job_level || 'Not specified'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <Building2 className="w-5 h-5 text-gray-400" />
+                      <div>
+                        <p className="text-xs text-gray-500">Industry</p>
+                        <p className="text-sm font-medium text-gray-900">{job.industry_type || 'Not specified'}</p>
+                      </div>
+                    </div>
+                    {(job.salary_min || job.salary_max) && (
+                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg col-span-2">
+                        <DollarSign className="w-5 h-5 text-gray-400" />
+                        <div>
+                          <p className="text-xs text-gray-500">Salary Range</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {job.salary_currency} {job.salary_min?.toLocaleString()} - {job.salary_max?.toLocaleString()}
+                            {job.compensation_type && ` (${job.compensation_type})`}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {activeTab === 'scored-resumes' && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-semibold text-gray-900">Scored Resumes</h2>
+                  <button
+                    onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm"
+                  >
+                    <Target className="w-4 h-4" />
+                    Score New Resumes
+                  </button>
+                </div>
+                {job.scored_resumes_count === 0 ? (
+                  <div className="text-center py-12">
+                    <Target className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No scored resumes yet</h3>
+                    <p className="text-gray-500 mb-4">Start scoring resumes against this job description</p>
+                    <button
+                      onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+                    >
+                      <Target className="w-4 h-4" />
+                      Score Resumes
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-gray-600">{job.scored_resumes_count} resumes have been scored</p>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'assessment-results' && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-semibold text-gray-900">Assessment Results</h2>
+                  <button
+                    onClick={() => router.push(`/recruitment/assessments?jd_id=${job.id}`)}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm"
+                  >
+                    <ClipboardList className="w-4 h-4" />
+                    Create Assessment
+                  </button>
+                </div>
+                {job.assessments_count === 0 ? (
+                  <div className="text-center py-12">
+                    <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No assessments yet</h3>
+                    <p className="text-gray-500 mb-4">Create assessments for candidates applying to this job</p>
+                    <button
+                      onClick={() => router.push(`/recruitment/assessments?jd_id=${job.id}`)}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+                    >
+                      <ClipboardList className="w-4 h-4" />
+                      Create Assessment
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-gray-600">{job.assessments_count} assessments created</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Quick Actions */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="text-sm font-semibold text-gray-900 mb-4">Quick Actions</h3>
+              <div className="space-y-2">
+                {job.status === 'draft' && (
+                  <button
+                    onClick={() => handleStatusChange('published')}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Publish Job
+                  </button>
+                )}
+                {job.status === 'published' && (
+                  <button
+                    onClick={() => handleStatusChange('disabled')}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    <Ban className="w-4 h-4" />
+                    Disable Job
+                  </button>
+                )}
+                {job.status === 'disabled' && (
+                  <button
+                    onClick={() => handleStatusChange('published')}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-white bg-gray-800 rounded-lg hover:bg-gray-900 transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Republish Job
+                  </button>
+                )}
+                <button
+                  onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <Target className="w-4 h-4" />
+                  Score Resumes
+                </button>
+                <button
+                  onClick={() => router.push(`/recruitment/ai-talent-match?jd_id=${job.id}`)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <Users className="w-4 h-4" />
+                  Find Talent
+                </button>
+              </div>
+            </div>
+
+            {/* Applicant Statistics */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="text-sm font-semibold text-gray-900 mb-4">Applicant Statistics</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center">
+                      <Users className="w-4 h-4 text-gray-800" />
+                    </div>
+                    <span className="text-sm text-gray-600">Total Applicants</span>
+                  </div>
+                  <span className="text-lg font-semibold text-gray-900">{job.applicants_count || 0}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
+                      <UserCheck className="w-4 h-4 text-green-600" />
+                    </div>
+                    <span className="text-sm text-gray-600">Shortlisted</span>
+                  </div>
+                  <span className="text-lg font-semibold text-gray-900">0</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center">
+                      <Target className="w-4 h-4 text-gray-800" />
+                    </div>
+                    <span className="text-sm text-gray-600">Scored</span>
+                  </div>
+                  <span className="text-lg font-semibold text-gray-900">{job.scored_resumes_count || 0}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-yellow-50 rounded-lg flex items-center justify-center">
+                      <ClipboardList className="w-4 h-4 text-yellow-600" />
+                    </div>
+                    <span className="text-sm text-gray-600">Assessments</span>
+                  </div>
+                  <span className="text-lg font-semibold text-gray-900">{job.assessments_count || 0}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="text-sm font-semibold text-gray-900 mb-4">Recent Activity</h3>
+              <div className="space-y-3">
+                {recentActivity.map((activity) => (
+                  <div key={activity.id} className="flex items-start gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      activity.type === 'application' ? 'bg-gray-50' :
+                      activity.type === 'score' ? 'bg-green-50' : 'bg-gray-50'
+                    }`}>
+                      {activity.type === 'application' && <Users className="w-4 h-4 text-gray-800" />}
+                      {activity.type === 'score' && <Target className="w-4 h-4 text-green-600" />}
+                      {activity.type === 'assessment' && <ClipboardList className="w-4 h-4 text-gray-800" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900">{activity.action}</p>
+                      <p className="text-xs text-gray-500">{activity.user} • {activity.time}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
