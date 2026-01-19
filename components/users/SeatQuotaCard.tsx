@@ -49,9 +49,10 @@ interface Addon {
 interface SeatQuotaCardProps {
   onRefresh?: () => void;
   compact?: boolean;
+  refreshTrigger?: number; // Increment this to trigger a refresh
 }
 
-export default function SeatQuotaCard({ onRefresh, compact = false }: SeatQuotaCardProps) {
+export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigger = 0 }: SeatQuotaCardProps) {
   const [loading, setLoading] = useState(true);
   const [seatData, setSeatData] = useState<SeatQuotaData | null>(null);
   const [planName, setPlanName] = useState('');
@@ -67,7 +68,7 @@ export default function SeatQuotaCard({ onRefresh, compact = false }: SeatQuotaC
   useEffect(() => {
     fetchQuotaData();
     fetchSeatAddon();
-  }, []);
+  }, [refreshTrigger]); // Re-fetch when refreshTrigger changes
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
