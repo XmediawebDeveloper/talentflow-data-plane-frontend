@@ -215,16 +215,15 @@ export function AssessmentInterface({
     try {
       const response = await onAnswerSubmit(currentQuestion.question_id, answer);
 
-      // Auto-advance to next question only if not in review mode
-      // User stays on current question if they're reviewing/editing
-      if (!response.is_last_question && !allQuestionsAnswered) {
-        // Auto-navigate to next question only during initial answering
-        onNavigate(currentQuestion.question_number + 1);
-      } else if (autoSubmit) {
-        // Time expired - auto-show completion modal
+      // Navigation is handled by parent component via response.next_question
+      // The parent's handleAnswerSubmit already sets currentQuestion from the response
+      // So we don't need to call onNavigate here - it would cause duplicate navigation
+
+      if (autoSubmit && response.is_last_question) {
+        // Time expired on last question - auto-show completion modal
         setShowCompleteConfirm(true);
       }
-      // Otherwise, stay on current question (review mode) - user can navigate manually
+      // Parent component handles navigation via setCurrentQuestion(response.next_question)
     } catch (error) {
       console.error('Failed to submit answer:', error);
     } finally {
@@ -235,6 +234,38 @@ export function AssessmentInterface({
   const handleCompleteAssessment = () => {
     setShowCompleteConfirm(false);
     onComplete();
+  };
+
+  // Check if the current answer is valid based on question type
+  const isAnswerValid = (): boolean => {
+    const { round_type, question_type, starter_code } = currentQuestion;
+
+    // For coding questions
+    if (round_type === 'coding') {
+      const code = answer.code_submission?.trim() || '';
+      const language = answer.language || 'python';
+      const template = starter_code?.[language]?.trim() || '';
+
+      // Code must be non-empty and different from the template
+      if (!code) return false;
+      if (code === template) return false;
+
+      return true;
+    }
+
+    // For MCQ questions (can be in any round)
+    if (question_type === 'mcq' || question_type === 'multiple_choice') {
+      return (answer.selected_options?.length || 0) > 0;
+    }
+
+    // For text/video questions (HR, Technical rounds)
+    if (question_type === 'text' || question_type === 'video' || round_type === 'hr' || round_type === 'technical') {
+      const textAnswer = answer.text_response?.trim() || '';
+      return textAnswer.length > 0;
+    }
+
+    // Default: allow submission (for any unknown question types)
+    return true;
   };
 
   const formatTime = (seconds: number) => {
@@ -475,7 +506,8 @@ export function AssessmentInterface({
                     variant="primary"
                     onClick={() => handleSubmit()}
                     loading={isSubmitting}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !isAnswerValid()}
+                    title={!isAnswerValid() ? 'Please provide an answer before proceeding' : ''}
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
                     Save & Next
@@ -490,7 +522,8 @@ export function AssessmentInterface({
                       setShowCompleteConfirm(true);
                     }}
                     loading={isSubmitting}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !isAnswerValid()}
+                    title={!isAnswerValid() ? 'Please provide an answer before submitting' : ''}
                   >
                     <Send className="w-4 h-4 mr-2" />
                     Save & Submit Assessment

@@ -7,12 +7,54 @@ import axios from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
+// ===================== Session Token Management =====================
+// Manages single-session enforcement token
+
+let currentSessionToken: string | null = null;
+
+export const sessionTokenManager = {
+  setToken(token: string) {
+    currentSessionToken = token;
+    // Also store in sessionStorage for tab refresh persistence (but not across devices)
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('assessment_session_token', token);
+    }
+  },
+  getToken(): string | null {
+    if (currentSessionToken) return currentSessionToken;
+    // Try to recover from sessionStorage
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('assessment_session_token');
+      if (stored) {
+        currentSessionToken = stored;
+        return stored;
+      }
+    }
+    return null;
+  },
+  clearToken() {
+    currentSessionToken = null;
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('assessment_session_token');
+    }
+  }
+};
+
 // Create a separate axios instance for candidate (no auth interceptors)
 const candidateApi = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Add request interceptor to include session token
+candidateApi.interceptors.request.use((config) => {
+  const sessionToken = sessionTokenManager.getToken();
+  if (sessionToken) {
+    config.headers['X-Session-Token'] = sessionToken;
+  }
+  return config;
 });
 
 // ===================== Types =====================
@@ -114,6 +156,7 @@ export interface StartAssessmentResponse {
   }>;
   first_question: CurrentQuestion;
   message: string;
+  session_token?: string;  // Unique session token for single-session enforcement
 }
 
 export interface AnswerSubmission {
@@ -223,8 +266,23 @@ export interface HeartbeatResponse {
 }
 
 export interface ProctorEvent {
-  event_type: 'tab_switch' | 'copy_attempt' | 'paste_attempt' | 'fullscreen_exit' | 'window_blur' | 'camera_disabled' | 'screen_share_stopped';
+  event_type:
+    | 'tab_switch'
+    | 'copy_attempt'
+    | 'paste_attempt'
+    | 'fullscreen_exit'
+    | 'window_blur'
+    | 'camera_disabled'
+    | 'screen_share_stopped'
+    | 'voice_detected'
+    | 'multiple_voices'
+    | 'microphone_disabled'
+    | 'camera_obstructed'
+    | 'screenshot_attempt'
+    | 'screen_recording_attempt';
   event_data?: Record<string, unknown>;
+  timestamp?: string;
+  details?: Record<string, unknown>;
 }
 
 export interface ProctorEventResponse {
@@ -358,10 +416,19 @@ export const candidateService = {
       const response = await candidateApi.post<StartAssessmentResponse>(
         `/candidate/assessment/${token}/start`
       );
+      // Store session token for single-session enforcement
+      if (response.data.session_token) {
+        sessionTokenManager.setToken(response.data.session_token);
+      }
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        throw new Error(error.response?.data?.detail || 'Failed to start assessment');
+        // Check for session already active error
+        const errorDetail = error.response?.data?.detail;
+        if (typeof errorDetail === 'object' && errorDetail?.error === 'SESSION_ALREADY_ACTIVE') {
+          throw new Error('SESSION_ALREADY_ACTIVE');
+        }
+        throw new Error(typeof errorDetail === 'string' ? errorDetail : 'Failed to start assessment');
       }
       throw error;
     }
@@ -488,8 +555,8 @@ export const candidateService = {
         `/candidate/assessment/${token}/proctor-event`,
         {
           event_type: event.event_type,
-          timestamp: new Date().toISOString(),
-          details: event.event_data,
+          timestamp: event.timestamp || new Date().toISOString(),
+          details: event.details || event.event_data || {},
         }
       );
       return response.data;

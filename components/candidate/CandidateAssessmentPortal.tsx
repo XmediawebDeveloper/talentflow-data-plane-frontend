@@ -18,6 +18,8 @@ import { LoadingScreen } from './LoadingScreen';
 import { ErrorScreen } from './ErrorScreen';
 import { CompletedScreen } from './CompletedScreen';
 import { useRefreshPrevention } from '@/hooks/useRefreshPrevention';
+import { useProctoringMonitor, ProctoringWarning } from '@/hooks/useProctoringMonitor';
+import { ProctoringWarningModal, useProctoringWarnings } from './ProctoringWarningModal';
 
 type AssessmentStep =
   | 'loading'
@@ -45,6 +47,9 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   const [results, setResults] = useState<AssessmentResult | null>(null);
   const [progress, setProgress] = useState({ answered: 0, total: 0, percent: 0 });
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+
+  // Proctoring warnings state
+  const { warnings, addWarning, dismissWarning } = useProctoringWarnings();
 
   // Refs for proctoring
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
@@ -90,6 +95,19 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     onAttempt: (type) => {
       console.log(`[PROCTORING] Blocked ${type} attempt during assessment`);
     },
+  });
+
+  // Advanced proctoring monitoring (voice detection, camera obstruction, etc.)
+  const { state: proctoringState } = useProctoringMonitor({
+    token,
+    stream: cameraStream,
+    enabled: isAssessmentActive,
+    onWarning: (warning: ProctoringWarning) => {
+      console.log('[PROCTORING] Warning:', warning.type, warning.message);
+      addWarning(warning);
+    },
+    voiceDetectionSensitivity: 50,
+    obstructionThreshold: 30,
   });
 
   // ============================================
@@ -411,9 +429,14 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
               isStartingRef.current = false;
               isFlowActiveRef.current = false;
             }
-          } catch {
+          } catch (err) {
             if (isMountedRef.current) {
-              setError('Question generation timed out. Please try again.');
+              const errorMessage = err instanceof Error ? err.message : 'Question generation timed out. Please try again.';
+              if (errorMessage === 'SESSION_ALREADY_ACTIVE') {
+                setError('This assessment is already open in another browser or device. Please close the other session and try again. Only one active session is allowed per assessment.');
+              } else {
+                setError(errorMessage);
+              }
               setStepSafe('error');
               isStartingRef.current = false;
               isFlowActiveRef.current = false;
@@ -453,7 +476,13 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     } catch (err) {
       console.error('[PORTAL] Error in handleSystemCheckComplete:', err);
       if (isMountedRef.current) {
-        setError(err instanceof Error ? err.message : 'Failed to start assessment');
+        // Handle session already active error with user-friendly message
+        const errorMessage = err instanceof Error ? err.message : 'Failed to start assessment';
+        if (errorMessage === 'SESSION_ALREADY_ACTIVE') {
+          setError('This assessment is already open in another browser or device. Please close the other session and try again. Only one active session is allowed per assessment.');
+        } else {
+          setError(errorMessage);
+        }
         setStepSafe('error');
         isStartingRef.current = false;
         isFlowActiveRef.current = false;
@@ -535,6 +564,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
 
   const startProctoring = async () => {
     // Initialize camera stream for video monitoring
+    // The useProctoringMonitor hook handles all event detection (copy, paste, tab switch, voice, etc.)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -551,7 +581,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       console.error('[PROCTORING] Failed to initialize camera:', err);
     }
 
-    // Start heartbeat
+    // Start heartbeat for session keepalive
     heartbeatRef.current = setInterval(async () => {
       try {
         await candidateService.sendHeartbeat(token);
@@ -560,11 +590,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       }
     }, 30000);
 
-    // Setup event listeners for violations
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    document.addEventListener('copy', handleCopyAttempt);
-    document.addEventListener('paste', handlePasteAttempt);
-    window.addEventListener('blur', handleWindowBlur);
+    console.log('[PROCTORING] Advanced monitoring active via useProctoringMonitor hook');
   };
 
   const stopProctoring = () => {
@@ -582,59 +608,24 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       heartbeatRef.current = null;
     }
 
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-    document.removeEventListener('copy', handleCopyAttempt);
-    document.removeEventListener('paste', handlePasteAttempt);
-    window.removeEventListener('blur', handleWindowBlur);
+    console.log('[PROCTORING] Monitoring stopped');
   };
-
-  const handleVisibilityChange = useCallback(() => {
-    if (document.hidden && stepRef.current === 'assessment') {
-      candidateService.reportProctorEvent(token, {
-        event_type: 'tab_switch'
-      }).catch(console.error);
-    }
-  }, [token]);
-
-  const handleCopyAttempt = useCallback((e: ClipboardEvent) => {
-    if (stepRef.current === 'assessment') {
-      e.preventDefault();
-      candidateService.reportProctorEvent(token, {
-        event_type: 'copy_attempt'
-      }).catch(console.error);
-    }
-  }, [token]);
-
-  const handlePasteAttempt = useCallback((e: ClipboardEvent) => {
-    if (stepRef.current === 'assessment' && currentQuestion?.round_type !== 'coding') {
-      e.preventDefault();
-      candidateService.reportProctorEvent(token, {
-        event_type: 'paste_attempt'
-      }).catch(console.error);
-    }
-  }, [token, currentQuestion]);
-
-  const handleWindowBlur = useCallback(() => {
-    if (stepRef.current === 'assessment') {
-      candidateService.reportProctorEvent(token, {
-        event_type: 'window_blur'
-      }).catch(console.error);
-    }
-  }, [token]);
 
   // ============================================
   // RENDER
   // ============================================
 
-  switch (step) {
-    case 'loading':
-      return <LoadingScreen message="Loading assessment..." />;
+  // Render the main content based on step
+  const renderContent = () => {
+    switch (step) {
+      case 'loading':
+        return <LoadingScreen message="Loading assessment..." />;
 
-    case 'error':
-      return (
-        <ErrorScreen
-          message={error || 'An error occurred'}
-          onRetry={() => {
+      case 'error':
+        return (
+          <ErrorScreen
+            message={error || 'An error occurred'}
+            onRetry={() => {
             // Reset all flags before retry
             isFlowActiveRef.current = false;
             isStartingRef.current = false;
@@ -734,7 +725,20 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         />
       );
 
-    default:
-      return <LoadingScreen message="Loading..." />;
-  }
+      default:
+        return <LoadingScreen message="Loading..." />;
+    }
+  };
+
+  return (
+    <>
+      {renderContent()}
+      {/* Proctoring Warning Modal - shows warnings for violations */}
+      <ProctoringWarningModal
+        warnings={warnings}
+        onDismiss={dismissWarning}
+        autoDismissDelay={5000}
+      />
+    </>
+  );
 }
