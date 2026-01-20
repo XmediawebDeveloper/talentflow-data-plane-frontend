@@ -137,9 +137,18 @@ export default api;
 // Error handler helper
 export const handleApiError = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.detail;
-    if (typeof message === 'string') return message;
-    if (Array.isArray(message)) return message[0]?.msg || 'Validation error';
+    const detail = error.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) return detail[0]?.msg || 'Validation error';
+    // Handle object detail (e.g., quota errors with error_code)
+    if (detail && typeof detail === 'object') {
+      // Check for quota exceeded error
+      if (detail.error_code === 'QUOTA_EXCEEDED') {
+        return detail.message || 'OpenAI API quota exceeded. Please try again later or contact support.';
+      }
+      // Return message if available
+      if (detail.message) return detail.message;
+    }
     return error.message;
   }
   return 'An unexpected error occurred';

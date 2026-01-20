@@ -23,6 +23,7 @@ export interface SSECompleteEvent {
 export interface SSEErrorEvent {
   type: 'error';
   message: string;
+  error_code?: string;
 }
 
 export interface SSEConnectedEvent {
@@ -35,7 +36,7 @@ export interface SSECallbacks {
   onChunk?: (content: string) => void;
   onTitle?: (title: string) => void;
   onComplete?: (data: { title: string; description: string; extracted_params: any }) => void;
-  onError?: (message: string) => void;
+  onError?: (message: string, errorCode?: string) => void;
   onConnected?: () => void;
 }
 
@@ -131,8 +132,8 @@ export class JDStreamClient {
                 return true; // Signal completion
 
               case 'error':
-                console.error('[Stream] Server error:', data.message);
-                callbacks.onError?.(data.message);
+                console.error('[Stream] Server error:', data.message, data.error_code);
+                callbacks.onError?.(data.message, data.error_code);
                 throw new Error(data.message);
             }
           } catch (err) {

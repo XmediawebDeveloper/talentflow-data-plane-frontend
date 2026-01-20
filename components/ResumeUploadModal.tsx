@@ -88,7 +88,12 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const files = Array.from(e.dataTransfer.files).filter(
-        file => file.type === 'application/pdf' || file.name.endsWith('.doc') || file.name.endsWith('.docx')
+        file => file.type === 'application/pdf' ||
+                file.type === 'text/plain' ||
+                file.name.endsWith('.doc') ||
+                file.name.endsWith('.docx') ||
+                file.name.endsWith('.txt') ||
+                file.name.endsWith('.rtf')
       );
       addFiles(files);
     }
@@ -291,7 +296,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
               <input
                 type="file"
                 multiple
-                accept=".pdf,.doc,.docx"
+                accept=".pdf,.doc,.docx,.txt,.rtf"
                 onChange={handleFileSelect}
                 className="hidden"
                 id="resume-upload"
@@ -304,7 +309,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                 Browse Files
               </label>
               <p className="text-xs text-gray-500 mt-4">
-                Supported formats: PDF, DOC, DOCX (Max 10MB per file)
+                Supported formats: PDF, DOC, DOCX, RTF, TXT (Max 3MB per file)
               </p>
             </div>
 

@@ -289,9 +289,10 @@ export interface AuthorizationValidation extends ValidationStatus {
 }
 
 export interface UnitsValidation extends ValidationStatus {
-  RS: UnitAvailability;
-  AS: UnitAvailability;
-  AIU: UnitAvailability;
+  RU: UnitAvailability;  // Resume Upload - MANDATORY for JD creation
+  RS: UnitAvailability;  // Resume Scoring - MANDATORY for JD creation
+  AS: UnitAvailability;  // Assessment - MANDATORY for JD creation
+  AIU: UnitAvailability; // AI Interview - Optional
 }
 
 export interface JobQuotaValidation extends ValidationStatus {
@@ -400,7 +401,7 @@ export const jdService = {
       onChunk: (content: string) => void;
       onTitle?: (title: string) => void;
       onComplete: (data: JDGenerateResponse) => void;
-      onError: (message: string) => void;
+      onError: (message: string, errorCode?: string) => void;
     }
   ): Promise<void> {
     try {

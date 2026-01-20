@@ -79,7 +79,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
       job.industry_type?.toLowerCase().includes(searchLower) ||
       job.department?.toLowerCase().includes(searchLower) ||
       job.employmentType?.toLowerCase().includes(searchLower) ||
-      job.experience?.toLowerCase().includes(searchLower)
+      job.experience?.toLowerCase().includes(searchLower) ||
+      job.postedBy?.toLowerCase().includes(searchLower) ||  // Created by
+      (job as any).workMode?.toLowerCase().includes(searchLower)  // Work mode (onsite, hybrid, remote)
     );
 
     const matchesStatus = statusFilter === 'all' || job.status.toLowerCase() === statusFilter.toLowerCase();
@@ -159,7 +161,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
         comparison = a.status.localeCompare(b.status);
         break;
       case 'department':
-        comparison = (a.department || '').localeCompare(b.department || '');
+        // Case-insensitive department sort, push empty departments to the end
+        const deptA = (a.department || '').trim().toLowerCase();
+        const deptB = (b.department || '').trim().toLowerCase();
+        // If one is empty and the other isn't, put empty ones last
+        if (!deptA && deptB) comparison = 1;
+        else if (deptA && !deptB) comparison = -1;
+        else comparison = deptA.localeCompare(deptB);
         break;
       default:
         comparison = 0;
@@ -259,6 +267,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeDropdown]);
 
+  // Get display status - show "Republished" if published and version > 1
+  const getDisplayStatus = (status: string, currentVersion?: number) => {
+    if (status === 'Published' && currentVersion && currentVersion > 1) {
+      return 'Republished';
+    }
+    return status;
+  };
+
   const getStatusConfig = (status: string) => {
     switch (status) {
       case 'Published':
@@ -267,6 +283,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
           text: 'text-green-700',
           border: 'border-green-200',
           dot: 'bg-green-500'
+        };
+      case 'Republished':
+        return {
+          bg: 'bg-blue-50',
+          text: 'text-blue-700',
+          border: 'border-blue-200',
+          dot: 'bg-blue-500'
         };
       case 'Draft':
         return {
@@ -505,7 +528,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by title, JD ID, location, industry, experience, employment type..."
+                  placeholder="Search by title, JD ID, location, industry, experience, employment type, created by, work mode..."
                   className="w-full pl-12 pr-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                 />
               </div>
@@ -857,7 +880,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
             // Grid View
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {currentJobs.map(job => {
-                const statusConfig = getStatusConfig(job.status);
+                const displayStatus = getDisplayStatus(job.status, job.currentVersion);
+                const statusConfig = getStatusConfig(displayStatus);
                 const creationMethodConfig = getCreationMethodConfig(job.creation_method);
 
                 return (
@@ -875,7 +899,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         <div className="flex items-center gap-2">
                           <span className={`px-3 py-1.5 rounded-full text-sm ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-2`}>
                             <div className={`w-2 h-2 rounded-full ${statusConfig.dot}`}></div>
-                            {job.status}
+                            {displayStatus}
                           </span>
                           <span className={`px-3 py-1.5 rounded-full text-sm ${creationMethodConfig.bg} ${creationMethodConfig.text} border ${creationMethodConfig.border} flex items-center gap-2`}>
                             <div className={`w-2 h-2 rounded-full ${creationMethodConfig.dot}`}></div>
@@ -1072,7 +1096,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
             // List View
             <div className="space-y-4">
               {currentJobs.map(job => {
-                const statusConfig = getStatusConfig(job.status);
+                const displayStatus = getDisplayStatus(job.status, job.currentVersion);
+                const statusConfig = getStatusConfig(displayStatus);
                 const creationMethodConfig = getCreationMethodConfig(job.creation_method);
 
                 return (
@@ -1100,7 +1125,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           </h3>
                           <span className={`px-3 py-1.5 rounded-full text-sm ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-2 flex-shrink-0`}>
                             <div className={`w-2 h-2 rounded-full ${statusConfig.dot}`}></div>
-                            {job.status}
+                            {displayStatus}
                           </span>
                           <span className={`px-3 py-1.5 rounded-full text-sm ${creationMethodConfig.bg} ${creationMethodConfig.text} border ${creationMethodConfig.border} flex items-center gap-2 flex-shrink-0`}>
                             <div className={`w-2 h-2 rounded-full ${creationMethodConfig.dot}`}></div>
