@@ -400,7 +400,7 @@ export const jdService = {
       onChunk: (content: string) => void;
       onTitle?: (title: string) => void;
       onComplete: (data: JDGenerateResponse) => void;
-      onError: (message: string) => void;
+      onError: (message: string, errorCode?: string) => void;
     }
   ): Promise<void> {
     try {

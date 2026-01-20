@@ -481,6 +481,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
+  // Cancel JD creation state
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+
   // Master data state - initialized with fallback data so dropdowns work immediately
   const [experienceLevels, setExperienceLevels] = useState<ExperienceLevel[]>(FALLBACK_EXPERIENCE_LEVELS);
   const [educationLevels, setEducationLevels] = useState<EducationLevel[]>(FALLBACK_EDUCATION_LEVELS);
@@ -755,10 +759,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         }
       } catch (error) {
         console.error('[TalentFlow] Fallback generation failed:', error);
-        toast.error({
-          title: 'Generation Failed',
-          description: 'Could not generate JD. Please check your connection and try again.'
-        });
+
+        // Check if it's a quota error
+        const errorMessage = error instanceof Error ? error.message.toLowerCase() : '';
+        if (errorMessage.includes('quota') || errorMessage.includes('rate') || errorMessage.includes('insufficient')) {
+          toast.error({
+            title: 'OpenAI Quota Exceeded',
+            description: 'The AI service is temporarily unavailable. Please try again later or contact support.'
+          });
+        } else {
+          toast.error({
+            title: 'Generation Failed',
+            description: 'Could not generate JD. Please check your connection and try again.'
+          });
+        }
         throw error;
       }
     };
@@ -796,12 +810,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           }
           setIsStreaming(false);
         },
-        onError: (message: string) => {
-          console.error('[TalentFlow] Stream error:', message);
+        onError: (message: string, errorCode?: string) => {
+          console.error('[TalentFlow] Stream error:', message, 'Code:', errorCode);
           setStreamError(message);
           setIsStreaming(false);
 
-          // Fall back to non-streaming
+          // Handle quota exceeded error - don't fallback, just show error
+          if (errorCode === 'QUOTA_EXCEEDED') {
+            toast.error({
+              title: 'OpenAI Quota Exceeded',
+              description: 'The AI service is temporarily unavailable. Please try again later or contact support.',
+            });
+            setIsGenerating(false);
+            return;
+          }
+
+          // Fall back to non-streaming for other errors
           fallbackToNonStreaming(prompt).catch(() => {
             // Error already handled in fallback function
           });
@@ -1969,6 +1993,31 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     setPendingNavigation(null);
   };
 
+  // Handle cancel JD creation - delete draft and navigate away
+  const handleCancelJD = () => {
+    setShowCancelDialog(true);
+  };
+
+  // Confirm cancel and delete JD
+  const confirmCancelJD = async () => {
+    setIsCancelling(true);
+    try {
+      // Delete the JD if it exists (editingId means we have a draft saved)
+      if (editingId) {
+        await jdService.delete(editingId);
+        toast.info('JD draft has been deleted');
+      }
+      // Navigate to job openings
+      router.push('/recruitment/job-openings');
+    } catch (error) {
+      console.error('Failed to delete JD:', error);
+      toast.error('Failed to delete JD');
+    } finally {
+      setIsCancelling(false);
+      setShowCancelDialog(false);
+    }
+  };
+
   // Save JD as draft
   const handleSaveDraft = async () => {
     // Validate job title has at least 1 non-space character
@@ -2691,8 +2740,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               </div>
             </div>
 
-            {/* Next Button */}
-            <div className="flex justify-end mt-6">
+            {/* Navigation Buttons */}
+            <div className="flex justify-between mt-6">
+              <button
+                onClick={handleCancelJD}
+                className="px-6 py-3 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
               <button
                 onClick={handleNext}
                 disabled={
@@ -3544,15 +3599,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               </div>
 
             <div className="flex justify-between items-center mt-8">
-              <button
-                onClick={() => {
-                  setStep('create');
-                  setHasProceededToExtract(false);  // Re-enable regenerate button when going back
-                }}
-                className="px-8 py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-              >
-                Back
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setStep('create');
+                    setHasProceededToExtract(false);  // Re-enable regenerate button when going back
+                  }}
+                  className="px-8 py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleCancelJD}
+                  className="px-6 py-3 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
               <button
                 onClick={handlePublish}
                 disabled={isRegenerating}
@@ -3989,9 +4052,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 >
                   ← Back to Edit
                 </button>
-                {/* JD12: Cancel button to return to JD List */}
+                {/* Cancel button - delete JD and return to JD List */}
                 <button
-                  onClick={() => router.push('/recruitment/jobs')}
+                  onClick={handleCancelJD}
                   className="px-6 py-3 text-gray-600 hover:text-gray-800 transition-colors"
                 >
                   Cancel
@@ -4140,6 +4203,40 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 </>
               ) : (
                 'Save Draft'
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel JD Creation Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={(open) => !open && setShowCancelDialog(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel JD Creation?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel? {editingId ? 'This will delete the current draft and all your progress will be lost.' : 'All your progress will be lost.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={() => setShowCancelDialog(false)}
+              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Continue Editing
+            </button>
+            <button
+              onClick={confirmCancelJD}
+              disabled={isCancelling}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isCancelling ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Yes, Cancel'
               )}
             </button>
           </DialogFooter>
