@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Clock, Loader2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import ResumeTable from '@/components/ResumeTable';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
@@ -532,6 +534,7 @@ export default function ResumeDatabasePage() {
   }
 
   return (
+    <DndProvider backend={HTML5Backend}>
     <main className="flex-1 p-8 bg-gray-50">
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -709,5 +712,6 @@ export default function ResumeDatabasePage() {
         />
       )}
     </main>
+    </DndProvider>
   );
 }

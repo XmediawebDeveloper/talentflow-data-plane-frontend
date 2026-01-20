@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, RefObject } from 'react';
 import {
   Clock,
   ChevronRight,
+  ChevronLeft,
   Send,
   AlertCircle,
   CheckCircle,
@@ -449,7 +450,24 @@ export function AssessmentInterface({
             </div>
 
             {/* Actions */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-end">
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+              {/* Previous Button */}
+              <div>
+                {currentQuestion.question_number > 1 ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => onNavigate(currentQuestion.question_number - 1)}
+                    disabled={isSubmitting}
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Previous
+                  </Button>
+                ) : (
+                  <div /> /* Empty div to maintain spacing */
+                )}
+              </div>
+
+              {/* Next / Submit Button */}
               <div className="flex items-center gap-3">
                 {/* Save & Next button - saves and moves to next question */}
                 {!isLastQuestion ? (
@@ -482,9 +500,9 @@ export function AssessmentInterface({
             </div>
           </div>
 
-          {/* Progress Indicator */}
+          {/* Progress Indicator - Clickable Navigation */}
           <div className="mt-6 bg-white rounded-xl shadow p-4">
-            <p className="text-sm font-medium text-gray-700 mb-3">Progress</p>
+            <p className="text-sm font-medium text-gray-700 mb-3">Progress (Click to navigate)</p>
             <div className="flex flex-wrap gap-2">
               {Array.from({ length: currentQuestion.total_questions }, (_, i) => {
                 const num = i + 1;
@@ -492,22 +510,25 @@ export function AssessmentInterface({
                 const isAnswered = num < currentQuestion.question_number;
 
                 return (
-                  <div
+                  <button
                     key={num}
-                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center ${
+                    onClick={() => onNavigate(num)}
+                    disabled={isSubmitting}
+                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center transition-all ${
                       isCurrent
-                        ? 'bg-gray-800 text-white'
+                        ? 'bg-gray-800 text-white ring-2 ring-gray-800 ring-offset-2'
                         : isAnswered
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-400'
-                    }`}
+                        ? 'bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer'
+                        : 'bg-gray-100 text-gray-400 hover:bg-gray-200 cursor-pointer'
+                    } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={`Go to question ${num}`}
                   >
                     {isAnswered ? (
                       <CheckCircle className="w-5 h-5" />
                     ) : (
                       num
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -554,17 +575,10 @@ export function AssessmentInterface({
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setShowCompleteConfirm(false)}
-              >
-                Review Answers
-              </Button>
+            <div className="flex items-center justify-center">
               <Button
                 variant="primary"
-                className="flex-1"
+                className="w-full"
                 onClick={handleCompleteAssessment}
               >
                 Submit Now

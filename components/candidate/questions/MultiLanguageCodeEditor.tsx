@@ -97,8 +97,8 @@ export function MultiLanguageCodeEditor({
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'problem' | 'output'>('problem');
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
-  // Auto-show input panel if no sample_input is available (so users can provide test input)
-  const [showInputPanel, setShowInputPanel] = useState(!question.sample_input);
+  // Always show input panel so users can see and edit the input
+  const [showInputPanel, setShowInputPanel] = useState(true);
   const [fontSize, setFontSize] = useState(14);
   const editorRef = useRef<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -202,28 +202,23 @@ export function MultiLanguageCodeEditor({
       const langConfig = getLanguageConfig(selectedLanguage);
       const compilerLang = langConfig?.compilerName || selectedLanguage;
 
-      // Use custom input or sample input
-      // If input panel is shown, use custom input; otherwise use sample_input
-      const inputToUse = showInputPanel ? customInput : (question.sample_input || '');
+      // Always use the custom input field value
+      const inputToUse = customInput;
 
       // Check if code expects input but none is provided
       const codeExpectsInput = detectsInputRequired(code, selectedLanguage);
       if (codeExpectsInput && !inputToUse.trim()) {
-        // Show warning but still run - user might have modified code to not need input
+        // Show warning - code expects input but none provided
         console.warn('[CODE_EXEC] Warning: Code appears to expect input but none provided');
         setExecutionOutput({
           success: false,
-          error: 'Your code expects input (e.g., Scanner, input(), cin, etc.) but no input was provided.\n\nPlease enter test input in the "Input" panel below and try again.',
+          error: 'Your code expects input (e.g., Scanner, input(), cin, etc.) but no input was provided.\n\nPlease enter test input in the "Custom Input" panel below and click Run again.',
         });
         setIsRunning(false);
-        // Auto-show input panel so user can enter input
-        if (!showInputPanel) {
-          setShowInputPanel(true);
-        }
         return;
       }
 
-      // Log input for debugging (helpful when diagnosing input issues)
+      // Log input for debugging
       console.log('[CODE_EXEC] Running with input:', inputToUse ? `"${inputToUse.substring(0, 50)}..."` : '(empty)');
 
       const result = await candidateService.executeCode(compilerLang, code, inputToUse);
@@ -235,21 +230,25 @@ export function MultiLanguageCodeEditor({
         compile_error: result.compile_error,
       });
 
-      // Compare with expected output if using sample input
-      if (result.success && question.sample_output && !showInputPanel) {
-        const actualOutput = (result.output || '').trim();
-        const expectedOutput = question.sample_output.trim();
-        const passed = actualOutput === expectedOutput;
+      // Compare with expected output if input matches sample_input
+      if (result.success && question.sample_output && question.sample_input) {
+        // Only compare if user is using the sample input
+        const isUsingSampleInput = customInput.trim() === (question.sample_input || '').trim();
+        if (isUsingSampleInput) {
+          const actualOutput = (result.output || '').trim();
+          const expectedOutput = question.sample_output.trim();
+          const passed = actualOutput === expectedOutput;
 
-        setTestResults([
-          {
-            passed,
-            input: question.sample_input || 'No input',
-            expected: expectedOutput,
-            actual: actualOutput,
-            error: passed ? undefined : 'Output does not match expected result',
-          },
-        ]);
+          setTestResults([
+            {
+              passed,
+              input: question.sample_input || 'No input',
+              expected: expectedOutput,
+              actual: actualOutput,
+              error: passed ? undefined : 'Output does not match expected result',
+            },
+          ]);
+        }
       }
     } catch (error) {
       console.error('Code execution error:', error);
@@ -639,15 +638,30 @@ export function MultiLanguageCodeEditor({
         {/* Custom Input Panel */}
         {showInputPanel && (
           <div className="border-t border-gray-700 bg-gray-800 p-3">
-            <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">
-              Custom Input
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs text-gray-400 uppercase tracking-wide">
+                Input (stdin)
+              </label>
+              {question.sample_input && customInput !== question.sample_input && (
+                <button
+                  onClick={() => setCustomInput(question.sample_input || '')}
+                  className="text-xs text-blue-400 hover:text-blue-300"
+                >
+                  Reset to sample input
+                </button>
+              )}
+            </div>
             <textarea
               value={customInput}
               onChange={(e) => setCustomInput(e.target.value)}
-              placeholder="Enter custom input here..."
+              placeholder="Enter input for your program here (e.g., numbers, text that your code will read)..."
               className="w-full h-20 bg-gray-900 text-green-400 font-mono text-sm p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {!customInput.trim() && (
+              <p className="text-xs text-amber-400 mt-1">
+                ⚠ Your code may need input. Enter test values above before running.
+              </p>
+            )}
           </div>
         )}
 

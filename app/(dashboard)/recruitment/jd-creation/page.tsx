@@ -2,9 +2,160 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle, XCircle, CreditCard, ShieldX, LogIn } from 'lucide-react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import JDCreation from '@/components/JDCreation';
-import { jdService, JDResponse } from '@/lib/services/jdService';
+import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
+
+// Error display component for pre-condition failures
+function AccessBlockedError({
+  errorCode,
+  errorMessage,
+  accessCheck,
+  onBack
+}: {
+  errorCode: string;
+  errorMessage: string;
+  accessCheck?: JDAccessCheckResponse;
+  onBack: () => void;
+}) {
+  const getErrorIcon = () => {
+    switch (errorCode) {
+      case 'ACCOUNT_SUSPENDED':
+        return <XCircle className="w-16 h-16 text-red-600" />;
+      case 'SUBSCRIPTION_INACTIVE':
+        return <CreditCard className="w-16 h-16 text-orange-500" />;
+      case 'INSUFFICIENT_UNITS':
+        return <CreditCard className="w-16 h-16 text-orange-500" />;
+      case 'UNAUTHORIZED':
+        return <ShieldX className="w-16 h-16 text-yellow-500" />;
+      case 'UNAUTHENTICATED':
+        return <LogIn className="w-16 h-16 text-blue-500" />;
+      default:
+        return <AlertTriangle className="w-16 h-16 text-red-500" />;
+    }
+  };
+
+  const getErrorTitle = () => {
+    switch (errorCode) {
+      case 'ACCOUNT_SUSPENDED':
+        return 'Account Suspended';
+      case 'SUBSCRIPTION_INACTIVE':
+        return 'Subscription Inactive';
+      case 'INSUFFICIENT_UNITS':
+        return 'Insufficient Units';
+      case 'UNAUTHORIZED':
+        return 'User Not Authorized';
+      case 'UNAUTHENTICATED':
+        return 'Authentication Required';
+      case 'JOB_QUOTA_EXCEEDED':
+        return 'Job Quota Exceeded';
+      default:
+        return 'Access Denied';
+    }
+  };
+
+  const getActionButton = () => {
+    switch (errorCode) {
+      case 'ACCOUNT_SUSPENDED':
+        return (
+          <button
+            onClick={() => window.location.href = 'mailto:support@talentflow.com'}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+          >
+            Contact Support
+          </button>
+        );
+      case 'SUBSCRIPTION_INACTIVE':
+        return (
+          <button
+            onClick={() => window.location.href = '/subscription/current-plan'}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+          >
+            View Subscription
+          </button>
+        );
+      case 'INSUFFICIENT_UNITS':
+        return (
+          <button
+            onClick={() => window.location.href = '/subscription/usage-quotas'}
+            className="px-6 py-3 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 transition-colors"
+          >
+            View Usage & Buy Units
+          </button>
+        );
+      case 'UNAUTHORIZED':
+        return (
+          <button
+            onClick={() => window.location.href = 'mailto:support@talentflow.com'}
+            className="px-6 py-3 bg-yellow-600 text-white rounded-lg font-medium hover:bg-yellow-700 transition-colors"
+          >
+            Contact Admin
+          </button>
+        );
+      case 'UNAUTHENTICATED':
+        return (
+          <button
+            onClick={() => window.location.href = '/login'}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+          >
+            Sign In
+          </button>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="flex-1 flex items-center justify-center bg-gray-50 p-8">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 text-center">
+        <div className="flex justify-center mb-6">
+          {getErrorIcon()}
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-3">
+          {getErrorTitle()}
+        </h2>
+        <p className="text-gray-600 mb-6">
+          {errorMessage}
+        </p>
+
+        {/* Show unit details if insufficient units */}
+        {errorCode === 'INSUFFICIENT_UNITS' && accessCheck?.units && (
+          <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+            <p className="text-sm font-medium text-gray-700 mb-2">Unit Availability:</p>
+            <div className="space-y-1 text-sm text-gray-600">
+              <p>Resume Scoring: {accessCheck.units.RS?.available || 0} available</p>
+              <p>Assessment: {accessCheck.units.AS?.available || 0} available</p>
+              <p>AI Interview: {accessCheck.units.AIU?.available || 0} available</p>
+            </div>
+          </div>
+        )}
+
+        {/* Show job quota details if exceeded */}
+        {errorCode === 'JOB_QUOTA_EXCEEDED' && accessCheck?.job_quota && (
+          <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+            <p className="text-sm font-medium text-gray-700 mb-2">Job Quota:</p>
+            <div className="text-sm text-gray-600">
+              <p>Used: {accessCheck.job_quota.used} / {accessCheck.job_quota.is_unlimited ? '∞' : accessCheck.job_quota.limit}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3">
+          {getActionButton()}
+          <button
+            onClick={onBack}
+            className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function JDCreationContent() {
   const router = useRouter();
@@ -13,29 +164,62 @@ function JDCreationContent() {
   const stageFromUrl = searchParams.get('stage') as 'create' | 'extract' | 'review' | null;
 
   const [editingJD, setEditingJD] = useState<JDResponse | null>(null);
-  const [loading, setLoading] = useState(!!jdId);
+  const [loading, setLoading] = useState(true); // Start with loading true for access check
+  const [accessCheck, setAccessCheck] = useState<JDAccessCheckResponse | null>(null);
+  const [accessError, setAccessError] = useState<{ code: string; message: string } | null>(null);
 
+  // JD01: Pre-condition validation on page load
   useEffect(() => {
-    if (jdId) {
-      // Fetch the JD data to continue editing
-      const fetchJD = async () => {
-        try {
-          const jd = await jdService.get(jdId);
-          console.log('[TalentFlow] Loaded JD from database:', {
-            id: jd.id,
-            title: jd.title,
-            creation_stage: jd.creation_stage,
-            status: jd.status
+    const checkAccess = async () => {
+      try {
+        console.log('[JD] Checking access pre-conditions...');
+        const result = await jdService.accessCheck();
+        console.log('[JD] Access check result:', result);
+        setAccessCheck(result);
+
+        if (!result.all_checks_passed) {
+          // Set the blocking error
+          setAccessError({
+            code: result.blocking_error_code || 'ACCESS_DENIED',
+            message: result.blocking_error || 'You do not have access to create job descriptions.'
           });
-          setEditingJD(jd);
-        } catch (error) {
-          console.error('Failed to fetch JD:', error);
-        } finally {
           setLoading(false);
+          return;
         }
-      };
-      fetchJD();
-    }
+
+        // Access granted - now fetch JD if editing
+        if (jdId) {
+          try {
+            const jd = await jdService.get(jdId);
+            console.log('[TalentFlow] Loaded JD from database:', {
+              id: jd.id,
+              title: jd.title,
+              creation_stage: jd.creation_stage,
+              status: jd.status
+            });
+            setEditingJD(jd);
+          } catch (error) {
+            console.error('Failed to fetch JD:', error);
+          }
+        }
+        setLoading(false);
+      } catch (error) {
+        console.error('[JD] Access check failed:', error);
+        // If access check API fails, allow access (fail-open for API errors)
+        // The individual JD operations will still be protected
+        if (jdId) {
+          try {
+            const jd = await jdService.get(jdId);
+            setEditingJD(jd);
+          } catch (fetchError) {
+            console.error('Failed to fetch JD:', fetchError);
+          }
+        }
+        setLoading(false);
+      }
+    };
+
+    checkAccess();
   }, [jdId]);
 
   const handleViewAllJobs = () => {
@@ -46,46 +230,60 @@ function JDCreationContent() {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
-        <span className="ml-3 text-gray-600">Loading job description...</span>
+        <span className="ml-3 text-gray-600">Checking access...</span>
       </div>
     );
   }
 
-  return (
-    <div className="h-[calc(100vh-64px)] overflow-hidden">
-      <JDCreation
+  // Show error screen if access is blocked
+  if (accessError) {
+    return (
+      <AccessBlockedError
+        errorCode={accessError.code}
+        errorMessage={accessError.message}
+        accessCheck={accessCheck || undefined}
         onBack={handleViewAllJobs}
-        editingJD={editingJD ? {
-        id: editingJD.id,
-        title: editingJD.title,
-        description: editingJD.description,
-        status: editingJD.status,  // Pass status to determine if draft or published
-        creation_stage: stageFromUrl || editingJD.creation_stage || 'create',  // URL stage takes priority
-        creation_method: editingJD.creation_method,
-        ai_prompt: editingJD.ai_prompt,  // Original AI prompt for editing
-        must_have_skills: editingJD.must_have_skills,
-        nice_to_have_skills: editingJD.nice_to_have_skills,
-        education_requirements: editingJD.education_requirements,
-        experience_min: editingJD.experience_min,
-        experience_max: editingJD.experience_max,
-        industry_type: editingJD.industry_type,
-        salary_min: editingJD.salary_min,
-        salary_max: editingJD.salary_max,
-        compensation_type: editingJD.compensation_type,
-        employment_type: editingJD.employment_type,
-        remote_type: editingJD.remote_type,
-        assessment_guidance: editingJD.assessment_guidance,
-        internal_comments: editingJD.internal_comments,
-        must_have_comments: editingJD.must_have_comments,
-        allow_overqualified: editingJD.allow_overqualified,
-        locations: editingJD.locations?.map(loc => ({
-          city: loc.city || '',
-          radius_km: loc.radius_km,
-          is_required: loc.is_required,
-        })),
-      } : null}
       />
-    </div>
+    );
+  }
+
+  return (
+    <DndProvider backend={HTML5Backend}>
+      <div className="h-[calc(100vh-64px)] overflow-hidden">
+        <JDCreation
+          onBack={handleViewAllJobs}
+          editingJD={editingJD ? {
+          id: editingJD.id,
+          title: editingJD.title,
+          description: editingJD.description,
+          status: editingJD.status,  // Pass status to determine if draft or published
+          creation_stage: stageFromUrl || editingJD.creation_stage || 'create',  // URL stage takes priority
+          creation_method: editingJD.creation_method,
+          ai_prompt: editingJD.ai_prompt,  // Original AI prompt for editing
+          must_have_skills: editingJD.must_have_skills,
+          nice_to_have_skills: editingJD.nice_to_have_skills,
+          education_requirements: editingJD.education_requirements,
+          experience_min: editingJD.experience_min,
+          experience_max: editingJD.experience_max,
+          industry_type: editingJD.industry_type,
+          salary_min: editingJD.salary_min,
+          salary_max: editingJD.salary_max,
+          compensation_type: editingJD.compensation_type,
+          employment_type: editingJD.employment_type,
+          remote_type: editingJD.remote_type,
+          assessment_guidance: editingJD.assessment_guidance,
+          internal_comments: editingJD.internal_comments,
+          must_have_comments: editingJD.must_have_comments,
+          allow_overqualified: editingJD.allow_overqualified,
+          locations: editingJD.locations?.map(loc => ({
+            city: loc.city || '',
+            radius_km: loc.radius_km,
+            is_required: loc.is_required,
+          })),
+        } : null}
+        />
+      </div>
+    </DndProvider>
   );
 }
 
