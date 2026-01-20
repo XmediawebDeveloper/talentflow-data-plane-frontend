@@ -686,12 +686,16 @@ function CurrentPlanContent() {
             ?.map(f => f.feature_name) || [];
 
           // Check if monthly or annual plan is the current plan
-          const isCurrentMonthly = settings?.current_plan_id !== undefined &&
-            Number(settings.current_plan_id) === Number(monthly?.id);
-          const isCurrentAnnual = settings?.current_plan_id !== undefined &&
-            Number(settings.current_plan_id) === Number(annual?.id);
+          // Use multiple sources for current_plan_id: settings API, quota API, or plan name match
+          const currentPlanId = settings?.current_plan_id ?? quotaData?.plan_info?.plan_id;
+          const currentPlanName = settings?.current_plan_name ?? quotaData?.plan_name ?? quotaData?.plan_info?.plan_name;
+
+          const isCurrentMonthly = currentPlanId !== undefined && currentPlanId !== null &&
+            Number(currentPlanId) === Number(monthly?.id);
+          const isCurrentAnnual = currentPlanId !== undefined && currentPlanId !== null &&
+            Number(currentPlanId) === Number(annual?.id);
           const isCurrent = isCurrentMonthly || isCurrentAnnual ||
-            (settings?.current_plan_name?.toLowerCase() === groupedPlan.plan_name.toLowerCase());
+            (currentPlanName && currentPlanName.toLowerCase() === groupedPlan.plan_name.toLowerCase());
 
           return {
             id: String(basePlan.id),
@@ -1677,7 +1681,8 @@ function CurrentPlanContent() {
               {plans.map((plan) => {
                 const Icon = plan.icon;
                 const isSelectedPending = isPendingPayment && companySettings?.selected_plan_id === plan.numericId;
-                // Check if this plan matches current subscription for the selected billing toggle
+                // Show "Current Plan" only when viewing the matching billing period
+                // e.g., if user has Annual plan, show "Current Plan" only when toggle is on Annual
                 const isCurrentForToggle = (plan.isCurrentMonthly && !isYearly) || (plan.isCurrentAnnual && isYearly);
 
                 return (
