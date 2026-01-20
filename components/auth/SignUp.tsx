@@ -4,9 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft,
-  Building2, User, CheckCircle, Loader2, Phone, ShieldCheck
+  Building2, User, CheckCircle, Loader2, Phone, ShieldCheck, CreditCard, Check
 } from 'lucide-react';
 import { decodePlanId } from '@/lib/utils/planEncoder';
+import { toast } from 'sonner';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -41,7 +42,28 @@ interface SignUpForm {
   confirmPassword: string;
 }
 
-type SignUpStep = 'form' | 'verification' | 'success';
+type SignUpStep = 'form' | 'verification' | 'payment' | 'success';
+
+interface PlanDetails {
+  id: number;
+  plan_name: string;
+  plan_tier: string;
+  description: string;
+  base_price: number;
+  monthly_price: number;
+  currency: string;
+  billing_period: string;
+  included_seats: number;
+  features?: { feature_name: string; is_enabled: boolean }[];
+  quotas?: {
+    max_seats?: number;
+    max_jobs?: number;
+    RS?: number;
+    RU?: number;
+    AS?: number;
+    AIU?: number;
+  };
+}
 
 export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps) {
   const router = useRouter();
@@ -78,6 +100,16 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   // Success state
   const [step, setStep] = useState<SignUpStep>('form');
 
+  // Payment step state (for plan purchase during signup)
+  const billingIntervalFromUrl = searchParams.get('billing');
+  const [billingInterval, setBillingInterval] = useState<'MONTHLY' | 'ANNUAL'>(
+    billingIntervalFromUrl === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY'
+  );
+  const [selectedPlanDetails, setSelectedPlanDetails] = useState<PlanDetails | null>(null);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
+
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -111,6 +143,58 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       return () => clearTimeout(timer);
     }
   }, [resendTimer]);
+
+  // Fetch plan details when plan ID is present in URL
+  useEffect(() => {
+    const fetchPlanDetails = async () => {
+      if (!encodedPlanFromUrl) return;
+
+      const planId = decodePlanId(encodedPlanFromUrl);
+      if (!planId) return;
+
+      setPlanLoading(true);
+      try {
+        const response = await fetch(`${API_URL}/subscription/public/plans`);
+        if (response.ok) {
+          const result = await response.json();
+          const plansArray = result.data?.plans || result.plans || [];
+
+          // Find the plan with matching ID in billing_options
+          for (const groupedPlan of plansArray) {
+            const monthly = groupedPlan.billing_options?.monthly;
+            const annual = groupedPlan.billing_options?.annual;
+
+            if (monthly?.id === parseInt(planId) || annual?.id === parseInt(planId)) {
+              // Determine which plan variant to use based on billingInterval
+              const planVariant = billingInterval === 'ANNUAL' ? (annual || monthly) : (monthly || annual);
+              if (planVariant) {
+                setSelectedPlanDetails({
+                  id: planVariant.id,
+                  plan_name: groupedPlan.plan_name,
+                  plan_tier: groupedPlan.plan_tier,
+                  description: groupedPlan.description,
+                  base_price: planVariant.base_price,
+                  monthly_price: planVariant.monthly_price,
+                  currency: planVariant.currency,
+                  billing_period: planVariant.billing_period,
+                  included_seats: planVariant.included_seats,
+                  features: planVariant.features,
+                  quotas: planVariant.quotas,
+                });
+              }
+              break;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching plan details:', err);
+      } finally {
+        setPlanLoading(false);
+      }
+    };
+
+    fetchPlanDetails();
+  }, [encodedPlanFromUrl, billingInterval]);
 
   // Comprehensive email validation
   const validateEmail = (email: string): { isValid: boolean; error: string } => {
@@ -286,22 +370,38 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
 
     setError('');
+
+    // Always call complete-registration API when "Create Account" is clicked
+    // Backend handles purchase_intent (trial or paid) based on plan_id
+    await completeRegistration();
+  };
+
+  // Complete registration - calls API with plan_id if selected
+  const completeRegistration = async () => {
     setIsLoading(true);
 
     try {
       // Call complete-registration endpoint to create tenant
+      const requestBody: any = {
+        email: form.adminEmail,
+        password: form.password,
+        full_name: form.adminName,
+        company_name: form.companyName,
+        phone_number: form.phoneNumber,
+      };
+
+      // Add plan details if a plan is selected from URL (paid signup)
+      if (encodedPlanFromUrl && selectedPlanDetails) {
+        requestBody.plan_id = selectedPlanDetails.id;
+        requestBody.billing_interval = billingInterval;
+      }
+
       const response = await fetch(`${API_URL}/signup/complete-registration`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email: form.adminEmail,
-          password: form.password,
-          full_name: form.adminName,
-          company_name: form.companyName,
-          phone_number: form.phoneNumber,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -333,24 +433,85 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         throw new Error(errorMessage);
       }
 
-      setStep('success');
+      // Store tenant_id for payment processing
+      if (data.tenant_id) {
+        setCreatedTenantId(data.tenant_id);
+      }
 
-      // Redirect to login page with plan parameter after brief success message
-      setTimeout(() => {
-        if (encodedPlanFromUrl) {
-          router.push(`/login?plan=${encodedPlanFromUrl}&email=${encodeURIComponent(form.adminEmail)}`);
-        } else {
-          router.push('/login');
-        }
-      }, 2000);
+      // If paid signup, show payment step to complete purchase
+      // If trial signup, go directly to success
+      if (data.purchase_intent === 'paid' && data.tenant_id) {
+        setStep('payment'); // Show payment step
+        toast.success('Account created!', { description: 'Please complete your payment to activate your plan.' });
+      } else {
+        setStep('success');
+        // Redirect to login page after brief success message
+        setTimeout(() => {
+          router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
+        }, 2000);
+      }
 
     } catch (err: any) {
       console.error('Signup error:', err);
       const message = err.message || 'Registration failed. Please try again.';
       setError(message);
+      toast.error('Registration failed', { description: message });
     } finally {
       setIsLoading(false);
+      setPaymentProcessing(false);
     }
+  };
+
+  // Handle payment submission (process payment for paid signup)
+  const handlePaymentSubmit = async () => {
+    if (!createdTenantId || !selectedPlanDetails) {
+      setError('Missing tenant or plan information');
+      return;
+    }
+
+    setPaymentProcessing(true);
+    setError('');
+
+    try {
+      const response = await fetch(`${API_URL}/signup/process-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenant_id: createdTenantId,
+          plan_id: selectedPlanDetails.id,
+          billing_interval: billingInterval,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Payment processing failed');
+      }
+
+      // Payment successful - show success and redirect to login
+      toast.success('Payment successful!', { description: 'Your plan is now active.' });
+      setStep('success');
+      setTimeout(() => {
+        router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
+      }, 2000);
+
+    } catch (err: any) {
+      console.error('Payment error:', err);
+      const message = err.message || 'Payment failed. Please try again.';
+      setError(message);
+      toast.error('Payment failed', { description: message });
+    } finally {
+      setPaymentProcessing(false);
+    }
+  };
+
+  // Handle continue to login (skip payment - stay on trial)
+  const handleSkipPayment = () => {
+    toast.info('Starting with free trial', { description: 'You can upgrade anytime from your dashboard.' });
+    router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
   };
 
   // Check if email is valid for OTP
@@ -729,6 +890,162 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   };
 
   // Verification step removed - now handled inline in the form
+
+  // Helper function to format currency
+  const formatCurrency = (amount: number, currency: string): string => {
+    const currencySymbols: Record<string, string> = {
+      'USD': '$',
+      'INR': '₹',
+      'EUR': '€',
+      'GBP': '£',
+    };
+    const symbol = currencySymbols[currency] || currency + ' ';
+    return `${symbol}${amount.toLocaleString()}`;
+  };
+
+  // Payment Step UI (shown after account created - user needs to complete payment)
+  if (step === 'payment' && selectedPlanDetails) {
+    return (
+      <div style={containerStyle}>
+        {/* Background Blobs */}
+        <div style={{ position: 'absolute', top: 80, left: 40, width: 288, height: 288, backgroundColor: '#93C5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
+        <div style={{ position: 'absolute', top: 160, right: 40, width: 288, height: 288, backgroundColor: '#C4B5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
+
+        <div style={{ ...formCardStyle, maxWidth: 520, margin: '0 auto', position: 'relative' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+            <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #2563EB, #4338CA)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CreditCard style={{ width: 24, height: 24, color: '#ffffff' }} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: 24, fontWeight: 700, color: '#111827', marginBottom: 4 }}>Complete Your Purchase</h2>
+              <p style={{ color: '#6B7280', fontSize: 14 }}>Your account is ready. Complete payment to activate your plan.</p>
+            </div>
+          </div>
+
+          {error && (
+            <div style={{ marginBottom: 24, padding: 16, backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
+              <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
+            </div>
+          )}
+
+          {/* Plan Summary Card */}
+          <div style={{ backgroundColor: '#F9FAFB', borderRadius: 16, padding: 24, marginBottom: 24, border: '1px solid #E5E7EB' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: 20, fontWeight: 600, color: '#111827' }}>{selectedPlanDetails.plan_name}</span>
+                  <span style={{ backgroundColor: '#DBEAFE', color: '#1D4ED8', fontSize: 12, fontWeight: 500, padding: '2px 8px', borderRadius: 12 }}>
+                    {selectedPlanDetails.plan_tier}
+                  </span>
+                </div>
+                <p style={{ color: '#6B7280', fontSize: 14 }}>{selectedPlanDetails.description}</p>
+              </div>
+            </div>
+
+            {/* Billing Period Display */}
+            <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid #E5E7EB' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 14, color: '#374151' }}>Billing Period:</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>
+                  {billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}
+                </span>
+              </div>
+            </div>
+
+            {/* Price Display */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: '1px solid #E5E7EB' }}>
+              <span style={{ fontSize: 16, color: '#374151' }}>Total Amount</span>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>
+                  {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
+                </span>
+                <span style={{ fontSize: 14, color: '#6B7280', marginLeft: 4 }}>
+                  /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Account Summary */}
+          <div style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 16, marginBottom: 24, border: '1px solid #BBF7D0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <CheckCircle style={{ width: 18, height: 18, color: '#16A34A' }} />
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#166534' }}>Account Details Confirmed</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13, color: '#166534' }}>
+              <div><strong>Company:</strong> {form.companyName}</div>
+              <div><strong>Name:</strong> {form.adminName}</div>
+              <div><strong>Email:</strong> {form.adminEmail}</div>
+              <div><strong>Phone:</strong> {form.phoneNumber}</div>
+            </div>
+          </div>
+
+          {/* Features List */}
+          {selectedPlanDetails.features && selectedPlanDetails.features.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>Included Features:</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {selectedPlanDetails.features
+                  .filter(f => f.is_enabled)
+                  .slice(0, 6)
+                  .map((feature, index) => (
+                    <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Check style={{ width: 16, height: 16, color: '#10B981' }} />
+                      <span style={{ fontSize: 13, color: '#4B5563' }}>{feature.feature_name}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Complete Purchase Button */}
+          <button
+            onClick={handlePaymentSubmit}
+            disabled={paymentProcessing}
+            style={{
+              ...submitButtonStyle,
+              opacity: paymentProcessing ? 0.7 : 1,
+              cursor: paymentProcessing ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {paymentProcessing ? (
+              <>
+                <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
+                Processing Payment...
+              </>
+            ) : (
+              <>
+                <CreditCard style={{ width: 20, height: 20 }} />
+                Complete Purchase - {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
+              </>
+            )}
+          </button>
+
+          {/* Security Notice */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, color: '#6B7280', fontSize: 13 }}>
+            <ShieldCheck style={{ width: 16, height: 16 }} />
+            <span>Secure payment processing</span>
+          </div>
+
+          {/* Skip and use Free Trial */}
+          <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #E5E7EB', textAlign: 'center' }}>
+            <button
+              type="button"
+              onClick={handleSkipPayment}
+              disabled={paymentProcessing}
+              style={{ color: '#6B7280', fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              Skip and start with Free Trial instead
+            </button>
+          </div>
+        </div>
+
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   // Success Step UI
   if (step === 'success') {

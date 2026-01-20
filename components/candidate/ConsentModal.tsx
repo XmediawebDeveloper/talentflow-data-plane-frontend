@@ -168,14 +168,14 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
         </div>
 
         {/* Assessment Info Card */}
-        <div className="bg-gradient-to-r from-purple-600 via-purple-500 to-indigo-500 rounded-2xl p-6 mb-8 text-white shadow-lg">
+        <div className="bg-gradient-to-r from-sky-400 via-sky-500 to-blue-500 rounded-2xl p-6 mb-8 text-white shadow-lg">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
               <FileText className="w-6 h-6 text-white" />
             </div>
             <div className="flex-1">
               <h2 className="text-xl font-semibold mb-1">{assessmentInfo.assessment_title}</h2>
-              <p className="text-purple-100 text-sm mb-4">{assessmentInfo.jd_title}</p>
+              <p className="text-sky-100 text-sm mb-4">{assessmentInfo.jd_title}</p>
               <div className="flex flex-wrap items-center gap-4 text-sm">
                 <span className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full">
                   <Clock className="w-4 h-4" />
@@ -186,7 +186,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                   Proctored
                 </span>
                 {assessmentInfo.company_name && (
-                  <span className="text-purple-100">
+                  <span className="text-sky-100">
                     by {assessmentInfo.company_name}
                   </span>
                 )}

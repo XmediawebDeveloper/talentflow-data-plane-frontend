@@ -3,6 +3,8 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { Loader2, AlertTriangle, XCircle, CreditCard, ShieldX, LogIn } from 'lucide-react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import JDCreation from '@/components/JDCreation';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 
@@ -246,40 +248,42 @@ function JDCreationContent() {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] overflow-hidden">
-      <JDCreation
-        onBack={handleViewAllJobs}
-        editingJD={editingJD ? {
-        id: editingJD.id,
-        title: editingJD.title,
-        description: editingJD.description,
-        status: editingJD.status,  // Pass status to determine if draft or published
-        creation_stage: stageFromUrl || editingJD.creation_stage || 'create',  // URL stage takes priority
-        creation_method: editingJD.creation_method,
-        ai_prompt: editingJD.ai_prompt,  // Original AI prompt for editing
-        must_have_skills: editingJD.must_have_skills,
-        nice_to_have_skills: editingJD.nice_to_have_skills,
-        education_requirements: editingJD.education_requirements,
-        experience_min: editingJD.experience_min,
-        experience_max: editingJD.experience_max,
-        industry_type: editingJD.industry_type,
-        salary_min: editingJD.salary_min,
-        salary_max: editingJD.salary_max,
-        compensation_type: editingJD.compensation_type,
-        employment_type: editingJD.employment_type,
-        remote_type: editingJD.remote_type,
-        assessment_guidance: editingJD.assessment_guidance,
-        internal_comments: editingJD.internal_comments,
-        must_have_comments: editingJD.must_have_comments,
-        allow_overqualified: editingJD.allow_overqualified,
-        locations: editingJD.locations?.map(loc => ({
-          city: loc.city || '',
-          radius_km: loc.radius_km,
-          is_required: loc.is_required,
-        })),
-      } : null}
-      />
-    </div>
+    <DndProvider backend={HTML5Backend}>
+      <div className="h-[calc(100vh-64px)] overflow-hidden">
+        <JDCreation
+          onBack={handleViewAllJobs}
+          editingJD={editingJD ? {
+          id: editingJD.id,
+          title: editingJD.title,
+          description: editingJD.description,
+          status: editingJD.status,  // Pass status to determine if draft or published
+          creation_stage: stageFromUrl || editingJD.creation_stage || 'create',  // URL stage takes priority
+          creation_method: editingJD.creation_method,
+          ai_prompt: editingJD.ai_prompt,  // Original AI prompt for editing
+          must_have_skills: editingJD.must_have_skills,
+          nice_to_have_skills: editingJD.nice_to_have_skills,
+          education_requirements: editingJD.education_requirements,
+          experience_min: editingJD.experience_min,
+          experience_max: editingJD.experience_max,
+          industry_type: editingJD.industry_type,
+          salary_min: editingJD.salary_min,
+          salary_max: editingJD.salary_max,
+          compensation_type: editingJD.compensation_type,
+          employment_type: editingJD.employment_type,
+          remote_type: editingJD.remote_type,
+          assessment_guidance: editingJD.assessment_guidance,
+          internal_comments: editingJD.internal_comments,
+          must_have_comments: editingJD.must_have_comments,
+          allow_overqualified: editingJD.allow_overqualified,
+          locations: editingJD.locations?.map(loc => ({
+            city: loc.city || '',
+            radius_km: loc.radius_km,
+            is_required: loc.is_required,
+          })),
+        } : null}
+        />
+      </div>
+    </DndProvider>
   );
 }
 

@@ -758,7 +758,11 @@ export default function PricingPage() {
 
                 {/* Button - Fixed at bottom */}
                 <Link
-                  href={isTrialPlan ? "/signup" : (plan.basePrice ? "/signup?plan=" + encodePlanId(plan.id) : "/contact")}
+                  href={isTrialPlan
+                    ? "/signup"
+                    : (plan.basePrice
+                        ? `/signup?plan=${encodePlanId(String(isYearly && plan.annualPlanId ? plan.annualPlanId : plan.monthlyPlanId || plan.id))}&billing=${isYearly ? 'ANNUAL' : 'MONTHLY'}`
+                        : "/contact")}
                   className={`block w-full h-12 rounded-lg font-medium text-center leading-[48px] transition-all ${
                     plan.popular || isTrialPlan
                       ? "bg-gray-800 text-white hover:bg-gray-700"
