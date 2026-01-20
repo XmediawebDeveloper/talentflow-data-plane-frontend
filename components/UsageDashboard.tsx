@@ -874,7 +874,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         <button
                           key={quota.quota_type}
                           onClick={() => {
-                            if (subscriptionSummary.is_trial) {
+                            if (subscriptionSummary?.is_trial) {
                               // Show upgrade message for trial users
                               setAddonPurchaseError('Addon purchases are only available for paid plans. Please upgrade from your free trial.');
                               return;
@@ -889,9 +889,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                               }
                             }
                           }}
-                          title={subscriptionSummary.is_trial ? "Upgrade to a paid plan to purchase addons" : ""}
+                          title={subscriptionSummary?.is_trial ? "Upgrade to a paid plan to purchase addons" : ""}
                           className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
-                            subscriptionSummary.is_trial
+                            subscriptionSummary?.is_trial
                               ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
                               : quota.is_exhausted
                                 ? 'bg-gray-900 text-white hover:bg-gray-800'
@@ -900,7 +900,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         >
                           <Plus className="w-3.5 h-3.5" />
                           {quota.name}
-                          {quota.is_exhausted && !subscriptionSummary.is_trial && <span className="text-xs opacity-80">(Exhausted)</span>}
+                          {quota.is_exhausted && !subscriptionSummary?.is_trial && <span className="text-xs opacity-80">(Exhausted)</span>}
                         </button>
                       );
                     })}
@@ -1200,16 +1200,16 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       </div>
                       <button
                         onClick={() => handleBuyAddon(addon)}
-                        disabled={subscriptionSummary.is_trial}
-                        title={subscriptionSummary.is_trial ? "Upgrade to a paid plan to purchase addons" : ""}
+                        disabled={!subscriptionSummary || subscriptionSummary.is_trial}
+                        title={subscriptionSummary?.is_trial ? "Upgrade to a paid plan to purchase addons" : ""}
                         className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                          subscriptionSummary.is_trial
+                          !subscriptionSummary || subscriptionSummary.is_trial
                             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             : 'bg-gray-800 text-white hover:bg-gray-700'
                         }`}
                       >
                         <ShoppingCart className="w-4 h-4" />
-                        {subscriptionSummary.is_trial ? 'Upgrade First' : 'Buy'}
+                        {!subscriptionSummary || subscriptionSummary.is_trial ? 'Upgrade First' : 'Buy'}
                       </button>
                     </div>
                   </div>

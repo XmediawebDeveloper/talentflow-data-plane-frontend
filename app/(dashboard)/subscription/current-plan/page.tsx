@@ -371,6 +371,7 @@ function CurrentPlanContent() {
   const [currentPlanBillingPeriod, setCurrentPlanBillingPeriod] = useState<string>('MONTHLY');
   // Subscription status from quota-status API (source of truth for plan status)
   const [quotaSubscriptionStatus, setQuotaSubscriptionStatus] = useState<string>('loading'); // Will be updated by API response
+  const [tenantStatus, setTenantStatus] = useState<{ status: string; message: string } | null>(null);
 
   // Queued upgrades state
   const [queuedUpgrades, setQueuedUpgrades] = useState<QueuedUpgrade[]>([]);
@@ -416,6 +417,7 @@ function CurrentPlanContent() {
     try {
       setIsLoading(true);
       setError(null);
+      setTenantStatus(null);
 
       // Fetch quota status from backend API (calls external admin API)
       let quotaData: any = null;
@@ -432,6 +434,16 @@ function CurrentPlanContent() {
             const quotaResult = await quotaResponse.json();
             quotaData = quotaResult.data || quotaResult;
             console.log('[CurrentPlan] Quota status:', quotaData);
+          } else if (quotaResponse.status === 403) {
+            // Handle TENANT_INACTIVE error
+            const errorData = await quotaResponse.json();
+            if (errorData?.detail?.error === 'TENANT_INACTIVE') {
+              setTenantStatus({
+                status: errorData.detail.status || 'PENDING',
+                message: errorData.detail.message || 'Your account is pending activation.',
+              });
+              console.log('[CurrentPlan] Tenant inactive:', errorData.detail);
+            }
           }
         }
       } catch (quotaError) {
@@ -1157,6 +1169,88 @@ function CurrentPlanContent() {
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-12 h-12 text-gray-500 animate-spin" />
             <p className="mt-4 text-gray-600">Loading subscription details...</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Show pending account status
+  if (tenantStatus) {
+    const statusColors = {
+      PENDING: { bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-800', icon: 'text-amber-500' },
+      SUSPENDED: { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-800', icon: 'text-red-500' },
+      LOCKED: { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-800', icon: 'text-red-500' },
+    };
+    const colors = statusColors[tenantStatus.status as keyof typeof statusColors] || statusColors.PENDING;
+
+    return (
+      <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
+                <CreditCard className="w-7 h-7 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold text-gray-900">Current Plan</h1>
+                <p className="text-sm text-gray-600">Manage your subscription and billing</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Account Status Banner */}
+          <div className={`${colors.bg} border-2 ${colors.border} rounded-xl p-8 mb-8`}>
+            <div className="flex items-start gap-4">
+              <div className={`w-12 h-12 ${colors.bg} rounded-full flex items-center justify-center flex-shrink-0`}>
+                <Clock className={`w-6 h-6 ${colors.icon}`} />
+              </div>
+              <div className="flex-1">
+                <h3 className={`text-xl font-semibold ${colors.text} mb-2`}>
+                  {tenantStatus.status === 'PENDING' ? 'Account Activation Pending' :
+                   tenantStatus.status === 'SUSPENDED' ? 'Account Suspended' :
+                   tenantStatus.status === 'LOCKED' ? 'Account Locked' : 'Account Status'}
+                </h3>
+                <p className={`${colors.text} mb-4`}>
+                  {tenantStatus.message}
+                </p>
+                <div className={`text-sm ${colors.text} space-y-2`}>
+                  {tenantStatus.status === 'PENDING' && (
+                    <>
+                      <p className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4" />
+                        Your account has been created successfully
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        Activation typically takes a few minutes
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <Mail className="w-4 h-4" />
+                        You'll receive an email once activated
+                      </p>
+                    </>
+                  )}
+                </div>
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={() => fetchData()}
+                    className="px-4 py-2 bg-white border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  >
+                    <Loader2 className="w-4 h-4" />
+                    Refresh Status
+                  </button>
+                  <a
+                    href="mailto:support@talentflow.com"
+                    className={`px-4 py-2 ${colors.text} underline flex items-center gap-2`}
+                  >
+                    <Mail className="w-4 h-4" />
+                    Contact Support
+                  </a>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>
