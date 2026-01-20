@@ -1,9 +1,24 @@
 import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
 import InviteToAssessmentModal from './InviteToAssessmentModal';
 import { scoringService } from '@/lib/services/scoringService';
+
+const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
+
+const DEFAULT_COLUMNS = [
+  { id: 'candidateName', label: 'Candidate Name', enabled: true },
+  { id: 'email', label: 'Email', enabled: true },
+  { id: 'phone', label: 'Phone', enabled: true },
+  { id: 'matchStatus', label: 'Match Status', enabled: true },
+  { id: 'scorePercentage', label: 'Score %', enabled: true },
+  { id: 'experience', label: 'Experience', enabled: false },
+  { id: 'education', label: 'Education', enabled: false },
+  { id: 'certifications', label: 'Certifications', enabled: false },
+  { id: 'scoredDate', label: 'Scored Date', enabled: true },
+  { id: 'scoredBy', label: 'Scored By', enabled: true },
+];
 
 interface ScoredResume {
   id: string;
@@ -76,19 +91,42 @@ export default function ScoredResumesTable({
   const [filterDateTo, setFilterDateTo] = useState<string>('');
   const [filterRecruiter, setFilterRecruiter] = useState<string>('all');
 
-  // Column configuration
-  const [availableColumns, setAvailableColumns] = useState([
-    { id: 'candidateName', label: 'Candidate Name', enabled: true },
-    { id: 'email', label: 'Email', enabled: true },
-    { id: 'phone', label: 'Phone', enabled: true },
-    { id: 'matchStatus', label: 'Match Status', enabled: true },
-    { id: 'scorePercentage', label: 'Score %', enabled: true },
-    { id: 'experience', label: 'Experience', enabled: false },
-    { id: 'education', label: 'Education', enabled: false },
-    { id: 'certifications', label: 'Certifications', enabled: false },
-    { id: 'scoredDate', label: 'Scored Date', enabled: true },
-    { id: 'scoredBy', label: 'Scored By', enabled: true },
-  ]);
+  // Column configuration - initialize with defaults, then load from localStorage
+  const [availableColumns, setAvailableColumns] = useState(DEFAULT_COLUMNS);
+  const [columnsLoaded, setColumnsLoaded] = useState(false);
+
+  // Load column preferences from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(COLUMN_PREFERENCES_KEY);
+      if (saved) {
+        const savedPrefs = JSON.parse(saved) as Record<string, boolean>;
+        setAvailableColumns(prev =>
+          prev.map(col => ({
+            ...col,
+            enabled: savedPrefs[col.id] !== undefined ? savedPrefs[col.id] : col.enabled
+          }))
+        );
+      }
+    } catch (error) {
+      console.error('Failed to load column preferences:', error);
+    }
+    setColumnsLoaded(true);
+  }, []);
+
+  // Save column preferences to localStorage when they change
+  useEffect(() => {
+    if (!columnsLoaded) return; // Don't save on initial load
+    try {
+      const prefs: Record<string, boolean> = {};
+      availableColumns.forEach(col => {
+        prefs[col.id] = col.enabled;
+      });
+      localStorage.setItem(COLUMN_PREFERENCES_KEY, JSON.stringify(prefs));
+    } catch (error) {
+      console.error('Failed to save column preferences:', error);
+    }
+  }, [availableColumns, columnsLoaded]);
 
   const enabledColumns = availableColumns.filter(col => col.enabled);
 

@@ -92,6 +92,7 @@ export default function MyResumesPage() {
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
   const [publishedJobs, setPublishedJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
+  const [uploadedResumeToScore, setUploadedResumeToScore] = useState<{ id: string; candidateName: string } | null>(null);
 
   // ZIP download confirmation modal state
   const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
@@ -389,6 +390,16 @@ export default function MyResumesPage() {
     setIsApplyToJobModalOpen(true);
   };
 
+  // Handle scoring an uploaded resume - called from UploadModal success state
+  const handleScoreUploadedResume = async (resumeId: string, candidateName: string) => {
+    // Store the uploaded resume info for scoring
+    setUploadedResumeToScore({ id: resumeId, candidateName });
+
+    // Fetch published jobs and open modal
+    await fetchPublishedJobs();
+    setIsApplyToJobModalOpen(true);
+  };
+
   // Handle applying resumes to selected jobs (scoring) - using async Celery
   const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
@@ -568,7 +579,11 @@ export default function MyResumesPage() {
         const converted = convertApiResume(r);
         setResumes(prev => [converted, ...prev]);
         toast.success('Resume uploaded successfully');
-        return { success: true };
+        return {
+          success: true,
+          resumeId: r.id,
+          candidateName: r.candidate_name || files[0].name
+        };
       } catch (error: any) {
         // Check for duplicate error (409 Conflict)
         if (error?.response?.status === 409) {
@@ -1363,6 +1378,7 @@ export default function MyResumesPage() {
             setIsUploadModalOpen(false);
             router.push(`/recruitment/resume-detail/${resumeId}`);
           }}
+          onScoreResume={handleScoreUploadedResume}
         />
       )}
 
@@ -1389,9 +1405,16 @@ export default function MyResumesPage() {
       {/* Apply to Job Modal */}
       {isApplyToJobModalOpen && (
         <ApplyToJobModal
-          resumes={resumes.filter(r => selectedResumes.includes(r.id))}
+          resumes={
+            uploadedResumeToScore
+              ? resumes.filter(r => r.id === uploadedResumeToScore.id)
+              : resumes.filter(r => selectedResumes.includes(r.id))
+          }
           jobs={publishedJobs}
-          onClose={() => setIsApplyToJobModalOpen(false)}
+          onClose={() => {
+            setIsApplyToJobModalOpen(false);
+            setUploadedResumeToScore(null); // Clear the uploaded resume state
+          }}
           onApply={handleApplyToJobSubmit}
         />
       )}

@@ -289,6 +289,20 @@ export const resumeService = {
       throw new Error(handleApiError(error));
     }
   },
+
+  /**
+   * Download a specific version of a resume
+   */
+  async downloadVersion(resumeId: string, versionId: string): Promise<Blob> {
+    try {
+      const response = await api.get(`/resumes/${resumeId}/versions/${versionId}/download`, {
+        responseType: 'blob',
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
 };
 
 export const folderService = {

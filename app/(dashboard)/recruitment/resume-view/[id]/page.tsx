@@ -117,9 +117,20 @@ export default function ResumeViewPage() {
     versionCount: r.version_count || versionsData.length || 1,
   });
 
-  const handleDownload = () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-    window.open(`${apiUrl}/resumes/${resumeId}/download`, '_blank');
+  const handleDownload = async () => {
+    try {
+      const blob = await resumeService.download(resumeId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = resume?.fileName || `resume-${resumeId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error('Failed to download resume');
+    }
   };
 
   const handleShare = () => {
@@ -168,30 +179,36 @@ export default function ResumeViewPage() {
     setIsApplyToJobModalOpen(true);
   };
 
-  // Handle applying resume to selected job (scoring)
+  // Handle applying resume to selected job (scoring) - using async Celery
   const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setIsApplyToJobModalOpen(false);
 
     const jobId = jobIds[0];
-    const toastId = toast.loading('Scoring resume against job...');
 
     try {
-      await scoringService.scoreResume(jobId, resumeId);
+      // Start async bulk scoring via Celery
+      const response = await scoringService.startBulkScoringAsync(jobId, [resumeId]);
 
-      toast.success('Resume scored successfully!', { id: toastId });
+      // Store batch info for the resume-scoring page to poll
+      const scoringData = {
+        batchId: response.batch_id,
+        jobId: response.jd_id,
+        jobTitle: response.jd_title,
+        totalResumes: response.total_resumes,
+      };
+      sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
 
-      // Navigate to the job's scored resumes page
-      router.push(`/recruitment/job-details?id=${jobId}&tab=scored`);
-
+      // Navigate to resume scoring page to show progress
+      router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
     } catch (error: any) {
-      console.error('Scoring error:', error);
+      console.error('Failed to start scoring:', error);
 
       if (error?.message?.includes('QUOTA') || error?.response?.status === 403) {
-        toast.error('Resume scoring quota exhausted. Please upgrade your plan.', { id: toastId });
+        toast.error('Resume scoring quota exhausted. Please upgrade your plan.');
       } else {
-        toast.error('Failed to score resume. Please try again.', { id: toastId });
+        toast.error(error.message || 'Failed to start scoring');
       }
     }
   };
@@ -621,9 +638,20 @@ export default function ResumeViewPage() {
                         </div>
                       </div>
                       <button
-                        onClick={() => {
-                          const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-                          window.open(`${apiUrl}/resumes/${resumeId}/versions/${version.id}/download`, '_blank');
+                        onClick={async () => {
+                          try {
+                            const blob = await resumeService.downloadVersion(resumeId, version.id);
+                            const url = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = version.fileName || `resume-v${version.version}.pdf`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            window.URL.revokeObjectURL(url);
+                          } catch (err) {
+                            toast.error('Failed to download version');
+                          }
                         }}
                         className={`p-2 rounded-md transition-colors ${
                           index === 0
