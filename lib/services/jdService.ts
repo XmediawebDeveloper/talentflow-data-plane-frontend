@@ -41,6 +41,7 @@ export interface JDCreate {
   allow_overqualified?: boolean;
   creation_stage?: 'create' | 'extract' | 'review';  // Where user left off in draft
   creation_method?: 'manual' | 'ai_generated';  // How the JD was created
+  ai_prompt?: string;  // Original AI prompt used to generate JD
   locations?: JDLocation[];
 }
 
@@ -114,7 +115,10 @@ export interface JDVersion {
   tenant_id: string;
   version_number: number;
   published_by: string;
+  published_by_name?: string;
+  published_by_role?: string;
   published_at: string;
+  published_at_ist?: string;
   title: string;
   description: string;
   department?: string;

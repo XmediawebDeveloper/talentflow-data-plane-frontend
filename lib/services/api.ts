@@ -64,11 +64,44 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - handle token refresh
+// Custom event for subscription inactive errors
+export const SUBSCRIPTION_INACTIVE_EVENT = 'subscription-inactive';
+
+export interface SubscriptionInactiveDetail {
+  error_code: string;
+  message: string;
+  status: string;
+  action_required: string;
+  support_email: string;
+  reason?: string;
+  suspended_at?: string;
+  expired_at?: string;
+}
+
+// Dispatch subscription inactive event for global handling
+const dispatchSubscriptionInactiveEvent = (detail: SubscriptionInactiveDetail) => {
+  if (typeof window !== 'undefined') {
+    const event = new CustomEvent(SUBSCRIPTION_INACTIVE_EVENT, { detail });
+    window.dispatchEvent(event);
+  }
+};
+
+// Response interceptor - handle token refresh and subscription errors
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    // Handle SUBSCRIPTION_INACTIVE error (403 with specific error_code)
+    if (error.response?.status === 403) {
+      const detail = error.response.data as { detail?: SubscriptionInactiveDetail };
+      if (detail?.detail?.error_code === 'SUBSCRIPTION_INACTIVE') {
+        // Dispatch event for global UI handling
+        dispatchSubscriptionInactiveEvent(detail.detail);
+        // Don't reject - let the event handler show the modal
+        return Promise.reject(error);
+      }
+    }
 
     // If 401 and not already retrying, try to refresh token
     if (error.response?.status === 401 && !originalRequest._retry) {

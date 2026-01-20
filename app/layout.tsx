@@ -5,6 +5,7 @@ import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ModalProvider } from "@/components/providers/ModalProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { Toaster } from "sonner";
+import SubscriptionInactiveModal from "@/components/SubscriptionInactiveModal";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -41,6 +42,8 @@ export default function RootLayout({
             <ModalProvider>
               {children}
               <Toaster position="top-right" richColors closeButton />
+              {/* Global subscription inactive modal - catches events from API interceptor */}
+              <SubscriptionInactiveModal />
             </ModalProvider>
           </AuthProvider>
         </ThemeProvider>
