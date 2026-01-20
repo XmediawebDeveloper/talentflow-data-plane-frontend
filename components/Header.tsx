@@ -23,6 +23,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [quotaData, setQuotaData] = useState<any>(null);
   const [loadingQuota, setLoadingQuota] = useState(true);
   const [quotaError, setQuotaError] = useState<boolean>(false);
+  const [tenantStatus, setTenantStatus] = useState<string | null>(null);
 
   // Fetch quota status from API
   const fetchQuotaStatus = async () => {
@@ -34,6 +35,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
     setLoadingQuota(true);
     setQuotaError(false);
+    setTenantStatus(null);
     try {
       const response = await api.get('/usage/quota-status');
       if (response.data?.status === 'success') {
@@ -42,8 +44,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
       } else {
         setQuotaError(true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch quota status:', error);
+      // Handle TENANT_INACTIVE error specifically
+      if (error.response?.status === 403 && error.response?.data?.detail?.error === 'TENANT_INACTIVE') {
+        setTenantStatus(error.response.data.detail.status || 'PENDING');
+      }
       setQuotaError(true);
       setQuotaData(null);
     } finally {
@@ -91,8 +97,20 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   };
 
   const totalUnits = calculateTotalUnits();
-  const planName = loadingQuota ? 'Loading...' : quotaError ? 'Unable to load' : (quotaData?.plan_name || 'No plan data');
+
+  // Determine plan name based on status
+  const getPlanDisplayName = () => {
+    if (loadingQuota) return 'Loading...';
+    if (tenantStatus === 'PENDING') return 'Account Pending';
+    if (tenantStatus === 'SUSPENDED') return 'Account Suspended';
+    if (tenantStatus === 'LOCKED') return 'Account Locked';
+    if (quotaError) return 'Unable to load';
+    return quotaData?.plan_name || 'No plan data';
+  };
+
+  const planName = getPlanDisplayName();
   const usagePercentage = totalUnits.limit > 0 ? ((totalUnits.used / totalUnits.limit) * 100) : 0;
+  const isPendingStatus = tenantStatus === 'PENDING' || tenantStatus === 'SUSPENDED' || tenantStatus === 'LOCKED';
 
   const roleLabels = {
     tenant_admin: 'Tenant Admin',
