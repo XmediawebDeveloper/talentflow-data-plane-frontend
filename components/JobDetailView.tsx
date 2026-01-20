@@ -691,14 +691,25 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </div>
 
             <div className="flex items-center gap-3 ml-6">
-            {/* AI Talent Match Button */}
-            <button
-              onClick={handleAITalentMatch}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors shadow-sm"
-            >
-              <Sparkles className="w-4 h-4" />
-              AI Talent Match
-            </button>
+            {/* AI Talent Match Button - Disabled for Disabled JDs */}
+            {job.status !== 'Disabled' ? (
+              <button
+                onClick={handleAITalentMatch}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors shadow-sm"
+              >
+                <Sparkles className="w-4 h-4" />
+                AI Talent Match
+              </button>
+            ) : (
+              <button
+                disabled
+                className="flex items-center gap-2 px-4 py-2 bg-gray-300 text-gray-500 rounded-md cursor-not-allowed shadow-sm"
+                title="AI Talent Match is not available for disabled JDs"
+              >
+                <Sparkles className="w-4 h-4" />
+                AI Talent Match
+              </button>
+            )}
 
             {/* Add Applicants Dropdown */}
             {/* <div className="relative" ref={menuRef}>
@@ -1013,16 +1024,27 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h3 className="text-gray-900 mb-4">Quick Actions</h3>
             <div className="space-y-2">
-              {/* Invite for Assessment */}
-              <button
-                onClick={() => setShowInviteToAssessmentModal(true)}
-                className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors shadow-sm text-left flex items-center gap-2"
-              >
-                <Mail className="w-4 h-4" />
-                <span>Invite for Assessment</span>
-              </button>
+              {/* Invite for Assessment - Disabled for Disabled JDs */}
+              {job.status !== 'Disabled' ? (
+                <button
+                  onClick={() => setShowInviteToAssessmentModal(true)}
+                  className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors shadow-sm text-left flex items-center gap-2"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Invite for Assessment</span>
+                </button>
+              ) : (
+                <button
+                  disabled
+                  className="w-full px-4 py-2.5 text-sm bg-gray-300 text-gray-500 rounded-md cursor-not-allowed shadow-sm text-left flex items-center gap-2"
+                  title="Assessments are not available for disabled JDs"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Invite for Assessment</span>
+                </button>
+              )}
 
-              {/* AI Talent Match Results - Shows existing match results for this JD */}
+              {/* AI Talent Match Results - Always allow viewing existing results */}
               <button
                 onClick={() => {
                   // Set flag to show results only (not run new match)

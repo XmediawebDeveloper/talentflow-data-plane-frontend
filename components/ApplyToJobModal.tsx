@@ -1,6 +1,13 @@
-import { X, Search, Star, MapPin, Clock, CheckCircle, Users, Briefcase } from 'lucide-react';
+import { X, Search, Star, MapPin, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, User, DollarSign, Sparkles, PenLine, Hash, Monitor, Laptop, Home } from 'lucide-react';
 import { useState } from 'react';
 import { Resume, Job } from '@/lib/types/types';
+
+// Work mode configuration
+const workModeConfig: Record<string, { label: string; icon: React.ElementType; bgColor: string; textColor: string }> = {
+  onsite: { label: 'On-site', icon: Monitor, bgColor: 'bg-blue-50', textColor: 'text-blue-700' },
+  hybrid: { label: 'Hybrid', icon: Laptop, bgColor: 'bg-purple-50', textColor: 'text-purple-700' },
+  remote: { label: 'Remote', icon: Home, bgColor: 'bg-green-50', textColor: 'text-green-700' },
+};
 
 interface ApplyToJobModalProps {
   resumes: Resume[];
@@ -153,45 +160,154 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
                 {filteredJobs.map(job => {
                   const isSelected = selectedJobs.includes(job.id);
                   const match = resumes.length === 1 ? calculateMatch(resumes[0], job) : null;
+                  const workMode = workModeConfig[(job as any).workMode?.toLowerCase()] || null;
+                  const WorkModeIcon = workMode?.icon;
+
+                  // Format posted date
+                  const formatPostedDate = (dateStr: string | undefined) => {
+                    if (!dateStr) return 'N/A';
+                    const date = new Date(dateStr);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  };
 
                   return (
                     <div key={job.id} className="space-y-2">
                       <label
-                        className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                        className={`block p-4 border-2 rounded-lg cursor-pointer transition-all ${
                           isSelected
                             ? 'border-gray-800 bg-gray-50'
                             : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleJob(job.id)}
-                          className="mt-1 rounded border-gray-300 text-gray-800 focus:ring-gray-600"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="text-sm text-gray-900 mb-1.5">{job.title}</div>
-                            {isSelected && (
-                              <CheckCircle className="w-5 h-5 text-gray-800 flex-shrink-0" />
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded">
-                              {job.status}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {job.location}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Users className="w-3 h-3" />
-                              {job.applicants || 0} applicants
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {job.daysActive} days active
-                            </span>
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleJob(job.id)}
+                            className="mt-1 rounded border-gray-300 text-gray-800 focus:ring-gray-600"
+                          />
+                          <div className="flex-1 min-w-0">
+                            {/* Header Row: Job ID, Title, Status, Creation Method */}
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {/* Job ID Badge */}
+                                {(job as any).job_id && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs font-medium">
+                                    <Hash className="w-3 h-3" />
+                                    {(job as any).job_id}
+                                  </span>
+                                )}
+                                {/* Title */}
+                                <span className="text-sm font-medium text-gray-900">{job.title}</span>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {/* Status Badge */}
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                  {job.status}
+                                </span>
+                                {/* Creation Method Badge */}
+                                {(job as any).creation_method && (
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                                    (job as any).creation_method === 'ai'
+                                      ? 'bg-purple-100 text-purple-700'
+                                      : 'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {(job as any).creation_method === 'ai' ? (
+                                      <><Sparkles className="w-3 h-3" /> AI</>
+                                    ) : (
+                                      <><PenLine className="w-3 h-3" /> Manual</>
+                                    )}
+                                  </span>
+                                )}
+                                {isSelected && (
+                                  <CheckCircle className="w-5 h-5 text-gray-800" />
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Info Row 1: Industry, Location, Employment Type, Work Mode */}
+                            <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap mb-2">
+                              {/* Industry */}
+                              {(job as any).industry_type && (
+                                <span className="flex items-center gap-1">
+                                  <Building2 className="w-3 h-3" />
+                                  {(job as any).industry_type}
+                                </span>
+                              )}
+                              {/* Location */}
+                              {job.location && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3" />
+                                  {job.location}
+                                </span>
+                              )}
+                              {/* Employment Type */}
+                              {(job as any).employmentType && (
+                                <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded">
+                                  <Briefcase className="w-3 h-3" />
+                                  {(job as any).employmentType}
+                                </span>
+                              )}
+                              {/* Work Mode */}
+                              {workMode && WorkModeIcon && (
+                                <span className={`flex items-center gap-1 px-2 py-0.5 rounded ${workMode.bgColor} ${workMode.textColor}`}>
+                                  <WorkModeIcon className="w-3 h-3" />
+                                  {workMode.label}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Info Row 2: Experience, Posted Date, Posted By */}
+                            <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap mb-2">
+                              {/* Experience */}
+                              {(job as any).experience && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {(job as any).experience} yrs exp
+                                </span>
+                              )}
+                              {/* Posted Date */}
+                              {(job as any).postedDate && (
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  {formatPostedDate((job as any).postedDate)}
+                                </span>
+                              )}
+                              {/* Posted By */}
+                              {(job as any).postedBy && (
+                                <span className="flex items-center gap-1">
+                                  <User className="w-3 h-3" />
+                                  {(job as any).postedBy}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Info Row 3: Salary, Skills, Applicants */}
+                            <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
+                              {/* Salary */}
+                              {(job as any).salary && (
+                                <span className="flex items-center gap-1 text-green-600 font-medium">
+                                  <DollarSign className="w-3 h-3" />
+                                  {(job as any).salary}
+                                </span>
+                              )}
+                              {/* Skills Count */}
+                              {job.skills && job.skills.length > 0 && (
+                                <span className="flex items-center gap-1 px-2 py-0.5 bg-orange-50 text-orange-700 rounded">
+                                  <Star className="w-3 h-3" />
+                                  {job.skills.length} skill{job.skills.length > 1 ? 's' : ''}
+                                </span>
+                              )}
+                              {/* Applicants */}
+                              <span className="flex items-center gap-1">
+                                <Users className="w-3 h-3" />
+                                {job.applicants || 0} applicant{(job.applicants || 0) !== 1 ? 's' : ''}
+                              </span>
+                              {/* Days Active */}
+                              <span className="text-gray-400">
+                                {job.daysActive} day{job.daysActive !== 1 ? 's' : ''} active
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </label>
@@ -199,7 +315,7 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
                       {/* Show match score for single resume */}
                       {isSelected && match && (
                         <div
-                          className={`ml-11 p-3 rounded-lg border ${
+                          className={`ml-7 p-3 rounded-lg border ${
                             match.status === 'exact'
                               ? 'bg-green-50 border-green-200'
                               : match.status === 'partial'

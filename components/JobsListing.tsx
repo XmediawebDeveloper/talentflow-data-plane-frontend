@@ -79,7 +79,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
       job.industry_type?.toLowerCase().includes(searchLower) ||
       job.department?.toLowerCase().includes(searchLower) ||
       job.employmentType?.toLowerCase().includes(searchLower) ||
-      job.experience?.toLowerCase().includes(searchLower)
+      job.experience?.toLowerCase().includes(searchLower) ||
+      job.postedBy?.toLowerCase().includes(searchLower) ||  // Created by
+      (job as any).workMode?.toLowerCase().includes(searchLower)  // Work mode (onsite, hybrid, remote)
     );
 
     const matchesStatus = statusFilter === 'all' || job.status.toLowerCase() === statusFilter.toLowerCase();
@@ -159,7 +161,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
         comparison = a.status.localeCompare(b.status);
         break;
       case 'department':
-        comparison = (a.department || '').localeCompare(b.department || '');
+        // Case-insensitive department sort, push empty departments to the end
+        const deptA = (a.department || '').trim().toLowerCase();
+        const deptB = (b.department || '').trim().toLowerCase();
+        // If one is empty and the other isn't, put empty ones last
+        if (!deptA && deptB) comparison = 1;
+        else if (deptA && !deptB) comparison = -1;
+        else comparison = deptA.localeCompare(deptB);
         break;
       default:
         comparison = 0;
@@ -520,7 +528,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by title, JD ID, location, industry, experience, employment type..."
+                  placeholder="Search by title, JD ID, location, industry, experience, employment type, created by, work mode..."
                   className="w-full pl-12 pr-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                 />
               </div>

@@ -13,9 +13,12 @@ import UploadHistoryPanel from '@/components/UploadHistoryPanel';
 import UploadModal from '@/components/UploadModal';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
-import { Resume, Folder } from '@/lib/types/types';
+import ApplyToJobModal from '@/components/ApplyToJobModal';
+import { Resume, Folder, Job } from '@/lib/types/types';
 import { resumeService, folderService, ResumeSearchParams } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
+import { jdService } from '@/lib/services/jdService';
+import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 
@@ -57,6 +60,11 @@ export default function ResumeDatabasePage() {
   const [uploadHistory, setUploadHistory] = useState<any[]>([]);
   const [viewingResume, setViewingResume] = useState<Resume | null>(null);
   const [quickViewResume, setQuickViewResume] = useState<Resume | null>(null);
+
+  // Apply to Job modal states
+  const [showApplyToJobModal, setShowApplyToJobModal] = useState(false);
+  const [resumesForApply, setResumesForApply] = useState<Resume[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
 
   // Build search params from filters
   const buildSearchParams = useCallback((): ResumeSearchParams => {
@@ -390,6 +398,111 @@ export default function ResumeDatabasePage() {
     })),
   });
 
+  // Fetch jobs for Apply to Job modal
+  const fetchJobs = async () => {
+    try {
+      const response = await jdService.list({ page_size: 100 });
+      const convertedJobs: Job[] = response.items.map((jd: any) => ({
+        id: jd.id,
+        job_id: jd.job_id,
+        title: jd.title || 'Untitled',
+        status: mapJobStatus(jd.status),
+        location: jd.location || '',
+        daysActive: calculateDaysActive(jd.created_at),
+        requiredMatch: jd.required_match || 70,
+        department: jd.department,
+        industry_type: jd.industry_type,
+        experience: jd.experience_required || (jd.experience_min && jd.experience_max ? `${jd.experience_min}-${jd.experience_max}` : jd.experience_min ? `${jd.experience_min}+` : undefined),
+        applicants: jd.applicants_count || 0,
+        description: jd.description,
+        skills: jd.skills || [],
+        postedDate: jd.created_at,
+        postedBy: jd.created_by_name || jd.created_by,
+        employmentType: jd.employment_type,
+        workMode: jd.remote_type,
+        created_at: jd.created_at,
+        creation_stage: jd.creation_stage,
+        creation_method: jd.creation_method,
+        currentVersion: jd.current_version,
+      }));
+      setJobs(convertedJobs);
+    } catch (error) {
+      console.error('Failed to fetch jobs:', error);
+    }
+  };
+
+  const mapJobStatus = (status: string): 'Published' | 'Draft' | 'Closed' | 'Archived' | 'Disabled' => {
+    const statusMap: Record<string, 'Published' | 'Draft' | 'Closed' | 'Archived' | 'Disabled'> = {
+      'published': 'Published',
+      'active': 'Published',
+      'draft': 'Draft',
+      'closed': 'Closed',
+      'archived': 'Archived',
+      'disabled': 'Disabled',
+    };
+    return statusMap[status?.toLowerCase()] || 'Draft';
+  };
+
+  const calculateDaysActive = (createdAt: string): number => {
+    if (!createdAt) return 0;
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - created.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  // Handle Apply to Job for single resume
+  const handleApplyToJob = (resume: Resume) => {
+    setResumesForApply([resume]);
+    fetchJobs();
+    setShowApplyToJobModal(true);
+  };
+
+  // Handle Apply to Job for bulk selected resumes
+  const handleBulkApplyToJob = () => {
+    const selectedResumesList = resumes.filter(r => selectedResumes.includes(r.id));
+    if (selectedResumesList.length === 0) {
+      toast.error('Please select at least one resume');
+      return;
+    }
+    setResumesForApply(selectedResumesList);
+    fetchJobs();
+    setShowApplyToJobModal(true);
+  };
+
+  // Handle actual apply action from modal - using async Celery scoring
+  const handleApply = async (resumeIds: string[], jobIds: string[]) => {
+    if (jobIds.length === 0 || resumeIds.length === 0) return;
+
+    setShowApplyToJobModal(false);
+
+    // Get the selected job details
+    const jobId = jobIds[0];
+    const selectedJob = jobs.find(j => j.id === jobId);
+
+    try {
+      // Start async bulk scoring via Celery
+      const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
+
+      // Store batch info for the resume-scoring page to poll
+      const scoringData = {
+        batchId: response.batch_id,
+        jobId: response.jd_id,
+        jobTitle: response.jd_title,
+        totalResumes: response.total_resumes,
+      };
+      sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
+
+      // Clear selection and navigate to resume scoring page
+      setSelectedResumes([]);
+      setResumesForApply([]);
+      router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
+    } catch (error: any) {
+      console.error('Failed to start scoring:', error);
+      toast.error(error.message || 'Failed to start scoring');
+    }
+  };
+
   const handleCreateFolder = async (name: string, parentId?: string) => {
     try {
       const newFolder = await folderService.create(name, parentId);
@@ -570,7 +683,7 @@ export default function ResumeDatabasePage() {
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
-            onApplyToJob={() => {}}
+            onApplyToJob={handleBulkApplyToJob}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             onResumeScoring={() => {}}
             onAssessment={() => {}}
@@ -629,7 +742,7 @@ export default function ResumeDatabasePage() {
           onSelectResume={handleSelectResume}
           onSelectAll={handleSelectAll}
           onQuickView={(resume) => setQuickViewResume(resume)}
-          onApplyToJob={(resume) => console.log('Apply to job:', resume)}
+          onApplyToJob={handleApplyToJob}
           onDelete={(id) => handleDelete(id)}
           onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
           highlightQuery={appliedSearchQuery}
@@ -709,6 +822,18 @@ export default function ResumeDatabasePage() {
         <ResumeQuickViewModal
           resume={quickViewResume}
           onClose={() => setQuickViewResume(null)}
+        />
+      )}
+
+      {showApplyToJobModal && (
+        <ApplyToJobModal
+          resumes={resumesForApply}
+          jobs={jobs}
+          onClose={() => {
+            setShowApplyToJobModal(false);
+            setResumesForApply([]);
+          }}
+          onApply={handleApply}
         />
       )}
     </main>

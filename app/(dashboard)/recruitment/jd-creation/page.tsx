@@ -126,10 +126,19 @@ function AccessBlockedError({
           <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
             <p className="text-sm font-medium text-gray-700 mb-2">Unit Availability:</p>
             <div className="space-y-1 text-sm text-gray-600">
-              <p>Resume Scoring: {accessCheck.units.RS?.available || 0} available</p>
-              <p>Assessment: {accessCheck.units.AS?.available || 0} available</p>
-              <p>AI Interview: {accessCheck.units.AIU?.available || 0} available</p>
+              <p className={!accessCheck.units.RU?.sufficient ? 'text-red-600 font-medium' : ''}>
+                Resume Upload: {accessCheck.units.RU?.available || 0} available {!accessCheck.units.RU?.sufficient && '❌'}
+              </p>
+              <p className={!accessCheck.units.RS?.sufficient ? 'text-red-600 font-medium' : ''}>
+                Resume Scoring: {accessCheck.units.RS?.available || 0} available {!accessCheck.units.RS?.sufficient && '❌'}
+              </p>
+              <p className={!accessCheck.units.AS?.sufficient ? 'text-red-600 font-medium' : ''}>
+                Assessment: {accessCheck.units.AS?.available || 0} available {!accessCheck.units.AS?.sufficient && '❌'}
+              </p>
             </div>
+            <p className="text-xs text-gray-500 mt-2">
+              All three unit types (Resume Upload, Resume Scoring, Assessment) are empty. Please purchase units to continue.
+            </p>
           </div>
         )}
 

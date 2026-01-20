@@ -407,6 +407,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const [validationErrors, setValidationErrors] = useState<{
     mustHaveSkills?: string;
     mustHaveComments?: string;
+    education?: string;
+    experience?: string;
+    industryType?: string;
     salaryRange?: string;
   }>({});
 
@@ -1465,7 +1468,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const handlePublish = async () => {
     // Validate mandatory fields
     const missingFields: string[] = [];
-    const errors: { mustHaveSkills?: string; mustHaveComments?: string } = {};
+    const errors: {
+      mustHaveSkills?: string;
+      mustHaveComments?: string;
+      education?: string;
+      experience?: string;
+      industryType?: string;
+    } = {};
 
     // Must have at least one must-have skill
     if (extractedData.mustHaveSkills.length === 0) {
@@ -1479,7 +1488,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       errors.mustHaveComments = 'At least one Must-Have Comment is required';
     }
 
-    // Experience, Education, and Industry Type are optional - no validation required
+    // Education is required
+    if (!extractedData.education) {
+      missingFields.push('Education');
+      errors.education = 'Education is required';
+    }
+
+    // Experience is required
+    if (!extractedData.experience) {
+      missingFields.push('Experience');
+      errors.experience = 'Experience is required';
+    }
+
+    // Industry Type is required
+    if (!extractedData.industryType) {
+      missingFields.push('Industry Type');
+      errors.industryType = 'Industry Type is required';
+    }
 
     // Set validation errors for inline display
     setValidationErrors(errors);
@@ -1497,6 +1522,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
     console.log('[DEBUG] Reformatting JD description with extracted parameters...');
     console.log('[DEBUG] extractedDataModified:', extractedDataModified);
     setIsRegenerating(true);
+
+    // Track the final description to use (avoiding React state async issues)
+    let finalDescription = mode === 'ai' ? generatedJD : manualJD;
 
     try {
       // Always reformat if there are parameters to include (comments, skills, etc.)
@@ -1557,6 +1585,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
           console.log('[DEBUG] Reformat successful, updated description length:', reformattedJD.description?.length);
 
+          // Store the reformatted description for saving (React state is async)
+          finalDescription = reformattedJD.description;
+
           // Update the description based on mode
           // For AI mode, update generatedJD
           // For manual mode, update manualJD so the formatted version shows in review
@@ -1612,7 +1643,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
       const jdData = {
         title: jobTitle.trim(),
-        description: generatedJD || manualJD,
+        description: finalDescription,  // Use finalDescription to avoid React state async issues
         creation_stage: 'review' as const,
         creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
         ai_prompt: mode === 'ai' ? aiPrompt : undefined,  // Save AI prompt
@@ -1704,7 +1735,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       missingFields.push('At least one Must-Have Skill');
     }
 
-    // Experience, Education, and Industry Type are optional - no validation required
+    // Must have at least one must-have comment
+    if (extractedData.mustHaveComments.length === 0) {
+      missingFields.push('At least one Must-Have Comment');
+    }
+
+    // Education is required
+    if (!extractedData.education) {
+      missingFields.push('Education');
+    }
+
+    // Experience is required
+    if (!extractedData.experience) {
+      missingFields.push('Experience');
+    }
+
+    // Industry Type is required
+    if (!extractedData.industryType) {
+      missingFields.push('Industry Type');
+    }
 
     // Validate salary range
     const salaryError = validateSalaryRange(extractedData.salaryFrom || '', extractedData.salaryTo || '');
@@ -3159,11 +3208,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               <div className="grid grid-cols-3 gap-6 mb-8">
                 {/* Experience */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Experience {extractedData.experienceRequired && <span className="text-red-500">*</span>}</h3>
+                  <h3 className="text-gray-900 mb-4">Experience <span className="text-red-500">*</span></h3>
                   <select
                     value={extractedData.experience}
-                    onChange={(e) => setExtractedData(prev => ({ ...prev, experience: e.target.value }))}
-                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${!extractedData.experience ? 'border-gray-300' : 'border-gray-300'}`}
+                    onChange={(e) => {
+                      setExtractedData(prev => ({ ...prev, experience: e.target.value }));
+                      // Clear validation error when user makes a selection
+                      if (e.target.value) {
+                        setValidationErrors(prev => ({ ...prev, experience: undefined }));
+                      }
+                    }}
+                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${
+                      validationErrors.experience ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     disabled={masterDataLoading}
                   >
                     <option value="">{masterDataLoading ? 'Loading...' : 'Select experience level'}</option>
@@ -3171,6 +3228,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                       <option key={level.id} value={level.code}>{level.label}</option>
                     ))}
                   </select>
+                  {validationErrors.experience && (
+                    <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {validationErrors.experience}
+                    </p>
+                  )}
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -3184,11 +3247,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
                 {/* Education */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Education {extractedData.educationRequired && <span className="text-red-500">*</span>}</h3>
+                  <h3 className="text-gray-900 mb-4">Education <span className="text-red-500">*</span></h3>
                   <select
                     value={extractedData.education}
-                    onChange={(e) => setExtractedData(prev => ({ ...prev, education: e.target.value }))}
-                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${!extractedData.education ? 'border-gray-300' : 'border-gray-300'}`}
+                    onChange={(e) => {
+                      setExtractedData(prev => ({ ...prev, education: e.target.value }));
+                      // Clear validation error when user makes a selection
+                      if (e.target.value) {
+                        setValidationErrors(prev => ({ ...prev, education: undefined }));
+                      }
+                    }}
+                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${
+                      validationErrors.education ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     disabled={masterDataLoading}
                   >
                     <option value="">{masterDataLoading ? 'Loading...' : 'Select education level'}</option>
@@ -3196,6 +3267,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                       <option key={level.id} value={level.code}>{level.label}</option>
                     ))}
                   </select>
+                  {validationErrors.education && (
+                    <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {validationErrors.education}
+                    </p>
+                  )}
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -3209,11 +3286,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
                 {/* Industry Type */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Industry Type {extractedData.industryTypeRequired && <span className="text-red-500">*</span>}</h3>
+                  <h3 className="text-gray-900 mb-4">Industry Type <span className="text-red-500">*</span></h3>
                   <select
                     value={extractedData.industryType}
-                    onChange={(e) => setExtractedData(prev => ({ ...prev, industryType: e.target.value }))}
-                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${!extractedData.industryType ? 'border-gray-300' : 'border-gray-300'}`}
+                    onChange={(e) => {
+                      setExtractedData(prev => ({ ...prev, industryType: e.target.value }));
+                      // Clear validation error when user makes a selection
+                      if (e.target.value) {
+                        setValidationErrors(prev => ({ ...prev, industryType: undefined }));
+                      }
+                    }}
+                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${
+                      validationErrors.industryType ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     disabled={masterDataLoading}
                   >
                     <option value="">{masterDataLoading ? 'Loading...' : 'Select industry type'}</option>
@@ -3221,6 +3306,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                       <option key={type.id} value={type.code}>{type.label}</option>
                     ))}
                   </select>
+                  {validationErrors.industryType && (
+                    <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {validationErrors.industryType}
+                    </p>
+                  )}
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -3618,8 +3709,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               </div>
               <button
                 onClick={handlePublish}
-                disabled={isRegenerating}
+                disabled={isRegenerating || !validationStatus.isValid}
                 className="flex items-center gap-2 bg-green-600 text-white px-8 py-3 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={!validationStatus.isValid ? `Missing: ${validationStatus.missingFields.join(', ')}` : ''}
               >
                 {isRegenerating ? (
                   <>
