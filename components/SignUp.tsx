@@ -666,7 +666,7 @@ export default function SignUp({ onSignUp, onSwitchToLogin, onBackToPublic }: Si
                     type="tel"
                     value={form.phoneNumber}
                     onChange={handleChange('phoneNumber')}
-                    placeholder="+1 (555) 123-4567"
+                    placeholder="+91 98765 43210"
                     required
                     style={inputStyle}
                   />
@@ -693,14 +693,14 @@ export default function SignUp({ onSignUp, onSwitchToLogin, onBackToPublic }: Si
                   </div>
                 </div>
                 <div>
-                  <label style={labelStyle}>Confirm</label>
+                  <label style={labelStyle}>Confirm Password</label>
                   <div style={inputContainerStyle}>
                     <Lock style={{ ...inputIconStyle, width: 20, height: 20 }} />
                     <input
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={form.confirmPassword}
                       onChange={handleChange('confirmPassword')}
-                      placeholder="Confirm"
+                      placeholder="Confirm password"
                       required
                       style={{ ...inputStyle, paddingRight: 40 }}
                     />
