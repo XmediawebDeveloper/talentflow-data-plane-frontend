@@ -61,6 +61,8 @@ function JDCreationContent() {
         description: editingJD.description,
         status: editingJD.status,  // Pass status to determine if draft or published
         creation_stage: stageFromUrl || editingJD.creation_stage || 'create',  // URL stage takes priority
+        creation_method: editingJD.creation_method,
+        ai_prompt: editingJD.ai_prompt,  // Original AI prompt for editing
         must_have_skills: editingJD.must_have_skills,
         nice_to_have_skills: editingJD.nice_to_have_skills,
         education_requirements: editingJD.education_requirements,

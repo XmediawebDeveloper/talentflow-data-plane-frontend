@@ -41,6 +41,22 @@ const formatToIST = (dateString: string): string => {
   return `${day} ${month} ${year}, ${hour12.toString().padStart(2, '0')}:${minutes} ${ampm}`;
 };
 
+// Helper function to format an already-IST datetime (no offset needed)
+const formatISTDateTime = (dateString: string): string => {
+  const date = new Date(dateString);
+
+  const day = date.getDate();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[date.getMonth()];
+  const year = date.getFullYear();
+  const hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const ampm = hours >= 12 ? 'pm' : 'am';
+  const hour12 = hours % 12 || 12;
+
+  return `${day} ${month} ${year}, ${hour12.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+};
+
 // Extended Job interface with additional fields
 interface ExtendedJob extends Job {
   niceToHaveSkills?: string[];
@@ -145,7 +161,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       // Convert version history to JD history events
       const historyEvents = versionData.versions.map((version, index) => {
         const isLatest = index === 0;
-        const publishDate = new Date(version.published_at);
+        // Use IST time from backend if available (already in IST), otherwise convert UTC to IST
+        const istTimestamp = version.published_at_ist
+          ? formatISTDateTime(version.published_at_ist)
+          : formatToIST(version.published_at);
 
         return {
           id: version.id,
@@ -153,20 +172,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           description: isLatest
             ? 'Current published version'
             : `Version ${version.version_number} published`,
-          performedBy: 'User', // Would need user service to get actual name
-          performedByRole: 'Recruiter',
-          timestamp: publishDate.toLocaleString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-          date: publishDate.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          }),
+          performedBy: version.published_by_name || 'Unknown User',
+          performedByRole: version.published_by_role || 'Team Member',
+          timestamp: istTimestamp,
+          date: istTimestamp.split(',')[0],
           icon: 'check-circle',
           color: 'green',
           version: version,

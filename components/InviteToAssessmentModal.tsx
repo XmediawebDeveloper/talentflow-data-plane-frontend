@@ -428,15 +428,15 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
     return (
       <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5 flex items-center justify-between">
+          {/* Header - Grey Theme */}
+          <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-6 py-5 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
                 <AlertTriangle className="w-5 h-5 text-white" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">No Assessment Found</h2>
-                <p className="text-amber-100 text-sm">{jobTitle}</p>
+                <p className="text-gray-300 text-sm">{jobTitle}</p>
               </div>
             </div>
             <button
@@ -449,8 +449,8 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
           {/* Content */}
           <div className="p-6 text-center">
-            <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-10 h-10 text-amber-600" />
+            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FileText className="w-10 h-10 text-gray-600" />
             </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No Assessment Created</h3>
             <p className="text-gray-600 mb-6">
@@ -461,7 +461,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
             <div className="flex flex-col gap-3">
               <button
                 onClick={handleStartCreateAssessment}
-                className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg hover:from-green-700 hover:to-teal-700 transition-colors flex items-center justify-center gap-2 font-medium"
+                className="w-full px-6 py-3 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg hover:from-gray-800 hover:to-gray-900 transition-colors flex items-center justify-center gap-2 font-medium"
               >
                 <Sparkles className="w-5 h-5" />
                 Create Assessment
@@ -484,8 +484,8 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
     return (
       <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-5 flex items-center justify-between">
+          {/* Header - Grey Theme */}
+          <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-6 py-5 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setView('no-assessment')}
@@ -498,7 +498,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">Configure Assessment</h2>
-                <p className="text-purple-100 text-sm">{jobTitle}</p>
+                <p className="text-gray-300 text-sm">{jobTitle}</p>
               </div>
             </div>
             <button
@@ -514,11 +514,11 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
             {assessmentStep === 'configure' && (
               <div className="space-y-6">
                 {/* Duration Info */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-blue-600" />
+                <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-gray-600" />
                   <div>
-                    <p className="text-sm font-medium text-blue-900">Fixed Duration: 30 minutes</p>
-                    <p className="text-xs text-blue-700">All assessments are standardized to 30 minutes</p>
+                    <p className="text-sm font-medium text-gray-900">Fixed Duration: 30 minutes</p>
+                    <p className="text-xs text-gray-600">All assessments are standardized to 30 minutes</p>
                   </div>
                 </div>
 
@@ -694,7 +694,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
               <button
                 onClick={handleGenerateAssessment}
                 disabled={!isPercentageValid || isGenerating}
-                className="px-6 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-6 py-2 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg hover:from-gray-800 hover:to-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isGenerating ? (
                   <>
