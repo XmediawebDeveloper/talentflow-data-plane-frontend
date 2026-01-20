@@ -28,12 +28,21 @@ interface MatchHistory {
 
 // Transform JD API response to Job format for the component
 function transformJDToJob(jd: JDResponse): Job {
+  // Map status to display format
+  const statusMap: Record<string, string> = {
+    'published': 'Published',
+    'draft': 'Draft',
+    'disabled': 'Disabled',
+    'archived': 'Archived',
+    'active': 'Active',
+  };
+
   return {
     id: jd.id,
     title: jd.title,
     department: jd.department,
     location: jd.location || '',
-    status: jd.status === 'published' ? 'Published' : jd.status === 'draft' ? 'Draft' : jd.status,
+    status: statusMap[jd.status?.toLowerCase()] || jd.status,
     applicants: jd.applicants_count || 0,
     employmentType: jd.employment_type,
     experience: jd.experience_min && jd.experience_max
@@ -55,9 +64,10 @@ export default function AITalentMatchRoute() {
       try {
         setIsLoading(true);
 
-        // Fetch jobs and match history in parallel
+        // Fetch ALL jobs (not just published) so we can show disabled jobs in history
+        // and match history in parallel
         const [jobsResponse, historyResponse] = await Promise.all([
-          jdService.list({ status: 'published', page_size: 100 }),
+          jdService.list({ page_size: 100 }), // Fetch all jobs to show disabled jobs in history
           aiMatchService.listSessions({ page_size: 100 }).catch(() => ({ items: [], total: 0 })),
         ]);
 

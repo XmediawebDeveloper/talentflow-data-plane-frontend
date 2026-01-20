@@ -81,7 +81,7 @@ function JobDetailsContent() {
         postedDate: data.published_at || data.created_at,
         postedBy: data.created_by_name || 'System',
         employmentType: data.employment_type,
-        currentVersion: 1, // Will be fetched from API
+        currentVersion: data.current_version || 1, // Use from response, fallback to 1
         internalRecruiterComments: data.internal_comments ? [data.internal_comments] : [],
         mustHaveComments: data.must_have_comments || [],
         assessmentGuidance: data.assessment_guidance,

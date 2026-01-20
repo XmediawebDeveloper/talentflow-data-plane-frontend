@@ -161,24 +161,33 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       // Convert version history to JD history events
       const historyEvents = versionData.versions.map((version, index) => {
         const isLatest = index === 0;
+        const isRepublished = version.version_number > 1;
         // Use IST time from backend if available (already in IST), otherwise convert UTC to IST
         const istTimestamp = version.published_at_ist
           ? formatISTDateTime(version.published_at_ist)
           : formatToIST(version.published_at);
 
+        // Show "Republished" for versions > 1, "Published" for version 1
+        const actionText = isRepublished
+          ? `Republished (v${version.version_number}.0)`
+          : `Published (v${version.version_number}.0)`;
+
+        const descriptionText = isLatest
+          ? (isRepublished ? 'Current republished version' : 'Current published version')
+          : (isRepublished ? `Version ${version.version_number} republished after edit` : `Version ${version.version_number} published`);
+
         return {
           id: version.id,
-          action: `Published (v${version.version_number}.0)`,
-          description: isLatest
-            ? 'Current published version'
-            : `Version ${version.version_number} published`,
+          action: actionText,
+          description: descriptionText,
           performedBy: version.published_by_name || 'Unknown User',
           performedByRole: version.published_by_role || 'Team Member',
           timestamp: istTimestamp,
           date: istTimestamp.split(',')[0],
-          icon: 'check-circle',
-          color: 'green',
+          icon: isRepublished ? 'refresh' : 'check-circle',
+          color: isRepublished ? 'blue' : 'green',
           version: version,
+          isRepublished: isRepublished,
         };
       });
 
@@ -383,6 +392,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     switch (status) {
       case 'Published':
         return 'bg-green-100 text-green-700 border-green-200';
+      case 'Republished':
+        return 'bg-blue-100 text-blue-700 border-blue-200';
       case 'Draft':
         return 'bg-yellow-100 text-yellow-700 border-yellow-200';
       case 'Closed':
@@ -394,6 +405,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       default:
         return 'bg-gray-100 text-gray-700 border-gray-200';
     }
+  };
+
+  // Get display status - show "Republished" if published and version > 1
+  const getDisplayStatus = (status: string, currentVersion?: number) => {
+    if (status === 'Published' && currentVersion && currentVersion > 1) {
+      return 'Republished';
+    }
+    return status;
   };
 
   const handleStatusChange = (newStatus: 'Published' | 'Draft' | 'Closed') => {
@@ -606,8 +625,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-3">
                 <h1 className="text-gray-900">{job.title}</h1>
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm border ${getStatusBadgeClass(job.status)}`}>
-                  {job.status}
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm border ${getStatusBadgeClass(getDisplayStatus(job.status, job.currentVersion))}`}>
+                  {getDisplayStatus(job.status, job.currentVersion)}
                 </span>
               </div>
               <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
