@@ -1,8 +1,9 @@
 'use client'
 
-import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, FileText, Clock } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, FileText, Clock, GripVertical } from 'lucide-react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useDrag } from 'react-dnd';
 import { Resume, Folder } from '@/lib/types/types';
 import { EmptyState } from './ui/empty-state';
 import Pagination from './Pagination';
@@ -11,6 +12,51 @@ import VersionHistoryModal from './VersionHistoryModal';
 import ResumeVersionSelector from './ResumeVersionSelector';
 import { toast } from 'sonner';
 import { resumeService } from '@/lib/services/resumeService';
+
+// Drag item type for resumes
+const RESUME_DRAG_TYPE = 'RESUME';
+
+interface DragItem {
+  id: string;
+  ids: string[];
+}
+
+// Draggable row component
+interface DraggableResumeRowProps {
+  resume: Resume;
+  selectedResumes: string[];
+  children: React.ReactNode;
+  className?: string;
+}
+
+function DraggableResumeRow({ resume, selectedResumes, children, className }: DraggableResumeRowProps) {
+  const [{ isDragging }, drag, preview] = useDrag<DragItem, void, { isDragging: boolean }>({
+    type: RESUME_DRAG_TYPE,
+    item: () => ({
+      id: resume.id,
+      // If current resume is selected, drag all selected resumes; otherwise just this one
+      ids: selectedResumes.includes(resume.id) ? selectedResumes : [resume.id],
+    }),
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  });
+
+  return (
+    <tr
+      ref={preview as unknown as React.Ref<HTMLTableRowElement>}
+      className={`${className} ${isDragging ? 'opacity-50' : ''}`}
+    >
+      {/* Drag handle */}
+      <td className="w-8 px-2 py-4">
+        <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab hover:bg-gray-100 rounded p-1 flex items-center justify-center">
+          <GripVertical className="w-4 h-4 text-gray-400" />
+        </div>
+      </td>
+      {children}
+    </tr>
+  );
+}
 
 interface ResumeTableProps {
   resumes: Resume[];
@@ -196,6 +242,10 @@ export default function ResumeTable({
       <table className="w-full">
         <thead className="bg-gray-50 sticky top-0">
           <tr>
+            {/* Drag handle column */}
+            <th className="w-8 px-2 py-3">
+              <span className="sr-only">Drag</span>
+            </th>
             {!hideCheckboxes && (
               <th className="w-12 px-4 py-3">
                 <input
@@ -243,8 +293,10 @@ export default function ResumeTable({
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {paginatedItems.map((resume) => (
-            <tr
+            <DraggableResumeRow
               key={resume.id}
+              resume={resume}
+              selectedResumes={selectedResumes}
               className={`hover:bg-gray-50 transition-colors ${
                 selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''
               }`}
@@ -513,7 +565,7 @@ export default function ResumeTable({
                   )}
                 </div>
               </td>
-            </tr>
+            </DraggableResumeRow>
           ))}
         </tbody>
       </table>

@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive } from 'lucide-react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import ResumeTable from '@/components/ResumeTable';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
@@ -915,6 +917,7 @@ export default function MyResumesPage() {
   }
 
   return (
+    <DndProvider backend={HTML5Backend}>
     <main className="flex-1 p-8 bg-gray-50">
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -1046,6 +1049,8 @@ export default function MyResumesPage() {
                 setSelectedFolder(folderId);
                 setIsUploadModalOpen(true);
               }}
+              onMoveToFolder={handleMoveToFolder}
+              selectedResumes={selectedResumes}
               resumes={resumes}
               width={folderTreeWidth}
               onWidthChange={setFolderTreeWidth}
@@ -1865,5 +1870,6 @@ export default function MyResumesPage() {
         />
       )}
     </main>
+    </DndProvider>
   );
 }
