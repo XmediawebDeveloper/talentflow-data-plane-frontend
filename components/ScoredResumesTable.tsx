@@ -9,6 +9,7 @@ const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
 const DEFAULT_COLUMNS = [
   { id: 'candidateName', label: 'Candidate Name', enabled: true },
+  { id: 'jobTitle', label: 'Job Title', enabled: false }, // Enabled in global view
   { id: 'email', label: 'Email', enabled: true },
   { id: 'phone', label: 'Phone', enabled: true },
   { id: 'matchStatus', label: 'Match Status', enabled: true },
@@ -46,6 +47,9 @@ interface ScoredResume {
   title?: string;
   currentCompany?: string;
   location?: string;
+  // For global view
+  jobTitle?: string;
+  jdId?: string;
 }
 
 interface ScoredResumesTableProps {
@@ -57,6 +61,7 @@ interface ScoredResumesTableProps {
   selectedResumes?: string[];
   onSelectResume?: (resumeId: string) => void;
   onSelectAll?: (resumeIds: string[]) => void;
+  isGlobalView?: boolean; // Show job title column in global view
 }
 
 export default function ScoredResumesTable({
@@ -67,7 +72,8 @@ export default function ScoredResumesTable({
   onViewCandidate,
   selectedResumes: externalSelectedResumes = [],
   onSelectResume,
-  onSelectAll
+  onSelectAll,
+  isGlobalView = false
 }: ScoredResumesTableProps) {
   const [showColumnModal, setShowColumnModal] = useState(false);
   const [internalSelectedResumes, setInternalSelectedResumes] = useState<string[]>([]);
@@ -96,6 +102,7 @@ export default function ScoredResumesTable({
   const [columnsLoaded, setColumnsLoaded] = useState(false);
 
   // Load column preferences from localStorage on mount
+  // Auto-enable jobTitle column in global view
   useEffect(() => {
     try {
       const saved = localStorage.getItem(COLUMN_PREFERENCES_KEY);
@@ -104,7 +111,18 @@ export default function ScoredResumesTable({
         setAvailableColumns(prev =>
           prev.map(col => ({
             ...col,
-            enabled: savedPrefs[col.id] !== undefined ? savedPrefs[col.id] : col.enabled
+            // In global view, always enable jobTitle; otherwise use saved preference
+            enabled: col.id === 'jobTitle' && isGlobalView
+              ? true
+              : (savedPrefs[col.id] !== undefined ? savedPrefs[col.id] : col.enabled)
+          }))
+        );
+      } else if (isGlobalView) {
+        // No saved preferences, but in global view - enable jobTitle
+        setAvailableColumns(prev =>
+          prev.map(col => ({
+            ...col,
+            enabled: col.id === 'jobTitle' ? true : col.enabled
           }))
         );
       }
@@ -112,7 +130,7 @@ export default function ScoredResumesTable({
       console.error('Failed to load column preferences:', error);
     }
     setColumnsLoaded(true);
-  }, []);
+  }, [isGlobalView]);
 
   // Save column preferences to localStorage when they change
   useEffect(() => {
@@ -210,19 +228,145 @@ export default function ScoredResumesTable({
     );
   };
 
-  const handleExportExcel = () => {
+  // Export format modal state
+  const [showExportModal, setShowExportModal] = useState(false);
+
+  // Get cell value for export based on column ID
+  const getCellValue = (resume: ScoredResume, columnId: string): string => {
+    switch (columnId) {
+      case 'candidateName':
+        return resume.candidateName || '';
+      case 'jobTitle':
+        return resume.jobTitle || '';
+      case 'email':
+        return resume.email || '';
+      case 'phone':
+        return resume.phone || '';
+      case 'matchStatus':
+        return resume.matchStatus || '';
+      case 'scorePercentage':
+        return `${resume.scorePercentage}%`;
+      case 'experience':
+        return resume.experience || '';
+      case 'education':
+        return typeof resume.education === 'string'
+          ? resume.education
+          : Array.isArray(resume.education) && resume.education.length > 0
+            ? (resume.education[0]?.degree || resume.education[0]?.institution || '')
+            : '';
+      case 'certifications':
+        return resume.certifications?.join(', ') || '';
+      case 'scoredDate':
+        return new Date(resume.scoredDate).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+      case 'scoredBy':
+        return resume.scoredBy || '';
+      default:
+        return '';
+    }
+  };
+
+  // Export to CSV
+  const exportToCSV = () => {
     const selectedData = filteredResumes.filter(r => selectedResumes.includes(r.id));
     const dataToExport = selectedResumes.length > 0 ? selectedData : filteredResumes;
-    
-    console.log('Exporting to Excel:', {
-      jobTitle,
-      exportedDate: new Date().toISOString(),
-      columns: enabledColumns.map(c => c.label),
-      records: dataToExport.length,
-      data: dataToExport
-    });
-    
-    alert(`Excel export initiated!\n\nJob: ${jobTitle}\nRecords: ${dataToExport.length}\nColumns: ${enabledColumns.length}\n\n(Mock export - would download Excel file)`);
+
+    // Build CSV content with only enabled columns
+    const headers = enabledColumns.map(col => `"${col.label}"`).join(',');
+    const rows = dataToExport.map(resume =>
+      enabledColumns.map(col => {
+        const value = getCellValue(resume, col.id);
+        // Escape quotes and wrap in quotes
+        return `"${value.replace(/"/g, '""')}"`;
+      }).join(',')
+    );
+
+    const csvContent = [headers, ...rows].join('\n');
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${jobTitle.replace(/\s+/g, '_')}_Scored_Resumes_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    toast.success(`Exported ${dataToExport.length} records to CSV`);
+    setShowExportModal(false);
+  };
+
+  // Export to XLS (using HTML table format that Excel can read)
+  const exportToXLS = () => {
+    const selectedData = filteredResumes.filter(r => selectedResumes.includes(r.id));
+    const dataToExport = selectedResumes.length > 0 ? selectedData : filteredResumes;
+
+    // Build HTML table that Excel can open
+    let tableHTML = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head>
+        <meta charset="UTF-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>Scored Resumes</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          table { border-collapse: collapse; }
+          th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+          th { background-color: #f0f0f0; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <h2>${jobTitle} - Scored Resumes</h2>
+        <p>Exported: ${new Date().toLocaleString()}</p>
+        <p>Total Records: ${dataToExport.length}</p>
+        <table>
+          <thead>
+            <tr>
+              ${enabledColumns.map(col => `<th>${col.label}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${dataToExport.map(resume => `
+              <tr>
+                ${enabledColumns.map(col => `<td>${getCellValue(resume, col.id)}</td>`).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([tableHTML], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${jobTitle.replace(/\s+/g, '_')}_Scored_Resumes_${new Date().toISOString().slice(0, 10)}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    toast.success(`Exported ${dataToExport.length} records to Excel`);
+    setShowExportModal(false);
+  };
+
+  const handleExportExcel = () => {
+    setShowExportModal(true);
   };
 
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -539,6 +683,13 @@ export default function ScoredResumesTable({
                       </td>
                     );
                   }
+                  if (col.id === 'jobTitle') {
+                    return (
+                      <td key={col.id} className="py-3 px-4">
+                        <div className="text-sm text-gray-700 font-medium">{resume.jobTitle || '-'}</div>
+                      </td>
+                    );
+                  }
                   if (col.id === 'email') {
                     return (
                       <td key={col.id} className="py-3 px-4">
@@ -761,6 +912,12 @@ export default function ScoredResumesTable({
                 </button>
                 <div className="flex-1">
                   <h3 className="text-gray-900 mb-1">{resume.candidateName}</h3>
+                  {/* Show job title in global view */}
+                  {isGlobalView && resume.jobTitle && (
+                    <div className="text-xs text-gray-500 mb-1">
+                      Applied for: <span className="font-medium text-gray-700">{resume.jobTitle}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 mb-2">
                     <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${
                       resume.matchStatus === 'Exact Match'
@@ -931,6 +1088,78 @@ export default function ScoredResumesTable({
           jobTitle={jobTitle}
           onClose={() => setShowInviteModal(false)}
         />
+      )}
+
+      {/* Export Format Selection Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">Export Scored Resumes</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {selectedResumes.length > 0
+                    ? `${selectedResumes.length} selected records`
+                    : `${filteredResumes.length} records`
+                  } • {enabledColumns.length} columns
+                </p>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5">
+              <p className="text-sm text-gray-600 mb-4">Choose export format:</p>
+
+              <div className="space-y-3">
+                <button
+                  onClick={exportToCSV}
+                  className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                >
+                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                    <FileDown className="w-6 h-6 text-green-700" />
+                  </div>
+                  <div className="text-left flex-1">
+                    <div className="font-medium text-gray-900">CSV Format</div>
+                    <div className="text-sm text-gray-500">Compatible with Excel, Google Sheets, and most spreadsheet apps</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={exportToXLS}
+                  className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                >
+                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                    <FileDown className="w-6 h-6 text-blue-700" />
+                  </div>
+                  <div className="text-left flex-1">
+                    <div className="font-medium text-gray-900">Excel Format (.xls)</div>
+                    <div className="text-sm text-gray-500">Native Excel format with formatting and styling</div>
+                  </div>
+                </button>
+              </div>
+
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500">
+                  <strong>Columns included:</strong> {enabledColumns.map(c => c.label).join(', ')}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200">
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
