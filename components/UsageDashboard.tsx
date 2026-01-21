@@ -305,10 +305,12 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         const quotasList: QuotaInfo[] = [];
 
         // Preferred order for display (any extras will be added at the end)
-        const preferredOrder = ['RU', 'RS', 'AS', 'AIU', 'storage_gb', 'max_jobs', 'max_seats'];
+        // Note: max_jobs removed - JD creation now only blocked when RS=0, RU=0, AS=0
+        const preferredOrder = ['RU', 'RS', 'AS', 'AIU', 'storage_gb', 'max_seats'];
 
-        // Get all quota types from API response
-        const allQuotaTypes = Object.keys(quotasMap);
+        // Get all quota types from API response (exclude max_jobs - no longer used)
+        const excludedQuotaTypes = ['max_jobs'];
+        const allQuotaTypes = Object.keys(quotasMap).filter(qt => !excludedQuotaTypes.includes(qt));
 
         // Sort: preferred order first, then any remaining
         const sortedQuotaTypes = [
@@ -474,7 +476,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     'AS': 'Assessment',
     'AIU': 'AI Interview',
     'storage_gb': 'Storage',
-    'max_jobs': 'Max Jobs',
     'max_seats': 'Max Users',
   };
 
@@ -860,7 +861,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         'RS': 'resume scoring',
                         'AS': 'assessment',
                         'AIU': 'ai interview',
-                        'max_jobs': 'max jobs',
                         'max_seats': 'max seats',
                       };
                       const addonPattern = quotaToAddonMap[quota.quota_type] || '';

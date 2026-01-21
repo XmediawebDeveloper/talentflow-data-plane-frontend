@@ -6,6 +6,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDVersion, JDAssessmentResultsResponse, AssessmentResultItem } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 
+// Utility function to format employment type for display
+// Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
+const formatEmploymentType = (type: string | undefined): string => {
+  if (!type) return '';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
 type TabType = 'overview' | 'scored-resumes' | 'assessment-results';
 
 // Parse and render JD description with proper formatting
@@ -834,13 +844,13 @@ export default function JDDetailsPage() {
                 {jd.employment_type && (
                   <span className="flex items-center gap-1">
                     <Briefcase className="w-4 h-4" />
-                    <span className="capitalize">{jd.employment_type.replace('_', ' ')}</span>
+                    <span>{formatEmploymentType(jd.employment_type)}</span>
                   </span>
                 )}
                 {jd.remote_type && (
                   <span className="flex items-center gap-1">
                     <Monitor className="w-4 h-4" />
-                    <span className="capitalize">{jd.remote_type.replace('_', ' ')}</span>
+                    <span>{formatEmploymentType(jd.remote_type)}</span>
                   </span>
                 )}
                 <span className="flex items-center gap-1">
@@ -996,7 +1006,7 @@ export default function JDDetailsPage() {
                         <Briefcase className="w-4 h-4" />
                         Employment Type
                       </span>
-                      <span className="text-gray-900 capitalize">{jd.employment_type.replace('_', ' ')}</span>
+                      <span className="text-gray-900">{formatEmploymentType(jd.employment_type)}</span>
                     </div>
                   )}
                   {jd.remote_type && (
@@ -1005,7 +1015,7 @@ export default function JDDetailsPage() {
                         <Monitor className="w-4 h-4" />
                         Work Mode
                       </span>
-                      <span className="text-gray-900 capitalize">{jd.remote_type.replace('_', ' ')}</span>
+                      <span className="text-gray-900">{formatEmploymentType(jd.remote_type)}</span>
                     </div>
                   )}
                   {(jd.experience_min || jd.experience_max) && (
