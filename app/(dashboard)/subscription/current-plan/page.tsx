@@ -924,7 +924,8 @@ function CurrentPlanContent() {
   };
 
   const handleChoosePlan = (plan: DisplayPlan) => {
-    if (!plan.price) {
+    // Check if plan has any pricing (monthly OR annual)
+    if (!plan.monthlyPrice && !plan.annualPrice) {
       setError('Cannot select a plan without a price');
       return;
     }
@@ -962,16 +963,44 @@ function CurrentPlanContent() {
       const token = localStorage.getItem('accessToken');
       const apiUrl = `${API_URL}/subscription/${tenantId}/select-plan`;
 
-      // Request body per API spec - use correct plan_id based on billing period
-      const planId = isYearly
-        ? (selectedPlanForPayment.annualPlanId || selectedPlanForPayment.numericId)
-        : (selectedPlanForPayment.monthlyPlanId || selectedPlanForPayment.numericId);
+      // Request body per API spec - use correct plan_id based on billing period AND availability
+      // If user selects yearly but only monthly exists, use monthly plan ID and MONTHLY interval
+      // If user selects monthly but only yearly exists, use yearly plan ID and ANNUAL interval
+      const hasAnnual = !!selectedPlanForPayment.annualPlanId;
+      const hasMonthly = !!selectedPlanForPayment.monthlyPlanId;
+
+      // Determine actual billing interval based on availability
+      let actualBillingInterval: 'ANNUAL' | 'MONTHLY';
+      let planId: number;
+
+      if (isYearly && hasAnnual) {
+        // User wants yearly and it's available
+        actualBillingInterval = 'ANNUAL';
+        planId = selectedPlanForPayment.annualPlanId!;
+      } else if (!isYearly && hasMonthly) {
+        // User wants monthly and it's available
+        actualBillingInterval = 'MONTHLY';
+        planId = selectedPlanForPayment.monthlyPlanId!;
+      } else if (hasAnnual) {
+        // Only annual available (user wanted monthly but it's not available)
+        actualBillingInterval = 'ANNUAL';
+        planId = selectedPlanForPayment.annualPlanId!;
+      } else if (hasMonthly) {
+        // Only monthly available (user wanted yearly but it's not available)
+        actualBillingInterval = 'MONTHLY';
+        planId = selectedPlanForPayment.monthlyPlanId!;
+      } else {
+        // Fallback to numericId (shouldn't happen with proper validation)
+        actualBillingInterval = isYearly ? 'ANNUAL' : 'MONTHLY';
+        planId = selectedPlanForPayment.numericId;
+      }
 
       console.log('[SelectPlan] Plan IDs available:', {
         monthlyPlanId: selectedPlanForPayment.monthlyPlanId,
         annualPlanId: selectedPlanForPayment.annualPlanId,
         numericId: selectedPlanForPayment.numericId,
         isYearly,
+        actualBillingInterval,
         selectedPlanId: planId,
       });
 
@@ -980,7 +1009,7 @@ function CurrentPlanContent() {
         schema_per_tenant: isolationType === 'schema',
         database_per_tenant: isolationType === 'database',
         external_transaction_id: transactionId,
-        billing_interval: isYearly ? 'ANNUAL' : 'MONTHLY',
+        billing_interval: actualBillingInterval,
       };
 
       console.log('Calling API:', apiUrl);
@@ -1515,7 +1544,7 @@ function CurrentPlanContent() {
                   <p className="text-2xl font-semibold text-gray-900">
                     {companySettings.max_resume_searches || '-'}
                   </p>
-                  <p className="text-xs text-gray-600">Resume Searches</p>
+                  <p className="text-xs text-gray-600">Resume Scores</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
@@ -1734,16 +1763,19 @@ function CurrentPlanContent() {
                             <span className="text-4xl font-bold text-gray-900">
                               {formatCurrency(
                                 isYearly
-                                  ? (plan.annualPrice || 0)
-                                  : (plan.monthlyPrice || 0),
+                                  ? (plan.annualPrice ?? plan.monthlyPrice ?? 0)
+                                  : (plan.monthlyPrice ?? plan.annualPrice ?? 0),
                                 plan.currency
                               )}
                             </span>
                             <span className="text-gray-500 text-sm">
-                              {isYearly ? '/year' : '/month'}
+                              {/* Show correct billing period based on what's available */}
+                              {isYearly
+                                ? (plan.annualPrice ? '/year' : '/month')
+                                : (plan.monthlyPrice ? '/month' : '/year')}
                             </span>
                           </div>
-                          {/* Show strikethrough price and discount badge when viewing yearly */}
+                          {/* Show strikethrough price and discount badge when viewing yearly and both prices exist */}
                           {isYearly && plan.monthlyPrice && plan.annualPrice && (plan.monthlyPrice * 12) > plan.annualPrice && (
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-sm text-gray-400 line-through">
@@ -1756,14 +1788,26 @@ function CurrentPlanContent() {
                               )}
                             </div>
                           )}
-                          {/* Show monthly equivalent hint when viewing yearly */}
-                          {isYearly && plan.monthlyPrice && (
+                          {/* Show note when yearly is selected but only monthly is available */}
+                          {isYearly && !plan.annualPrice && plan.monthlyPrice && (
+                            <p className="text-xs text-amber-600 mt-1">
+                              Billed monthly (yearly not available)
+                            </p>
+                          )}
+                          {/* Show note when monthly is selected but only yearly is available */}
+                          {!isYearly && !plan.monthlyPrice && plan.annualPrice && (
+                            <p className="text-xs text-amber-600 mt-1">
+                              Billed annually (monthly not available)
+                            </p>
+                          )}
+                          {/* Show monthly equivalent hint when viewing yearly and both exist */}
+                          {isYearly && plan.monthlyPrice && plan.annualPrice && (
                             <p className="text-xs text-gray-500 mt-1">
                               {formatCurrency(plan.monthlyPrice, plan.currency)}/month if billed monthly
                             </p>
                           )}
-                          {/* Show yearly option hint when viewing monthly */}
-                          {!isYearly && plan.annualPrice && (
+                          {/* Show yearly option hint when viewing monthly and both exist */}
+                          {!isYearly && plan.annualPrice && plan.monthlyPrice && (
                             <p className="text-xs text-gray-500 mt-1">
                               or {formatCurrency(plan.annualPrice, plan.currency)}/year
                               {plan.discountPercentage && plan.discountPercentage > 0 && (
@@ -1810,7 +1854,7 @@ function CurrentPlanContent() {
                             {displayQuotas.RS !== undefined && displayQuotas.RS >= 1 && (
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-900">{displayQuotas.RS.toLocaleString()}</span>
-                                <span className="text-gray-600">Resume Searches</span>
+                                <span className="text-gray-600">Resume Scores</span>
                               </div>
                             )}
                             {displayQuotas.AS !== undefined && displayQuotas.AS >= 1 && (
@@ -1823,12 +1867,6 @@ function CurrentPlanContent() {
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-900">{displayQuotas.AIU.toLocaleString()}</span>
                                 <span className="text-gray-600">AI Interviews</span>
-                              </div>
-                            )}
-                            {displayQuotas.storage_gb !== undefined && displayQuotas.storage_gb >= 1 && (
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-900">{displayQuotas.storage_gb}GB</span>
-                                <span className="text-gray-600">Storage</span>
                               </div>
                             )}
                           </div>
@@ -1853,13 +1891,13 @@ function CurrentPlanContent() {
 
                     <button
                       onClick={() => handleChoosePlan(plan)}
-                      disabled={isCurrentForToggle || isSelectingPlan || isSelectedPending || !plan.price || queuedUpgrades.length > 0}
+                      disabled={isCurrentForToggle || isSelectingPlan || isSelectedPending || (!plan.monthlyPrice && !plan.annualPrice) || queuedUpgrades.length > 0}
                       className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 mt-auto ${
                         isCurrentForToggle || isSelectedPending
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                           : queuedUpgrades.length > 0
                             ? "bg-amber-100 text-amber-600 cursor-not-allowed"
-                            : !plan.price
+                            : (!plan.monthlyPrice && !plan.annualPrice)
                               ? "bg-gray-100 text-gray-500 cursor-not-allowed"
                               : plan.popular
                                 ? "bg-gray-800 text-white hover:bg-gray-700"
@@ -1872,7 +1910,7 @@ function CurrentPlanContent() {
                         'Pending Payment'
                       ) : queuedUpgrades.length > 0 ? (
                         'Upgrade Queued'
-                      ) : !plan.price ? (
+                      ) : (!plan.monthlyPrice && !plan.annualPrice) ? (
                         'Contact Sales'
                       ) : isOnTrial || isLocked ? (
                         'Choose Plan'
@@ -1931,16 +1969,32 @@ function CurrentPlanContent() {
                       <span className="font-medium text-gray-900">{selectedPlanForPayment?.name}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">{isYearly ? 'Annual Price:' : 'Monthly Price:'}</span>
+                      <span className="text-gray-600">
+                        {/* Show correct billing label based on what's available */}
+                        {isYearly
+                          ? (selectedPlanForPayment?.annualPrice ? 'Annual Price:' : 'Monthly Price:')
+                          : (selectedPlanForPayment?.monthlyPrice ? 'Monthly Price:' : 'Annual Price:')}
+                      </span>
                       <span className="font-medium text-gray-900">
                         {formatCurrency(
                           isYearly
-                            ? (selectedPlanForPayment?.annualPrice || 0)
-                            : (selectedPlanForPayment?.monthlyPrice || 0),
+                            ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
+                            : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
                       </span>
                     </div>
+                    {/* Show note when billing period doesn't match available pricing */}
+                    {isYearly && !selectedPlanForPayment?.annualPrice && selectedPlanForPayment?.monthlyPrice && (
+                      <div className="text-xs text-amber-600">
+                        Yearly billing not available for this plan. Will be billed monthly.
+                      </div>
+                    )}
+                    {!isYearly && !selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice && (
+                      <div className="text-xs text-amber-600">
+                        Monthly billing not available for this plan. Will be billed annually.
+                      </div>
+                    )}
                     {isolationType === 'database' && (
                       <div className="flex justify-between text-amber-700">
                         <span>Database Isolation Fee{isYearly ? ' (12 months)' : ''}:</span>
@@ -1978,17 +2032,28 @@ function CurrentPlanContent() {
                     <div>
                       <span className="font-semibold">Total</span>
                       <p className="text-xs text-gray-300">
-                        {isYearly ? 'Billed annually (12× quotas)' : 'Billed monthly'}
+                        {/* Show actual billing period based on availability */}
+                        {(isYearly && selectedPlanForPayment?.annualPrice) || (!selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice)
+                          ? 'Billed annually (12× quotas)'
+                          : 'Billed monthly'}
                       </p>
                     </div>
                     <div className="text-right">
                       <span className="font-bold text-2xl">
                         {formatCurrency(
-                          isYearly
-                            ? (selectedPlanForPayment?.annualPrice || 0) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
-                            : (selectedPlanForPayment?.monthlyPrice || 0) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0),
+                          (() => {
+                            // Determine actual billing period based on availability
+                            const actuallyYearly = isYearly && selectedPlanForPayment?.annualPrice;
+                            const actuallyMonthly = !isYearly && selectedPlanForPayment?.monthlyPrice;
+                            const useYearlyPrice = actuallyYearly || (!actuallyMonthly && selectedPlanForPayment?.annualPrice);
+                            const basePrice = useYearlyPrice
+                              ? (selectedPlanForPayment?.annualPrice ?? 0)
+                              : (selectedPlanForPayment?.monthlyPrice ?? 0);
+                            const dbFee = isolationType === 'database'
+                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (useYearlyPrice ? 12 : 1)
+                              : 0;
+                            return basePrice + dbFee;
+                          })(),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
                       </span>
@@ -2227,15 +2292,6 @@ function CurrentPlanContent() {
                               User Seats:
                             </span>
                             <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.max_seats} seats</span>
-                          </div>
-                        )}
-                        {selectedPlanForPayment?.quotas?.storage_gb && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-green-700 flex items-center gap-1.5">
-                              <Database className="w-3.5 h-3.5" />
-                              Storage:
-                            </span>
-                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.storage_gb} GB</span>
                           </div>
                         )}
                         {selectedPlanForPayment?.quotas?.RS && (
