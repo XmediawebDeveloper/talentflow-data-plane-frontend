@@ -67,6 +67,9 @@ api.interceptors.request.use(
 // Custom event for subscription inactive errors
 export const SUBSCRIPTION_INACTIVE_EVENT = 'subscription-inactive';
 
+// Custom event for payment pending errors
+export const PAYMENT_PENDING_EVENT = 'payment-pending';
+
 export interface SubscriptionInactiveDetail {
   error_code: string;
   message: string;
@@ -78,10 +81,30 @@ export interface SubscriptionInactiveDetail {
   expired_at?: string;
 }
 
+export interface PaymentPendingDetail {
+  error_code: string;
+  message: string;
+  status: string;
+  action_required: string;
+  redirect_to: string;
+  tenant_id: string;
+  plan_id: number;
+  plan_name: string | null;
+  support_email: string;
+}
+
 // Dispatch subscription inactive event for global handling
 const dispatchSubscriptionInactiveEvent = (detail: SubscriptionInactiveDetail) => {
   if (typeof window !== 'undefined') {
     const event = new CustomEvent(SUBSCRIPTION_INACTIVE_EVENT, { detail });
+    window.dispatchEvent(event);
+  }
+};
+
+// Dispatch payment pending event for global handling
+const dispatchPaymentPendingEvent = (detail: PaymentPendingDetail) => {
+  if (typeof window !== 'undefined') {
+    const event = new CustomEvent(PAYMENT_PENDING_EVENT, { detail });
     window.dispatchEvent(event);
   }
 };
@@ -91,6 +114,22 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    // Handle PAYMENT_PENDING error (402 Payment Required)
+    if (error.response?.status === 402) {
+      const detail = error.response.data as { detail?: PaymentPendingDetail };
+      if (detail?.detail?.error_code === 'PAYMENT_PENDING') {
+        console.log('[API] Payment pending detected, redirecting to payment page...');
+        // Dispatch event for global UI handling
+        dispatchPaymentPendingEvent(detail.detail);
+        // Redirect to payment completion page (only if not already on that page)
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/complete-payment')) {
+          const { tenant_id, plan_id } = detail.detail;
+          window.location.href = `/complete-payment?tenant_id=${tenant_id}&plan_id=${plan_id}`;
+        }
+        return Promise.reject(error);
+      }
+    }
 
     // Handle SUBSCRIPTION_INACTIVE error (403 with specific error_code)
     if (error.response?.status === 403) {
