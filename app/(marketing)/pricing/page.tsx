@@ -42,7 +42,7 @@ interface PlanFeature {
 
 interface PlanQuotas {
   AS?: number;           // Assessment Sessions
-  RS?: number;           // Resume Searches
+  RS?: number;           // Resume Scores
   RU?: number;           // Resume Uploads
   AIU?: number;          // AI Interview Units
   max_jobs?: number;
@@ -605,20 +605,22 @@ export default function PricingPage() {
                     <>
                       <div className="flex items-baseline gap-1">
                         <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                          {/* Show yearly price if available and yearly selected, otherwise show monthly */}
+                          {/* Show price based on toggle, with fallback to available price */}
                           {formatCurrency(
                             isYearly
                               ? (plan.yearlyPrice ?? plan.monthlyPrice)
-                              : plan.monthlyPrice,
+                              : (plan.monthlyPrice ?? plan.yearlyPrice),
                             plan.currency
                           )}
                         </span>
                         <span className="text-gray-500 dark:text-gray-400 text-sm">
                           {/* Show correct billing period based on what's available */}
-                          {isYearly && plan.yearlyPrice ? '/year' : '/month'}
+                          {isYearly
+                            ? (plan.yearlyPrice ? '/year' : '/month')
+                            : (plan.monthlyPrice ? '/month' : '/year')}
                         </span>
                       </div>
-                      {/* Show strikethrough price and discount badge when viewing yearly and yearly price exists */}
+                      {/* Show strikethrough price and discount badge when viewing yearly and both prices exist */}
                       {isYearly && plan.monthlyPrice && plan.yearlyPrice && (plan.monthlyPrice * 12) > plan.yearlyPrice && (
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-sm text-gray-400 dark:text-gray-500 line-through">
@@ -633,12 +635,18 @@ export default function PricingPage() {
                       )}
                       {/* Show note when yearly is selected but only monthly is available */}
                       {isYearly && !plan.yearlyPrice && plan.monthlyPrice && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                           Billed monthly (yearly not available)
                         </p>
                       )}
-                      {/* Show yearly option hint when viewing monthly */}
-                      {!isYearly && plan.yearlyPrice && (
+                      {/* Show note when monthly is selected but only yearly is available */}
+                      {!isYearly && !plan.monthlyPrice && plan.yearlyPrice && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                          Billed annually (monthly not available)
+                        </p>
+                      )}
+                      {/* Show yearly option hint when viewing monthly and both exist */}
+                      {!isYearly && plan.yearlyPrice && plan.monthlyPrice && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                           or {formatCurrency(plan.yearlyPrice, plan.currency)}/year
                           {plan.discountPercentage && plan.discountPercentage > 0 && (
@@ -646,7 +654,7 @@ export default function PricingPage() {
                           )}
                         </p>
                       )}
-                      {/* Show monthly equivalent hint when viewing yearly and yearly price exists */}
+                      {/* Show monthly equivalent hint when viewing yearly and both prices exist */}
                       {isYearly && plan.monthlyPrice && plan.yearlyPrice && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                           {formatCurrency(plan.monthlyPrice, plan.currency)}/month if billed monthly
@@ -701,7 +709,7 @@ export default function PricingPage() {
                             <span className="font-semibold text-gray-900 dark:text-white">
                               {displayQuotas.RS.toLocaleString()}
                             </span>
-                            <span className="text-gray-600 dark:text-gray-400">Resume Searches</span>
+                            <span className="text-gray-600 dark:text-gray-400">Resume Scores</span>
                           </div>
                         )}
                         {displayQuotas.AS !== undefined && displayQuotas.AS >= 1 && (
@@ -718,12 +726,6 @@ export default function PricingPage() {
                               {displayQuotas.AIU.toLocaleString()}
                             </span>
                             <span className="text-gray-600 dark:text-gray-400">AI Interviews</span>
-                          </div>
-                        )}
-                        {displayQuotas.storage_gb !== undefined && displayQuotas.storage_gb >= 1 && (
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-900 dark:text-white">{displayQuotas.storage_gb}GB</span>
-                            <span className="text-gray-600 dark:text-gray-400">Storage</span>
                           </div>
                         )}
                         {displayQuotas.total_resume_storage !== undefined && displayQuotas.total_resume_storage >= 1 && (
@@ -760,8 +762,32 @@ export default function PricingPage() {
                 <Link
                   href={isTrialPlan
                     ? "/signup"
-                    : (plan.basePrice
-                        ? `/signup?plan=${encodePlanId(String(isYearly && plan.annualPlanId ? plan.annualPlanId : plan.monthlyPlanId || plan.id))}&billing=${isYearly ? 'ANNUAL' : 'MONTHLY'}`
+                    : ((plan.monthlyPrice || plan.yearlyPrice)
+                        ? (() => {
+                            // Determine actual plan ID and billing based on availability
+                            const hasAnnual = !!plan.annualPlanId;
+                            const hasMonthly = !!plan.monthlyPlanId;
+                            let actualPlanId: string;
+                            let actualBilling: string;
+
+                            if (isYearly && hasAnnual) {
+                              actualPlanId = String(plan.annualPlanId);
+                              actualBilling = 'ANNUAL';
+                            } else if (!isYearly && hasMonthly) {
+                              actualPlanId = String(plan.monthlyPlanId);
+                              actualBilling = 'MONTHLY';
+                            } else if (hasAnnual) {
+                              actualPlanId = String(plan.annualPlanId);
+                              actualBilling = 'ANNUAL';
+                            } else if (hasMonthly) {
+                              actualPlanId = String(plan.monthlyPlanId);
+                              actualBilling = 'MONTHLY';
+                            } else {
+                              actualPlanId = plan.id;
+                              actualBilling = isYearly ? 'ANNUAL' : 'MONTHLY';
+                            }
+                            return `/signup?plan=${encodePlanId(actualPlanId)}&billing=${actualBilling}`;
+                          })()
                         : "/contact")}
                   className={`block w-full h-12 rounded-lg font-medium text-center leading-[48px] transition-all ${
                     plan.popular || isTrialPlan
