@@ -326,12 +326,12 @@ export default function ResumeViewPage() {
           <div className="bg-gray-50 border border-gray-300 rounded-xl p-6 shadow-sm">
             <div className="flex items-start gap-6">
               <div className="w-24 h-24 rounded-full bg-gray-400 flex items-center justify-center text-white text-3xl flex-shrink-0">
-                {resume.name.split(' ').map(n => n[0]).join('')}
+                {(resume.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
               <div className="flex-1">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{resume.name}</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{resume.name || 'Unknown'}</h2>
                     <p className="text-xl text-gray-700 mb-3">{resume.title}</p>
                     <div className="flex items-center gap-4 text-sm text-gray-600">
                       {resume.location && (

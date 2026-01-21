@@ -123,9 +123,9 @@ export default function TeamUsagePage() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center text-sm">
-                        {user.name.split(' ').map(n => n[0]).join('')}
+                        {(user.name || 'U').split(' ').map(n => n[0]).join('')}
                       </div>
-                      <span className="font-medium text-gray-900">{user.name}</span>
+                      <span className="font-medium text-gray-900">{user.name || 'Unknown'}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{user.role}</td>
