@@ -204,7 +204,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const fetchScoredResumes = async () => {
     setLoadingScoredResumes(true);
     try {
+      console.log('[JobDetailView] Fetching scored resumes for JD:', job.id);
       const response = await jdService.getScoredResumes(job.id, { page_size: 100 });
+      console.log('[JobDetailView] Scored resumes response:', response);
 
       // Convert API response to ScoredResume format
       const convertedResumes = (response.items || []).map((item: any) => {
@@ -260,14 +262,16 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       setScoredResumes(convertedResumes);
 
       // Update stats from response
-      setScoredResumesStats({
+      const stats = {
         total: response.total || convertedResumes.length,
         exactMatch: response.excellent_count || convertedResumes.filter((r: any) => r.matchStatus === 'Exact Match').length,
         partialMatch: response.partial_count || convertedResumes.filter((r: any) => r.matchStatus === 'Partial Match').length,
         noMatch: response.no_match_count || convertedResumes.filter((r: any) => r.matchStatus === 'No Match').length,
-      });
+      };
+      console.log('[JobDetailView] Setting scored resumes stats:', stats);
+      setScoredResumesStats(stats);
     } catch (error) {
-      console.error('Failed to fetch scored resumes:', error);
+      console.error('[JobDetailView] Failed to fetch scored resumes:', error);
       setScoredResumes([]);
       setScoredResumesStats({ total: 0, exactMatch: 0, partialMatch: 0, noMatch: 0 });
     } finally {
@@ -1112,7 +1116,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <span className="text-gray-900">{scoredResumesStats.total}</span>
                 </div>
                 <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: '100%' }}></div>
+                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: scoredResumesStats.total > 0 ? '100%' : '0%' }}></div>
                 </div>
               </div>
               <div>

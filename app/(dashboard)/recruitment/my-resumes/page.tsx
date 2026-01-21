@@ -981,8 +981,7 @@ export default function MyResumesPage() {
       <StatsCards
         cards={[
           { type: 'total', value: totalResumes },
-          { type: 'applied', value: appliedResumes },
-          { type: 'available', value: availableResumes }
+          { type: 'applied', value: appliedResumes }
         ]}
       />
 

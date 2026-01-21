@@ -2,7 +2,7 @@
 
 import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
 import { Job } from '@/lib/types/types';
@@ -566,6 +566,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showExtractedSummary, setShowExtractedSummary] = useState(false);
 
+  // Track if we've loaded from editingJD to prevent re-initialization on re-renders
+  const hasLoadedFromEditingJD = useRef(false);
+
+  // Track original values from last extraction to skip re-extraction if unchanged
+  const [lastExtractedJD, setLastExtractedJD] = useState<string>('');
+
+  // Track if we've already formatted for review to skip re-formatting if no changes
+  const [hasFormattedForReview, setHasFormattedForReview] = useState(false);
+
   // Validation errors for inline display
   const [validationErrors, setValidationErrors] = useState<{
     mustHaveSkills?: string;
@@ -1045,6 +1054,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       return;
     }
 
+    // Check if JD has changed since last extraction - if not, skip extraction and go to step 2
+    if (lastExtractedJD && jdText.trim() === lastExtractedJD.trim()) {
+      console.log('[TalentFlow] JD unchanged, skipping extraction and going directly to step 2');
+      setHasProceededToExtract(true);
+      setStep('extract');
+      return;
+    }
+
     setIsExtracting(true);
     setHasProceededToExtract(true); // Disable regenerate button immediately when Next is clicked
 
@@ -1341,6 +1358,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       });
 
       setExtractedData(extraction);
+      setLastExtractedJD(jdText);  // Track JD text to skip extraction if unchanged on next "Next" click
       setStep('extract');
 
       // Save JD with creation_stage: 'extract' so refresh preserves the stage
@@ -1742,8 +1760,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
     // BEFORE going to review, reformat the JD description using AI (Odoo-style)
     // If user has modified extracted data (skills/comments), regenerate JD with those changes
+    // Skip formatting if already formatted and no changes were made
+    if (hasFormattedForReview && !extractedDataModified) {
+      console.log('[DEBUG] Skipping reformat - already formatted and no changes made');
+      setStep('review');
+      return;
+    }
+
     console.log('[DEBUG] Reformatting JD description with extracted parameters...');
-    console.log('[DEBUG] extractedDataModified:', extractedDataModified);
+    console.log('[DEBUG] extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview);
     setIsRegenerating(true);
 
     // Track the final description to use (avoiding React state async issues)
@@ -1840,6 +1865,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
 
     // Go to review step to show the reformatted summary
     setStep('review');
+    setHasFormattedForReview(true);  // Mark as formatted so we can skip on next "Next" click
+    setExtractedDataModified(false);  // Reset modified flag after formatting
 
     // Save JD with creation_stage: 'review' so refresh preserves the stage
     try {
@@ -2466,7 +2493,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   // - Draft JD: editingId is already set in useState, so saves will update the same draft
   // - Published JD: editingId is null, so saves will create a new draft
   useEffect(() => {
-    if (editingJD) {
+    if (editingJD && !hasLoadedFromEditingJD.current) {
+      // Only load from editingJD once on initial mount to prevent overwriting user edits
+      hasLoadedFromEditingJD.current = true;
+
       console.log('[TalentFlow] Restoring JD state from editingJD:', {
         id: editingJD.id,
         title: editingJD.title,
@@ -2475,18 +2505,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         status: editingJD.status
       });
 
-      setJobTitle(editingJD.title);
-      setGeneratedJD(editingJD.description);
+      // Use functional updates to preserve user edits if they exist
+      setJobTitle(prev => prev || editingJD.title);
+      setGeneratedJD(prev => prev || editingJD.description);
 
       // Populate AI prompt field with saved ai_prompt (not description)
+      // Only set if current value is empty to avoid overwriting user edits
       if (editingJD.creation_method === 'ai_generated') {
-        setAiPrompt(editingJD.ai_prompt || '');  // Use saved AI prompt
+        setAiPrompt(prev => prev || editingJD.ai_prompt || '');  // Preserve user edits
       } else if (editingJD.creation_method === 'manual') {
-        setManualJD(editingJD.description || '');
+        setManualJD(prev => prev || editingJD.description || '');  // Preserve user edits
       }
+
+      // Set lastExtractedJD to the loaded description so we can detect changes
+      setLastExtractedJD(editingJD.description || '');
 
       setStep(editingJD.creation_stage);
       console.log('[TalentFlow] Set step to:', editingJD.creation_stage);
+
+      // If already at review stage, mark as formatted to skip reformatting on next "Next" click
+      if (editingJD.creation_stage === 'review') {
+        setHasFormattedForReview(true);
+      }
 
       // Restore the creation mode based on saved creation_method
       if (editingJD.creation_method) {

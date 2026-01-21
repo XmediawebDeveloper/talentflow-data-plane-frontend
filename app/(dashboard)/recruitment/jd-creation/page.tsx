@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useMemo } from 'react';
 import { Loader2, AlertTriangle, XCircle, CreditCard, ShieldX, LogIn } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -235,6 +235,41 @@ function JDCreationContent() {
     router.push('/recruitment/job-openings');
   };
 
+  // Memoize editingJD to prevent unnecessary re-renders and state resets in JDCreation
+  const memoizedEditingJD = useMemo(() => {
+    if (!editingJD) return null;
+    return {
+      id: editingJD.id,
+      title: editingJD.title,
+      description: editingJD.description,
+      status: editingJD.status,
+      creation_stage: stageFromUrl || editingJD.creation_stage || 'create',
+      creation_method: editingJD.creation_method,
+      ai_prompt: editingJD.ai_prompt,
+      must_have_skills: editingJD.must_have_skills,
+      nice_to_have_skills: editingJD.nice_to_have_skills,
+      education_requirements: editingJD.education_requirements,
+      experience_min: editingJD.experience_min,
+      experience_max: editingJD.experience_max,
+      industry_type: editingJD.industry_type,
+      salary_min: editingJD.salary_min,
+      salary_max: editingJD.salary_max,
+      compensation_type: editingJD.compensation_type,
+      employment_type: editingJD.employment_type,
+      remote_type: editingJD.remote_type,
+      assessment_guidance: editingJD.assessment_guidance,
+      internal_comments: editingJD.internal_comments,
+      must_have_comments: editingJD.must_have_comments,
+      nice_to_have_comments: editingJD.nice_to_have_comments,
+      allow_overqualified: editingJD.allow_overqualified,
+      locations: editingJD.locations?.map(loc => ({
+        city: loc.city || '',
+        radius_km: loc.radius_km,
+        is_required: loc.is_required,
+      })),
+    };
+  }, [editingJD, stageFromUrl]);
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -261,36 +296,7 @@ function JDCreationContent() {
       <div className="h-[calc(100vh-64px)] overflow-hidden">
         <JDCreation
           onBack={handleViewAllJobs}
-          editingJD={editingJD ? {
-          id: editingJD.id,
-          title: editingJD.title,
-          description: editingJD.description,
-          status: editingJD.status,  // Pass status to determine if draft or published
-          creation_stage: stageFromUrl || editingJD.creation_stage || 'create',  // URL stage takes priority
-          creation_method: editingJD.creation_method,
-          ai_prompt: editingJD.ai_prompt,  // Original AI prompt for editing
-          must_have_skills: editingJD.must_have_skills,
-          nice_to_have_skills: editingJD.nice_to_have_skills,
-          education_requirements: editingJD.education_requirements,
-          experience_min: editingJD.experience_min,
-          experience_max: editingJD.experience_max,
-          industry_type: editingJD.industry_type,
-          salary_min: editingJD.salary_min,
-          salary_max: editingJD.salary_max,
-          compensation_type: editingJD.compensation_type,
-          employment_type: editingJD.employment_type,
-          remote_type: editingJD.remote_type,
-          assessment_guidance: editingJD.assessment_guidance,
-          internal_comments: editingJD.internal_comments,
-          must_have_comments: editingJD.must_have_comments,
-          nice_to_have_comments: editingJD.nice_to_have_comments,
-          allow_overqualified: editingJD.allow_overqualified,
-          locations: editingJD.locations?.map(loc => ({
-            city: loc.city || '',
-            radius_km: loc.radius_km,
-            is_required: loc.is_required,
-          })),
-        } : null}
+          editingJD={memoizedEditingJD}
         />
       </div>
     </DndProvider>
