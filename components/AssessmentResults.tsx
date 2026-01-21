@@ -858,9 +858,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           <td className="px-4 py-4">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs">
-                                {candidate.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
                               </div>
-                              <div className="text-sm text-gray-900 font-medium">{candidate.name}</div>
+                              <div className="text-sm text-gray-900 font-medium">{candidate.name || 'Unknown'}</div>
                             </div>
                           </td>
                         )}
@@ -1101,10 +1101,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xl">
-                {selectedCandidateData?.name.split(' ').map(n => n[0]).join('')}
+                {(selectedCandidateData?.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
               <div>
-                <h1 className="text-gray-900 mb-1">{selectedCandidateData?.name}</h1>
+                <h1 className="text-gray-900 mb-1">{selectedCandidateData?.name || 'Unknown'}</h1>
                 <p className="text-sm text-gray-600">{selectedCandidateData?.email}</p>
               </div>
             </div>

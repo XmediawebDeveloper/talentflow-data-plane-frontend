@@ -835,11 +835,11 @@ export default function UserManagement() {
                           : 'bg-gray-600'
                       }`}>
                         <span className="text-white text-sm font-medium">
-                          {user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                          {(user.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
                         </span>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                        <div className="text-sm font-medium text-gray-900">{user.name || user.email || 'Unknown'}</div>
                         <div className="text-xs text-gray-500 flex items-center gap-1">
                           <Mail className="w-3 h-3" />
                           {user.email}
