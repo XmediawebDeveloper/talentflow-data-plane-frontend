@@ -5,6 +5,16 @@ import { useState, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 
+// Utility function to format employment type for display
+// Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
+const formatEmploymentType = (type: string | undefined): string => {
+  if (!type) return '-';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
 interface JobsListingProps {
   jobs: Job[];
   onCreateNew: () => void;
@@ -79,9 +89,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
       job.industry_type?.toLowerCase().includes(searchLower) ||
       job.department?.toLowerCase().includes(searchLower) ||
       job.employmentType?.toLowerCase().includes(searchLower) ||
+      formatEmploymentType(job.employmentType).toLowerCase().includes(searchLower) ||  // Also search formatted version (e.g., "Full Time")
       job.experience?.toLowerCase().includes(searchLower) ||
       job.postedBy?.toLowerCase().includes(searchLower) ||  // Created by
-      (job as any).workMode?.toLowerCase().includes(searchLower)  // Work mode (onsite, hybrid, remote)
+      (job as any).workMode?.toLowerCase().includes(searchLower) ||  // Work mode (onsite, hybrid, remote)
+      formatEmploymentType((job as any).workMode).toLowerCase().includes(searchLower)  // Also search formatted work mode
     );
 
     const matchesStatus = statusFilter === 'all' || job.status.toLowerCase() === statusFilter.toLowerCase();
@@ -695,7 +707,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                       >
                         <option value="all">All Types</option>
                         {uniqueEmploymentTypes.map(type => (
-                          <option key={type} value={type}>{type}</option>
+                          <option key={type} value={type}>{formatEmploymentType(type)}</option>
                         ))}
                       </select>
                     </div>
@@ -853,8 +865,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 <span className="text-base text-gray-600">Sort by:</span>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                  onChange={(e) => {
+                    const value = e.target.value as 'date' | 'applicants' | 'title' | 'status' | 'department';
+                    setSortBy(value);
+                  }}
+                  className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base cursor-pointer"
                 >
                   <option value="date">Date Posted</option>
                   <option value="applicants">Applicants</option>
@@ -863,11 +878,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   <option value="department">Department</option>
                 </select>
                 <button
-                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  className="p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                  type="button"
+                  onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                  className="p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                  title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                 >
-                  <ArrowUpDown className={`w-5 h-5 ${sortOrder === 'desc' ? 'rotate-180' : ''} transition-transform`} />
+                  <ArrowUpDown className={`w-5 h-5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
                 </button>
               </div>
             </div>
@@ -932,7 +948,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         </div>
                         <div className="flex items-center gap-3 text-base text-gray-600">
                           <Briefcase className="w-5 h-5 text-gray-400" />
-                          <span>{job.employmentType || '-'}</span>
+                          <span>{formatEmploymentType(job.employmentType)}</span>
                         </div>
                         {(job as any).workMode && (
                           <div className="flex items-center gap-3 text-base text-gray-600">
@@ -1145,7 +1161,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           </span>
                           <span className="flex items-center gap-2">
                             <Briefcase className="w-5 h-5 text-gray-400" />
-                            {job.employmentType || '-'}
+                            {formatEmploymentType(job.employmentType)}
                           </span>
                           {(job as any).workMode && (
                             <span className="flex items-center gap-2">

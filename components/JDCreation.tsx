@@ -4,8 +4,7 @@ import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, Ch
 import ReactMarkdown from 'react-markdown';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { DndProvider, useDrag, useDrop } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
+import { useDrag, useDrop } from 'react-dnd';
 import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
@@ -257,6 +256,170 @@ const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkill
           ? isMustHave 
             ? 'border-red-400 bg-red-50' 
             : 'border-gray-400 bg-gray-50'
+          : 'border-transparent'
+      }`}
+    >
+      {children}
+    </div>
+  );
+};
+
+// Comment Drag & Drop Components
+interface DraggableCommentProps {
+  comment: string;
+  index: number;
+  category: 'mustHaveComments' | 'niceToHaveComments';
+  onMove: (comment: string, from: 'mustHaveComments' | 'niceToHaveComments', to: 'mustHaveComments' | 'niceToHaveComments') => void;
+  onRemove: (category: 'mustHaveComments' | 'niceToHaveComments', index: number) => void;
+  onStartEdit: (category: 'mustHaveComments' | 'niceToHaveComments', index: number, value: string) => void;
+  isEditing: boolean;
+  editingValue: string;
+  onEditChange: (value: string) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+}
+
+const DraggableComment = ({
+  comment,
+  index,
+  category,
+  onMove,
+  onRemove,
+  onStartEdit,
+  isEditing,
+  editingValue,
+  onEditChange,
+  onSaveEdit,
+  onCancelEdit
+}: DraggableCommentProps) => {
+  const [{ isDragging }, drag, dragPreview] = useDrag(() => ({
+    type: 'COMMENT',
+    item: { comment, category, index },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  }));
+
+  const isMustHave = category === 'mustHaveComments';
+  const bgColor = isMustHave ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200';
+  const iconColor = isMustHave ? 'text-orange-500' : 'text-blue-500';
+
+  return (
+    <div
+      ref={dragPreview}
+      className={`flex items-center justify-between p-2.5 ${bgColor} border rounded-lg group transition-opacity ${
+        isDragging ? 'opacity-50' : 'opacity-100'
+      }`}
+    >
+      {isEditing ? (
+        <>
+          <input
+            type="text"
+            value={editingValue}
+            onChange={(e) => onEditChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSaveEdit();
+              if (e.key === 'Escape') onCancelEdit();
+            }}
+            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
+            autoFocus
+          />
+          <div className="flex gap-1 ml-2">
+            <button
+              onClick={onSaveEdit}
+              className="text-green-600 hover:text-green-700 px-2"
+              title="Save"
+            >
+              <CheckCircle className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onCancelEdit}
+              className="text-red-600 hover:text-red-700"
+              title="Cancel"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 flex-1">
+            <div
+              ref={drag}
+              className="cursor-move opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-600"
+              title="Drag to move"
+            >
+              <GripVertical className="w-4 h-4" />
+            </div>
+            <CheckCircle2 className={`w-4 h-4 ${iconColor} flex-shrink-0`} />
+            <span
+              className="text-sm text-gray-900 flex-1 cursor-pointer hover:text-gray-800"
+              onClick={() => onStartEdit(category, index, comment)}
+              title="Click to edit"
+            >
+              {comment}
+            </span>
+          </div>
+          <div className="flex gap-1">
+            <button
+              onClick={() => onStartEdit(category, index, comment)}
+              className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Edit"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => onMove(comment, category, isMustHave ? 'niceToHaveComments' : 'mustHaveComments')}
+              className="text-xs text-gray-800 hover:text-gray-900 px-2"
+              title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
+            >
+              {isMustHave ? '→' : '←'}
+            </button>
+            <button
+              onClick={() => onRemove(category, index)}
+              className={isMustHave ? 'text-red-600 hover:text-red-700' : 'text-blue-600 hover:text-blue-700'}
+              title="Delete"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+interface DroppableCommentsContainerProps {
+  category: 'mustHaveComments' | 'niceToHaveComments';
+  onDrop: (comment: string, fromCategory: 'mustHaveComments' | 'niceToHaveComments') => void;
+  children: React.ReactNode;
+}
+
+const DroppableCommentsContainer = ({ category, onDrop, children }: DroppableCommentsContainerProps) => {
+  const [{ isOver, canDrop }, drop] = useDrop(() => ({
+    accept: 'COMMENT',
+    drop: (item: { comment: string; category: 'mustHaveComments' | 'niceToHaveComments' }) => {
+      if (item.category !== category) {
+        onDrop(item.comment, item.category);
+      }
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+      canDrop: monitor.canDrop(),
+    }),
+  }));
+
+  const isMustHave = category === 'mustHaveComments';
+  const isActive = isOver && canDrop;
+
+  return (
+    <div
+      ref={drop}
+      className={`space-y-2 min-h-[100px] p-3 rounded-lg border-2 border-dashed transition-all ${
+        isActive
+          ? isMustHave
+            ? 'border-orange-400 bg-orange-50'
+            : 'border-blue-400 bg-blue-50'
           : 'border-transparent'
       }`}
     >
@@ -714,26 +877,40 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         suggested_languages: params.suggested_languages
       });
 
+      // When in edit mode, preserve existing values if extraction returns empty arrays
+      const isEditMode = !!editingId;
+
+      // Debug logging for extraction
+      console.log('[DEBUG] Extraction params received:', {
+        nice_to_have_skills: params.nice_to_have_skills,
+        nice_to_have_comments: params.nice_to_have_comments,
+        must_have_skills: params.must_have_skills,
+        must_have_comments: params.must_have_comments,
+      });
+
       setExtractedData(prev => ({
         ...prev,
-        mustHaveSkills: params.must_have_skills || [],
-        mustHaveComments: params.must_have_comments || [],
-        niceToHaveSkills: params.nice_to_have_skills || [],
-        education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || '',
+        mustHaveSkills: params.must_have_skills?.length > 0 ? params.must_have_skills : (isEditMode ? prev.mustHaveSkills : []),
+        mustHaveComments: params.must_have_comments?.length > 0 ? params.must_have_comments : (isEditMode ? prev.mustHaveComments : []),
+        niceToHaveSkills: params.nice_to_have_skills?.length > 0 ? params.nice_to_have_skills : (isEditMode ? prev.niceToHaveSkills : []),
+        niceToHaveComments: params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : (isEditMode ? prev.niceToHaveComments : []),
+        education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || (isEditMode ? prev.education : ''),
         experience: expValue || prev.experience,
-        industryType: params.industry_type?.toLowerCase() || '',
+        industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
         employmentType: prev.employmentType,
         workModel: prev.workModel,
-        salaryFrom: params.salary_min ? params.salary_min.toString() : '',
-        salaryTo: params.salary_max ? params.salary_max.toString() : '',
-        compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || 'yearly',
-        locations: (params.locations || []).map((loc: any) => ({
+        salaryFrom: params.salary_min ? params.salary_min.toString() : (isEditMode ? prev.salaryFrom : ''),
+        salaryTo: params.salary_max ? params.salary_max.toString() : (isEditMode ? prev.salaryTo : ''),
+        compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
+        locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
           radius: '50'
-        })),
-        allowOverqualified: false,
-        codingRequired: params.coding_required === true,
-        suggestedLanguages: params.suggested_languages || [],
+        })) : (isEditMode ? prev.locations : []),
+        allowOverqualified: isEditMode ? prev.allowOverqualified : false,
+        codingRequired: params.coding_required === true || (isEditMode ? prev.codingRequired : false),
+        suggestedLanguages: params.suggested_languages?.length > 0 ? params.suggested_languages : (isEditMode ? prev.suggestedLanguages : []),
+        certifications: params.certifications?.length > 0 ? params.certifications : (isEditMode ? prev.certifications : []),
+        domainKeywords: params.domain_keywords?.length > 0 ? params.domain_keywords : (isEditMode ? prev.domainKeywords : []),
       }));
     };
 
@@ -796,8 +973,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
             setJobTitle(title);
           }
         },
+        onTextComplete: () => {
+          // Text streaming is done, hide "Generating..." indicator
+          // Parameter extraction is still happening in background
+          console.log('[TalentFlow] Text generation complete, extracting params...');
+          setIsStreaming(false);
+        },
         onComplete: (response) => {
-          // Set final content
+          // IMPORTANT: Set isStreaming to false FIRST to prevent "Generating..." from showing
+          setIsStreaming(false);
+
+          // Then set final content
           if (response?.description) {
             setGeneratedJD(response.description);
 
@@ -811,7 +997,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
               description: 'AI has created a comprehensive job description.'
             });
           }
-          setIsStreaming(false);
         },
         onError: (message: string, errorCode?: string) => {
           console.error('[TalentFlow] Stream error:', message, 'Code:', errorCode);
@@ -1095,39 +1280,43 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         console.log('[TalentFlow] Mapped industry:', { industry: params.industry_type, code: industryValue });
       }
 
+      // When in edit mode, preserve existing values if extraction returns empty arrays
+      // This prevents losing manually edited comments/skills when re-extracting
+      const isEditMode = !!editingId;
+
       const extraction: ExtractedData = {
-        mustHaveSkills: params.must_have_skills || [],
-        mustHaveComments: params.must_have_comments || [],
-        niceToHaveSkills: params.nice_to_have_skills || [],
-        niceToHaveComments: params.nice_to_have_comments || [],
-        education: educationValue,
+        mustHaveSkills: params.must_have_skills?.length > 0 ? params.must_have_skills : (isEditMode ? extractedData.mustHaveSkills : []),
+        mustHaveComments: params.must_have_comments?.length > 0 ? params.must_have_comments : (isEditMode ? extractedData.mustHaveComments : []),
+        niceToHaveSkills: params.nice_to_have_skills?.length > 0 ? params.nice_to_have_skills : (isEditMode ? extractedData.niceToHaveSkills : []),
+        niceToHaveComments: params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : (isEditMode ? extractedData.niceToHaveComments : []),
+        education: educationValue || (isEditMode ? extractedData.education : ''),
         // Use API's mandatory flag for education
         educationRequired: params.education_mandatory || false,
-        experience: experienceValue,
+        experience: experienceValue || (isEditMode ? extractedData.experience : ''),
         // Use API's mandatory flag for experience
         experienceRequired: params.experience_mandatory || false,
-        industryType: industryValue,
+        industryType: industryValue || (isEditMode ? extractedData.industryType : ''),
         // Use API's mandatory flag for industry
         industryTypeRequired: params.industry_mandatory || false,
-        allowOverqualified: false,
-        employmentType: params.job_type || 'full_time',  // Use API response or default
-        workModel: params.work_mode || 'onsite',  // Use API response or default
-        salaryFrom: params.salary_min ? params.salary_min.toString() : '',
-        salaryTo: params.salary_max ? params.salary_max.toString() : '',
-        compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || 'yearly',
-        locations: (params.locations || []).map((loc: any) => ({
+        allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
+        employmentType: params.job_type || (isEditMode ? extractedData.employmentType : 'full_time'),
+        workModel: params.work_mode || (isEditMode ? extractedData.workModel : 'onsite'),
+        salaryFrom: params.salary_min ? params.salary_min.toString() : (isEditMode ? extractedData.salaryFrom : ''),
+        salaryTo: params.salary_max ? params.salary_max.toString() : (isEditMode ? extractedData.salaryTo : ''),
+        compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || (isEditMode ? extractedData.compensationType : 'yearly'),
+        locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
           radius: '50'  // Default radius
-        })),
-        locationsRequired: false,
-        assessmentGuidance: '',
-        internalRecruiterComments: [],
+        })) : (isEditMode ? extractedData.locations : []),
+        locationsRequired: isEditMode ? extractedData.locationsRequired : false,
+        assessmentGuidance: isEditMode ? extractedData.assessmentGuidance : '',
+        internalRecruiterComments: isEditMode ? extractedData.internalRecruiterComments : [],
         // JD09: Extract certifications and domain keywords
-        certifications: params.certifications || [],
-        domainKeywords: params.domain_keywords || [],
+        certifications: params.certifications?.length > 0 ? params.certifications : (isEditMode ? extractedData.certifications : []),
+        domainKeywords: params.domain_keywords?.length > 0 ? params.domain_keywords : (isEditMode ? extractedData.domainKeywords : []),
         // Coding assessment fields - extract from AI response
-        codingRequired: params.coding_required === true,
-        suggestedLanguages: params.suggested_languages || [],
+        codingRequired: params.coding_required === true || (isEditMode ? extractedData.codingRequired : false),
+        suggestedLanguages: params.suggested_languages?.length > 0 ? params.suggested_languages : (isEditMode ? extractedData.suggestedLanguages : []),
       };
 
       console.log('[TalentFlow] Final extracted data being set:', {
@@ -1441,6 +1630,40 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   const handleDropSkill = (skill: string, fromCategory: 'mustHaveSkills' | 'niceToHaveSkills', toCategory: 'mustHaveSkills' | 'niceToHaveSkills') => {
     if (fromCategory !== toCategory) {
       handleMoveSkill(skill, fromCategory, toCategory);
+    }
+  };
+
+  // Comment move/drop handlers for drag and drop
+  const handleMoveComment = (comment: string, from: 'mustHaveComments' | 'niceToHaveComments', to: 'mustHaveComments' | 'niceToHaveComments') => {
+    setExtractedData(prev => ({
+      ...prev,
+      [from]: (prev[from] || []).filter(c => c !== comment),
+      [to]: [...(prev[to] || []), comment],
+    }));
+    setExtractedDataModified(true);
+  };
+
+  const handleDropComment = (comment: string, fromCategory: 'mustHaveComments' | 'niceToHaveComments', toCategory: 'mustHaveComments' | 'niceToHaveComments') => {
+    if (fromCategory !== toCategory) {
+      handleMoveComment(comment, fromCategory, toCategory);
+    }
+  };
+
+  const handleRemoveCommentByCategory = (category: 'mustHaveComments' | 'niceToHaveComments', index: number) => {
+    setExtractedData(prev => ({
+      ...prev,
+      [category]: (prev[category] || []).filter((_, i) => i !== index),
+    }));
+    setExtractedDataModified(true);
+  };
+
+  const handleStartEditCommentByCategory = (category: 'mustHaveComments' | 'niceToHaveComments', index: number, value: string) => {
+    if (category === 'mustHaveComments') {
+      setEditingCommentIndex(index);
+      setEditingCommentValue(value);
+    } else {
+      setEditingNiceCommentIndex(index);
+      setEditingNiceCommentValue(value);
     }
   };
 
@@ -2307,6 +2530,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
         const experienceValue = mapExpToLevel(editingJD.experience_min, editingJD.experience_max);
         const industryValue = editingJD.industry_type || '';
 
+        console.log('[DEBUG] Loading editingJD data:');
+        console.log('[DEBUG] - nice_to_have_comments from API:', editingJD.nice_to_have_comments);
+        console.log('[DEBUG] - must_have_comments from API:', editingJD.must_have_comments);
+
         setExtractedData(prev => ({
           ...prev,
           mustHaveSkills: editingJD.must_have_skills || [],
@@ -2342,7 +2569,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   }, [editingJD]);
 
   return (
-    <DndProvider backend={HTML5Backend}>
+    <>
       <div className="h-full flex flex-col">
         {/* Fixed Header with Step Indicator */}
         <div className="flex-shrink-0 bg-white border-b border-gray-200 px-8 pt-6 shadow-sm">
@@ -2690,7 +2917,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                     <div className="relative">
                       <div className="h-[600px] overflow-y-auto px-6 py-4 border border-gray-300 rounded-md bg-white markdown-content">
                         {generatedJD ? (
-                          <ReactMarkdown>{generatedJD}</ReactMarkdown>
+                          <>
+                            <ReactMarkdown>{generatedJD}</ReactMarkdown>
+                            <div className="flex items-center gap-2 mt-4 text-blue-600 border-t pt-4">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span className="text-sm font-medium">Generating...</span>
+                            </div>
+                          </>
                         ) : (
                           <div className="flex items-center justify-center h-full">
                             <div className="text-center">
@@ -2698,12 +2931,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                               <p className="text-gray-600 font-medium">AI is generating your job description...</p>
                               <p className="text-sm text-gray-500 mt-2">This may take a few seconds</p>
                             </div>
-                          </div>
-                        )}
-                        {generatedJD && (
-                          <div className="flex items-center gap-2 mt-4 text-blue-600 border-t pt-4">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span className="text-sm font-medium">Generating...</span>
                           </div>
                         )}
                       </div>
@@ -2807,7 +3034,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 }
                 className="flex items-center gap-2 bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isStreaming ? 'Generating...' : isExtracting ? 'Extracting...' : 'Next: Extract Skills'}
+                {isStreaming ? 'Generating...' : isExtracting ? 'Extracting...' : 'Next'}
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
@@ -2885,9 +3112,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 AI has extracted the following information from your JD. You can modify, add, or remove items.
               </p>
 
-              {/* Skills Section - 3 Column Layout */}
+              {/* Skills & Comments Section - Single Row with 3 Columns */}
               <div className="grid grid-cols-3 gap-6 mb-8">
-                {/* Must-Have Skills */}
+                {/* Column 1: Must-Have Skills */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-gray-900">Must-Have Skills <span className="text-red-500">*</span></h3>
@@ -2918,8 +3145,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                       </button>
                     </div>
                   )}
-                  <DroppableSkillsContainer 
-                    category="mustHaveSkills" 
+                  <DroppableSkillsContainer
+                    category="mustHaveSkills"
                     onDrop={(skill, fromCategory) => handleDropSkill(skill, fromCategory, 'mustHaveSkills')}
                   >
                     {extractedData.mustHaveSkills.map((skill, index) => (
@@ -2947,7 +3174,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                   )}
                 </div>
 
-                {/* Nice-to-Have Skills */}
+                {/* Column 2: Nice-to-Have Skills */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-gray-900">Nice-to-Have Skills</h3>
@@ -2978,8 +3205,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                       </button>
                     </div>
                   )}
-                  <DroppableSkillsContainer 
-                    category="niceToHaveSkills" 
+                  <DroppableSkillsContainer
+                    category="niceToHaveSkills"
                     onDrop={(skill, fromCategory) => handleDropSkill(skill, fromCategory, 'niceToHaveSkills')}
                   >
                     {extractedData.niceToHaveSkills.map((skill, index) => (
@@ -3001,205 +3228,121 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                   </DroppableSkillsContainer>
                 </div>
 
-                {/* Must-Have Comments */}
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
+                {/* Column 3: Comments (Split - Must-Have on top, Nice-to-Have below) */}
+                <div className="space-y-6">
+                  {/* Must-Have Comments */}
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
                       <h3 className="text-gray-900">Must-Have Comments <span className="text-red-500">*</span></h3>
-                    </div>
-                    <button
-                      onClick={() => setEditingCategory('comments')}
-                      className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add
-                    </button>
-                  </div>
-                  {editingCategory === 'comments' && (
-                    <div className="flex gap-2 mb-4">
-                      <input
-                        type="text"
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-                        placeholder="Enter comment..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
-                        autoFocus
-                      />
                       <button
-                        onClick={handleAddComment}
-                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                        onClick={() => setEditingCategory('comments')}
+                        className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
                       >
+                        <Plus className="w-4 h-4" />
                         Add
                       </button>
                     </div>
-                  )}
-                  <div className="space-y-2">
-                    {extractedData.mustHaveComments.map((comment, index) => (
-                      <div key={index} className="flex items-center justify-between p-2.5 bg-red-50 border border-red-200 rounded-lg group">
-                        {editingCommentIndex === index ? (
-                          <>
-                            <input
-                              type="text"
-                              value={editingCommentValue}
-                              onChange={(e) => setEditingCommentValue(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleSaveEditComment();
-                                if (e.key === 'Escape') handleCancelEditComment();
-                              }}
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
-                              autoFocus
-                            />
-                            <div className="flex gap-1 ml-2">
-                              <button
-                                onClick={handleSaveEditComment}
-                                className="text-green-600 hover:text-green-700 px-2"
-                                title="Save"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={handleCancelEditComment}
-                                className="text-red-600 hover:text-red-700"
-                                title="Cancel"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <span 
-                              className="text-sm text-gray-900 flex-1 cursor-pointer hover:text-gray-800" 
-                              onClick={() => handleStartEditComment(index, comment)}
-                              title="Click to edit"
-                            >
-                              {comment}
-                            </span>
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => handleStartEditComment(index, comment)}
-                                className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="Edit"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleRemoveComment(index)}
-                                className="text-red-600 hover:text-red-700"
-                                title="Delete"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </>
-                        )}
+                    {editingCategory === 'comments' && (
+                      <div className="flex gap-2 mb-4">
+                        <input
+                          type="text"
+                          value={newComment}
+                          onChange={(e) => setNewComment(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
+                          placeholder="Enter comment..."
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                          autoFocus
+                        />
+                        <button
+                          onClick={handleAddComment}
+                          className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                        >
+                          Add
+                        </button>
                       </div>
-                    ))}
+                    )}
+                    <DroppableCommentsContainer
+                      category="mustHaveComments"
+                      onDrop={(comment, fromCategory) => handleDropComment(comment, fromCategory, 'mustHaveComments')}
+                    >
+                      {extractedData.mustHaveComments.map((comment, index) => (
+                        <DraggableComment
+                          key={index}
+                          comment={comment}
+                          index={index}
+                          category="mustHaveComments"
+                          onMove={handleMoveComment}
+                          onRemove={handleRemoveCommentByCategory}
+                          onStartEdit={handleStartEditCommentByCategory}
+                          isEditing={editingCommentIndex === index}
+                          editingValue={editingCommentValue}
+                          onEditChange={setEditingCommentValue}
+                          onSaveEdit={handleSaveEditComment}
+                          onCancelEdit={handleCancelEditComment}
+                        />
+                      ))}
+                    </DroppableCommentsContainer>
+                    {validationErrors.mustHaveComments && (
+                      <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+                        <AlertCircle className="w-4 h-4" />
+                        {validationErrors.mustHaveComments}
+                      </p>
+                    )}
                   </div>
-                  {validationErrors.mustHaveComments && (
-                    <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
-                      <AlertCircle className="w-4 h-4" />
-                      {validationErrors.mustHaveComments}
-                    </p>
-                  )}
-                </div>
 
-                {/* Nice-to-Have Comments */}
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-gray-900">Nice-to-Have Comments</h3>
-                    </div>
-                    <button
-                      onClick={() => setEditingCategory('nice-comments')}
-                      className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add
-                    </button>
-                  </div>
-                  {editingCategory === 'nice-comments' && (
-                    <div className="flex gap-2 mb-4">
-                      <input
-                        type="text"
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddNiceComment()}
-                        placeholder="Enter nice-to-have comment..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
-                        autoFocus
-                      />
+                  {/* Nice-to-Have Comments */}
+                  <div>
+                    {console.log('[DEBUG] Rendering Nice-to-Have Comments, count:', extractedData.niceToHaveComments?.length, 'data:', extractedData.niceToHaveComments)}
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-gray-900">Nice-to-Have Comments ({extractedData.niceToHaveComments?.length || 0})</h3>
                       <button
-                        onClick={handleAddNiceComment}
-                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                        onClick={() => setEditingCategory('nice-comments')}
+                        className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
                       >
+                        <Plus className="w-4 h-4" />
                         Add
                       </button>
                     </div>
-                  )}
-                  <div className="space-y-2">
-                    {(extractedData.niceToHaveComments || []).map((comment, index) => (
-                      <div key={index} className="flex items-center justify-between p-2.5 bg-blue-50 border border-blue-200 rounded-lg group">
-                        {editingNiceCommentIndex === index ? (
-                          <>
-                            <input
-                              type="text"
-                              value={editingNiceCommentValue}
-                              onChange={(e) => setEditingNiceCommentValue(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleSaveEditNiceComment();
-                                if (e.key === 'Escape') handleCancelEditNiceComment();
-                              }}
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
-                              autoFocus
-                            />
-                            <div className="flex gap-1 ml-2">
-                              <button
-                                onClick={handleSaveEditNiceComment}
-                                className="text-green-600 hover:text-green-700 px-2"
-                                title="Save"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={handleCancelEditNiceComment}
-                                className="text-red-600 hover:text-red-700"
-                                title="Cancel"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <span
-                              className="text-sm text-gray-900 flex-1 cursor-pointer hover:text-gray-800"
-                              onClick={() => handleStartEditNiceComment(index, comment)}
-                              title="Click to edit"
-                            >
-                              {comment}
-                            </span>
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => handleStartEditNiceComment(index, comment)}
-                                className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="Edit"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleRemoveNiceComment(index)}
-                                className="text-blue-600 hover:text-blue-700"
-                                title="Delete"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </>
-                        )}
+                    {editingCategory === 'nice-comments' && (
+                      <div className="flex gap-2 mb-4">
+                        <input
+                          type="text"
+                          value={newComment}
+                          onChange={(e) => setNewComment(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddNiceComment()}
+                          placeholder="Enter nice-to-have comment..."
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                          autoFocus
+                        />
+                        <button
+                          onClick={handleAddNiceComment}
+                          className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                        >
+                          Add
+                        </button>
                       </div>
-                    ))}
+                    )}
+                    <DroppableCommentsContainer
+                      category="niceToHaveComments"
+                      onDrop={(comment, fromCategory) => handleDropComment(comment, fromCategory, 'niceToHaveComments')}
+                    >
+                      {(extractedData.niceToHaveComments || []).map((comment, index) => (
+                        <DraggableComment
+                          key={index}
+                          comment={comment}
+                          index={index}
+                          category="niceToHaveComments"
+                          onMove={handleMoveComment}
+                          onRemove={handleRemoveCommentByCategory}
+                          onStartEdit={handleStartEditCommentByCategory}
+                          isEditing={editingNiceCommentIndex === index}
+                          editingValue={editingNiceCommentValue}
+                          onEditChange={setEditingNiceCommentValue}
+                          onSaveEdit={handleSaveEditNiceComment}
+                          onCancelEdit={handleCancelEditNiceComment}
+                        />
+                      ))}
+                    </DroppableCommentsContainer>
                   </div>
                 </div>
               </div>
@@ -3689,6 +3832,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 </div>
               </div>
 
+            {/* Validation Warning Banner - Show when required fields are missing */}
+            {!validationStatus.isValid && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-6">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-amber-800 font-medium">Cannot Proceed - Missing Required Fields</h4>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Please complete the following before publishing:
+                    </p>
+                    <ul className="text-sm text-amber-700 mt-2 list-disc list-inside">
+                      {validationStatus.missingFields.map((field, index) => (
+                        <li key={index}>{field}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between items-center mt-8">
               <div className="flex gap-3">
                 <button
@@ -3723,7 +3886,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                   </>
                 ) : (
                   <>
-                    Review & Publish
+                    Next
                     <ChevronRight className="w-5 h-5" />
                   </>
                 )}
@@ -3887,47 +4050,68 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                     Edit
                   </button>
                 </div>
-                <div className="grid grid-cols-3 gap-6">
-                  {/* Must-Have Skills */}
-                  <div>
-                    <h4 className="text-sm text-gray-700 mb-3">Must-Have Skills ({extractedData.mustHaveSkills.length})</h4>
-                    <div className="space-y-2">
-                      {extractedData.mustHaveSkills.map((skill, index) => (
-                        <div key={index} className="flex items-center gap-2 text-sm text-gray-700">
-                          <CheckCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                          {skill}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Nice-to-Have Skills */}
-                  <div>
-                    <h4 className="text-sm text-gray-700 mb-3">Nice-to-Have Skills ({extractedData.niceToHaveSkills.length})</h4>
-                    <div className="space-y-2">
-                      {extractedData.niceToHaveSkills.map((skill, index) => (
-                        <div key={index} className="flex items-center gap-2 text-sm text-gray-600">
-                          <CheckCircle className="w-4 h-4 text-gray-800 flex-shrink-0" />
-                          {skill}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Must-Have Comments */}
-                  {extractedData.mustHaveComments.length > 0 && (
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Left Column: Skills */}
+                  <div className="space-y-6">
+                    {/* Must-Have Skills */}
                     <div>
-                      <h4 className="text-sm text-gray-700 mb-3">Must-Have Comments ({extractedData.mustHaveComments.length})</h4>
+                      <h4 className="text-sm text-gray-700 mb-3">Must-Have Skills ({extractedData.mustHaveSkills.length})</h4>
                       <div className="space-y-2">
-                        {extractedData.mustHaveComments.map((comment, index) => (
-                          <div key={index} className="flex items-start gap-2 text-sm text-gray-700">
-                            <CheckCircle2 className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-                            <span>{comment}</span>
+                        {extractedData.mustHaveSkills.map((skill, index) => (
+                          <div key={index} className="flex items-center gap-2 text-sm text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                            {skill}
                           </div>
                         ))}
                       </div>
                     </div>
-                  )}
+
+                    {/* Nice-to-Have Skills */}
+                    <div>
+                      <h4 className="text-sm text-gray-700 mb-3">Nice-to-Have Skills ({extractedData.niceToHaveSkills.length})</h4>
+                      <div className="space-y-2">
+                        {extractedData.niceToHaveSkills.map((skill, index) => (
+                          <div key={index} className="flex items-center gap-2 text-sm text-gray-600">
+                            <CheckCircle className="w-4 h-4 text-gray-800 flex-shrink-0" />
+                            {skill}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Comments */}
+                  <div className="space-y-6">
+                    {/* Must-Have Comments */}
+                    {extractedData.mustHaveComments.length > 0 && (
+                      <div>
+                        <h4 className="text-sm text-gray-700 mb-3">Must-Have Comments ({extractedData.mustHaveComments.length})</h4>
+                        <div className="space-y-2">
+                          {extractedData.mustHaveComments.map((comment, index) => (
+                            <div key={index} className="flex items-start gap-2 text-sm text-gray-700">
+                              <CheckCircle2 className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                              <span>{comment}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Nice-to-Have Comments */}
+                    {(extractedData.niceToHaveComments || []).length > 0 && (
+                      <div>
+                        <h4 className="text-sm text-gray-700 mb-3">Nice-to-Have Comments ({(extractedData.niceToHaveComments || []).length})</h4>
+                        <div className="space-y-2">
+                          {(extractedData.niceToHaveComments || []).map((comment, index) => (
+                            <div key={index} className="flex items-start gap-2 text-sm text-gray-600">
+                              <CheckCircle2 className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                              <span>{comment}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -3962,14 +4146,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                     </p>
                   </div>
 
-                  {/* Industry Type */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="text-sm text-gray-600 mb-2">Industry Type</h4>
-                    <p className="text-gray-900">{getIndustryLabel(extractedData.industryType)}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {extractedData.industryTypeRequired ? '✓ Required' : '○ Preferred'}
-                    </p>
-                  </div>
+                  {/* Industry Type - Only show if specified */}
+                  {extractedData.industryType && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="text-sm text-gray-600 mb-2">Industry Type</h4>
+                      <p className="text-gray-900">{getIndustryLabel(extractedData.industryType)}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {extractedData.industryTypeRequired ? '✓ Required' : '○ Preferred'}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -4334,7 +4520,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-    </DndProvider>
+    </>
   );
 }

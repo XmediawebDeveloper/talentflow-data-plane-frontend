@@ -982,6 +982,21 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
                
 
+                {/* Must-Have Comments */}
+                {job.mustHaveComments && job.mustHaveComments.length > 0 && (
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-900 mb-4">
+                      Must-Have Comments
+                    </h2>
+                    <div className="h-px bg-gray-200 mb-4"></div>
+                    <ul className="list-disc list-inside space-y-2 text-gray-700">
+                      {job.mustHaveComments.map((comment, index) => (
+                        <li key={index}>{comment}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* Compensation */}
                 {(job.salaryMin || job.salaryMax) && (
                   <div>
@@ -1159,22 +1174,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <div className="bg-red-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.noMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Must-Have Comments */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-gray-900 mb-4">Must-Have Comments</h3>
-            <div className="text-sm text-gray-600 space-y-2">
-              {job.mustHaveComments && job.mustHaveComments.length > 0 ? (
-                <ul className="list-disc list-inside space-y-1">
-                  {job.mustHaveComments.map((comment, index) => (
-                    <li key={index}>{comment}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-500 italic">No must-have comments added</p>
-              )}
             </div>
           </div>
 
