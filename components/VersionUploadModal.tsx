@@ -7,9 +7,12 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_FORMATS = [
   'application/pdf',
   'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/rtf',
+  'text/rtf',
+  'text/plain'
 ];
-const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx'];
+const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.rtf', '.txt'];
 
 interface FileValidationError {
   fileName: string;
@@ -76,7 +79,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
       if (!ALLOWED_FORMATS.includes(file.type) && !ALLOWED_EXTENSIONS.includes(fileExtension)) {
         errors.push({
           fileName: file.name,
-          error: 'Unsupported file format. Only PDF, DOC, and DOCX files are allowed.',
+          error: 'Unsupported file format. Only PDF, DOC, DOCX, RTF, and TXT files are allowed.',
           type: 'format'
         });
         return;

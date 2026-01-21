@@ -410,47 +410,64 @@ export default function AITalentMatchPage({
         {/* Header Section - Sticky */}
         <div className="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm p-6">
           {/* Back Button & Title */}
-          <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={() => {
-                setViewMode('history');
-                setSelectedHistoryItem(null);
-                setSelectedCandidates([]);
-                updateUrlParams({}); // Clear URL params
-              }}
-              className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Back to Matched Jobs
-            </button>
-            <button
-              onClick={() => {
-                // Keep the current JD and run new match
-                if (selectedHistoryItem?.jobId) {
-                  isMatchingInProgress.current = true;
-                  setSelectedJob(selectedHistoryItem.jobId);
-                  setSelectedCandidates([]);
-                  // Don't change URL view - just show overlay
-                  // updateUrlParams({ jdId: selectedHistoryItem.jobId, view: 'matching' });
-                  // Trigger matching panel immediately
-                  setShowMatchingPanel(true);
-                }
-              }}
-              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2"
-            >
-              <Sparkles className="w-4 h-4" />
-              New AI Match
-            </button>
-          </div>
+          {(() => {
+            // Check if job is disabled
+            const jobData = jobs.find(j => j.id === selectedHistoryItem.jobId);
+            const jobStatus = jobData?.status?.toLowerCase();
+            const isJobDisabled = jobStatus === 'disabled';
+            // Show Run AI Match button for all jobs except disabled ones
+            const canRunAIMatch = !isJobDisabled;
 
-          {/* Job Info Card */}
-          <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md">
-                <Sparkles className="w-6 h-6 text-white" />
-              </div>
-              <div className="flex-1">
-                <h1 className="text-xl text-gray-900 font-semibold">{selectedHistoryItem.jobTitle}</h1>
+            return (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <button
+                    onClick={() => {
+                      setViewMode('history');
+                      setSelectedHistoryItem(null);
+                      setSelectedCandidates([]);
+                      updateUrlParams({}); // Clear URL params
+                    }}
+                    className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                    Back to Matched Jobs
+                  </button>
+                  {/* Show Run AI Match button for all jobs except disabled */}
+                  {canRunAIMatch && (
+                    <button
+                      onClick={() => {
+                        const jobId = selectedJob || selectedHistoryItem?.jobId;
+                        if (jobId) {
+                          isMatchingInProgress.current = true;
+                          setSelectedJob(jobId);
+                          setSelectedCandidates([]);
+                          setShowMatchingPanel(true);
+                        }
+                      }}
+                      className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Run AI Match
+                    </button>
+                  )}
+                </div>
+
+                {/* Job Info Card */}
+                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md">
+                      <Sparkles className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3">
+                        <h1 className="text-xl text-gray-900 font-semibold">{selectedHistoryItem.jobTitle}</h1>
+                        {isJobDisabled && (
+                          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full border border-red-200">
+                            Disabled
+                          </span>
+                        )}
+                      </div>
                 <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
                   <span className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
@@ -504,6 +521,9 @@ export default function AITalentMatchPage({
               </button>
             )}
           </div>
+              </>
+            );
+          })()}
         </div>
 
         {/* Candidates List - Table View */}
@@ -657,6 +677,19 @@ export default function AITalentMatchPage({
           onClose={() => setSelectedVersionsCandidate(null)}
         />
       )}
+
+      {/* AI Matching Progress Panel - for details view */}
+      {showMatchingPanel && selectedJob && (
+        <AITalentMatchProgressPanel
+          jobTitle={selectedJobData?.title || selectedHistoryItem?.jobTitle || 'Job Description'}
+          jobId={selectedJob}
+          onComplete={handleMatchingComplete}
+          onError={(error) => {
+            setMatchError(error);
+            setShowMatchingPanel(false);
+          }}
+        />
+      )}
       </>
     );
   }
@@ -685,7 +718,7 @@ export default function AITalentMatchPage({
               <p className="text-sm text-gray-600">Review jobs with AI-matched candidates and their results</p>
             </div>
             
-            {/* Units Display */}
+            {/* Units Display - Commented out (static data)
             {availableUnits !== null && (
               <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-gray-300">
                 <div className="flex items-center gap-3">
@@ -702,6 +735,7 @@ export default function AITalentMatchPage({
                 </div>
               </div>
             )}
+            */}
             
             <button
               onClick={() => {

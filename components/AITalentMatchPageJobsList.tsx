@@ -43,7 +43,10 @@ export default function AITalentMatchPageJobsList({
   const [showFilters, setShowFilters] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   
-  const publishedJobs = jobs.filter(j => j.status === 'Published' || j.status === 'Active');
+  // Filter jobs: Only show Published/Active jobs, exclude Disabled jobs
+  const publishedJobs = jobs.filter(j =>
+    (j.status === 'Published' || j.status === 'Active') && j.status !== 'Disabled'
+  );
   
   // Apply filters
   const filteredJobs = publishedJobs.filter(job => {
@@ -324,9 +327,9 @@ export default function AITalentMatchPageJobsList({
                       )}
                     </div>
 
-                    {/* Action Button */}
+                    {/* Action Button - Always show for Active/Published JDs */}
                     <div className="flex-shrink-0 flex items-center justify-center">
-                      <button 
+                      <button
                         onClick={() => onSelectJob(job.id)}
                         className="px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-gray-700 hover:to-gray-900 transition-all font-medium shadow-md group-hover:shadow-lg flex items-center gap-2 whitespace-nowrap"
                       >

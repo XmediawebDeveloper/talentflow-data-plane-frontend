@@ -83,6 +83,7 @@ export default function JobOpeningsPage() {
         created_at: jd.created_at, // For accurate sorting
         creation_stage: jd.creation_stage, // For draft JDs
         creation_method: jd.creation_method, // AI or Manual
+        currentVersion: jd.current_version, // For republished status
       }));
 
       setJobs(convertedJobs);

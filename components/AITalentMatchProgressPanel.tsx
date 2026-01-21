@@ -58,10 +58,10 @@ export default function AITalentMatchProgressPanel({
           });
         }, 1500);
 
-        // Call the real RAG API
+        // Call the real RAG API - Top 9 candidates with good similarity threshold
         const { session, candidates } = await aiMatchService.run(jobId, {
-          limit: 50,
-          minSimilarity: 0.2,  // Lower threshold to include more candidates
+          limit: 9,
+          minSimilarity: 0.5,  // 50% similarity threshold for quality matches
         });
 
         // Update progress to 100%
