@@ -4,8 +4,7 @@ import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, Ch
 import ReactMarkdown from 'react-markdown';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { DndProvider, useDrag, useDrop } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
+import { useDrag, useDrop } from 'react-dnd';
 import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
@@ -2570,7 +2569,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
   }, [editingJD]);
 
   return (
-    <DndProvider backend={HTML5Backend}>
+    <>
       <div className="h-full flex flex-col">
         {/* Fixed Header with Step Indicator */}
         <div className="flex-shrink-0 bg-white border-b border-gray-200 px-8 pt-6 shadow-sm">
@@ -4521,7 +4520,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-    </DndProvider>
+    </>
   );
 }
