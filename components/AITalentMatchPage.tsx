@@ -607,10 +607,10 @@ export default function AITalentMatchPage({
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm text-gray-700 font-medium">
-                        {candidate.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                        {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{candidate.name}</div>
+                        <div className="text-sm font-medium text-gray-900">{candidate.name || 'Unknown'}</div>
                       </div>
                     </div>
                   </td>
@@ -1183,10 +1183,10 @@ export default function AITalentMatchPage({
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm text-gray-700 font-medium">
-                          {candidate.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                          {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{candidate.name}</div>
+                          <div className="text-sm font-medium text-gray-900">{candidate.name || 'Unknown'}</div>
                         </div>
                       </div>
                     </td>

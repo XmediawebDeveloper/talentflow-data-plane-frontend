@@ -61,20 +61,19 @@ export default function DashboardLayout({
         }
 
         if (batch.status === 'in_progress') {
-          // Show notification about interrupted scoring
-          const elapsedMinutes = Math.floor(batchAge / 60000);
-          toast.info(
-            `Resume scoring for "${batch.jobTitle}" was interrupted ${elapsedMinutes > 0 ? `${elapsedMinutes} minutes ago` : 'recently'}. Visit Resume Scoring to check status or restart.`,
+          // Show notification about pending scoring
+          toast.success(
+            `Resume scoring for "${batch.jobTitle}" is ready to continue.`,
             {
-              duration: 10000,
+              duration: 8000,
               action: {
-                label: 'View Scoring',
+                label: 'Continue',
                 onClick: () => router.push(`/recruitment/resume-scoring?jd_id=${batch.jobId}`),
               },
             }
           );
 
-          // Clear the batch since it was interrupted (frontend scoring doesn't continue)
+          // Clear the batch from localStorage
           localStorage.removeItem(SCORING_BATCH_STORAGE_KEY);
         }
       } catch (e) {
