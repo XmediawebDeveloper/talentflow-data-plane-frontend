@@ -113,6 +113,19 @@ export function useProctoringMonitor({
   const lastEventTimeRef = useRef<Record<string, number>>({});
   const isMonitoringRef = useRef(false);
 
+  // Use refs for callbacks to prevent infinite re-renders
+  const onWarningRef = useRef(onWarning);
+  const tokenRef = useRef(token);
+
+  // Keep refs up to date without triggering re-renders
+  useEffect(() => {
+    onWarningRef.current = onWarning;
+  }, [onWarning]);
+
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+
   // Generate unique warning ID
   const generateWarningId = () => `warning-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -123,7 +136,7 @@ export function useProctoringMonitor({
     return Date.now() - lastTime < cooldown;
   }, []);
 
-  // Log event to backend
+  // Log event to backend - uses refs to avoid dependency changes
   const logEvent = useCallback(async (
     eventType: ProctoringEventType,
     details?: Record<string, any>
@@ -147,12 +160,12 @@ export function useProctoringMonitor({
       violationCount: prev.violationCount + 1,
     }));
 
-    // Notify via callback
-    onWarning?.(warning);
+    // Notify via callback (use ref to avoid re-renders)
+    onWarningRef.current?.(warning);
 
-    // Log to backend
+    // Log to backend (use ref for token)
     try {
-      await candidateService.reportProctorEvent(token, {
+      await candidateService.reportProctorEvent(tokenRef.current, {
         event_type: eventType,
         timestamp: new Date().toISOString(),
         details: details || {},
@@ -161,7 +174,7 @@ export function useProctoringMonitor({
     } catch (error) {
       console.error(`[PROCTORING] Failed to log event: ${eventType}`, error);
     }
-  }, [token, enabled, onWarning, isInCooldown]);
+  }, [enabled, isInCooldown]); // Removed token and onWarning from deps - using refs
 
   // ==================== VOICE DETECTION ====================
   const setupVoiceDetection = useCallback(() => {
