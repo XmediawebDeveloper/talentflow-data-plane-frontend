@@ -9,6 +9,7 @@ import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import ScoringJobProgressModal, { JobScoringProgress } from './ScoringJobProgressModal';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
+import ExistingScoreAlertModal from './ExistingScoreAlertModal';
 import api from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
@@ -176,6 +177,79 @@ export default function ResumeScoringPage({
   // Available units from quota API
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
 
+  // Global view state (view all scored resumes across all JDs)
+  const [isGlobalView, setIsGlobalView] = useState(false);
+  const [globalScoredResumes, setGlobalScoredResumes] = useState<any[]>([]);
+  const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+
+  // Existing score alert modal state
+  const [showExistingScoreAlert, setShowExistingScoreAlert] = useState(false);
+  const [existingScoreData, setExistingScoreData] = useState<{
+    jdTitle: string;
+    existingScores: Array<{
+      resume_id: string;
+      score_id: string;
+      candidate_name: string;
+      candidate_email: string;
+      overall_score: number;
+      match_status: string;
+      scored_at: string | null;
+    }>;
+    totalChecked: number;
+    newCount: number;
+    pendingResumeIds: string[];
+    pendingSource: 'my-resumes' | 'database';
+  } | null>(null);
+
+  // Fetch all scored resumes for global view
+  const fetchGlobalScoredResumes = async () => {
+    setIsLoadingGlobal(true);
+    try {
+      const response = await scoringService.getAllScoredResumes({
+        page: 1,
+        page_size: 100,
+      });
+
+      // Convert to ScoredResumesTable format
+      const converted = response.items.map((item: any) => ({
+        id: item.id,
+        candidateName: item.candidate_name || 'Unknown',
+        email: item.email || '',
+        phone: item.phone || '',
+        matchStatus: item.match_status || 'No Match',
+        scorePercentage: Math.round(item.overall_score || 0),
+        scoredDate: item.created_at || new Date().toISOString(),
+        scoredBy: item.scored_by || 'AI Engine',
+        experience: item.experience,
+        education: item.education,
+        certifications: item.certifications,
+        aiSummary: item.ai_summary,
+        strengths: item.strengths,
+        gaps: item.gaps,
+        jobTitle: item.jd_title,
+        jdId: item.jd_id,
+      }));
+
+      setGlobalScoredResumes(converted);
+    } catch (error) {
+      console.error('Failed to fetch global scored resumes:', error);
+      toast.error('Failed to load all scored candidates');
+    } finally {
+      setIsLoadingGlobal(false);
+    }
+  };
+
+  // Toggle global view
+  const handleToggleGlobalView = () => {
+    if (!isGlobalView) {
+      // Entering global view - fetch data
+      fetchGlobalScoredResumes();
+    }
+    setIsGlobalView(!isGlobalView);
+    setSelectedScoredResumes([]); // Clear selection when switching views
+  };
+
   // Handle initial JD ID from URL - auto-open scored resumes view
   useEffect(() => {
     if (initialJdId && scoredHistory.length > 0) {
@@ -211,22 +285,9 @@ export default function ResumeScoringPage({
       } else {
         console.log('[ResumeScoringPage] No history item found for JD:', initialJdId);
       }
-    } else if (!initialJdId && scoredHistory.length > 0) {
-      // No JD specified in URL - try to restore last viewed JD from localStorage
-      try {
-        const lastViewedJdId = localStorage.getItem('lastViewedScoringJdId');
-        if (lastViewedJdId) {
-          const historyItem = scoredHistory.find(item => item.jobId === lastViewedJdId);
-          if (historyItem) {
-            console.log('[ResumeScoringPage] Restoring last viewed JD from localStorage:', historyItem.jobTitle);
-            setSelectedHistoryItem(historyItem);
-            setViewMode('details');
-          }
-        }
-      } catch (e) {
-        console.error('Failed to restore last viewed JD:', e);
-      }
     }
+    // Removed: Auto-restore from localStorage - users should start at history view
+    // when navigating to Resume Scoring without a specific JD in URL
   }, [initialJdId, scoredHistory, initialShowProgress]);
 
   // Fetch available units on mount
@@ -860,6 +921,19 @@ export default function ResumeScoringPage({
               </button>
             )}
 
+            {/* View All Candidates Button */}
+            <button
+              onClick={handleToggleGlobalView}
+              className={`px-5 py-2.5 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md ${
+                isGlobalView
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Eye className="w-4 h-4" />
+              {isGlobalView ? 'View by Job' : 'View All Candidates'}
+            </button>
+
             <button
               onClick={() => {
                 setViewMode('new');
@@ -875,6 +949,45 @@ export default function ResumeScoringPage({
           </div>
         </div>
 
+        {/* Global View - All Scored Candidates */}
+        {isGlobalView ? (
+          <div className="space-y-4">
+            {isLoadingGlobal ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                <Loader className="w-8 h-8 animate-spin text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-600">Loading all scored candidates...</p>
+              </div>
+            ) : globalScoredResumes.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                <div className="text-gray-400 mb-2">
+                  <Search className="w-12 h-12 mx-auto" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Scored Candidates</h3>
+                <p className="text-sm text-gray-600">Score resumes against jobs to see them here.</p>
+              </div>
+            ) : (
+              <ScoredResumesTable
+                resumes={globalScoredResumes}
+                jobTitle="All Jobs"
+                jobId="global"
+                availableUnits={availableUnits || 0}
+                onViewCandidate={(resume) => {
+                  setSelectedCandidateForView(resume);
+                  setViewMode('candidateView');
+                }}
+                selectedResumes={selectedScoredResumes}
+                onSelectResume={(id) => {
+                  setSelectedScoredResumes(prev =>
+                    prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
+                  );
+                }}
+                onSelectAll={(ids) => setSelectedScoredResumes(ids)}
+                isGlobalView={true}
+              />
+            )}
+          </div>
+        ) : (
+        <>
         {/* View Toggle and Download Bar */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
           <div className="flex items-center justify-between">
@@ -1437,6 +1550,8 @@ export default function ResumeScoringPage({
             </div>
           </div>
         )}
+        </>
+        )}
 
         {showProgressModal && (
           <BulkScoringProgressModal
@@ -1688,9 +1803,35 @@ export default function ResumeScoringPage({
           databaseResumes={databaseResumes}
           folders={folders}
           onClose={() => setShowResumeSelectionModal(false)}
-          onScoreResumes={(selectedIds, source) => {
+          onScoreResumes={async (selectedIds, source) => {
             setShowResumeSelectionModal(false);
 
+            // Check for existing scores before proceeding
+            try {
+              toast.loading('Checking for existing scores...', { id: 'check-existing' });
+              const checkResult = await scoringService.checkExistingScores(selectedJob, selectedIds);
+              toast.dismiss('check-existing');
+
+              if (checkResult.existing_count > 0) {
+                // Show alert modal with existing scores
+                setExistingScoreData({
+                  jdTitle: selectedJobData.title,
+                  existingScores: checkResult.existing_scores,
+                  totalChecked: checkResult.total_checked,
+                  newCount: checkResult.new_count,
+                  pendingResumeIds: selectedIds,
+                  pendingSource: source,
+                });
+                setShowExistingScoreAlert(true);
+                return;
+              }
+            } catch (error) {
+              console.error('Failed to check existing scores:', error);
+              toast.dismiss('check-existing');
+              // Continue with scoring if check fails
+            }
+
+            // No existing scores, proceed with scoring
             const selectedResumesData = resumes.filter(r => selectedIds.includes(r.id));
 
             // Pass all available resume data to the scoring panel
@@ -1708,34 +1849,91 @@ export default function ResumeScoringPage({
         />
       )}
 
-      {/* Real-Time Scoring Status Panel */}
-      {showScoringPanel && selectedJobData && !isScoringMinimized && (
-        <ResumeScoringStatusPanel
-          resumes={resumesToScore}
-          jobTitle={selectedJobData.title}
-          jobId={selectedJob}
-          onComplete={(scoredResults) => {
-            setShowScoringPanel(false);
-            setIsScoringMinimized(false);
-
-            if (onSaveScores) {
-              const scoredData: ScoredResumeData = {
-                id: Date.now().toString(),
-                jobId: selectedJob,
-                jobTitle: selectedJobData.title,
-                scoredAt: new Date(),
-                source: scoringSource,
-                totalScored: scoredResults.length,
-                scoredResumes: scoredResults,
-              };
-
-              onSaveScores(scoredData);
-              setSelectedHistoryItem(scoredData);
-              setViewMode('details');
-            }
+      {/* Existing Score Alert Modal */}
+      {showExistingScoreAlert && existingScoreData && (
+        <ExistingScoreAlertModal
+          isOpen={showExistingScoreAlert}
+          onClose={() => {
+            setShowExistingScoreAlert(false);
+            setExistingScoreData(null);
           }}
-          onMinimize={() => setIsScoringMinimized(true)}
+          jdTitle={existingScoreData.jdTitle}
+          existingScores={existingScoreData.existingScores}
+          totalChecked={existingScoreData.totalChecked}
+          newCount={existingScoreData.newCount}
+          onViewExisting={(scoreId) => {
+            setShowExistingScoreAlert(false);
+            setExistingScoreData(null);
+            // Navigate to the scored candidate view
+            router.push(`/recruitment/resume-scoring?jd_id=${selectedJob}&score_id=${scoreId}`);
+          }}
+          onProceedWithRescoring={() => {
+            setShowExistingScoreAlert(false);
+            // Proceed with all selected resumes (re-score)
+            const selectedResumesData = resumes.filter(r =>
+              existingScoreData.pendingResumeIds.includes(r.id)
+            );
+            setResumesToScore(selectedResumesData.map(r => ({
+              id: r.id,
+              name: r.name,
+              candidateName: r.candidateName || r.candidate_name,
+              candidateEmail: r.candidateEmail || r.candidate_email || r.email,
+              phone: r.phone,
+            })));
+            setScoringSource(existingScoreData.pendingSource);
+            setExistingScoreData(null);
+            setShowScoringPanel(true);
+          }}
+          onProceedWithNewOnly={existingScoreData.newCount > 0 ? () => {
+            setShowExistingScoreAlert(false);
+            // Filter out already scored resumes
+            const existingResumeIds = new Set(existingScoreData.existingScores.map(s => s.resume_id));
+            const newResumeIds = existingScoreData.pendingResumeIds.filter(id => !existingResumeIds.has(id));
+            const selectedResumesData = resumes.filter(r => newResumeIds.includes(r.id));
+            setResumesToScore(selectedResumesData.map(r => ({
+              id: r.id,
+              name: r.name,
+              candidateName: r.candidateName || r.candidate_name,
+              candidateEmail: r.candidateEmail || r.candidate_email || r.email,
+              phone: r.phone,
+            })));
+            setScoringSource(existingScoreData.pendingSource);
+            setExistingScoreData(null);
+            setShowScoringPanel(true);
+          } : undefined}
         />
+      )}
+
+      {/* Real-Time Scoring Status Panel - Always mounted when showScoringPanel is true to preserve state */}
+      {showScoringPanel && selectedJobData && (
+        <div className={isScoringMinimized ? 'hidden' : ''}>
+          <ResumeScoringStatusPanel
+            resumes={resumesToScore}
+            jobTitle={selectedJobData.title}
+            jobId={selectedJob}
+            onComplete={(scoredResults) => {
+              setShowScoringPanel(false);
+              setIsScoringMinimized(false);
+
+              if (onSaveScores) {
+                const scoredData: ScoredResumeData = {
+                  id: Date.now().toString(),
+                  jobId: selectedJob,
+                  jobTitle: selectedJobData.title,
+                  scoredAt: new Date(),
+                  source: scoringSource,
+                  totalScored: scoredResults.length,
+                  scoredResumes: scoredResults,
+                };
+
+                onSaveScores(scoredData);
+                setSelectedHistoryItem(scoredData);
+                setViewMode('details');
+              }
+            }}
+            onMinimize={() => setIsScoringMinimized(true)}
+          />
+        </div>
       )}
 
       {/* Minimized Scoring Indicator */}

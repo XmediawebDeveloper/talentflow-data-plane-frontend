@@ -117,9 +117,20 @@ export default function ResumeViewPage() {
     versionCount: r.version_count || versionsData.length || 1,
   });
 
-  const handleDownload = () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-    window.open(`${apiUrl}/resumes/${resumeId}/download`, '_blank');
+  const handleDownload = async () => {
+    try {
+      const blob = await resumeService.download(resumeId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = resume?.fileName || `resume-${resumeId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error('Failed to download resume');
+    }
   };
 
   const handleShare = () => {
@@ -168,38 +179,44 @@ export default function ResumeViewPage() {
     setIsApplyToJobModalOpen(true);
   };
 
-  // Handle applying resume to selected job (scoring)
+  // Handle applying resume to selected job (scoring) - using async Celery
   const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setIsApplyToJobModalOpen(false);
 
     const jobId = jobIds[0];
-    const toastId = toast.loading('Scoring resume against job...');
 
     try {
-      await scoringService.scoreResume(jobId, resumeId);
+      // Start async bulk scoring via Celery
+      const response = await scoringService.startBulkScoringAsync(jobId, [resumeId]);
 
-      toast.success('Resume scored successfully!', { id: toastId });
+      // Store batch info for the resume-scoring page to poll
+      const scoringData = {
+        batchId: response.batch_id,
+        jobId: response.jd_id,
+        jobTitle: response.jd_title,
+        totalResumes: response.total_resumes,
+      };
+      sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
 
-      // Navigate to the job's scored resumes page
-      router.push(`/recruitment/job-details?id=${jobId}&tab=scored`);
-
+      // Navigate to resume scoring page to show progress
+      router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
     } catch (error: any) {
-      console.error('Scoring error:', error);
+      console.error('Failed to start scoring:', error);
 
       if (error?.message?.includes('QUOTA') || error?.response?.status === 403) {
-        toast.error('Resume scoring quota exhausted. Please upgrade your plan.', { id: toastId });
+        toast.error('Resume scoring quota exhausted. Please upgrade your plan.');
       } else {
-        toast.error('Failed to score resume. Please try again.', { id: toastId });
+        toast.error(error.message || 'Failed to start scoring');
       }
     }
   };
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50 min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
+      <div className="flex-1 flex items-center justify-center bg-gray-100 min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
         <span className="ml-3 text-gray-600">Loading resume...</span>
       </div>
     );
@@ -207,11 +224,11 @@ export default function ResumeViewPage() {
 
   if (error || !resume) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 min-h-screen">
+      <div className="flex-1 flex flex-col items-center justify-center bg-gray-100 min-h-screen">
         <p className="text-gray-600 mb-4">{error || 'Resume not found'}</p>
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-2 text-blue-600 hover:text-blue-700"
+          className="flex items-center gap-2 text-gray-700 hover:text-gray-900"
         >
           <ArrowLeft className="w-4 h-4" />
           Go Back
@@ -241,24 +258,24 @@ export default function ResumeViewPage() {
   };
 
   return (
-    <div className="flex-1 bg-gray-50 min-h-screen">
+    <div className="flex-1 bg-gray-100 min-h-screen">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4">
+      <div className="bg-gray-200 border-b border-gray-300 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.back()}
-              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+              className="text-gray-700 hover:bg-gray-300 p-2 rounded-lg transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-gray-400 rounded-lg flex items-center justify-center">
                 <Briefcase className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-white">Resume Details</h1>
-                <p className="text-blue-100 text-sm">{resume.name}</p>
+                <h1 className="text-xl font-semibold text-gray-800">Resume Details</h1>
+                <p className="text-gray-600 text-sm">{resume.name}</p>
               </div>
             </div>
           </div>
@@ -266,26 +283,26 @@ export default function ResumeViewPage() {
       </div>
 
       {/* Action Bar */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 sticky top-0 z-10">
+      <div className="bg-gray-50 border-b border-gray-300 px-6 py-3 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
               onClick={handleDownload}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
             >
               <Download className="w-4 h-4" />
               Download
             </button>
             <button
               onClick={handleShare}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
             >
               <Share2 className="w-4 h-4" />
               Share
             </button>
             <button
               onClick={handleDelete}
-              className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-400 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors text-sm"
             >
               <Trash2 className="w-4 h-4" />
               Delete
@@ -293,7 +310,7 @@ export default function ResumeViewPage() {
           </div>
           <button
             onClick={handleApplyToJob}
-            className="flex items-center gap-2 px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm shadow-md"
+            className="flex items-center gap-2 px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm shadow-sm"
           >
             <Send className="w-4 h-4" />
             Apply to Job
@@ -306,15 +323,15 @@ export default function ResumeViewPage() {
         <div className="max-w-6xl mx-auto space-y-6">
 
           {/* Personal Info Card */}
-          <div className="bg-white border-2 border-blue-200 rounded-xl p-6 shadow-lg">
+          <div className="bg-gray-50 border border-gray-300 rounded-xl p-6 shadow-sm">
             <div className="flex items-start gap-6">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-3xl flex-shrink-0">
-                {resume.name.split(' ').map(n => n[0]).join('')}
+              <div className="w-24 h-24 rounded-full bg-gray-400 flex items-center justify-center text-white text-3xl flex-shrink-0">
+                {(resume.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
               <div className="flex-1">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{resume.name}</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{resume.name || 'Unknown'}</h2>
                     <p className="text-xl text-gray-700 mb-3">{resume.title}</p>
                     <div className="flex items-center gap-4 text-sm text-gray-600">
                       {resume.location && (
@@ -343,14 +360,14 @@ export default function ResumeViewPage() {
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   {resume.email && resume.email !== 'No email' && (
                     <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <Mail className="w-4 h-4 text-blue-600" />
-                      <a href={`mailto:${resume.email}`} className="hover:text-blue-600">{resume.email}</a>
+                      <Mail className="w-4 h-4 text-gray-500" />
+                      <a href={`mailto:${resume.email}`} className="hover:text-gray-900">{resume.email}</a>
                     </div>
                   )}
                   {resume.phone && resume.phone !== 'No phone' && (
                     <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <Phone className="w-4 h-4 text-blue-600" />
-                      <a href={`tel:${resume.phone}`} className="hover:text-blue-600">{resume.phone}</a>
+                      <Phone className="w-4 h-4 text-gray-500" />
+                      <a href={`tel:${resume.phone}`} className="hover:text-gray-900">{resume.phone}</a>
                     </div>
                   )}
                 </div>
@@ -369,10 +386,10 @@ export default function ResumeViewPage() {
 
           {/* Professional Summary */}
           {detailedResume.summary && (
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Star className="w-5 h-5 text-yellow-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Professional Summary</h3>
+                <Star className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Professional Summary</h3>
               </div>
               <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{detailedResume.summary}</p>
             </div>
@@ -380,15 +397,15 @@ export default function ResumeViewPage() {
 
           {/* Work Experience */}
           {detailedResume.experience.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Briefcase className="w-5 h-5 text-blue-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Work Experience</h3>
+                <Briefcase className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Work Experience</h3>
               </div>
               <div className="space-y-6">
                 {detailedResume.experience.map((exp, index) => (
-                  <div key={index} className="relative pl-6 pb-6 border-l-2 border-gray-300 last:pb-0">
-                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gray-600 border-2 border-white"></div>
+                  <div key={index} className="relative pl-6 pb-6 border-l-2 border-gray-400 last:pb-0">
+                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gray-500 border-2 border-gray-50"></div>
                     <div className="mb-3">
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -411,7 +428,7 @@ export default function ResumeViewPage() {
                               </span>
                             )}
                             {exp.duration && (
-                              <span className="text-blue-600">({exp.duration})</span>
+                              <span className="text-gray-600">({exp.duration})</span>
                             )}
                           </div>
                         </div>
@@ -423,7 +440,7 @@ export default function ResumeViewPage() {
                         <div className="space-y-2">
                           {exp.achievements.map((achievement, achIndex) => (
                             <div key={achIndex} className="flex items-start gap-2 text-sm text-gray-700">
-                              <ChevronRight className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                              <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
                               <span>{achievement}</span>
                             </div>
                           ))}
@@ -438,15 +455,15 @@ export default function ResumeViewPage() {
 
           {/* Education */}
           {detailedResume.education.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-6">
-                <GraduationCap className="w-5 h-5 text-purple-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Education</h3>
+                <GraduationCap className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Education</h3>
               </div>
               <div className="space-y-4">
                 {detailedResume.education.map((edu, index) => (
-                  <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <h4 className="font-semibold text-gray-900 mb-2">{edu.degree}</h4>
+                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                    <h4 className="font-semibold text-gray-800 mb-2">{edu.degree}</h4>
                     {edu.school && <div className="text-gray-700 mb-1">{edu.school}</div>}
                     <div className="flex items-center gap-4 text-sm text-gray-600">
                       {edu.location && (
@@ -462,10 +479,10 @@ export default function ResumeViewPage() {
                         </span>
                       )}
                       {edu.gpa && (
-                        <span className="text-purple-700">GPA: {edu.gpa}</span>
+                        <span className="text-gray-700">GPA: {edu.gpa}</span>
                       )}
                       {edu.honors && (
-                        <span className="px-2 py-0.5 bg-gray-600 text-white rounded text-xs">
+                        <span className="px-2 py-0.5 bg-gray-500 text-white rounded text-xs">
                           {edu.honors}
                         </span>
                       )}
@@ -478,10 +495,10 @@ export default function ResumeViewPage() {
 
           {/* Skills */}
           {(detailedResume.skills.technical.length > 0 || detailedResume.skills.soft.length > 0) && (
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Code className="w-5 h-5 text-green-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Skills</h3>
+                <Code className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Skills</h3>
               </div>
 
               {/* Technical Skills */}
@@ -516,17 +533,17 @@ export default function ResumeViewPage() {
 
           {/* Certifications */}
           {detailedResume.certifications.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Award className="w-5 h-5 text-yellow-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Certifications</h3>
+                <Award className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Certifications</h3>
               </div>
               <div className="space-y-4">
                 {detailedResume.certifications.map((cert, index) => (
-                  <div key={index} className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
                     <div className="flex items-start justify-between">
                       <div>
-                        <h4 className="font-semibold text-gray-900 mb-1">{cert.name}</h4>
+                        <h4 className="font-semibold text-gray-800 mb-1">{cert.name}</h4>
                         {cert.issuer && <div className="text-sm text-gray-700 mb-1">{cert.issuer}</div>}
                         <div className="flex items-center gap-4 text-xs text-gray-600">
                           {cert.date && (
@@ -538,7 +555,7 @@ export default function ResumeViewPage() {
                           {cert.credentialId && <span>ID: {cert.credentialId}</span>}
                         </div>
                       </div>
-                      <Award className="w-6 h-6 text-yellow-600" />
+                      <Award className="w-6 h-6 text-gray-500" />
                     </div>
                   </div>
                 ))}
@@ -548,16 +565,16 @@ export default function ResumeViewPage() {
 
           {/* Languages */}
           {detailedResume.languages.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Languages className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Languages</h3>
+                <Languages className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Languages</h3>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 {detailedResume.languages.map((lang, index) => (
-                  <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
-                    <div className="font-medium text-gray-900 mb-1">{lang.name}</div>
-                    <div className="text-sm text-indigo-700">{lang.proficiency}</div>
+                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg text-center">
+                    <div className="font-medium text-gray-800 mb-1">{lang.name}</div>
+                    <div className="text-sm text-gray-600">{lang.proficiency}</div>
                   </div>
                 ))}
               </div>
@@ -566,35 +583,35 @@ export default function ResumeViewPage() {
 
           {/* Version History */}
           {resume.versions && resume.versions.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-6">
-                <History className="w-5 h-5 text-blue-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Version History</h3>
-                <span className="px-2.5 py-0.5 bg-gray-200 text-gray-700 rounded-full text-xs">
+                <History className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Version History</h3>
+                <span className="px-2.5 py-0.5 bg-gray-300 text-gray-700 rounded-full text-xs">
                   {resume.versions.length} version{resume.versions.length !== 1 ? 's' : ''}
                 </span>
               </div>
               <div className="space-y-3">
                 {resume.versions.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()).map((version, index) => (
-                  <div key={version.id} className={`p-4 rounded-lg border-2 transition-all ${
+                  <div key={version.id} className={`p-4 rounded-lg border transition-all ${
                     index === 0
-                      ? 'bg-gray-50 border-gray-300'
-                      : 'bg-gray-50 border-gray-200'
+                      ? 'bg-gray-100 border-gray-400'
+                      : 'bg-gray-100 border-gray-300'
                   }`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3 flex-1">
                         <div className={`p-2 rounded-lg ${
-                          index === 0 ? 'bg-gray-200' : 'bg-gray-100'
+                          index === 0 ? 'bg-gray-300' : 'bg-gray-200'
                         }`}>
                           <FileText className={`w-4 h-4 ${
-                            index === 0 ? 'text-blue-600' : 'text-gray-600'
+                            index === 0 ? 'text-gray-700' : 'text-gray-600'
                           }`} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-medium text-gray-900 truncate">{version.name}</span>
+                            <span className="text-sm font-medium text-gray-800 truncate">{version.name}</span>
                             {index === 0 && (
-                              <span className="px-2 py-0.5 bg-gray-600 text-white rounded text-xs flex-shrink-0">
+                              <span className="px-2 py-0.5 bg-gray-500 text-white rounded text-xs flex-shrink-0">
                                 Latest
                               </span>
                             )}
@@ -621,14 +638,25 @@ export default function ResumeViewPage() {
                         </div>
                       </div>
                       <button
-                        onClick={() => {
-                          const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-                          window.open(`${apiUrl}/resumes/${resumeId}/versions/${version.id}/download`, '_blank');
+                        onClick={async () => {
+                          try {
+                            const blob = await resumeService.downloadVersion(resumeId, version.id);
+                            const url = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = version.fileName || `resume-v${version.version}.pdf`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            window.URL.revokeObjectURL(url);
+                          } catch (err) {
+                            toast.error('Failed to download version');
+                          }
                         }}
                         className={`p-2 rounded-md transition-colors ${
                           index === 0
-                            ? 'text-gray-700 hover:bg-gray-200'
-                            : 'text-gray-600 hover:bg-gray-200'
+                            ? 'text-gray-700 hover:bg-gray-300'
+                            : 'text-gray-600 hover:bg-gray-300'
                         }`}
                         title="Download this version"
                       >
@@ -642,10 +670,10 @@ export default function ResumeViewPage() {
           )}
 
           {/* File Properties */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
             <div className="flex items-center gap-2 mb-6">
-              <File className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">File Properties</h3>
+              <File className="w-5 h-5 text-gray-500" />
+              <h3 className="text-lg font-semibold text-gray-800">File Properties</h3>
             </div>
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-4">
@@ -757,23 +785,23 @@ export default function ResumeViewPage() {
           </div>
 
           {/* Metadata Summary */}
-          <div className="bg-gradient-to-r from-gray-50 to-blue-50 border-2 border-gray-300 rounded-lg p-4">
+          <div className="bg-gray-200 border border-gray-300 rounded-lg p-4">
             <div className="grid grid-cols-4 gap-4 text-sm">
               <div className="text-center">
                 <div className="text-xs text-gray-500 mb-1">Document ID</div>
-                <div className="font-medium text-gray-900">#{resume.id.substring(0, 8).toUpperCase()}</div>
+                <div className="font-medium text-gray-800">#{resume.id.substring(0, 8).toUpperCase()}</div>
               </div>
               <div className="text-center">
                 <div className="text-xs text-gray-500 mb-1">Source</div>
-                <div className="font-medium text-gray-900">{resume.source}</div>
+                <div className="font-medium text-gray-800">{resume.source}</div>
               </div>
               <div className="text-center">
                 <div className="text-xs text-gray-500 mb-1">Folder</div>
-                <div className="font-medium text-gray-900">{resume.folderId || 'Uncategorized'}</div>
+                <div className="font-medium text-gray-800">{resume.folderId || 'Uncategorized'}</div>
               </div>
               <div className="text-center">
                 <div className="text-xs text-gray-500 mb-1">Status</div>
-                <div className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                <div className="inline-flex items-center px-2 py-1 bg-gray-300 text-gray-700 rounded text-xs">
                   Active
                 </div>
               </div>

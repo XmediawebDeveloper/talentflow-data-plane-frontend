@@ -1,4 +1,4 @@
-import { X, Upload, File, Trash2, FolderPlus, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, CreditCard } from 'lucide-react';
+import { X, Upload, File, Trash2, FolderPlus, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, CreditCard, Target, Eye } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
@@ -10,9 +10,12 @@ const MAX_BULK_FILES = 100; // Maximum files per bulk upload (matches backend li
 const ALLOWED_FORMATS = [
   'application/pdf',
   'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/rtf',
+  'text/rtf',
+  'text/plain'
 ];
-const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx'];
+const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.rtf', '.txt'];
 
 interface FileValidationError {
   fileName: string;
@@ -33,6 +36,8 @@ interface UploadModalProps {
   onUpload: (files: File[], folderId?: string) => Promise<{
     success: boolean;
     error?: string;
+    resumeId?: string; // Added to support post-upload scoring
+    candidateName?: string;
     existingResume?: {
       id: string;
       candidateName: string;
@@ -42,12 +47,14 @@ interface UploadModalProps {
   onUploadComplete?: (statuses: any[]) => void;
   onCreateFolder?: (name: string, parentId?: string) => void;
   onViewResume?: (resumeId: string) => void;
+  onScoreResume?: (resumeId: string, candidateName: string) => void; // New callback for scoring
   targetFolder?: string;
 }
 
-export default function UploadModal({ folders, tenant, uploadSection, onClose, onUpload, onUploadComplete, onCreateFolder, onViewResume, targetFolder }: UploadModalProps) {
+export default function UploadModal({ folders, tenant, uploadSection, onClose, onUpload, onUploadComplete, onCreateFolder, onViewResume, onScoreResume, targetFolder }: UploadModalProps) {
   const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadSuccess, setUploadSuccess] = useState<{ resumeId: string; candidateName: string } | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string>(targetFolder || '');
   const [isDragging, setIsDragging] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
@@ -284,7 +291,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
       if (!ALLOWED_FORMATS.includes(file.type) && !ALLOWED_EXTENSIONS.includes(fileExtension)) {
         errors.push({
           fileName: file.name,
-          error: 'Unsupported file format. Only PDF, DOC, and DOCX files are allowed.',
+          error: 'Unsupported file format. Only PDF, DOC, DOCX, RTF, and TXT files are allowed.',
           type: 'format'
         });
         return;
@@ -390,7 +397,17 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
         return;
       }
 
-      // Success - close modal
+      // Success - show success state with scoring option for single uploads
+      if (activeTab === 'single' && result.resumeId && onScoreResume) {
+        setUploadSuccess({
+          resumeId: result.resumeId,
+          candidateName: result.candidateName || selectedFiles[0]?.name || 'Resume'
+        });
+        setIsUploading(false);
+        return;
+      }
+
+      // For bulk uploads or when scoring is not available, close modal
       onClose();
     } catch (error) {
       setValidationErrors([{
@@ -423,6 +440,52 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
         </div>
 
         <div className="p-6">
+          {/* Success State with Scoring Option */}
+          {uploadSuccess ? (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Resume Uploaded Successfully!</h3>
+              <p className="text-gray-600 mb-6">
+                {uploadSuccess.candidateName} has been added to your resume database.
+              </p>
+
+              <div className="space-y-3 max-w-sm mx-auto">
+                <button
+                  onClick={() => {
+                    onScoreResume?.(uploadSuccess.resumeId, uploadSuccess.candidateName);
+                    onClose();
+                  }}
+                  className="w-full px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Target className="w-5 h-5" />
+                  Score Against a Job
+                </button>
+
+                {onViewResume && (
+                  <button
+                    onClick={() => {
+                      onViewResume(uploadSuccess.resumeId);
+                      onClose();
+                    }}
+                    className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Eye className="w-5 h-5" />
+                    View Resume Details
+                  </button>
+                )}
+
+                <button
+                  onClick={onClose}
+                  className="w-full px-6 py-3 text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
           {/* RU Quota Indicator */}
           <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-start gap-3">
@@ -754,8 +817,12 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               </div>
             )}
           </div>
+          </>
+          )}
         </div>
 
+        {/* Hide footer when showing success state */}
+        {!uploadSuccess && (
         <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
           <button
             onClick={onClose}
@@ -794,6 +861,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
             }
           </button>
         </div>
+        )}
       </div>
     </div>
   );

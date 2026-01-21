@@ -2,9 +2,23 @@
 
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Sidebar from '@/components/shared/Sidebar';
 import Header from '@/components/Header';
+import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
+import { toast } from 'sonner';
+import { scoringService } from '@/lib/services/scoringService';
+
+// Storage key for scoring batch persistence
+const SCORING_BATCH_STORAGE_KEY = 'talentflow_scoring_batch';
+
+interface StoredScoringBatch {
+  jobId: string;
+  jobTitle: string;
+  startTime: number;
+  resumeIds: string[];
+  status: 'in_progress' | 'completed';
+}
 
 export default function DashboardLayout({
   children,
@@ -21,6 +35,55 @@ export default function DashboardLayout({
       console.log('[DASHBOARD] Not authenticated, redirecting to login');
       router.push('/login');
     }
+  }, [isAuthenticated, isLoading, router]);
+
+  // Check for pending scoring batches on login and show notification
+  useEffect(() => {
+    if (!isAuthenticated || isLoading) return;
+
+    const checkPendingScoringBatch = async () => {
+      try {
+        const storedBatch = localStorage.getItem(SCORING_BATCH_STORAGE_KEY);
+        if (!storedBatch) return;
+
+        const batch: StoredScoringBatch = JSON.parse(storedBatch);
+        console.log('[DASHBOARD] Found pending scoring batch:', batch);
+
+        // Check if this batch was interrupted (started before current session)
+        const batchAge = Date.now() - batch.startTime;
+        const maxBatchAge = 24 * 60 * 60 * 1000; // 24 hours
+
+        if (batchAge > maxBatchAge) {
+          // Batch is too old, clear it
+          console.log('[DASHBOARD] Scoring batch too old, clearing...');
+          localStorage.removeItem(SCORING_BATCH_STORAGE_KEY);
+          return;
+        }
+
+        if (batch.status === 'in_progress') {
+          // Show notification about pending scoring
+          toast.success(
+            `Resume scoring for "${batch.jobTitle}" is ready to continue.`,
+            {
+              duration: 8000,
+              action: {
+                label: 'Continue',
+                onClick: () => router.push(`/recruitment/resume-scoring?jd_id=${batch.jobId}`),
+              },
+            }
+          );
+
+          // Clear the batch from localStorage
+          localStorage.removeItem(SCORING_BATCH_STORAGE_KEY);
+        }
+      } catch (e) {
+        console.error('[DASHBOARD] Error checking scoring batch:', e);
+      }
+    };
+
+    // Delay the check slightly to avoid toast during initial render
+    const timer = setTimeout(checkPendingScoringBatch, 1500);
+    return () => clearTimeout(timer);
   }, [isAuthenticated, isLoading, router]);
 
   if (isLoading) {
@@ -58,6 +121,9 @@ export default function DashboardLayout({
           {children}
         </div>
       </div>
+
+      {/* Global subscription inactive modal - shown on all dashboard pages */}
+      <SubscriptionInactiveModal />
     </div>
   );
 }

@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive } from 'lucide-react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import ResumeTable from '@/components/ResumeTable';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
@@ -90,6 +92,7 @@ export default function MyResumesPage() {
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
   const [publishedJobs, setPublishedJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
+  const [uploadedResumeToScore, setUploadedResumeToScore] = useState<{ id: string; candidateName: string } | null>(null);
 
   // ZIP download confirmation modal state
   const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
@@ -387,6 +390,16 @@ export default function MyResumesPage() {
     setIsApplyToJobModalOpen(true);
   };
 
+  // Handle scoring an uploaded resume - called from UploadModal success state
+  const handleScoreUploadedResume = async (resumeId: string, candidateName: string) => {
+    // Store the uploaded resume info for scoring
+    setUploadedResumeToScore({ id: resumeId, candidateName });
+
+    // Fetch published jobs and open modal
+    await fetchPublishedJobs();
+    setIsApplyToJobModalOpen(true);
+  };
+
   // Handle applying resumes to selected jobs (scoring) - using async Celery
   const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
@@ -566,7 +579,11 @@ export default function MyResumesPage() {
         const converted = convertApiResume(r);
         setResumes(prev => [converted, ...prev]);
         toast.success('Resume uploaded successfully');
-        return { success: true };
+        return {
+          success: true,
+          resumeId: r.id,
+          candidateName: r.candidate_name || files[0].name
+        };
       } catch (error: any) {
         // Check for duplicate error (409 Conflict)
         if (error?.response?.status === 409) {
@@ -915,6 +932,7 @@ export default function MyResumesPage() {
   }
 
   return (
+    <DndProvider backend={HTML5Backend}>
     <main className="flex-1 p-8 bg-gray-50">
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -1046,6 +1064,8 @@ export default function MyResumesPage() {
                 setSelectedFolder(folderId);
                 setIsUploadModalOpen(true);
               }}
+              onMoveToFolder={handleMoveToFolder}
+              selectedResumes={selectedResumes}
               resumes={resumes}
               width={folderTreeWidth}
               onWidthChange={setFolderTreeWidth}
@@ -1358,6 +1378,7 @@ export default function MyResumesPage() {
             setIsUploadModalOpen(false);
             router.push(`/recruitment/resume-detail/${resumeId}`);
           }}
+          onScoreResume={handleScoreUploadedResume}
         />
       )}
 
@@ -1384,9 +1405,16 @@ export default function MyResumesPage() {
       {/* Apply to Job Modal */}
       {isApplyToJobModalOpen && (
         <ApplyToJobModal
-          resumes={resumes.filter(r => selectedResumes.includes(r.id))}
+          resumes={
+            uploadedResumeToScore
+              ? resumes.filter(r => r.id === uploadedResumeToScore.id)
+              : resumes.filter(r => selectedResumes.includes(r.id))
+          }
           jobs={publishedJobs}
-          onClose={() => setIsApplyToJobModalOpen(false)}
+          onClose={() => {
+            setIsApplyToJobModalOpen(false);
+            setUploadedResumeToScore(null); // Clear the uploaded resume state
+          }}
           onApply={handleApplyToJobSubmit}
         />
       )}
@@ -1865,5 +1893,6 @@ export default function MyResumesPage() {
         />
       )}
     </main>
+    </DndProvider>
   );
 }

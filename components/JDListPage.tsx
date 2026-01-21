@@ -6,6 +6,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 
+// Utility function to format employment type for display
+// Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
+const formatEmploymentType = (type: string | undefined): string => {
+  if (!type) return '';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
 // JD03: Status tabs for filtering
 const STATUS_TABS = [
   { id: 'all', label: 'All JDs' },
@@ -59,9 +69,50 @@ export default function JDListPage() {
         if (!response.can_create_jd && response.blocking_error) {
           setAccessError(response.blocking_error);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Access check failed:', error);
-        // Don't block on access check failure - allow viewing JDs
+        // Parse error response for suspension/expiry messages
+        const errorResponse = error?.response?.data;
+        if (errorResponse) {
+          // Handle tenant suspended/expired errors from backend
+          if (errorResponse.error === 'TENANT_SUSPENDED') {
+            setAccessError(errorResponse.message || 'Your organization\'s account has been suspended.');
+            setAccessCheck({
+              can_access: false,
+              can_create_jd: false,
+              all_checks_passed: false,
+              blocking_error: 'Subscription Inactive',
+              blocking_error_code: 'SUBSCRIPTION_INACTIVE',
+              failed_checks: ['Subscription Inactive'],
+            } as any);
+          } else if (errorResponse.error === 'TENANT_EXPIRED') {
+            setAccessError(errorResponse.message || 'Your organization\'s subscription plan has expired.');
+            setAccessCheck({
+              can_access: false,
+              can_create_jd: false,
+              all_checks_passed: false,
+              blocking_error: 'Subscription Expired',
+              blocking_error_code: 'SUBSCRIPTION_EXPIRED',
+              failed_checks: ['Subscription Expired'],
+            } as any);
+          } else if (errorResponse.error === 'TENANT_INACTIVE') {
+            setAccessError(errorResponse.message || 'Your organization\'s account is inactive.');
+            setAccessCheck({
+              can_access: false,
+              can_create_jd: false,
+              all_checks_passed: false,
+              blocking_error: 'Account Inactive',
+              blocking_error_code: 'TENANT_INACTIVE',
+              failed_checks: ['Account Inactive'],
+            } as any);
+          } else if (errorResponse.detail) {
+            // Handle other structured errors
+            const detail = typeof errorResponse.detail === 'string'
+              ? errorResponse.detail
+              : errorResponse.detail.message || JSON.stringify(errorResponse.detail);
+            setAccessError(detail);
+          }
+        }
       } finally {
         setAccessCheckLoading(false);
       }
@@ -84,9 +135,19 @@ export default function JDListPage() {
       setJds(response.items);
       setTotalPages(response.total_pages);
       setTotal(response.total);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch JDs:', error);
-      toast.error('Failed to load job descriptions');
+      // Handle tenant suspended/expired errors
+      const errorResponse = error?.response?.data;
+      if (errorResponse?.error === 'TENANT_SUSPENDED') {
+        setAccessError(errorResponse.message || 'Your organization\'s account has been suspended.');
+      } else if (errorResponse?.error === 'TENANT_EXPIRED') {
+        setAccessError(errorResponse.message || 'Your organization\'s subscription plan has expired.');
+      } else if (errorResponse?.error === 'TENANT_INACTIVE') {
+        setAccessError(errorResponse.message || 'Your organization\'s account is inactive.');
+      } else {
+        toast.error('Failed to load job descriptions');
+      }
     } finally {
       setLoading(false);
     }
@@ -465,13 +526,13 @@ export default function JDListPage() {
                         {jd.employment_type && (
                           <span className="flex items-center gap-1">
                             <Briefcase className="w-4 h-4" />
-                            <span className="capitalize">{jd.employment_type.replace('_', ' ')}</span>
+                            <span>{formatEmploymentType(jd.employment_type)}</span>
                           </span>
                         )}
                         {jd.remote_type && (
                           <span className="flex items-center gap-1">
                             <Monitor className="w-4 h-4" />
-                            <span className="capitalize">{jd.remote_type.replace('_', ' ')}</span>
+                            <span>{formatEmploymentType(jd.remote_type)}</span>
                           </span>
                         )}
                         <span className="flex items-center gap-1">

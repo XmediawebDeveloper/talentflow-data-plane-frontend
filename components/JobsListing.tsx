@@ -5,6 +5,16 @@ import { useState, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 
+// Utility function to format employment type for display
+// Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
+const formatEmploymentType = (type: string | undefined): string => {
+  if (!type) return '-';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
 interface JobsListingProps {
   jobs: Job[];
   onCreateNew: () => void;
@@ -79,7 +89,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
       job.industry_type?.toLowerCase().includes(searchLower) ||
       job.department?.toLowerCase().includes(searchLower) ||
       job.employmentType?.toLowerCase().includes(searchLower) ||
-      job.experience?.toLowerCase().includes(searchLower)
+      formatEmploymentType(job.employmentType).toLowerCase().includes(searchLower) ||  // Also search formatted version (e.g., "Full Time")
+      job.experience?.toLowerCase().includes(searchLower) ||
+      job.postedBy?.toLowerCase().includes(searchLower) ||  // Created by
+      (job as any).workMode?.toLowerCase().includes(searchLower) ||  // Work mode (onsite, hybrid, remote)
+      formatEmploymentType((job as any).workMode).toLowerCase().includes(searchLower)  // Also search formatted work mode
     );
 
     const matchesStatus = statusFilter === 'all' || job.status.toLowerCase() === statusFilter.toLowerCase();
@@ -159,7 +173,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
         comparison = a.status.localeCompare(b.status);
         break;
       case 'department':
-        comparison = (a.department || '').localeCompare(b.department || '');
+        // Case-insensitive department sort, push empty departments to the end
+        const deptA = (a.department || '').trim().toLowerCase();
+        const deptB = (b.department || '').trim().toLowerCase();
+        // If one is empty and the other isn't, put empty ones last
+        if (!deptA && deptB) comparison = 1;
+        else if (deptA && !deptB) comparison = -1;
+        else comparison = deptA.localeCompare(deptB);
         break;
       default:
         comparison = 0;
@@ -259,6 +279,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeDropdown]);
 
+  // Get display status - show "Republished" if published and version > 1
+  const getDisplayStatus = (status: string, currentVersion?: number) => {
+    if (status === 'Published' && currentVersion && currentVersion > 1) {
+      return 'Republished';
+    }
+    return status;
+  };
+
   const getStatusConfig = (status: string) => {
     switch (status) {
       case 'Published':
@@ -267,6 +295,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
           text: 'text-green-700',
           border: 'border-green-200',
           dot: 'bg-green-500'
+        };
+      case 'Republished':
+        return {
+          bg: 'bg-blue-50',
+          text: 'text-blue-700',
+          border: 'border-blue-200',
+          dot: 'bg-blue-500'
         };
       case 'Draft':
         return {
@@ -505,7 +540,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by title, JD ID, location, industry, experience, employment type..."
+                  placeholder="Search by title, JD ID, location, industry, experience, employment type, created by, work mode..."
                   className="w-full pl-12 pr-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                 />
               </div>
@@ -672,7 +707,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                       >
                         <option value="all">All Types</option>
                         {uniqueEmploymentTypes.map(type => (
-                          <option key={type} value={type}>{type}</option>
+                          <option key={type} value={type}>{formatEmploymentType(type)}</option>
                         ))}
                       </select>
                     </div>
@@ -830,8 +865,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 <span className="text-base text-gray-600">Sort by:</span>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                  onChange={(e) => {
+                    const value = e.target.value as 'date' | 'applicants' | 'title' | 'status' | 'department';
+                    setSortBy(value);
+                  }}
+                  className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base cursor-pointer"
                 >
                   <option value="date">Date Posted</option>
                   <option value="applicants">Applicants</option>
@@ -840,11 +878,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   <option value="department">Department</option>
                 </select>
                 <button
-                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  className="p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                  type="button"
+                  onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                  className="p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                  title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                 >
-                  <ArrowUpDown className={`w-5 h-5 ${sortOrder === 'desc' ? 'rotate-180' : ''} transition-transform`} />
+                  <ArrowUpDown className={`w-5 h-5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
                 </button>
               </div>
             </div>
@@ -857,7 +896,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
             // Grid View
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {currentJobs.map(job => {
-                const statusConfig = getStatusConfig(job.status);
+                const displayStatus = getDisplayStatus(job.status, job.currentVersion);
+                const statusConfig = getStatusConfig(displayStatus);
                 const creationMethodConfig = getCreationMethodConfig(job.creation_method);
 
                 return (
@@ -875,7 +915,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         <div className="flex items-center gap-2">
                           <span className={`px-3 py-1.5 rounded-full text-sm ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-2`}>
                             <div className={`w-2 h-2 rounded-full ${statusConfig.dot}`}></div>
-                            {job.status}
+                            {displayStatus}
                           </span>
                           <span className={`px-3 py-1.5 rounded-full text-sm ${creationMethodConfig.bg} ${creationMethodConfig.text} border ${creationMethodConfig.border} flex items-center gap-2`}>
                             <div className={`w-2 h-2 rounded-full ${creationMethodConfig.dot}`}></div>
@@ -908,7 +948,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         </div>
                         <div className="flex items-center gap-3 text-base text-gray-600">
                           <Briefcase className="w-5 h-5 text-gray-400" />
-                          <span>{job.employmentType || '-'}</span>
+                          <span>{formatEmploymentType(job.employmentType)}</span>
                         </div>
                         {(job as any).workMode && (
                           <div className="flex items-center gap-3 text-base text-gray-600">
@@ -1072,7 +1112,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
             // List View
             <div className="space-y-4">
               {currentJobs.map(job => {
-                const statusConfig = getStatusConfig(job.status);
+                const displayStatus = getDisplayStatus(job.status, job.currentVersion);
+                const statusConfig = getStatusConfig(displayStatus);
                 const creationMethodConfig = getCreationMethodConfig(job.creation_method);
 
                 return (
@@ -1100,7 +1141,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           </h3>
                           <span className={`px-3 py-1.5 rounded-full text-sm ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-2 flex-shrink-0`}>
                             <div className={`w-2 h-2 rounded-full ${statusConfig.dot}`}></div>
-                            {job.status}
+                            {displayStatus}
                           </span>
                           <span className={`px-3 py-1.5 rounded-full text-sm ${creationMethodConfig.bg} ${creationMethodConfig.text} border ${creationMethodConfig.border} flex items-center gap-2 flex-shrink-0`}>
                             <div className={`w-2 h-2 rounded-full ${creationMethodConfig.dot}`}></div>
@@ -1120,7 +1161,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           </span>
                           <span className="flex items-center gap-2">
                             <Briefcase className="w-5 h-5 text-gray-400" />
-                            {job.employmentType || '-'}
+                            {formatEmploymentType(job.employmentType)}
                           </span>
                           {(job as any).workMode && (
                             <span className="flex items-center gap-2">

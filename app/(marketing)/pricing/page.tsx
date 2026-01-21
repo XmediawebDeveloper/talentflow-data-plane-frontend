@@ -9,6 +9,28 @@ import { encodePlanId } from "@/lib/utils/planEncoder";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
+// Module-level cache to prevent duplicate API calls across component remounts
+let cachedData: {
+  plans: any[] | null;
+  addons: any[] | null;
+  freeTrial: any | null;
+  planSettings: any | null;
+  fetchedAt: number | null;
+} = {
+  plans: null,
+  addons: null,
+  freeTrial: null,
+  planSettings: null,
+  fetchedAt: null,
+};
+
+// Cache TTL: 5 minutes
+const CACHE_TTL = 5 * 60 * 1000;
+
+const isCacheValid = () => {
+  return cachedData.fetchedAt && (Date.now() - cachedData.fetchedAt) < CACHE_TTL;
+};
+
 interface PlanFeature {
   id: string;
   feature_key: string;
@@ -189,6 +211,18 @@ export default function PricingPage() {
     if (hasFetchedRef.current) return;
     hasFetchedRef.current = true;
 
+    // Check if we have valid cached data - use it immediately
+    if (isCacheValid() && cachedData.plans) {
+      console.log('[Pricing] Using cached data');
+      if (cachedData.planSettings) setPlanSettings(cachedData.planSettings);
+      if (cachedData.plans) setPlans(cachedData.plans);
+      if (cachedData.addons) setAddons(cachedData.addons);
+      if (cachedData.freeTrial) setFreeTrial(cachedData.freeTrial);
+      setIsLoading(false);
+      setAddonsLoading(false);
+      return;
+    }
+
     let isCancelled = false;
     const abortController = new AbortController();
 
@@ -203,10 +237,11 @@ export default function PricingPage() {
           const settingsData = result?.data || result;
           if (settingsData) {
             setPlanSettings(settingsData);
+            cachedData.planSettings = settingsData;
             return settingsData.yearlyDiscountPercentage ?? 10;
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         if (!isCancelled && err.name !== 'AbortError') {
           console.error('Error fetching plan settings:', err);
         }
@@ -304,7 +339,8 @@ export default function PricingPage() {
           });
 
         setPlans(transformedPlans);
-      } catch (err) {
+        cachedData.plans = transformedPlans;
+      } catch (err: any) {
         if (!isCancelled && err.name !== 'AbortError') {
           console.error('Error fetching plans:', err);
           setError(err instanceof Error ? err.message : 'Failed to load plans');
@@ -337,7 +373,8 @@ export default function PricingPage() {
           : [];
 
         setAddons(sortedAddons);
-      } catch (err) {
+        cachedData.addons = sortedAddons;
+      } catch (err: any) {
         if (!isCancelled && err.name !== 'AbortError') {
           console.error('Error fetching addons:', err);
           setAddonsError(err instanceof Error ? err.message : 'Failed to load addons');
@@ -359,9 +396,10 @@ export default function PricingPage() {
 
           if (trialData && trialData.trial_days) {
             setFreeTrial(trialData);
+            cachedData.freeTrial = trialData;
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         if (!isCancelled && err.name !== 'AbortError') {
           console.error('Error fetching free trial settings:', err);
         }
@@ -370,10 +408,13 @@ export default function PricingPage() {
 
     // Fetch all data
     const loadData = async () => {
+      console.log('[Pricing] Fetching fresh data...');
       const discountPercent = await fetchPlanSettings();
       if (!isCancelled) {
-        fetchPlans(discountPercent);
+        await fetchPlans(discountPercent);
       }
+      // Mark cache as valid after plans are loaded
+      cachedData.fetchedAt = Date.now();
     };
 
     loadData();
@@ -560,17 +601,24 @@ export default function PricingPage() {
                     <div className="text-4xl font-bold text-gray-900 dark:text-white">
                       Free
                     </div>
-                  ) : (isYearly ? plan.yearlyPrice : plan.monthlyPrice) ? (
+                  ) : (plan.monthlyPrice || plan.yearlyPrice) ? (
                     <>
                       <div className="flex items-baseline gap-1">
                         <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                          {formatCurrency(isYearly ? plan.yearlyPrice : plan.monthlyPrice, plan.currency)}
+                          {/* Show yearly price if available and yearly selected, otherwise show monthly */}
+                          {formatCurrency(
+                            isYearly
+                              ? (plan.yearlyPrice ?? plan.monthlyPrice)
+                              : plan.monthlyPrice,
+                            plan.currency
+                          )}
                         </span>
                         <span className="text-gray-500 dark:text-gray-400 text-sm">
-                          {isYearly ? '/year' : '/month'}
+                          {/* Show correct billing period based on what's available */}
+                          {isYearly && plan.yearlyPrice ? '/year' : '/month'}
                         </span>
                       </div>
-                      {/* Show strikethrough price and discount badge when viewing yearly */}
+                      {/* Show strikethrough price and discount badge when viewing yearly and yearly price exists */}
                       {isYearly && plan.monthlyPrice && plan.yearlyPrice && (plan.monthlyPrice * 12) > plan.yearlyPrice && (
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-sm text-gray-400 dark:text-gray-500 line-through">
@@ -583,6 +631,12 @@ export default function PricingPage() {
                           )}
                         </div>
                       )}
+                      {/* Show note when yearly is selected but only monthly is available */}
+                      {isYearly && !plan.yearlyPrice && plan.monthlyPrice && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Billed monthly (yearly not available)
+                        </p>
+                      )}
                       {/* Show yearly option hint when viewing monthly */}
                       {!isYearly && plan.yearlyPrice && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -592,8 +646,8 @@ export default function PricingPage() {
                           )}
                         </p>
                       )}
-                      {/* Show monthly equivalent hint when viewing yearly */}
-                      {isYearly && plan.monthlyPrice && (
+                      {/* Show monthly equivalent hint when viewing yearly and yearly price exists */}
+                      {isYearly && plan.monthlyPrice && plan.yearlyPrice && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                           {formatCurrency(plan.monthlyPrice, plan.currency)}/month if billed monthly
                         </p>
@@ -601,7 +655,7 @@ export default function PricingPage() {
                     </>
                   ) : (
                     <div className="text-4xl font-bold text-gray-900 dark:text-white">
-                      Custom
+                      Contact Sales
                     </div>
                   )}
                 </div>
@@ -704,7 +758,11 @@ export default function PricingPage() {
 
                 {/* Button - Fixed at bottom */}
                 <Link
-                  href={isTrialPlan ? "/signup" : (plan.basePrice ? "/signup?plan=" + encodePlanId(plan.id) : "/contact")}
+                  href={isTrialPlan
+                    ? "/signup"
+                    : (plan.basePrice
+                        ? `/signup?plan=${encodePlanId(String(isYearly && plan.annualPlanId ? plan.annualPlanId : plan.monthlyPlanId || plan.id))}&billing=${isYearly ? 'ANNUAL' : 'MONTHLY'}`
+                        : "/contact")}
                   className={`block w-full h-12 rounded-lg font-medium text-center leading-[48px] transition-all ${
                     plan.popular || isTrialPlan
                       ? "bg-gray-800 text-white hover:bg-gray-700"

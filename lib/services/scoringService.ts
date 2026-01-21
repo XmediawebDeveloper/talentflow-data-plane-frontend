@@ -136,6 +136,37 @@ export interface BatchScoringStatus {
 
 export const scoringService = {
   /**
+   * Check if resumes have already been scored against a JD
+   * Used to show alert before re-scoring
+   */
+  async checkExistingScores(jdId: string, resumeIds: string[]): Promise<{
+    jd_id: string;
+    jd_title: string;
+    total_checked: number;
+    existing_count: number;
+    existing_scores: Array<{
+      resume_id: string;
+      score_id: string;
+      candidate_name: string;
+      candidate_email: string;
+      overall_score: number;
+      match_status: string;
+      scored_at: string | null;
+    }>;
+    new_count: number;
+  }> {
+    try {
+      const response = await api.post('/scoring/check-existing', {
+        jd_id: jdId,
+        resume_ids: resumeIds,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Score single resume
    * Consumes 1 Resume Scoring Unit
    */
@@ -196,6 +227,30 @@ export const scoringService = {
     try {
       const response = await api.get<ScoredResumeListResponse>(`/scoring/jd/${jdId}`, { params });
       return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Get all scored resumes across all JDs (Global Search)
+   */
+  async getAllScoredResumes(
+    params?: {
+      match_status?: string;
+      score_min?: number;
+      score_max?: number;
+      search?: string;
+      jd_search?: string;
+      date_from?: string;
+      date_to?: string;
+      page?: number;
+      page_size?: number;
+    }
+  ): Promise<ScoredResumeListResponse & { items: Array<ScoringResponse & { jd_title: string }> }> {
+    try {
+      const response = await api.get<ScoredResumeListResponse>('/scoring/all', { params });
+      return response.data as ScoredResumeListResponse & { items: Array<ScoringResponse & { jd_title: string }> };
     } catch (error) {
       throw new Error(handleApiError(error));
     }

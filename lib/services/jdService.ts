@@ -41,6 +41,7 @@ export interface JDCreate {
   allow_overqualified?: boolean;
   creation_stage?: 'create' | 'extract' | 'review';  // Where user left off in draft
   creation_method?: 'manual' | 'ai_generated';  // How the JD was created
+  ai_prompt?: string;  // Original AI prompt used to generate JD
   locations?: JDLocation[];
 }
 
@@ -114,7 +115,10 @@ export interface JDVersion {
   tenant_id: string;
   version_number: number;
   published_by: string;
+  published_by_name?: string;
+  published_by_role?: string;
   published_at: string;
+  published_at_ist?: string;
   title: string;
   description: string;
   department?: string;
@@ -285,9 +289,10 @@ export interface AuthorizationValidation extends ValidationStatus {
 }
 
 export interface UnitsValidation extends ValidationStatus {
-  RS: UnitAvailability;
-  AS: UnitAvailability;
-  AIU: UnitAvailability;
+  RU: UnitAvailability;  // Resume Upload - MANDATORY for JD creation
+  RS: UnitAvailability;  // Resume Scoring - MANDATORY for JD creation
+  AS: UnitAvailability;  // Assessment - MANDATORY for JD creation
+  AIU: UnitAvailability; // AI Interview - Optional
 }
 
 export interface JobQuotaValidation extends ValidationStatus {
@@ -395,8 +400,9 @@ export const jdService = {
     callbacks: {
       onChunk: (content: string) => void;
       onTitle?: (title: string) => void;
+      onTextComplete?: () => void;  // Called when text streaming is done, before param extraction
       onComplete: (data: JDGenerateResponse) => void;
-      onError: (message: string) => void;
+      onError: (message: string, errorCode?: string) => void;
     }
   ): Promise<void> {
     try {
@@ -417,6 +423,7 @@ export const jdService = {
         },
         onChunk: callbacks.onChunk,
         onTitle: callbacks.onTitle,
+        onTextComplete: callbacks.onTextComplete,
         onComplete: (data) => {
           callbacks.onComplete({
             title: data.title,

@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import {
@@ -63,6 +63,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
+  // AS-25: PDF download state
+  const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
+
+  // AS-26: Bulk PDF download state
+  const [downloadingBulkPDF, setDownloadingBulkPDF] = useState(false);
+
   // NEW: Detailed result state
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
@@ -75,6 +81,67 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
   const [statusFilter, setStatusFilter] = useState<'all' | 'Passed' | 'Failed' | 'Under Review' | 'In Progress'>('all');
+
+  // AS-24: Column customization
+  const COLUMN_PREFERENCES_KEY = 'assessment_results_columns_v2';
+  const [showColumnSelector, setShowColumnSelector] = useState(false);
+
+  interface ColumnConfig {
+    id: string;
+    label: string;
+    enabled: boolean;
+  }
+
+  const defaultColumns: ColumnConfig[] = [
+    { id: 'candidate', label: 'Candidate', enabled: true },
+    { id: 'email', label: 'Email', enabled: true },
+    { id: 'jdTitle', label: 'JD Title', enabled: true },
+    { id: 'phone', label: 'Phone', enabled: true },
+    { id: 'inviteSource', label: 'Invite Source', enabled: true },
+    { id: 'score', label: 'Score %', enabled: true },
+    { id: 'status', label: 'Status', enabled: true },
+    { id: 'completed', label: 'Completed', enabled: true },
+    { id: 'duration', label: 'Duration', enabled: true },
+  ];
+
+  const [columns, setColumns] = useState<ColumnConfig[]>(() => {
+    if (typeof window === 'undefined') return defaultColumns;
+    try {
+      const saved = localStorage.getItem(COLUMN_PREFERENCES_KEY);
+      if (saved) {
+        const savedColumns = JSON.parse(saved) as ColumnConfig[];
+        return defaultColumns.map(defaultCol => {
+          const savedCol = savedColumns.find(sc => sc.id === defaultCol.id);
+          return savedCol ? { ...defaultCol, enabled: savedCol.enabled } : defaultCol;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load column preferences:', error);
+    }
+    return defaultColumns;
+  });
+
+  // AS-24: Save column preferences to localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(COLUMN_PREFERENCES_KEY, JSON.stringify(columns));
+    } catch (error) {
+      console.error('Failed to save column preferences:', error);
+    }
+  }, [columns]);
+
+  const handleToggleColumn = (columnId: string) => {
+    setColumns(columns.map(col =>
+      col.id === columnId ? { ...col, enabled: !col.enabled } : col
+    ));
+  };
+
+  const isColumnEnabled = (columnId: string) => {
+    return columns.find(c => c.id === columnId)?.enabled ?? true;
+  };
+
+  const enabledColumnsCount = columns.filter(c => c.enabled).length;
 
   // Fetch results from API
   useEffect(() => {
@@ -244,6 +311,57 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
   };
 
+  // AS-25: Handle PDF download for individual result
+  const handleDownloadPDF = async (resultId: string) => {
+    if (downloadingPDF) return;
+
+    setDownloadingPDF(resultId);
+    try {
+      const blob = await assessmentService.exportPDF(resultId);
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Assessment_Report_${resultId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download PDF:', error);
+      alert('Failed to download PDF report. Please try again.');
+    } finally {
+      setDownloadingPDF(null);
+    }
+  };
+
+  // AS-26: Handle bulk PDF download as ZIP
+  const handleDownloadBulkPDFs = async () => {
+    if (downloadingBulkPDF || selectedRows.length === 0) return;
+
+    setDownloadingBulkPDF(true);
+    try {
+      const blob = await assessmentService.exportBulkPDFs(selectedRows);
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      link.download = `${assessmentTitle.replace(/\s+/g, '_')}_Reports_${timestamp}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download bulk PDFs:', error);
+      alert('Failed to download PDF reports. Please try again.');
+    } finally {
+      setDownloadingBulkPDF(false);
+    }
+  };
+
   const getScoreColor = (percentage: number) => {
     if (percentage >= 80) return 'text-green-600';
     if (percentage >= 60) return 'text-gray-800';
@@ -355,30 +473,52 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <h1 className="text-gray-900 mb-2">{assessmentTitle}</h1>
                 <p className="text-sm text-gray-600">
                   Assessment Results - {displayResults.length} candidates completed
+                  {selectedRows.length > 0 && (
+                    <span className="ml-2 text-gray-800 font-medium">
+                      • {selectedRows.length} selected
+                    </span>
+                  )}
                 </p>
               </div>
-              <button
-                onClick={async () => {
-                  try {
-                    const blob = await assessmentService.exportResults(assessmentId, 'csv');
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${assessmentTitle.replace(/\s+/g, '_')}_results.csv`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                  } catch (error) {
-                    console.error('Failed to export results:', error);
-                    alert('Failed to export results. Please try again.');
-                  }
-                }}
-                className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
-              >
-                <FileText className="w-5 h-5" />
-                Export Results
-              </button>
+              <div className="flex items-center gap-3">
+                {/* AS-26: Bulk PDF Download Button */}
+                {selectedRows.length > 0 && (
+                  <button
+                    onClick={handleDownloadBulkPDFs}
+                    disabled={downloadingBulkPDF}
+                    className="px-6 py-2.5 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {downloadingBulkPDF ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Download className="w-5 h-5" />
+                    )}
+                    {downloadingBulkPDF ? 'Downloading...' : `Download PDFs (${selectedRows.length})`}
+                  </button>
+                )}
+                <button
+                  onClick={async () => {
+                    try {
+                      const blob = await assessmentService.exportResults(assessmentId, 'csv');
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${assessmentTitle.replace(/\s+/g, '_')}_results.csv`;
+                      document.body.appendChild(a);
+                      a.click();
+                      window.URL.revokeObjectURL(url);
+                      document.body.removeChild(a);
+                    } catch (error) {
+                      console.error('Failed to export results:', error);
+                      alert('Failed to export results. Please try again.');
+                    }
+                  }}
+                  className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
+                >
+                  <FileText className="w-5 h-5" />
+                  Export Results
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -542,11 +682,47 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 Advanced Filters
               </button>
 
-              {/* Customize Columns Button */}
-              <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm text-gray-700">
-                <Columns3 className="w-4 h-4" />
-                Customize Columns
-              </button>
+              {/* AS-24: Customize Columns Button */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowColumnSelector(!showColumnSelector)}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm text-gray-700"
+                >
+                  <Columns3 className="w-4 h-4" />
+                  Columns ({enabledColumnsCount})
+                </button>
+
+                {showColumnSelector && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setShowColumnSelector(false)}
+                    ></div>
+                    <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 max-h-96 overflow-y-auto">
+                      <div className="px-4 py-2 border-b border-gray-200">
+                        <div className="text-sm font-medium text-gray-900">Select Columns</div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {enabledColumnsCount} of {columns.length} selected
+                        </div>
+                      </div>
+                      {columns.map((column) => (
+                        <label
+                          key={column.id}
+                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={column.enabled}
+                            onChange={() => handleToggleColumn(column.id)}
+                            className="w-4 h-4 text-gray-800 rounded border-gray-300 focus:ring-gray-500"
+                          />
+                          <span className="text-sm text-gray-700">{column.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -570,63 +746,87 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
                       />
                     </th>
-                    <th
-                      className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
-                      onClick={() => handleSort('name')}
-                    >
-                      <div className="flex items-center gap-1">
-                        Candidate
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'name' ? 'text-gray-800' : 'text-gray-400'}`} />
-                      </div>
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">
-                      <div className="flex items-center gap-1">
-                        <Mail className="w-3 h-3" />
-                        Email
-                      </div>
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">
-                      <div className="flex items-center gap-1">
-                        <Phone className="w-3 h-3" />
-                        Phone
-                      </div>
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">Invite Source</th>
-                    <th
-                      className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
-                      onClick={() => handleSort('score')}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        Score %
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-gray-800' : 'text-gray-400'}`} />
-                      </div>
-                    </th>
-                    <th
-                      className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
-                      onClick={() => handleSort('status')}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        Status
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'status' ? 'text-gray-800' : 'text-gray-400'}`} />
-                      </div>
-                    </th>
-                    <th
-                      className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
-                      onClick={() => handleSort('date')}
-                    >
-                      <div className="flex items-center gap-1">
-                        Completed
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'date' ? 'text-gray-800' : 'text-gray-400'}`} />
-                      </div>
-                    </th>
-                    <th className="text-center px-4 py-3 text-xs text-gray-600">Duration</th>
+                    {isColumnEnabled('candidate') && (
+                      <th
+                        className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('name')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Candidate
+                          <ArrowUpDown className={`w-3 h-3 ${sortField === 'name' ? 'text-gray-800' : 'text-gray-400'}`} />
+                        </div>
+                      </th>
+                    )}
+                    {isColumnEnabled('email') && (
+                      <th className="text-left px-4 py-3 text-xs text-gray-600">
+                        <div className="flex items-center gap-1">
+                          <Mail className="w-3 h-3" />
+                          Email
+                        </div>
+                      </th>
+                    )}
+                    {isColumnEnabled('jdTitle') && (
+                      <th className="text-left px-4 py-3 text-xs text-gray-600">
+                        <div className="flex items-center gap-1">
+                          <Briefcase className="w-3 h-3" />
+                          JD Title
+                        </div>
+                      </th>
+                    )}
+                    {isColumnEnabled('phone') && (
+                      <th className="text-left px-4 py-3 text-xs text-gray-600">
+                        <div className="flex items-center gap-1">
+                          <Phone className="w-3 h-3" />
+                          Phone
+                        </div>
+                      </th>
+                    )}
+                    {isColumnEnabled('inviteSource') && (
+                      <th className="text-left px-4 py-3 text-xs text-gray-600">Invite Source</th>
+                    )}
+                    {isColumnEnabled('score') && (
+                      <th
+                        className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('score')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          Score %
+                          <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-gray-800' : 'text-gray-400'}`} />
+                        </div>
+                      </th>
+                    )}
+                    {isColumnEnabled('status') && (
+                      <th
+                        className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('status')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          Status
+                          <ArrowUpDown className={`w-3 h-3 ${sortField === 'status' ? 'text-gray-800' : 'text-gray-400'}`} />
+                        </div>
+                      </th>
+                    )}
+                    {isColumnEnabled('completed') && (
+                      <th
+                        className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('date')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Completed
+                          <ArrowUpDown className={`w-3 h-3 ${sortField === 'date' ? 'text-gray-800' : 'text-gray-400'}`} />
+                        </div>
+                      </th>
+                    )}
+                    {isColumnEnabled('duration') && (
+                      <th className="text-center px-4 py-3 text-xs text-gray-600">Duration</th>
+                    )}
                     <th className="text-center px-4 py-3 text-xs text-gray-600">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {paginatedCandidates.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-6 py-12 text-center">
+                      <td colSpan={enabledColumnsCount + 2} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center">
                           <Users className="w-12 h-12 text-gray-300 mb-3" />
                           {searchQuery || statusFilter !== 'all' ? (
@@ -654,47 +854,70 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
                           />
                         </td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs">
-                              {candidate.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        {isColumnEnabled('candidate') && (
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs">
+                                {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </div>
+                              <div className="text-sm text-gray-900 font-medium">{candidate.name || 'Unknown'}</div>
                             </div>
-                            <div className="text-sm text-gray-900 font-medium">{candidate.name}</div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="text-sm text-gray-600">{candidate.email}</div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="text-sm text-gray-600">{candidate.phone || '-'}</div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-700">
-                            {candidate.inviteSource || 'Manual'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <span className={`text-lg font-semibold ${getScoreColor(candidate.percentage)}`}>
-                            {candidate.status === 'In Progress' ? '-' : `${candidate.percentage}%`}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border ${getStatusColor(candidate.status)}`}>
-                            {candidate.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Calendar className="w-4 h-4" />
-                            {candidate.completedDate}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-                            <Clock className="w-4 h-4" />
-                            {candidate.duration}
-                          </div>
-                        </td>
+                          </td>
+                        )}
+                        {isColumnEnabled('email') && (
+                          <td className="px-4 py-4">
+                            <div className="text-sm text-gray-600">{candidate.email}</div>
+                          </td>
+                        )}
+                        {isColumnEnabled('jdTitle') && (
+                          <td className="px-4 py-4">
+                            <div className="text-sm text-gray-600 truncate max-w-[200px]" title={jdTitle || 'N/A'}>
+                              {jdTitle || 'N/A'}
+                            </div>
+                          </td>
+                        )}
+                        {isColumnEnabled('phone') && (
+                          <td className="px-4 py-4">
+                            <div className="text-sm text-gray-600">{candidate.phone || '-'}</div>
+                          </td>
+                        )}
+                        {isColumnEnabled('inviteSource') && (
+                          <td className="px-4 py-4">
+                            <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-700">
+                              {candidate.inviteSource || 'Manual'}
+                            </span>
+                          </td>
+                        )}
+                        {isColumnEnabled('score') && (
+                          <td className="px-4 py-4 text-center">
+                            <span className={`text-lg font-semibold ${getScoreColor(candidate.percentage)}`}>
+                              {candidate.status === 'In Progress' ? '-' : `${candidate.percentage}%`}
+                            </span>
+                          </td>
+                        )}
+                        {isColumnEnabled('status') && (
+                          <td className="px-4 py-4 text-center">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border ${getStatusColor(candidate.status)}`}>
+                              {candidate.status}
+                            </span>
+                          </td>
+                        )}
+                        {isColumnEnabled('completed') && (
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Calendar className="w-4 h-4" />
+                              {candidate.completedDate}
+                            </div>
+                          </td>
+                        )}
+                        {isColumnEnabled('duration') && (
+                          <td className="px-4 py-4 text-center">
+                            <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                              <Clock className="w-4 h-4" />
+                              {candidate.duration}
+                            </div>
+                          </td>
+                        )}
                         <td className="px-4 py-4">
                           <div className="flex items-center justify-center gap-2">
                             <button
@@ -705,6 +928,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               <Award className="w-3 h-3" />
                               View Details
                             </button>
+                            {/* AS-25: PDF Download Button */}
+                            {candidate.status === 'Passed' || candidate.status === 'Failed' ? (
+                              <button
+                                onClick={() => handleDownloadPDF(candidate.id)}
+                                disabled={downloadingPDF === candidate.id}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Download PDF Report"
+                              >
+                                {downloadingPDF === candidate.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Download className="w-3 h-3" />
+                                )}
+                                PDF
+                              </button>
+                            ) : null}
                             <button
                               onClick={() => handleDeleteResult(candidate.id, candidate.name)}
                               disabled={isDeleting === candidate.id}
@@ -862,10 +1101,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xl">
-                {selectedCandidateData?.name.split(' ').map(n => n[0]).join('')}
+                {(selectedCandidateData?.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
               <div>
-                <h1 className="text-gray-900 mb-1">{selectedCandidateData?.name}</h1>
+                <h1 className="text-gray-900 mb-1">{selectedCandidateData?.name || 'Unknown'}</h1>
                 <p className="text-sm text-gray-600">{selectedCandidateData?.email}</p>
               </div>
             </div>

@@ -58,10 +58,10 @@ export default function AITalentMatchProgressPanel({
           });
         }, 1500);
 
-        // Call the real RAG API
+        // Call the real RAG API - Top 9 candidates with good similarity threshold
         const { session, candidates } = await aiMatchService.run(jobId, {
-          limit: 50,
-          minSimilarity: 0.2,  // Lower threshold to include more candidates
+          limit: 9,
+          minSimilarity: 0.5,  // 50% similarity threshold for quality matches
         });
 
         // Update progress to 100%
@@ -188,38 +188,6 @@ export default function AITalentMatchProgressPanel({
           })}
         </div>
 
-        {/* Stats */}
-        <div className="bg-gradient-to-br from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="text-center">
-              <div className="text-xs text-gray-600 mb-1">Candidates Found</div>
-              <div className="text-2xl font-bold text-gray-800">
-                {isLoading ? (
-                  <span className="animate-pulse">...</span>
-                ) : (
-                  completedCandidates
-                )}
-              </div>
-              <div className="text-xs text-gray-500 mt-0.5">
-                {isLoading ? 'Searching...' : `${totalCandidates} matches`}
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="text-xs text-gray-600 mb-1">RAG Pipeline</div>
-              <div className="flex items-center justify-center gap-2">
-                <div className="flex items-center gap-1">
-                  <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-green-500 animate-pulse' : 'bg-green-500'}`}></div>
-                  <span className="text-xs font-medium text-green-600">
-                    {isLoading ? 'Processing' : 'Complete'}
-                  </span>
-                </div>
-              </div>
-              <div className="text-xs text-gray-500 mt-0.5">
-                {isLoading ? 'AI filtering' : 'Done'}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

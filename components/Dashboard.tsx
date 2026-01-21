@@ -123,7 +123,7 @@ export default function Dashboard({
       <div className="max-w-7xl mx-auto">
         {/* Welcome Section */}
         <div className="mb-6">
-          <h1 className="text-gray-900 mb-2">Welcome back, {user?.name.split(' ')[0] || 'there'}! 👋</h1>
+          <h1 className="text-gray-900 mb-2">Welcome back, {user?.name?.split(' ')[0] || 'there'}! 👋</h1>
           <p className="text-gray-600 text-lg">Here's what's happening with your recruitment today.</p>
         </div>
 

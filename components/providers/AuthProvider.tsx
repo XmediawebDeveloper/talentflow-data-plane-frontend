@@ -196,7 +196,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(userData);
           saveUserToStorage(userData);
           console.log('[AUTH] User validated with API');
-        } catch (error) {
+        } catch (error: unknown) {
+          // Check if this is a subscription inactive error (403)
+          // The modal event is already dispatched by axios interceptor
+          const axiosError = error as { response?: { status?: number; data?: { detail?: { error_code?: string } } } };
+          if (axiosError?.response?.status === 403 &&
+              axiosError?.response?.data?.detail?.error_code === 'SUBSCRIPTION_INACTIVE') {
+            console.warn('[AUTH] Subscription inactive, clearing session');
+            clearTokens();
+            clearUserFromStorage();
+            setUser(null);
+            setTenant(null);
+            // Don't redirect - let the modal handle it
+            return;
+          }
           console.warn('[AUTH] API validation failed, using cached user:', error);
           // Keep using cached user - don't clear tokens for temporary API issues
         }

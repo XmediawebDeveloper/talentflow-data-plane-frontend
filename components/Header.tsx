@@ -23,6 +23,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [quotaData, setQuotaData] = useState<any>(null);
   const [loadingQuota, setLoadingQuota] = useState(true);
   const [quotaError, setQuotaError] = useState<boolean>(false);
+  const [tenantStatus, setTenantStatus] = useState<string | null>(null);
 
   // Fetch quota status from API
   const fetchQuotaStatus = async () => {
@@ -34,6 +35,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
     setLoadingQuota(true);
     setQuotaError(false);
+    setTenantStatus(null);
     try {
       const response = await api.get('/usage/quota-status');
       if (response.data?.status === 'success') {
@@ -42,8 +44,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
       } else {
         setQuotaError(true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch quota status:', error);
+      // Handle TENANT_INACTIVE error specifically
+      if (error.response?.status === 403 && error.response?.data?.detail?.error === 'TENANT_INACTIVE') {
+        setTenantStatus(error.response.data.detail.status || 'PENDING');
+      }
       setQuotaError(true);
       setQuotaData(null);
     } finally {
@@ -91,8 +97,20 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   };
 
   const totalUnits = calculateTotalUnits();
-  const planName = loadingQuota ? 'Loading...' : quotaError ? 'Unable to load' : (quotaData?.plan_name || 'No plan data');
+
+  // Determine plan name based on status
+  const getPlanDisplayName = () => {
+    if (loadingQuota) return 'Loading...';
+    if (tenantStatus === 'PENDING') return 'Account Pending';
+    if (tenantStatus === 'SUSPENDED') return 'Account Suspended';
+    if (tenantStatus === 'LOCKED') return 'Account Locked';
+    if (quotaError) return 'Unable to load';
+    return quotaData?.plan_name || 'No plan data';
+  };
+
+  const planName = getPlanDisplayName();
   const usagePercentage = totalUnits.limit > 0 ? ((totalUnits.used / totalUnits.limit) * 100) : 0;
+  const isPendingStatus = tenantStatus === 'PENDING' || tenantStatus === 'SUSPENDED' || tenantStatus === 'LOCKED';
 
   const roleLabels = {
     tenant_admin: 'Tenant Admin',
@@ -442,10 +460,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             className="flex items-center gap-3 hover:bg-gray-100 rounded-lg px-3 py-2 transition-colors"
           >
             <div className="w-9 h-9 rounded-full bg-gray-700 text-white flex items-center justify-center shadow-sm">
-              <span className="text-sm">{user.name.split(' ').map(n => n[0]).join('').toUpperCase()}</span>
+              <span className="text-sm">{(user.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}</span>
             </div>
             <div className="text-left">
-              <div className="text-sm text-gray-900">{user.name}</div>
+              <div className="text-sm text-gray-900">{user.name || user.email || 'User'}</div>
               <div className="text-xs text-gray-500">{roleLabels[user.role]}</div>
             </div>
             <ChevronDown className="w-4 h-4 text-gray-400" />
