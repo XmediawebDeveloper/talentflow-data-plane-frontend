@@ -42,13 +42,13 @@ interface ProctoringState {
   isCameraActive: boolean;
 }
 
-// Cooldown periods to prevent spam (in milliseconds)
-const EVENT_COOLDOWNS: Record<ProctoringEventType, number> = {
+// Backend logging cooldown - shorter, for accurate violation tracking (in milliseconds)
+const BACKEND_COOLDOWNS: Record<ProctoringEventType, number> = {
   tab_switch: 2000,
   copy_attempt: 1000,
   paste_attempt: 1000,
-  voice_detected: 5000, // 5 second cooldown for voice
-  multiple_voices: 10000, // 10 second cooldown
+  voice_detected: 5000,
+  multiple_voices: 10000,
   camera_disabled: 2000,
   microphone_disabled: 2000,
   camera_obstructed: 3000,
@@ -56,6 +56,9 @@ const EVENT_COOLDOWNS: Record<ProctoringEventType, number> = {
   screen_recording_attempt: 5000,
   window_blur: 2000,
 };
+
+// Frontend warning cooldown - 60 seconds to prevent re-render spam
+const FRONTEND_WARNING_COOLDOWN = 60000; // 60 seconds for all warning pop-ups
 
 // Warning messages for each event type
 const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
@@ -110,12 +113,15 @@ export function useProctoringMonitor({
   const animationFrameRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const lastEventTimeRef = useRef<Record<string, number>>({});
+  const lastBackendEventTimeRef = useRef<Record<string, number>>({});
+  const lastFrontendWarningTimeRef = useRef<number>(0); // Single timestamp for all frontend warnings
   const isMonitoringRef = useRef(false);
 
-  // Use refs for callbacks to prevent infinite re-renders
+  // Use refs for all props to prevent infinite re-renders
   const onWarningRef = useRef(onWarning);
   const tokenRef = useRef(token);
+  const streamRef = useRef(stream);
+  const enabledRef = useRef(enabled);
 
   // Keep refs up to date without triggering re-renders
   useEffect(() => {
@@ -126,66 +132,93 @@ export function useProctoringMonitor({
     tokenRef.current = token;
   }, [token]);
 
+  useEffect(() => {
+    streamRef.current = stream;
+  }, [stream]);
+
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+
   // Generate unique warning ID
   const generateWarningId = () => `warning-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-  // Check if event is within cooldown
-  const isInCooldown = useCallback((eventType: ProctoringEventType): boolean => {
-    const lastTime = lastEventTimeRef.current[eventType] || 0;
-    const cooldown = EVENT_COOLDOWNS[eventType];
+  // Check if backend logging is within cooldown (shorter cooldowns for accurate tracking)
+  const isBackendInCooldown = useCallback((eventType: ProctoringEventType): boolean => {
+    const lastTime = lastBackendEventTimeRef.current[eventType] || 0;
+    const cooldown = BACKEND_COOLDOWNS[eventType];
     return Date.now() - lastTime < cooldown;
   }, []);
 
-  // Log event to backend - uses refs to avoid dependency changes
+  // Check if frontend warning is within cooldown (60 seconds for all warnings)
+  const isFrontendWarningInCooldown = useCallback((): boolean => {
+    const lastTime = lastFrontendWarningTimeRef.current;
+    return Date.now() - lastTime < FRONTEND_WARNING_COOLDOWN;
+  }, []);
+
+  // Ref for violation count to avoid re-renders
+  const violationCountRef = useRef(0);
+
+  // Log event with frontend warning (two-cooldown system)
+  // - Backend: logs continuously with short cooldowns per event type
+  // - Frontend: shows warning pop-up only once per 60 seconds (all events combined)
   const logEvent = useCallback(async (
     eventType: ProctoringEventType,
     details?: Record<string, any>
   ) => {
-    if (!enabled || isInCooldown(eventType)) return;
+    if (!enabledRef.current) return;
 
-    lastEventTimeRef.current[eventType] = Date.now();
+    // Check backend cooldown - if in cooldown, skip entirely
+    if (isBackendInCooldown(eventType)) return;
 
-    // Create warning
-    const warning: ProctoringWarning = {
-      id: generateWarningId(),
-      type: eventType,
-      message: WARNING_MESSAGES[eventType],
-      timestamp: new Date(),
-      severity: EVENT_SEVERITY[eventType],
-    };
+    // Update backend cooldown timestamp
+    lastBackendEventTimeRef.current[eventType] = Date.now();
+    violationCountRef.current += 1;
 
-    // Update state
-    setState(prev => ({
-      ...prev,
-      violationCount: prev.violationCount + 1,
-    }));
+    // Show frontend warning only if 60 seconds have passed since last warning
+    const shouldShowWarning = !isFrontendWarningInCooldown();
+    if (shouldShowWarning) {
+      lastFrontendWarningTimeRef.current = Date.now();
 
-    // Notify via callback (use ref to avoid re-renders)
-    onWarningRef.current?.(warning);
+      const warning: ProctoringWarning = {
+        id: generateWarningId(),
+        type: eventType,
+        message: WARNING_MESSAGES[eventType],
+        timestamp: new Date(),
+        severity: EVENT_SEVERITY[eventType],
+      };
 
-    // Log to backend (use ref for token)
+      // Notify via callback (use ref to avoid re-renders)
+      onWarningRef.current?.(warning);
+      console.log(`[PROCTORING] Frontend warning shown: ${eventType}`);
+    } else {
+      console.log(`[PROCTORING] Frontend warning skipped (cooldown): ${eventType}`);
+    }
+
+    // Always log to backend (use ref for token)
     try {
       await candidateService.reportProctorEvent(tokenRef.current, {
         event_type: eventType,
         timestamp: new Date().toISOString(),
         details: details || {},
       });
-      console.log(`[PROCTORING] Event logged: ${eventType}`);
+      console.log(`[PROCTORING] Event logged to backend: ${eventType}`);
     } catch (error) {
       console.error(`[PROCTORING] Failed to log event: ${eventType}`, error);
     }
-  }, [enabled, isInCooldown]); // Removed token and onWarning from deps - using refs
+  }, [isBackendInCooldown, isFrontendWarningInCooldown]);
 
   // ==================== VOICE DETECTION ====================
   const setupVoiceDetection = useCallback(() => {
-    if (!stream) return;
+    const currentStream = streamRef.current;
+    if (!currentStream) return;
 
-    const audioTracks = stream.getAudioTracks();
+    const audioTracks = currentStream.getAudioTracks();
     if (audioTracks.length === 0) return;
 
     try {
       audioContextRef.current = new AudioContext();
-      const source = audioContextRef.current.createMediaStreamSource(stream);
+      const source = audioContextRef.current.createMediaStreamSource(currentStream);
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 256;
       source.connect(analyserRef.current);
@@ -218,7 +251,7 @@ export function useProctoringMonitor({
         if (average > threshold) {
           consecutiveVoiceFrames++;
           if (consecutiveVoiceFrames >= voiceFrameThreshold) {
-            setState(prev => ({ ...prev, lastVoiceDetected: new Date() }));
+            // Log to backend continuously, frontend warning only once per 60 seconds
             logEvent('voice_detected', { averageVolume: average, threshold });
             consecutiveVoiceFrames = 0;
           }
@@ -230,22 +263,23 @@ export function useProctoringMonitor({
       };
 
       detectVoice();
-      console.log('[PROCTORING] Voice detection started');
+      console.log('[PROCTORING] Voice detection started (60s warning cooldown)');
     } catch (error) {
       console.error('[PROCTORING] Failed to setup voice detection:', error);
     }
-  }, [stream, voiceDetectionSensitivity, logEvent]);
+  }, [voiceDetectionSensitivity, logEvent]); // Using logEvent with 60s frontend cooldown
 
   // ==================== CAMERA OBSTRUCTION DETECTION ====================
   const setupCameraObstructionDetection = useCallback(() => {
-    if (!stream) return;
+    const currentStream = streamRef.current;
+    if (!currentStream) return;
 
-    const videoTracks = stream.getVideoTracks();
+    const videoTracks = currentStream.getVideoTracks();
     if (videoTracks.length === 0) return;
 
     // Create hidden video and canvas for analysis
     videoRef.current = document.createElement('video');
-    videoRef.current.srcObject = stream;
+    videoRef.current.srcObject = currentStream;
     videoRef.current.muted = true;
     videoRef.current.play();
 
@@ -314,14 +348,15 @@ export function useProctoringMonitor({
       checkObstruction();
       console.log('[PROCTORING] Camera obstruction detection started');
     };
-  }, [stream, obstructionThreshold, logEvent]);
+  }, [obstructionThreshold, logEvent]); // Removed stream - using ref
 
   // ==================== TRACK STATE MONITORING ====================
   const setupTrackMonitoring = useCallback(() => {
-    if (!stream) return;
+    const currentStream = streamRef.current;
+    if (!currentStream) return;
 
-    const videoTracks = stream.getVideoTracks();
-    const audioTracks = stream.getAudioTracks();
+    const videoTracks = currentStream.getVideoTracks();
+    const audioTracks = currentStream.getAudioTracks();
 
     // Monitor video track
     videoTracks.forEach(track => {
@@ -354,7 +389,7 @@ export function useProctoringMonitor({
     });
 
     console.log('[PROCTORING] Track monitoring started');
-  }, [stream, logEvent]);
+  }, [logEvent]); // Removed stream - using ref
 
   // ==================== SCREENSHOT DETECTION ====================
   const setupScreenshotDetection = useCallback(() => {
@@ -464,7 +499,7 @@ export function useProctoringMonitor({
 
   // ==================== MAIN EFFECT ====================
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabledRef.current) return;
 
     isMonitoringRef.current = true;
     setState(prev => ({ ...prev, isMonitoring: true }));
@@ -476,7 +511,7 @@ export function useProctoringMonitor({
     const cleanupTabSwitch = setupTabSwitchDetection();
 
     // Stream-dependent setups
-    if (stream) {
+    if (streamRef.current) {
       setupVoiceDetection();
       setupCameraObstructionDetection();
       setupTrackMonitoring();
@@ -517,17 +552,8 @@ export function useProctoringMonitor({
 
       console.log('[PROCTORING] All monitoring systems stopped');
     };
-  }, [
-    enabled,
-    stream,
-    setupVoiceDetection,
-    setupCameraObstructionDetection,
-    setupTrackMonitoring,
-    setupScreenshotDetection,
-    setupScreenRecordingDetection,
-    setupCopyPasteDetection,
-    setupTabSwitchDetection,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, stream]); // Only re-run when enabled/stream actually change - setup functions use refs internally
 
   return {
     state,

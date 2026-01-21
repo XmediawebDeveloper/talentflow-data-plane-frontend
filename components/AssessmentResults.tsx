@@ -17,6 +17,7 @@ interface AssessmentResultsProps {
 
 interface CandidateResult {
   id: string;
+  invitation_id: string;  // For pending candidates without attempt
   name: string;
   email: string;
   phone?: string;
@@ -25,7 +26,7 @@ interface CandidateResult {
   score: number;
   totalScore: number;
   percentage: number;
-  status: 'Passed' | 'Failed' | 'Under Review' | 'In Progress';
+  status: 'Passed' | 'Failed' | 'Under Review' | 'In Progress' | 'Pending';
   completedDate: string;
   duration: string;
   sections: SectionResult[];
@@ -59,7 +60,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [selectedDetailRound, setSelectedDetailRound] = useState<number | 'all'>('all'); // Round filter for detail view
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [apiStats, setApiStats] = useState<{ completed_count: number; passed_count: number; failed_count: number; in_progress_count: number; average_score: number | null }>({ completed_count: 0, passed_count: 0, failed_count: 0, in_progress_count: 0, average_score: null });
+  const [apiStats, setApiStats] = useState<{ completed_count: number; passed_count: number; failed_count: number; in_progress_count: number; pending_count: number; average_score: number | null }>({ completed_count: 0, passed_count: 0, failed_count: 0, in_progress_count: 0, pending_count: 0, average_score: null });
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
@@ -80,7 +81,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Passed' | 'Failed' | 'Under Review' | 'In Progress'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Passed' | 'Failed' | 'Under Review' | 'In Progress' | 'Pending'>('all');
 
   // AS-24: Column customization
   const COLUMN_PREFERENCES_KEY = 'assessment_results_columns_v2';
@@ -153,8 +154,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           // Map API response to component format
           const mapped: CandidateResult[] = response.items.map((item: any, index: number) => {
             // Determine status
-            let status: 'Passed' | 'Failed' | 'Under Review' | 'In Progress' = 'Under Review';
-            if (item.status === 'completed') {
+            let status: 'Passed' | 'Failed' | 'Under Review' | 'In Progress' | 'Pending' = 'Under Review';
+            if (item.status === 'pending') {
+              status = 'Pending';
+            } else if (item.status === 'completed') {
               status = item.passed === true ? 'Passed' : item.passed === false ? 'Failed' : 'Under Review';
             } else if (item.status === 'in_progress') {
               status = 'In Progress';
@@ -165,7 +168,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             }
 
             return {
-              id: item.id,
+              id: item.id || item.invitation_id,  // Use invitation_id for pending
+              invitation_id: item.invitation_id,
               name: item.candidate_name || 'Unknown',
               email: item.candidate_email || '',
               phone: item.candidate_phone || '',
@@ -174,8 +178,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               totalScore: 100,
               percentage: Math.round(Number(item.overall_score) || 0),
               status,
-              completedDate: item.completed_at?.split('T')[0] || (item.started_at?.split('T')[0] || 'N/A'),
-              duration: item.time_spent_seconds ? `${Math.round(item.time_spent_seconds / 60)} min` : 'N/A',
+              completedDate: item.completed_at?.split('T')[0] || (item.started_at?.split('T')[0] || (status === 'Pending' ? 'Not started' : 'N/A')),
+              duration: item.time_spent_seconds ? `${Math.round(item.time_spent_seconds / 60)} min` : (status === 'Pending' ? '-' : 'N/A'),
               sections: [
                 {
                   name: 'HR Section',
@@ -207,10 +211,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
           // Set stats from API
           setApiStats({
-            completed_count: response.completed_count || mapped.filter((c: CandidateResult) => c.status !== 'In Progress').length,
+            completed_count: response.completed_count || mapped.filter((c: CandidateResult) => c.status === 'Passed' || c.status === 'Failed' || c.status === 'Under Review').length,
             passed_count: response.passed_count || mapped.filter((c: CandidateResult) => c.status === 'Passed').length,
             failed_count: response.failed_count || mapped.filter((c: CandidateResult) => c.status === 'Failed').length,
             in_progress_count: response.in_progress_count || mapped.filter((c: CandidateResult) => c.status === 'In Progress').length,
+            pending_count: response.pending_count || mapped.filter((c: CandidateResult) => c.status === 'Pending').length,
             average_score: response.average_score ? Math.round(Number(response.average_score)) : null
           });
         }
@@ -259,6 +264,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     switch (status) {
       case 'Passed': return 'bg-green-100 text-green-800 border-green-200';
       case 'Failed': return 'bg-red-100 text-red-800 border-red-200';
+      case 'Pending': return 'bg-gray-100 text-gray-800 border-gray-200';
       case 'Under Review': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'In Progress': return 'bg-blue-100 text-blue-800 border-blue-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -455,6 +461,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     const passedCount = candidateResults.length > 0 ? apiStats.passed_count : filteredCandidates.filter(c => c.status === 'Passed').length;
     const failedCount = candidateResults.length > 0 ? apiStats.failed_count : filteredCandidates.filter(c => c.status === 'Failed').length;
     const inProgressCount = candidateResults.length > 0 ? apiStats.in_progress_count : filteredCandidates.filter(c => c.status === 'In Progress').length;
+    const pendingCount = candidateResults.length > 0 ? apiStats.pending_count : filteredCandidates.filter(c => c.status === 'Pending').length;
 
     return (
       <div className="flex-1 bg-gray-50 overflow-y-auto">
@@ -590,7 +597,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </div>
           )}
 
-          <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-5 gap-4 mb-6">
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -630,11 +637,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-gray-600 text-sm mb-1">Progressing</div>
+                  <div className="text-gray-600 text-sm mb-1">In Progress</div>
                   <div className="text-2xl text-blue-600">{inProgressCount}</div>
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <Loader2 className="w-6 h-6 text-blue-600" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-gray-600 text-sm mb-1">Pending</div>
+                  <div className="text-2xl text-gray-600">{pendingCount}</div>
+                </div>
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <Clock className="w-6 h-6 text-gray-600" />
                 </div>
               </div>
             </div>
@@ -663,7 +682,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <select
                   value={statusFilter}
                   onChange={(e) => {
-                    setStatusFilter(e.target.value as 'all' | 'Passed' | 'Failed' | 'Under Review' | 'In Progress');
+                    setStatusFilter(e.target.value as 'all' | 'Passed' | 'Failed' | 'Under Review' | 'In Progress' | 'Pending');
                     setCurrentPage(1);
                   }}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
@@ -673,6 +692,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <option value="Failed">Failed</option>
                   <option value="In Progress">In Progress</option>
                   <option value="Under Review">Under Review</option>
+                  <option value="Pending">Pending</option>
                 </select>
               </div>
 

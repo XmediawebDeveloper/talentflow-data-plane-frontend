@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import {
   Clock,
@@ -32,6 +32,11 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [agreedProctoring, setAgreedProctoring] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Scroll to top when component mounts
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   const canAccept = agreedTerms && agreedProctoring;
 
@@ -168,7 +173,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
         </div>
 
         {/* Assessment Info Card */}
-        <div className="bg-gradient-to-r from-sky-400 via-sky-500 to-blue-500 rounded-2xl p-6 mb-8 text-white shadow-lg">
+        <div className="bg-gradient-to-r from-sky-300 via-sky-400 to-sky-500 rounded-2xl p-6 mb-8 text-white shadow-lg">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
               <FileText className="w-6 h-6 text-white" />

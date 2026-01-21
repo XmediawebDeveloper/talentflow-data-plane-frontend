@@ -86,10 +86,12 @@ export interface AssessmentInfo {
 
 export interface ConsentResponse {
   success: boolean;
-  consent_accepted: boolean;
-  consent_accepted_at: string;
-  consent_ip: string;
+  consent_accepted?: boolean;
+  consent_accepted_at?: string;
+  consent_ip?: string;
   message: string;
+  session_token?: string;  // Session token for single-session enforcement
+  consent_log_id?: string;
 }
 
 export interface SystemCheckResult {
@@ -340,10 +342,22 @@ export const candidateService = {
         terms_accepted: termsAccepted,
         proctoring_consent: proctoringConsent,
       });
+
+      // Store session token if returned (for single-session enforcement)
+      if (response.data.session_token) {
+        sessionTokenManager.setToken(response.data.session_token);
+        console.log('[CONSENT] Session token stored for single-session enforcement');
+      }
+
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        throw new Error(error.response?.data?.detail || 'Failed to accept consent');
+        // Check for session already active error
+        const errorDetail = error.response?.data?.detail;
+        if (typeof errorDetail === 'object' && errorDetail?.error === 'SESSION_ALREADY_ACTIVE') {
+          throw new Error('SESSION_ALREADY_ACTIVE');
+        }
+        throw new Error(typeof errorDetail === 'string' ? errorDetail : 'Failed to accept consent');
       }
       throw error;
     }

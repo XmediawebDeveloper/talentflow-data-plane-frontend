@@ -297,7 +297,14 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       // After consent accepted, show landing/preview page
       setStepSafe('landing');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to accept consent');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to accept consent';
+      // Handle session already active error with user-friendly message
+      if (errorMessage === 'SESSION_ALREADY_ACTIVE') {
+        setError('This assessment is already open in another browser or device. Only one active session is allowed. Please close the other session and try again.');
+      } else {
+        setError(errorMessage);
+      }
+      setStepSafe('error');
     }
   };
 

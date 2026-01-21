@@ -41,6 +41,9 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
+    // Scroll to top when component mounts
+    window.scrollTo(0, 0);
+
     return () => {
       // Cleanup stream on unmount
       if (streamRef.current) {
@@ -252,10 +255,10 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-green-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 py-4">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-lg">TF</span>
@@ -266,15 +269,16 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          {/* Header */}
-          <div className="px-8 py-6 border-b border-gray-200">
-            <h1 className="text-2xl font-bold text-gray-800">System Check</h1>
-            <p className="text-gray-600 mt-1">
-              Let's make sure your system is ready for the assessment
-            </p>
-          </div>
+      <main className="max-w-5xl mx-auto px-6 py-8">
+        {/* Title Section */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">System Check</h1>
+          <p className="text-gray-600">
+            Let's make sure your system is ready for the assessment
+          </p>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
 
           <div className="grid md:grid-cols-2 gap-6 p-8">
             {/* Camera Preview */}

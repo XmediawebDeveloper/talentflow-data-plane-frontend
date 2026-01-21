@@ -101,7 +101,7 @@ export interface InvitationResponse {
 }
 
 export interface AssessmentAttemptResponse {
-  id: string;
+  id?: string;  // Optional for pending candidates (no attempt yet)
   invitation_id: string;
   candidate_name: string;
   candidate_email: string;
@@ -130,6 +130,7 @@ export interface AssessmentResultsListResponse {
   passed_count: number;
   failed_count: number;
   in_progress_count: number;
+  pending_count: number;  // Invited but not started
   average_score?: number;
 }
 

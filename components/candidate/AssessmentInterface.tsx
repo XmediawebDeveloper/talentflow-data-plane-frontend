@@ -303,7 +303,7 @@ export function AssessmentInterface({
   const isLastQuestion = currentQuestion.question_number === currentQuestion.total_questions;
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       {/* Top Bar */}
       <header className="bg-white border-b border-gray-200 px-4 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -395,10 +395,10 @@ export function AssessmentInterface({
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <div className="max-w-5xl mx-auto px-4 py-6">
+        <div className="max-w-7xl mx-auto px-8 py-6">
           {/* Review Mode Banner */}
           {allQuestionsAnswered && (
-            <div className="mb-4 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+            <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
                   <CheckCircle className="w-5 h-5 text-green-600" />
@@ -419,9 +419,9 @@ export function AssessmentInterface({
           )}
 
           {/* Question Card */}
-          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
             {/* Question Header */}
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg ${getRoundColor(currentQuestion.round_type)} flex items-center justify-center`}>
@@ -481,7 +481,7 @@ export function AssessmentInterface({
             </div>
 
             {/* Actions */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
               {/* Previous Button */}
               <div>
                 {currentQuestion.question_number > 1 ? (
@@ -534,7 +534,7 @@ export function AssessmentInterface({
           </div>
 
           {/* Progress Indicator - Clickable Navigation */}
-          <div className="mt-6 bg-white rounded-xl shadow p-4">
+          <div className="mt-4 bg-white rounded-lg border border-gray-200 shadow-sm p-4">
             <p className="text-sm font-medium text-gray-700 mb-3">Progress (Click to navigate)</p>
             <div className="flex flex-wrap gap-2">
               {Array.from({ length: currentQuestion.total_questions }, (_, i) => {
