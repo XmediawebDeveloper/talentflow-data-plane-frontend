@@ -6,6 +6,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 
+// Utility function to format employment type for display
+// Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
+const formatEmploymentType = (type: string | undefined): string => {
+  if (!type) return '';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
 // JD03: Status tabs for filtering
 const STATUS_TABS = [
   { id: 'all', label: 'All JDs' },
@@ -516,13 +526,13 @@ export default function JDListPage() {
                         {jd.employment_type && (
                           <span className="flex items-center gap-1">
                             <Briefcase className="w-4 h-4" />
-                            <span className="capitalize">{jd.employment_type.replace('_', ' ')}</span>
+                            <span>{formatEmploymentType(jd.employment_type)}</span>
                           </span>
                         )}
                         {jd.remote_type && (
                           <span className="flex items-center gap-1">
                             <Monitor className="w-4 h-4" />
-                            <span className="capitalize">{jd.remote_type.replace('_', ' ')}</span>
+                            <span>{formatEmploymentType(jd.remote_type)}</span>
                           </span>
                         )}
                         <span className="flex items-center gap-1">
