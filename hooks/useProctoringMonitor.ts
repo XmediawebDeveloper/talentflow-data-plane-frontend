@@ -117,6 +117,11 @@ export function useProctoringMonitor({
   const lastFrontendWarningTimeRef = useRef<number>(0); // Single timestamp for all frontend warnings
   const isMonitoringRef = useRef(false);
 
+  // Web Worker ref for heavy processing
+  const workerRef = useRef<Worker | null>(null);
+  const voiceIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const cameraIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   // Use refs for all props to prevent infinite re-renders
   const onWarningRef = useRef(onWarning);
   const tokenRef = useRef(token);
@@ -139,6 +144,18 @@ export function useProctoringMonitor({
   useEffect(() => {
     enabledRef.current = enabled;
   }, [enabled]);
+
+  // Refs for worker processing params
+  const voiceSensitivityRef = useRef(voiceDetectionSensitivity);
+  const obstructionThresholdRef = useRef(obstructionThreshold);
+
+  useEffect(() => {
+    voiceSensitivityRef.current = voiceDetectionSensitivity;
+  }, [voiceDetectionSensitivity]);
+
+  useEffect(() => {
+    obstructionThresholdRef.current = obstructionThreshold;
+  }, [obstructionThreshold]);
 
   // Generate unique warning ID
   const generateWarningId = () => `warning-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -208,10 +225,186 @@ export function useProctoringMonitor({
     }
   }, [isBackendInCooldown, isFrontendWarningInCooldown]);
 
-  // ==================== VOICE DETECTION ====================
+  // Store logEvent in ref for worker message handler
+  const logEventRef = useRef(logEvent);
+  useEffect(() => {
+    logEventRef.current = logEvent;
+  }, [logEvent]);
+
+  // ==================== WEB WORKER SETUP ====================
+  // Inline worker code for reliable loading (avoids Next.js file serving issues)
+  const getWorkerCode = () => `
+    // Voice detection state
+    let voiceConsecutiveFrames = 0;
+    const VOICE_FRAME_THRESHOLD = 10;
+
+    // Camera obstruction state
+    let obstructionConsecutiveFrames = 0;
+    const OBSTRUCTION_FRAME_THRESHOLD = 30;
+
+    function analyzeVoice(frequencyData, threshold, sampleRate) {
+      const bufferLength = frequencyData.length;
+      const binSize = sampleRate / (bufferLength * 2);
+      const speechStartBin = Math.floor(300 / binSize);
+      const speechEndBin = Math.min(Math.floor(3000 / binSize), bufferLength);
+
+      let sum = 0;
+      for (let i = speechStartBin; i < speechEndBin; i++) {
+        sum += frequencyData[i];
+      }
+      const average = sum / (speechEndBin - speechStartBin);
+
+      if (average > threshold) {
+        voiceConsecutiveFrames++;
+        if (voiceConsecutiveFrames >= VOICE_FRAME_THRESHOLD) {
+          voiceConsecutiveFrames = 0;
+          return { detected: true, averageVolume: average, threshold: threshold };
+        }
+      } else {
+        voiceConsecutiveFrames = Math.max(0, voiceConsecutiveFrames - 1);
+      }
+      return { detected: false };
+    }
+
+    function analyzeCameraObstruction(imageData, width, height, obstructionThreshold) {
+      let totalBrightness = 0;
+      let minBrightness = 255;
+      let maxBrightness = 0;
+
+      for (let i = 0; i < imageData.length; i += 16) {
+        const r = imageData[i];
+        const g = imageData[i + 1];
+        const b = imageData[i + 2];
+        const brightness = (r + g + b) / 3;
+        totalBrightness += brightness;
+        minBrightness = Math.min(minBrightness, brightness);
+        maxBrightness = Math.max(maxBrightness, brightness);
+      }
+
+      const sampledPixels = Math.floor(imageData.length / 16);
+      const avgBrightness = totalBrightness / sampledPixels;
+      const brightnessRange = maxBrightness - minBrightness;
+
+      const isDark = avgBrightness < obstructionThreshold;
+      const isUniform = brightnessRange < 20;
+
+      if (isDark || isUniform) {
+        obstructionConsecutiveFrames++;
+        if (obstructionConsecutiveFrames >= OBSTRUCTION_FRAME_THRESHOLD) {
+          obstructionConsecutiveFrames = 0;
+          return {
+            obstructed: true,
+            avgBrightness: avgBrightness,
+            brightnessRange: brightnessRange,
+            reason: isDark ? 'too_dark' : 'too_uniform'
+          };
+        }
+      } else {
+        obstructionConsecutiveFrames = Math.max(0, obstructionConsecutiveFrames - 2);
+      }
+
+      return { obstructed: false, avgBrightness: avgBrightness, brightnessRange: brightnessRange };
+    }
+
+    self.onmessage = function(e) {
+      const { type, data } = e.data;
+
+      switch (type) {
+        case 'ANALYZE_VOICE': {
+          const result = analyzeVoice(
+            new Uint8Array(data.frequencyData),
+            data.threshold,
+            data.sampleRate
+          );
+          self.postMessage({ type: 'VOICE_RESULT', data: result });
+          break;
+        }
+        case 'ANALYZE_CAMERA': {
+          const result = analyzeCameraObstruction(
+            new Uint8ClampedArray(data.imageData),
+            data.width,
+            data.height,
+            data.obstructionThreshold
+          );
+          self.postMessage({ type: 'CAMERA_RESULT', data: result });
+          break;
+        }
+        case 'RESET': {
+          voiceConsecutiveFrames = 0;
+          obstructionConsecutiveFrames = 0;
+          self.postMessage({ type: 'RESET_COMPLETE' });
+          break;
+        }
+      }
+    };
+
+    self.postMessage({ type: 'WORKER_READY' });
+  `;
+
+  const setupWorker = useCallback(() => {
+    if (workerRef.current) return; // Already initialized
+
+    try {
+      // Create inline worker using Blob (more reliable than file-based worker in Next.js)
+      const blob = new Blob([getWorkerCode()], { type: 'application/javascript' });
+      const workerUrl = URL.createObjectURL(blob);
+      workerRef.current = new Worker(workerUrl);
+
+      workerRef.current.onmessage = (e) => {
+        const { type, data } = e.data;
+
+        switch (type) {
+          case 'WORKER_READY':
+            console.log('[PROCTORING] Web Worker ready');
+            break;
+
+          case 'VOICE_RESULT':
+            if (data.detected) {
+              logEventRef.current('voice_detected', {
+                averageVolume: data.averageVolume,
+                threshold: data.threshold
+              });
+            }
+            break;
+
+          case 'CAMERA_RESULT':
+            if (data.obstructed) {
+              setState(prev => ({ ...prev, isCameraObstructed: true }));
+              logEventRef.current('camera_obstructed', {
+                avgBrightness: data.avgBrightness,
+                brightnessRange: data.brightnessRange,
+                reason: data.reason
+              });
+            } else {
+              setState(prev => {
+                if (prev.isCameraObstructed) {
+                  return { ...prev, isCameraObstructed: false };
+                }
+                return prev; // No state change needed
+              });
+            }
+            break;
+
+          case 'RESET_COMPLETE':
+            console.log('[PROCTORING] Worker state reset');
+            break;
+        }
+      };
+
+      workerRef.current.onerror = (error) => {
+        console.error('[PROCTORING] Worker error:', error.message || error);
+      };
+
+      console.log('[PROCTORING] Web Worker initialized (inline)');
+    } catch (error) {
+      console.error('[PROCTORING] Failed to initialize Web Worker:', error);
+    }
+  }, []);
+
+  // ==================== VOICE DETECTION (Web Worker) ====================
   const setupVoiceDetection = useCallback(() => {
     const currentStream = streamRef.current;
-    if (!currentStream) return;
+    if (!currentStream || !workerRef.current) return;
 
     const audioTracks = currentStream.getAudioTracks();
     if (audioTracks.length === 0) return;
@@ -225,54 +418,40 @@ export function useProctoringMonitor({
 
       const bufferLength = analyserRef.current.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
+      const sampleRate = audioContextRef.current.sampleRate;
 
-      // Voice detection threshold based on sensitivity
-      const threshold = 128 - (voiceDetectionSensitivity * 1.28); // 0-128 range
-
-      let consecutiveVoiceFrames = 0;
-      const voiceFrameThreshold = 10; // Need 10 consecutive frames to confirm voice
-
-      const detectVoice = () => {
-        if (!isMonitoringRef.current || !analyserRef.current) return;
+      // Use setInterval instead of requestAnimationFrame for more controlled frequency
+      // 50ms interval = 20 checks per second (sufficient for voice detection)
+      voiceIntervalRef.current = setInterval(() => {
+        if (!isMonitoringRef.current || !analyserRef.current || !workerRef.current) return;
 
         analyserRef.current.getByteFrequencyData(dataArray);
 
-        // Calculate average volume in speech frequency range (300Hz - 3000Hz)
-        // With 256 fftSize and 48kHz sample rate, each bin is ~187.5Hz
-        const speechStartBin = Math.floor(300 / 187.5);
-        const speechEndBin = Math.floor(3000 / 187.5);
+        // Calculate threshold based on sensitivity
+        const threshold = 128 - (voiceSensitivityRef.current * 1.28);
 
-        let sum = 0;
-        for (let i = speechStartBin; i < speechEndBin && i < bufferLength; i++) {
-          sum += dataArray[i];
-        }
-        const average = sum / (speechEndBin - speechStartBin);
-
-        if (average > threshold) {
-          consecutiveVoiceFrames++;
-          if (consecutiveVoiceFrames >= voiceFrameThreshold) {
-            // Log to backend continuously, frontend warning only once per 60 seconds
-            logEvent('voice_detected', { averageVolume: average, threshold });
-            consecutiveVoiceFrames = 0;
+        // Send to worker for processing (transfer the buffer for performance)
+        const dataToSend = new Uint8Array(dataArray);
+        workerRef.current.postMessage({
+          type: 'ANALYZE_VOICE',
+          data: {
+            frequencyData: dataToSend.buffer,
+            threshold,
+            sampleRate
           }
-        } else {
-          consecutiveVoiceFrames = Math.max(0, consecutiveVoiceFrames - 1);
-        }
+        }, [dataToSend.buffer]);
+      }, 50);
 
-        animationFrameRef.current = requestAnimationFrame(detectVoice);
-      };
-
-      detectVoice();
-      console.log('[PROCTORING] Voice detection started (60s warning cooldown)');
+      console.log('[PROCTORING] Voice detection started (Web Worker, 50ms interval)');
     } catch (error) {
       console.error('[PROCTORING] Failed to setup voice detection:', error);
     }
-  }, [voiceDetectionSensitivity, logEvent]); // Using logEvent with 60s frontend cooldown
+  }, []); // No dependencies - uses refs internally
 
-  // ==================== CAMERA OBSTRUCTION DETECTION ====================
+  // ==================== CAMERA OBSTRUCTION DETECTION (Web Worker) ====================
   const setupCameraObstructionDetection = useCallback(() => {
     const currentStream = streamRef.current;
-    if (!currentStream) return;
+    if (!currentStream || !workerRef.current) return;
 
     const videoTracks = currentStream.getVideoTracks();
     if (videoTracks.length === 0) return;
@@ -290,65 +469,35 @@ export function useProctoringMonitor({
 
     if (!ctx) return;
 
-    let consecutiveObstructedFrames = 0;
-    const obstructionFrameThreshold = 30; // 30 frames (~1 second at 30fps)
+    // Use setInterval instead of setTimeout for better control
+    // 100ms interval = 10 checks per second
+    const startCameraCheck = () => {
+      cameraIntervalRef.current = setInterval(() => {
+        if (!isMonitoringRef.current || !videoRef.current || !canvasRef.current || !workerRef.current) return;
 
-    const checkObstruction = () => {
-      if (!isMonitoringRef.current || !videoRef.current || !canvasRef.current) return;
+        ctx.drawImage(videoRef.current, 0, 0, 160, 120);
+        const imageData = ctx.getImageData(0, 0, 160, 120);
 
-      ctx.drawImage(videoRef.current, 0, 0, 160, 120);
-      const imageData = ctx.getImageData(0, 0, 160, 120);
-      const data = imageData.data;
+        // Send to worker for processing (transfer the buffer for performance)
+        const dataToSend = new Uint8ClampedArray(imageData.data);
+        workerRef.current.postMessage({
+          type: 'ANALYZE_CAMERA',
+          data: {
+            imageData: dataToSend.buffer,
+            width: 160,
+            height: 120,
+            obstructionThreshold: obstructionThresholdRef.current
+          }
+        }, [dataToSend.buffer]);
+      }, 100);
 
-      // Calculate average brightness and color variance
-      let totalBrightness = 0;
-      let minBrightness = 255;
-      let maxBrightness = 0;
-
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        const brightness = (r + g + b) / 3;
-
-        totalBrightness += brightness;
-        minBrightness = Math.min(minBrightness, brightness);
-        maxBrightness = Math.max(maxBrightness, brightness);
-      }
-
-      const avgBrightness = totalBrightness / (data.length / 4);
-      const brightnessRange = maxBrightness - minBrightness;
-
-      // Detect obstruction:
-      // 1. Very dark image (covered by hand/object)
-      // 2. Very uniform color (covered by paper/tape)
-      const isDark = avgBrightness < obstructionThreshold;
-      const isUniform = brightnessRange < 20; // Very little variation
-
-      if (isDark || isUniform) {
-        consecutiveObstructedFrames++;
-        if (consecutiveObstructedFrames >= obstructionFrameThreshold) {
-          setState(prev => ({ ...prev, isCameraObstructed: true }));
-          logEvent('camera_obstructed', {
-            avgBrightness,
-            brightnessRange,
-            reason: isDark ? 'too_dark' : 'too_uniform',
-          });
-          consecutiveObstructedFrames = 0;
-        }
-      } else {
-        consecutiveObstructedFrames = Math.max(0, consecutiveObstructedFrames - 2);
-        setState(prev => ({ ...prev, isCameraObstructed: false }));
-      }
-
-      setTimeout(checkObstruction, 100); // Check every 100ms
+      console.log('[PROCTORING] Camera obstruction detection started (Web Worker, 100ms interval)');
     };
 
     videoRef.current.onloadedmetadata = () => {
-      checkObstruction();
-      console.log('[PROCTORING] Camera obstruction detection started');
+      startCameraCheck();
     };
-  }, [obstructionThreshold, logEvent]); // Removed stream - using ref
+  }, []); // No dependencies - uses refs internally
 
   // ==================== TRACK STATE MONITORING ====================
   const setupTrackMonitoring = useCallback(() => {
@@ -504,24 +653,42 @@ export function useProctoringMonitor({
     isMonitoringRef.current = true;
     setState(prev => ({ ...prev, isMonitoring: true }));
 
-    // Setup all detections
+    // Initialize Web Worker first
+    setupWorker();
+
+    // Setup all detections (lightweight - stay on main thread)
     const cleanupScreenshot = setupScreenshotDetection();
     const cleanupScreenRecording = setupScreenRecordingDetection();
     const cleanupCopyPaste = setupCopyPasteDetection();
     const cleanupTabSwitch = setupTabSwitchDetection();
 
-    // Stream-dependent setups
+    // Stream-dependent setups (heavy processing offloaded to Web Worker)
     if (streamRef.current) {
-      setupVoiceDetection();
-      setupCameraObstructionDetection();
-      setupTrackMonitoring();
+      // Small delay to ensure worker is ready
+      setTimeout(() => {
+        setupVoiceDetection();
+        setupCameraObstructionDetection();
+        setupTrackMonitoring();
+      }, 100);
     }
 
-    console.log('[PROCTORING] All monitoring systems active');
+    console.log('[PROCTORING] All monitoring systems active (Web Worker enabled)');
 
     return () => {
       isMonitoringRef.current = false;
       setState(prev => ({ ...prev, isMonitoring: false }));
+
+      // Cleanup voice detection interval
+      if (voiceIntervalRef.current) {
+        clearInterval(voiceIntervalRef.current);
+        voiceIntervalRef.current = null;
+      }
+
+      // Cleanup camera detection interval
+      if (cameraIntervalRef.current) {
+        clearInterval(cameraIntervalRef.current);
+        cameraIntervalRef.current = null;
+      }
 
       // Cleanup audio context
       if (audioContextRef.current) {
@@ -529,7 +696,7 @@ export function useProctoringMonitor({
         audioContextRef.current = null;
       }
 
-      // Cleanup animation frame
+      // Cleanup animation frame (legacy, kept for safety)
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
@@ -543,6 +710,13 @@ export function useProctoringMonitor({
 
       // Cleanup canvas
       canvasRef.current = null;
+
+      // Terminate Web Worker
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+        console.log('[PROCTORING] Web Worker terminated');
+      }
 
       // Cleanup event listeners
       cleanupScreenshot();

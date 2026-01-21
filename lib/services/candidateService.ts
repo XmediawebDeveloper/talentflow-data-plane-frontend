@@ -327,7 +327,12 @@ export const candidateService = {
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        throw new Error(error.response?.data?.detail || 'Failed to get assessment info');
+        // Check for session conflict (duplicate tab/browser)
+        const errorDetail = error.response?.data?.detail;
+        if (error.response?.status === 409 || (typeof errorDetail === 'object' && errorDetail?.code === 'DUPLICATE_SESSION')) {
+          throw new Error('DUPLICATE_SESSION');
+        }
+        throw new Error(typeof errorDetail === 'string' ? errorDetail : (errorDetail?.message || 'Failed to get assessment info'));
       }
       throw error;
     }

@@ -95,7 +95,6 @@ export function MultiLanguageCodeEditor({
   const [testResults, setTestResults] = useState<TestResult[] | null>(null);
   const [executionOutput, setExecutionOutput] = useState<ExecutionOutput | null>(null);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'problem' | 'output'>('problem');
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
   // Always show input panel so users can see and edit the input
   const [showInputPanel, setShowInputPanel] = useState(true);
@@ -194,7 +193,6 @@ export function MultiLanguageCodeEditor({
 
   const handleRunCode = async () => {
     setIsRunning(true);
-    setActiveTab('output');
     setExecutionOutput(null);
     setTestResults(null);
 
@@ -273,243 +271,227 @@ export function MultiLanguageCodeEditor({
 
   return (
     <div className="flex gap-4 h-[650px]">
-      {/* Left Panel - Problem Description */}
+      {/* Left Panel - Problem Description & Output */}
       <div className="w-[45%] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {/* Tabs */}
-        <div className="flex items-center gap-1 p-2 border-b border-gray-200 bg-gray-50">
-          <button
-            onClick={() => setActiveTab('problem')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'problem'
-                ? 'bg-white text-gray-800 shadow-sm'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            Problem
-          </button>
-          <button
-            onClick={() => setActiveTab('output')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-              activeTab === 'output'
-                ? 'bg-white text-gray-800 shadow-sm'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <Terminal className="w-4 h-4" />
-            Output
-            {testResults && (
-              <span
-                className={`px-2 py-0.5 rounded text-xs ${
-                  passedTests === totalTests
-                    ? 'bg-green-500 text-white'
-                    : 'bg-red-500 text-white'
-                }`}
-              >
-                {passedTests}/{totalTests}
-              </span>
-            )}
-          </button>
+        {/* Header */}
+        <div className="flex items-center gap-2 p-3 border-b border-gray-200 bg-gray-50">
+          <Code className="w-4 h-4 text-gray-600" />
+          <span className="text-sm font-medium text-gray-800">Problem</span>
         </div>
 
-        {/* Content */}
+        {/* Scrollable Content - Problem + Output */}
         <div className="flex-1 overflow-y-auto">
-          {activeTab === 'problem' ? (
-            <div className="p-6 space-y-6">
-              {/* Problem Title & Description */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                  {question.problem_title || question.question_text}
-                </h3>
-                <div className="prose prose-sm max-w-none text-gray-600">
-                  <p className="whitespace-pre-wrap">{question.question_text}</p>
-                </div>
-              </div>
-
-              {/* Input/Output Format */}
-              {question.input_format && (
-                <div>
-                  <h4 className="font-medium text-gray-800 mb-2 text-sm">Input Format</h4>
-                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                    {question.input_format}
-                  </p>
-                </div>
-              )}
-
-              {question.output_format && (
-                <div>
-                  <h4 className="font-medium text-gray-800 mb-2 text-sm">Output Format</h4>
-                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                    {question.output_format}
-                  </p>
-                </div>
-              )}
-
-              {/* Constraints */}
-              {question.constraints && question.constraints.length > 0 && (
-                <div>
-                  <h4 className="font-medium text-gray-800 mb-2 text-sm">Constraints</h4>
-                  <ul className="text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg">
-                    {question.constraints.map((constraint, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="text-gray-400">-</span>
-                        <code className="text-xs bg-gray-200 px-1 rounded">{constraint}</code>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Sample Input/Output */}
-              <div className="space-y-4">
-                <h4 className="font-medium text-gray-800 text-sm">Example</h4>
-
-                {question.sample_input && (
-                  <div className="relative">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Input
-                      </span>
-                      <button
-                        onClick={() => copyToClipboard(question.sample_input || '')}
-                        className="text-gray-400 hover:text-gray-600 p-1"
-                        title="Copy input"
-                      >
-                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm font-mono overflow-x-auto">
-                      {question.sample_input}
-                    </pre>
-                  </div>
-                )}
-
-                {question.sample_output && (
-                  <div>
-                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Output
-                    </span>
-                    <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm font-mono overflow-x-auto mt-2">
-                      {question.sample_output}
-                    </pre>
-                  </div>
-                )}
+          {/* Problem Section */}
+          <div className="p-5 space-y-5 border-b border-gray-100">
+            {/* Problem Title & Description */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                {question.problem_title || question.question_text}
+              </h3>
+              <div className="prose prose-sm max-w-none text-gray-600">
+                <p className="whitespace-pre-wrap">{question.question_text}</p>
               </div>
             </div>
-          ) : (
-            <div className="p-4">
-              {isRunning ? (
-                <div className="flex items-center justify-center h-64">
-                  <div className="text-center">
-                    <Loader2 className="w-10 h-10 text-blue-500 animate-spin mx-auto mb-4" />
-                    <p className="text-gray-600">Compiling and running code...</p>
-                  </div>
-                </div>
-              ) : executionOutput ? (
-                <div className="space-y-4">
-                  {/* Compilation Error */}
-                  {executionOutput.compile_error && (
-                    <div className="p-4 rounded-xl bg-red-50 border border-red-200">
-                      <div className="flex items-center gap-2 mb-2">
-                        <XCircle className="w-5 h-5 text-red-600" />
-                        <span className="font-medium text-red-800">Compilation Error</span>
-                      </div>
-                      <pre className="bg-red-900 text-red-200 p-4 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
-                        {executionOutput.compile_error}
-                      </pre>
-                    </div>
-                  )}
 
-                  {/* Runtime Error */}
-                  {executionOutput.error && !executionOutput.compile_error && (
-                    <div className="p-4 rounded-xl bg-red-50 border border-red-200">
-                      <div className="flex items-center gap-2 mb-2">
-                        <XCircle className="w-5 h-5 text-red-600" />
-                        <span className="font-medium text-red-800">Runtime Error</span>
-                      </div>
-                      <pre className="bg-red-900 text-red-200 p-4 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
-                        {executionOutput.error}
-                      </pre>
-                    </div>
-                  )}
+            {/* Input/Output Format */}
+            {question.input_format && (
+              <div>
+                <h4 className="font-medium text-gray-800 mb-2 text-sm">Input Format</h4>
+                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                  {question.input_format}
+                </p>
+              </div>
+            )}
 
-                  {/* Success Output */}
-                  {executionOutput.success && executionOutput.output && (
-                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-200">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                        <span className="font-medium text-gray-800">Output</span>
-                      </div>
-                      <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
-                        {executionOutput.output}
-                      </pre>
-                    </div>
-                  )}
+            {question.output_format && (
+              <div>
+                <h4 className="font-medium text-gray-800 mb-2 text-sm">Output Format</h4>
+                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                  {question.output_format}
+                </p>
+              </div>
+            )}
 
-                  {/* Test Results */}
-                  {testResults && testResults.length > 0 && (
-                    <div
-                      className={`p-4 rounded-xl ${
-                        passedTests === totalTests
-                          ? 'bg-green-50 border border-green-200'
-                          : 'bg-red-50 border border-red-200'
-                      }`}
+            {/* Constraints */}
+            {question.constraints && question.constraints.length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-800 mb-2 text-sm">Constraints</h4>
+                <ul className="text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg">
+                  {question.constraints.map((constraint, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-gray-400">-</span>
+                      <code className="text-xs bg-gray-200 px-1 rounded">{constraint}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Sample Input/Output */}
+            <div className="space-y-3">
+              <h4 className="font-medium text-gray-800 text-sm">Example</h4>
+
+              {question.sample_input && (
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Input
+                    </span>
+                    <button
+                      onClick={() => copyToClipboard(question.sample_input || '')}
+                      className="text-gray-400 hover:text-gray-600 p-1"
+                      title="Copy input"
                     >
-                      <div className="flex items-center gap-3 mb-4">
-                        {passedTests === totalTests ? (
-                          <CheckCircle className="w-6 h-6 text-green-600" />
-                        ) : (
-                          <XCircle className="w-6 h-6 text-red-600" />
-                        )}
-                        <div>
-                          <p
-                            className={`font-medium ${
-                              passedTests === totalTests ? 'text-green-800' : 'text-red-800'
-                            }`}
-                          >
-                            {passedTests === totalTests
-                              ? 'Sample test passed!'
-                              : 'Sample test failed'}
-                          </p>
-                        </div>
-                      </div>
+                      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
+                  <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto">
+                    {question.sample_input}
+                  </pre>
+                </div>
+              )}
 
-                      {testResults.map((result, idx) => (
-                        <div key={idx} className="space-y-2 text-sm">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <span className="text-gray-500 text-xs uppercase">Expected</span>
-                              <pre className="bg-white p-2 rounded mt-1 font-mono text-gray-700 text-xs">
-                                {result.expected}
-                              </pre>
-                            </div>
-                            <div>
-                              <span className="text-gray-500 text-xs uppercase">Your Output</span>
-                              <pre
-                                className={`p-2 rounded mt-1 font-mono text-xs ${
-                                  result.passed
-                                    ? 'bg-white text-gray-700'
-                                    : 'bg-red-100 text-red-700'
-                                }`}
-                              >
-                                {result.actual || '(no output)'}
-                              </pre>
-                            </div>
+              {question.sample_output && (
+                <div>
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    Expected Output
+                  </span>
+                  <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto mt-1">
+                    {question.sample_output}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Output Section - Always visible below problem */}
+          <div className="p-4 bg-gray-50">
+            <div className="flex items-center gap-2 mb-3">
+              <Terminal className="w-4 h-4 text-gray-600" />
+              <span className="text-sm font-medium text-gray-800">Output</span>
+              {testResults && (
+                <span
+                  className={`px-2 py-0.5 rounded text-xs ${
+                    passedTests === totalTests
+                      ? 'bg-green-500 text-white'
+                      : 'bg-red-500 text-white'
+                  }`}
+                >
+                  {passedTests}/{totalTests}
+                </span>
+              )}
+            </div>
+
+            {isRunning ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-3" />
+                  <p className="text-sm text-gray-600">Compiling and running...</p>
+                </div>
+              </div>
+            ) : executionOutput ? (
+              <div className="space-y-3">
+                {/* Compilation Error */}
+                {executionOutput.compile_error && (
+                  <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <XCircle className="w-4 h-4 text-red-600" />
+                      <span className="font-medium text-red-800 text-sm">Compilation Error</span>
+                    </div>
+                    <pre className="bg-red-900 text-red-200 p-3 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                      {executionOutput.compile_error}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Runtime Error */}
+                {executionOutput.error && !executionOutput.compile_error && (
+                  <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <XCircle className="w-4 h-4 text-red-600" />
+                      <span className="font-medium text-red-800 text-sm">Runtime Error</span>
+                    </div>
+                    <pre className="bg-red-900 text-red-200 p-3 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                      {executionOutput.error}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Success Output */}
+                {executionOutput.success && executionOutput.output && (
+                  <div className="p-3 rounded-lg bg-white border border-gray-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      <span className="font-medium text-gray-800 text-sm">Your Output</span>
+                    </div>
+                    <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+                      {executionOutput.output}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Test Results */}
+                {testResults && testResults.length > 0 && (
+                  <div
+                    className={`p-3 rounded-lg ${
+                      passedTests === totalTests
+                        ? 'bg-green-50 border border-green-200'
+                        : 'bg-red-50 border border-red-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      {passedTests === totalTests ? (
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-red-600" />
+                      )}
+                      <p
+                        className={`font-medium text-sm ${
+                          passedTests === totalTests ? 'text-green-800' : 'text-red-800'
+                        }`}
+                      >
+                        {passedTests === totalTests
+                          ? 'Sample test passed!'
+                          : 'Sample test failed'}
+                      </p>
+                    </div>
+
+                    {testResults.map((result, idx) => (
+                      <div key={idx} className="space-y-2 text-sm">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <span className="text-gray-500 text-xs uppercase">Expected</span>
+                            <pre className="bg-white p-2 rounded mt-1 font-mono text-gray-700 text-xs">
+                              {result.expected}
+                            </pre>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 text-xs uppercase">Your Output</span>
+                            <pre
+                              className={`p-2 rounded mt-1 font-mono text-xs ${
+                                result.passed
+                                  ? 'bg-white text-gray-700'
+                                  : 'bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {result.actual || '(no output)'}
+                            </pre>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-64 text-gray-400">
-                  <div className="text-center">
-                    <Play className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p>Run your code to see results</p>
+                      </div>
+                    ))}
                   </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-6 text-gray-400 bg-white rounded-lg border border-dashed border-gray-300">
+                <div className="text-center">
+                  <Play className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Click "Run" to see output</p>
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

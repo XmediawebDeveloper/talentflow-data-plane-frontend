@@ -260,7 +260,13 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       }
     } catch (err) {
       if (isMountedRef.current) {
-        setError(err instanceof Error ? err.message : 'Failed to load assessment');
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load assessment';
+        // Handle duplicate session error with user-friendly message
+        if (errorMessage === 'DUPLICATE_SESSION') {
+          setError('This assessment is already open in another tab or browser. Please use the original tab to continue your assessment. Only one active session is allowed.');
+        } else {
+          setError(errorMessage);
+        }
         setStepSafe('error');
       }
     }
@@ -704,6 +710,8 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
           onNavigate={handleNavigateToQuestion}
           videoRef={videoRef}
           stream={cameraStream}
+          isCameraActive={proctoringState.isCameraActive}
+          isMicrophoneActive={proctoringState.isMicrophoneActive}
         />
       );
 
