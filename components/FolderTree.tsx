@@ -244,6 +244,8 @@ export default function FolderTree({
     const isCreatingSubFolder = creatingSubFolderFor === folder.id;
     const hasMenu = showFolderMenu === folder.id;
     const isRenaming = renamingFolderId === folder.id;
+    const folderDepth = getFolderDepth(folder.id);
+    const canCreateSubfolder = folderDepth < MAX_FOLDER_DEPTH - 1;
 
     return (
       <div key={folder.id} className="relative">
@@ -304,14 +306,26 @@ export default function FolderTree({
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                if (!canCreateSubfolder) {
+                  toast.error(`Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)`);
+                  setShowFolderMenu(null);
+                  return;
+                }
                 setCreatingSubFolderFor(folder.id);
                 setIsCreatingFolder(false);
                 setShowFolderMenu(null);
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+              disabled={!canCreateSubfolder}
+              className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
+                canCreateSubfolder
+                  ? 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                  : 'text-gray-400 cursor-not-allowed'
+              }`}
+              title={!canCreateSubfolder ? `Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)` : ''}
             >
               <Plus className="w-4 h-4" />
               Create Subfolder
+              {!canCreateSubfolder && <span className="text-xs text-gray-400 ml-auto">(max depth)</span>}
             </button>
             {/* Only show rename option if not root folder */}
             {!(folder.name.toLowerCase() === 'root' && !folder.parentId) && (

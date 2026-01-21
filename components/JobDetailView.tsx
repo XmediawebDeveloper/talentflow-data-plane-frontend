@@ -629,24 +629,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   {getDisplayStatus(job.status, job.currentVersion)}
                 </span>
               </div>
+              {job.location && (
               <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
-                <div className="flex items-center gap-1">
-                  <Briefcase className="w-4 h-4" />
-                  {job.industry_type || '-'}
-                </div>
-                {job.location && (
                 <div className="flex items-center gap-1">
                   <MapPin className="w-4 h-4" />
                   {job.location}
                 </div>
-                )}
-                {job.experience && (
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    {job.experience}
-                  </div>
-                )}
               </div>
+              )}
 
               {/* Job Meta Information */}
               <div className="flex items-center gap-6 pt-4 border-t border-gray-200">
@@ -931,12 +921,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <span>{job.location}</span>
                 </div>
                 )}
-                {job.experience && (
-                  <div className="flex items-center gap-1.5">
-                    <Briefcase className="w-4 h-4 text-blue-600" />
-                    <span>{job.experience}</span>
-                  </div>
-                )}
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-4 h-4 text-blue-600" />
                   <span>Posted {job.postedDate
@@ -980,22 +964,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 )}
 
-               
-
-                {/* Must-Have Comments */}
-                {job.mustHaveComments && job.mustHaveComments.length > 0 && (
-                  <div>
-                    <h2 className="text-base font-semibold text-gray-900 mb-4">
-                      Must-Have Comments
-                    </h2>
-                    <div className="h-px bg-gray-200 mb-4"></div>
-                    <ul className="list-disc list-inside space-y-2 text-gray-700">
-                      {job.mustHaveComments.map((comment, index) => (
-                        <li key={index}>{comment}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
 
                 {/* Compensation */}
                 {(job.salaryMin || job.salaryMax) && (

@@ -437,13 +437,26 @@ export default function MyResumesPage() {
       console.log('[DEBUG] Creating folder:', { name, parentId });
       const newFolder = await folderService.create(name, parentId);
       console.log('[DEBUG] Folder created:', newFolder);
-      const converted: FolderType = {
-        id: newFolder.id,
-        name: newFolder.name,
-        count: 0,
-        parentId: newFolder.parent_id,
+
+      // Reload folders from backend to get proper tree structure
+      const folderResponse = await folderService.list();
+      const convertApiFolder = (f: ApiFolder): FolderType => ({
+        id: f.id,
+        name: f.name,
+        count: f.resume_count || 0,
+        parentId: f.parent_id,
+        children: f.children?.map(convertApiFolder),
+      });
+      const apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+
+      // Add "All Resumes" virtual folder at the top
+      const allResumesFolder: FolderType = {
+        id: 'all',
+        name: 'All Resumes',
+        count: resumes.length,
       };
-      setFolders(prev => [...prev, converted]);
+      setFolders([allResumesFolder, ...apiFolders]);
+
       toast.success('Folder created');
     } catch (error: any) {
       console.error('[DEBUG] Failed to create folder:', error);
