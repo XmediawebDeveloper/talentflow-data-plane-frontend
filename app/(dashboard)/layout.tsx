@@ -88,11 +88,71 @@ export default function DashboardLayout({
 
   if (isLoading) {
     console.log('[DASHBOARD] Still loading...');
+    // FIX-002: Skeleton loader instead of spinner
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-700 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+      <div className="flex h-screen bg-gray-50">
+        {/* Sidebar Skeleton */}
+        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+          {/* Logo area */}
+          <div className="h-16 px-4 flex items-center border-b border-gray-100">
+            <div className="h-8 w-32 bg-gray-200 rounded animate-pulse" />
+          </div>
+          {/* Nav items skeleton */}
+          <div className="flex-1 p-4 space-y-2">
+            {[75, 85, 65, 90, 70, 80, 95, 72].map((width, i) => (
+              <div key={i} className="flex items-center gap-3 p-2">
+                <div className="w-5 h-5 bg-gray-200 rounded animate-pulse" />
+                <div className="h-4 bg-gray-200 rounded animate-pulse" style={{ width: `${width}%` }} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col">
+          {/* Header Skeleton */}
+          <div className="h-16 bg-white border-b border-gray-200 px-8 flex items-center justify-between">
+            <div className="h-10 w-80 bg-gray-100 rounded-lg animate-pulse" />
+            <div className="flex items-center gap-4">
+              <div className="h-8 w-8 bg-gray-200 rounded-lg animate-pulse" />
+              <div className="h-8 w-8 bg-gray-200 rounded-lg animate-pulse" />
+              <div className="h-8 w-24 bg-gray-200 rounded-lg animate-pulse" />
+              <div className="h-9 w-9 bg-gray-300 rounded-full animate-pulse" />
+            </div>
+          </div>
+
+          {/* Content Skeleton */}
+          <div className="flex-1 p-8 space-y-6">
+            {/* Page title */}
+            <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+
+            {/* Stats cards skeleton */}
+            <div className="grid grid-cols-4 gap-6">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse mb-3" />
+                  <div className="h-8 w-16 bg-gray-200 rounded animate-pulse" />
+                </div>
+              ))}
+            </div>
+
+            {/* Table skeleton */}
+            <div className="bg-white rounded-xl border border-gray-200">
+              <div className="p-4 border-b border-gray-100">
+                <div className="h-6 w-32 bg-gray-200 rounded animate-pulse" />
+              </div>
+              <div className="divide-y divide-gray-100">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="p-4 flex items-center gap-4">
+                    <div className="h-4 w-4 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-4 bg-gray-200 rounded animate-pulse flex-1" />
+                    <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );

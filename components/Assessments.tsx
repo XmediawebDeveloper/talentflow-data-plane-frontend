@@ -95,18 +95,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   });
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
-  // Auto-open creation view if requested via query params
+  // FIX-004: Auto-open creation view inline if requested via props
   useEffect(() => {
     if (autoOpenCreate) {
-      // Navigate to create page with query params
-      const params = new URLSearchParams();
-      if (preSelectedJdId) params.set('jd_id', preSelectedJdId);
-      if (preSelectedJdTitle) params.set('jd_title', preSelectedJdTitle);
-      const queryString = params.toString();
-      router.push(`/recruitment/assessments/create${queryString ? `?${queryString}` : ''}`);
-      console.log('[TalentFlow] Auto-navigating to assessment creation for JD:', preSelectedJdId, preSelectedJdTitle);
+      // Open inline creation view instead of navigating
+      setShowCreation(true);
+      console.log('[TalentFlow] Auto-opening assessment creation for JD:', preSelectedJdId, preSelectedJdTitle);
     }
-  }, [autoOpenCreate, preSelectedJdId, preSelectedJdTitle, router]);
+  }, [autoOpenCreate, preSelectedJdId, preSelectedJdTitle]);
 
   // Load all data in parallel on mount (faster than 3 separate useEffects)
   useEffect(() => {
@@ -469,11 +465,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  // Check quota before navigating to creation page
+  // FIX-004: Check quota before opening creation view (inline instead of navigation)
   const handleOpenCreation = async () => {
     // If unlimited, allow creation
     if (isUnlimited) {
-      router.push('/recruitment/assessments/create');
+      setShowCreation(true);
       return;
     }
 
@@ -483,8 +479,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
 
-    // Navigate to creation page
-    router.push('/recruitment/assessments/create');
+    // FIX-004: Open inline creation view instead of navigating
+    setShowCreation(true);
   };
 
   const handleCreateAssessment = async (assessment: any) => {
@@ -1581,7 +1577,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No assessments yet</h3>
                 <p className="text-gray-600 mb-4">Create your first AI-powered assessment to start evaluating candidates</p>
                 <button
-                  onClick={() => router.push('/recruitment/assessments/create')}
+                  onClick={handleOpenCreation}
                   className="inline-flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-lg hover:bg-gray-900 transition-colors"
                 >
                   <Sparkles className="w-5 h-5" />
