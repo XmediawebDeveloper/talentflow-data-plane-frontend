@@ -238,8 +238,10 @@ export default function ResumeTable({
   }
 
   return (
-    <div className="flex-1 overflow-x-auto">
-      <table className="w-full">
+    <div className="flex-1">
+      {/* FIX-008: Desktop Table View - hidden on mobile */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full">
         <thead className="bg-gray-50 sticky top-0">
           <tr>
             {/* Drag handle column */}
@@ -568,7 +570,86 @@ export default function ResumeTable({
             </DraggableResumeRow>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
+
+      {/* FIX-008: Mobile Card View - visible only on mobile */}
+      <div className="md:hidden space-y-3 px-2">
+        {paginatedItems.map((resume) => (
+          <div
+            key={resume.id}
+            className={`bg-white border rounded-lg p-4 ${
+              selectedResumes.includes(resume.id) ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+            }`}
+          >
+            {/* Card Header */}
+            <div className="flex items-start gap-3 mb-3">
+              {!hideCheckboxes && (
+                <input
+                  type="checkbox"
+                  checked={selectedResumes.includes(resume.id)}
+                  onChange={() => onSelectResume(resume.id)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-600 mt-1"
+                />
+              )}
+              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm text-gray-700 flex-shrink-0">
+                {resume.name.split(' ').map(n => n[0]).join('')}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-gray-900 truncate">{resume.name}</div>
+                <div className="text-sm text-gray-500 truncate">{resume.title}</div>
+              </div>
+            </div>
+
+            {/* Card Content */}
+            <div className="space-y-2 text-sm mb-3">
+              {resume.email && resume.email !== 'No email' && (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Mail className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{resume.email}</span>
+                </div>
+              )}
+              {resume.experience && (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Briefcase className="w-4 h-4 flex-shrink-0" />
+                  <span>{resume.experience} years exp.</span>
+                </div>
+              )}
+              {resume.skills && resume.skills.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {resume.skills.slice(0, 3).map((skill, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs">
+                      {skill}
+                    </span>
+                  ))}
+                  {resume.skills.length > 3 && (
+                    <span className="px-2 py-0.5 text-gray-500 text-xs">+{resume.skills.length - 3}</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Card Actions */}
+            <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+              <button
+                onClick={() => onQuickView(resume)}
+                className="flex-1 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center gap-1"
+              >
+                <Eye className="w-4 h-4" />
+                View
+              </button>
+              <button
+                onClick={() => onApplyToJob(resume)}
+                className="flex-1 px-3 py-2 text-sm text-white bg-gray-800 hover:bg-gray-900 rounded-lg flex items-center justify-center gap-1"
+              >
+                <Briefcase className="w-4 h-4" />
+                Apply
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {totalPages > 1 && (
         <Pagination
           currentPage={currentPage}

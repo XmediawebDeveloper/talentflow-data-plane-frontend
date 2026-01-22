@@ -35,6 +35,7 @@ export type SSEEvent = SSEChunkEvent | SSETitleEvent | SSECompleteEvent | SSEErr
 export interface SSECallbacks {
   onChunk?: (content: string) => void;
   onTitle?: (title: string) => void;
+  onTextComplete?: () => void;  // Called when text streaming is done, before param extraction
   onComplete?: (data: { title: string; description: string; extracted_params: any }) => void;
   onError?: (message: string, errorCode?: string) => void;
   onConnected?: () => void;
@@ -120,6 +121,11 @@ export class JDStreamClient {
 
               case 'title':
                 callbacks.onTitle?.(data.content);
+                break;
+
+              case 'text_complete':
+                console.log('[Stream] Text generation complete, extracting params...');
+                callbacks.onTextComplete?.();
                 break;
 
               case 'complete':

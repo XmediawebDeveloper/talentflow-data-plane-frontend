@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useMemo } from 'react';
 import { Loader2, AlertTriangle, XCircle, CreditCard, ShieldX, LogIn } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -32,6 +32,8 @@ function AccessBlockedError({
         return <ShieldX className="w-16 h-16 text-yellow-500" />;
       case 'UNAUTHENTICATED':
         return <LogIn className="w-16 h-16 text-blue-500" />;
+      case 'JD_IN_USE':
+        return <AlertTriangle className="w-16 h-16 text-orange-500" />;
       default:
         return <AlertTriangle className="w-16 h-16 text-red-500" />;
     }
@@ -51,6 +53,8 @@ function AccessBlockedError({
         return 'Authentication Required';
       case 'JOB_QUOTA_EXCEEDED':
         return 'Job Quota Exceeded';
+      case 'JD_IN_USE':
+        return 'Job Description In Use';
       default:
         return 'Access Denied';
     }
@@ -176,6 +180,8 @@ function JDCreationContent() {
   const [loading, setLoading] = useState(true); // Start with loading true for access check
   const [accessCheck, setAccessCheck] = useState<JDAccessCheckResponse | null>(null);
   const [accessError, setAccessError] = useState<{ code: string; message: string } | null>(null);
+  const [isJDInUse, setIsJDInUse] = useState(false);
+  const [jdUsageMessage, setJdUsageMessage] = useState<string | undefined>(undefined);
 
   // JD01: Pre-condition validation on page load
   useEffect(() => {
@@ -206,6 +212,32 @@ function JDCreationContent() {
               creation_stage: jd.creation_stage,
               status: jd.status
             });
+
+            // Check usage status for published JDs - prevent editing if in use
+            if (jd.status === 'published') {
+              try {
+                const usageStatus = await jdService.getUsageStatus(jdId);
+                console.log('[TalentFlow] Usage status for JD:', usageStatus);
+
+                if (usageStatus && usageStatus.is_used) {
+                  // JD is in use - set flag to show warning and disable editing
+                  setIsJDInUse(true);
+                  const usageDetails = [
+                    usageStatus.usage?.resume_scores_count ? `Resume Scoring (${usageStatus.usage.resume_scores_count})` : '',
+                    usageStatus.usage?.assessments_count ? `Assessments (${usageStatus.usage.assessments_count})` : '',
+                    usageStatus.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : ''
+                  ].filter(Boolean).join(', ');
+                  setJdUsageMessage(
+                    usageStatus.edit_restriction_reason ||
+                    `This job description has been used in: ${usageDetails}. It cannot be modified. Please create a new JD instead.`
+                  );
+                }
+              } catch (usageError) {
+                console.error('[TalentFlow] Failed to check usage status:', usageError);
+                // Continue if usage check fails - backend will validate on save
+              }
+            }
+
             setEditingJD(jd);
           } catch (error) {
             console.error('Failed to fetch JD:', error);
@@ -235,6 +267,41 @@ function JDCreationContent() {
     router.push('/recruitment/job-openings');
   };
 
+  // Memoize editingJD to prevent unnecessary re-renders and state resets in JDCreation
+  const memoizedEditingJD = useMemo(() => {
+    if (!editingJD) return null;
+    return {
+      id: editingJD.id,
+      title: editingJD.title,
+      description: editingJD.description,
+      status: editingJD.status,
+      creation_stage: stageFromUrl || editingJD.creation_stage || 'create',
+      creation_method: editingJD.creation_method,
+      ai_prompt: editingJD.ai_prompt,
+      must_have_skills: editingJD.must_have_skills,
+      nice_to_have_skills: editingJD.nice_to_have_skills,
+      education_requirements: editingJD.education_requirements,
+      experience_min: editingJD.experience_min,
+      experience_max: editingJD.experience_max,
+      industry_type: editingJD.industry_type,
+      salary_min: editingJD.salary_min,
+      salary_max: editingJD.salary_max,
+      compensation_type: editingJD.compensation_type,
+      employment_type: editingJD.employment_type,
+      remote_type: editingJD.remote_type,
+      assessment_guidance: editingJD.assessment_guidance,
+      internal_comments: editingJD.internal_comments,
+      must_have_comments: editingJD.must_have_comments,
+      nice_to_have_comments: editingJD.nice_to_have_comments,
+      allow_overqualified: editingJD.allow_overqualified,
+      locations: editingJD.locations?.map(loc => ({
+        city: loc.city || '',
+        radius_km: loc.radius_km,
+        is_required: loc.is_required,
+      })),
+    };
+  }, [editingJD, stageFromUrl]);
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -261,35 +328,9 @@ function JDCreationContent() {
       <div className="h-[calc(100vh-64px)] overflow-hidden">
         <JDCreation
           onBack={handleViewAllJobs}
-          editingJD={editingJD ? {
-          id: editingJD.id,
-          title: editingJD.title,
-          description: editingJD.description,
-          status: editingJD.status,  // Pass status to determine if draft or published
-          creation_stage: stageFromUrl || editingJD.creation_stage || 'create',  // URL stage takes priority
-          creation_method: editingJD.creation_method,
-          ai_prompt: editingJD.ai_prompt,  // Original AI prompt for editing
-          must_have_skills: editingJD.must_have_skills,
-          nice_to_have_skills: editingJD.nice_to_have_skills,
-          education_requirements: editingJD.education_requirements,
-          experience_min: editingJD.experience_min,
-          experience_max: editingJD.experience_max,
-          industry_type: editingJD.industry_type,
-          salary_min: editingJD.salary_min,
-          salary_max: editingJD.salary_max,
-          compensation_type: editingJD.compensation_type,
-          employment_type: editingJD.employment_type,
-          remote_type: editingJD.remote_type,
-          assessment_guidance: editingJD.assessment_guidance,
-          internal_comments: editingJD.internal_comments,
-          must_have_comments: editingJD.must_have_comments,
-          allow_overqualified: editingJD.allow_overqualified,
-          locations: editingJD.locations?.map(loc => ({
-            city: loc.city || '',
-            radius_km: loc.radius_km,
-            is_required: loc.is_required,
-          })),
-        } : null}
+          editingJD={memoizedEditingJD}
+          isJDInUse={isJDInUse}
+          jdUsageMessage={jdUsageMessage}
         />
       </div>
     </DndProvider>

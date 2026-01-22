@@ -11,29 +11,43 @@ interface ResumeSelectionModalProps {
   onScoreResumes: (selectedIds: string[], source: 'my-resumes' | 'database') => void;
 }
 
-export default function ResumeSelectionModal({ 
-  jobTitle, 
-  myResumes, 
+export default function ResumeSelectionModal({
+  jobTitle,
+  myResumes,
   databaseResumes,
   folders,
-  onClose, 
-  onScoreResumes 
+  onClose,
+  onScoreResumes
 }: ResumeSelectionModalProps) {
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'database'>('my-resumes');
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
-  const [expandedFolders, setExpandedFolders] = useState<string[]>(['engineering', 'sales']);
+  const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+
+  // Debug: Log folders data
+  console.log('[ResumeSelectionModal] Folders received:', folders);
+  console.log('[ResumeSelectionModal] MyResumes count:', myResumes.length);
+  console.log('[ResumeSelectionModal] MyResumes sample:', myResumes.slice(0, 3).map(r => ({ id: r.id, name: r.name, folderId: r.folderId })));
 
   // Filter resumes based on active tab and selected folder
   const getFilteredResumes = () => {
     let resumes: Resume[] = [];
-    
+
     if (activeTab === 'my-resumes') {
       if (selectedFolder === 'all') {
         resumes = myResumes;
       } else {
-        resumes = myResumes.filter(r => r.folderId === selectedFolder);
+        // Check if selected folder is the root folder
+        const selectedFolderData = folders.find(f => f.id === selectedFolder);
+        const isRootFolder = selectedFolderData?.name?.toLowerCase() === 'root';
+
+        if (isRootFolder) {
+          // Root folder contains resumes with no folderId or folderId matching root
+          resumes = myResumes.filter(r => !r.folderId || r.folderId === selectedFolder);
+        } else {
+          resumes = myResumes.filter(r => r.folderId === selectedFolder);
+        }
       }
     } else {
       resumes = databaseResumes;
@@ -87,11 +101,21 @@ export default function ResumeSelectionModal({
 
   const getResumeCount = (folderId: string) => {
     if (folderId === 'all') return myResumes.length;
+    // Use folder's count from API if available, otherwise count from resumes
+    const folder = folders.find(f => f.id === folderId);
+    if (folder && folder.count !== undefined) {
+      return folder.count;
+    }
     return myResumes.filter(r => r.folderId === folderId).length;
   };
 
-  const renderFolderTree = (parentId?: string, level: number = 0) => {
-    const childFolders = folders.filter(f => f.parentId === parentId && !(f.name.toLowerCase() === 'root' && !f.parentId));
+  const renderFolderTree = (parentId?: string | null, level: number = 0) => {
+    // Filter folders by parentId - treat null and undefined as equivalent (top-level folders)
+    const childFolders = folders.filter(f => {
+      const isTopLevel = !parentId && (f.parentId === null || f.parentId === undefined);
+      const isChild = parentId && f.parentId === parentId;
+      return isTopLevel || isChild;
+    });
     
     return childFolders.map(folder => {
       const isExpanded = expandedFolders.includes(folder.id);

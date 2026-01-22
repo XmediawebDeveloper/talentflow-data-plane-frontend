@@ -2,7 +2,7 @@
  * Resume Scoring Service
  */
 
-import api, { handleApiError } from './api';
+import api, { handleApiError, dispatchUnitsConsumed } from './api';
 
 export interface ScoreBreakdownItem {
   category: string;
@@ -176,6 +176,10 @@ export const scoringService = {
         jd_id: jdId,
         resume_id: resumeId,
       });
+      // Dispatch event to refresh header quota display
+      if (response.data.unit_consumed) {
+        dispatchUnitsConsumed();
+      }
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -192,6 +196,8 @@ export const scoringService = {
         jd_id: jdId,
         resume_ids: resumeIds,
       });
+      // Dispatch event to refresh header quota display
+      dispatchUnitsConsumed();
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -340,6 +346,8 @@ export const scoringService = {
         jd_id: jdId,
         resume_ids: resumeIds,
       });
+      // Dispatch event to refresh header quota display
+      dispatchUnitsConsumed();
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

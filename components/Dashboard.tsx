@@ -204,13 +204,22 @@ export default function Dashboard({
             <div className="text-right bg-gray-50 rounded-lg p-4 border border-gray-200">
               <div className="text-xs text-gray-600 mb-1">Renews on</div>
               <div className="text-gray-900 mb-2">
-                {subscription?.renewalDate 
+                {subscription?.renewalDate
                   ? new Date(subscription.renewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                   : 'Jan 15, 2026'}
               </div>
-              <button className="text-sm text-gray-800 hover:text-gray-900 underline transition-colors">
-                Upgrade Plan
-              </button>
+              {user?.can_upgrade_plan !== false && onUpgradePlan ? (
+                <button
+                  onClick={onUpgradePlan}
+                  className="text-sm text-gray-800 hover:text-gray-900 underline transition-colors"
+                >
+                  Upgrade Plan
+                </button>
+              ) : (
+                <p className="text-xs text-gray-500 italic">
+                  Contact admin to upgrade plan
+                </p>
+              )}
             </div>
           </div>
 

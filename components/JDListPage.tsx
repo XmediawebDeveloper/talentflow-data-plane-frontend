@@ -5,6 +5,19 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+// FIX-003: Import Sheet for inline JD creation
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import JDCreation from '@/components/JDCreation';
+
+// Utility function to format employment type for display
+// Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
+const formatEmploymentType = (type: string | undefined): string => {
+  if (!type) return '';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
 
 // JD03: Status tabs for filtering
 const STATUS_TABS = [
@@ -26,6 +39,10 @@ export default function JDListPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [selectedJds, setSelectedJds] = useState<string[]>([]);
+
+  // FIX-003: State for inline JD creation/editing
+  const [showJDSheet, setShowJDSheet] = useState(false);
+  const [editingJDId, setEditingJDId] = useState<string | null>(null);
 
   // Read status from URL query parameter on mount
   useEffect(() => {
@@ -353,7 +370,13 @@ export default function JDListPage() {
             </p>
           </div>
           <button
-            onClick={() => canCreateJD && router.push('/recruitment/jd-creation')}
+            onClick={() => {
+              // FIX-003: Open sheet instead of navigating
+              if (canCreateJD) {
+                setEditingJDId(null);
+                setShowJDSheet(true);
+              }
+            }}
             disabled={!canCreateJD || accessCheckLoading}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
               canCreateJD
@@ -473,7 +496,11 @@ export default function JDListPage() {
             </p>
             {!searchQuery && statusFilter === 'all' && canCreateJD && (
               <button
-                onClick={() => router.push('/recruitment/jd-creation')}
+                onClick={() => {
+                  // FIX-003: Open sheet instead of navigating
+                  setEditingJDId(null);
+                  setShowJDSheet(true);
+                }}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
               >
                 <Plus className="w-4 h-4" />
@@ -508,6 +535,7 @@ export default function JDListPage() {
                         {getStatusBadge(jd.status, jd.current_version)}
                         {jd.creation_method && getCreationMethodBadge(jd.creation_method)}
                       </div>
+                      {/* FIX-008: Responsive metadata - primary info visible, secondary hidden on mobile */}
                       <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
                         <span className="flex items-center gap-1">
                           <FileText className="w-4 h-4" />
@@ -516,21 +544,22 @@ export default function JDListPage() {
                         {jd.employment_type && (
                           <span className="flex items-center gap-1">
                             <Briefcase className="w-4 h-4" />
-                            <span className="capitalize">{jd.employment_type.replace('_', ' ')}</span>
+                            <span>{formatEmploymentType(jd.employment_type)}</span>
                           </span>
                         )}
+                        {/* Hidden on mobile - secondary info */}
                         {jd.remote_type && (
-                          <span className="flex items-center gap-1">
+                          <span className="hidden sm:flex items-center gap-1">
                             <Monitor className="w-4 h-4" />
-                            <span className="capitalize">{jd.remote_type.replace('_', ' ')}</span>
+                            <span>{formatEmploymentType(jd.remote_type)}</span>
                           </span>
                         )}
-                        <span className="flex items-center gap-1">
+                        <span className="hidden sm:flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
                           Created {formatDate(jd.created_at)}
                         </span>
-                        {/* JD04: Last Updated */}
-                        <span className="flex items-center gap-1">
+                        {/* JD04: Last Updated - hidden on mobile */}
+                        <span className="hidden md:flex items-center gap-1">
                           <Clock className="w-4 h-4" />
                           Updated {formatDate(jd.updated_at)}
                         </span>
@@ -540,8 +569,9 @@ export default function JDListPage() {
                             Posted {formatDate(jd.published_at)}
                           </span>
                         )}
+                        {/* Hidden on mobile */}
                         {jd.created_by_name && (
-                          <span className="flex items-center gap-1">
+                          <span className="hidden md:flex items-center gap-1">
                             <User className="w-4 h-4" />
                             Created by {jd.created_by_name}
                           </span>
@@ -568,24 +598,27 @@ export default function JDListPage() {
                     </div>
                   </div>
 
-                  {/* Actions - View, Edit buttons and 3-dot menu */}
+                  {/* Actions - View, Edit buttons and 3-dot menu - FIX-008: Mobile-friendly */}
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* View Button */}
+                    {/* View Button - icon only on mobile */}
                     <button
                       onClick={() => router.push(`/recruitment/jd-details?id=${jd.id}`)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 whitespace-nowrap"
+                      className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 whitespace-nowrap"
                     >
                       <Eye className="w-4 h-4" />
-                      <span className="text-sm">View</span>
+                      <span className="text-sm hidden sm:inline">View</span>
                     </button>
 
-                    {/* Edit Button */}
+                    {/* Edit Button - FIX-003: Open in sheet, icon only on mobile */}
                     <button
-                      onClick={() => router.push(`/recruitment/jd-creation?id=${jd.id}`)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 whitespace-nowrap"
+                      onClick={() => {
+                        setEditingJDId(jd.id);
+                        setShowJDSheet(true);
+                      }}
+                      className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 whitespace-nowrap"
                     >
                       <Edit2 className="w-4 h-4" />
-                      <span className="text-sm">Edit</span>
+                      <span className="text-sm hidden sm:inline">Edit</span>
                     </button>
 
                     {/* More Actions Dropdown (3-dot menu) */}
@@ -686,6 +719,32 @@ export default function JDListPage() {
           </div>
         )}
       </div>
+
+      {/* FIX-003: JD Creation/Edit Sheet */}
+      <Sheet open={showJDSheet} onOpenChange={(open) => {
+        setShowJDSheet(open);
+        if (!open) setEditingJDId(null);
+      }}>
+        <SheetContent side="right" className="w-full max-w-6xl sm:max-w-6xl p-0 overflow-hidden">
+          <div className="h-full overflow-y-auto">
+            <JDCreation
+              editingJDId={editingJDId}
+              onClose={() => {
+                setShowJDSheet(false);
+                setEditingJDId(null);
+              }}
+              onSuccess={() => {
+                setShowJDSheet(false);
+                setEditingJDId(null);
+                // Refresh the JD list
+                fetchJDs();
+                toast.success(editingJDId ? 'JD updated successfully' : 'JD created successfully');
+              }}
+              isEmbedded={true}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

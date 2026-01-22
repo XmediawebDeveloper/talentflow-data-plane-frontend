@@ -128,6 +128,10 @@ export default function ResumeScoringPage({
   // View state
   const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'candidateView'>('history');
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<ScoredResumeData | null>(null);
+  const [isWaitingForInitialJd, setIsWaitingForInitialJd] = useState(false);
+
+  // Track if we've already handled the initialJdId to prevent re-triggering
+  const [initialJdHandled, setInitialJdHandled] = useState(false);
   const [selectedCandidateForView, setSelectedCandidateForView] = useState<any | null>(null);
   const [selectedJob, setSelectedJob] = useState('');
   const [resumeSource, setResumeSource] = useState<'my-resumes' | 'internal-database' | null>(null);
@@ -252,43 +256,70 @@ export default function ResumeScoringPage({
 
   // Handle initial JD ID from URL - auto-open scored resumes view
   useEffect(() => {
-    if (initialJdId && scoredHistory.length > 0) {
-      console.log('[ResumeScoringPage] Checking for initialJdId:', initialJdId);
-      const historyItem = scoredHistory.find(item => item.jobId === initialJdId);
-      if (historyItem) {
-        console.log('[ResumeScoringPage] Found history item for JD, auto-opening:', historyItem.jobTitle);
-        setSelectedHistoryItem(historyItem);
-        setViewMode('details');
+    // Only handle initialJdId once
+    if (initialJdHandled) return;
 
-        // Save to localStorage so we can restore this view later
-        try {
-          localStorage.setItem('lastViewedScoringJdId', initialJdId);
-        } catch (e) {
-          console.error('Failed to save last viewed JD:', e);
-        }
+    if (initialJdId) {
+      // Set waiting state when we have an initialJdId
+      if (!isWaitingForInitialJd && scoredHistory.length === 0) {
+        console.log('[ResumeScoringPage] Setting waiting state for initialJdId:', initialJdId);
+        setIsWaitingForInitialJd(true);
+        return;
+      }
 
-        // If show_progress is requested, open the job progress modal
-        if (initialShowProgress) {
-          console.log('[ResumeScoringPage] Show progress requested, opening progress modal');
-          const jobProgress: JobScoringProgress = {
-            jobId: historyItem.jobId,
-            jobTitle: historyItem.jobTitle,
-            total: historyItem.totalScored,
-            queued: 0,
-            inProgress: 0,
-            completed: historyItem.scoredResumes.length,
-            failed: historyItem.totalScored - historyItem.scoredResumes.length,
-          };
-          setJobProgressData([jobProgress]);
-          setShowJobProgressModal(true);
+      if (scoredHistory.length > 0) {
+        console.log('[ResumeScoringPage] Checking for initialJdId:', initialJdId);
+        const historyItem = scoredHistory.find(item => item.jobId === initialJdId);
+        if (historyItem) {
+          console.log('[ResumeScoringPage] Found history item for JD, auto-opening:', historyItem.jobTitle);
+          setSelectedHistoryItem(historyItem);
+          setViewMode('details');
+          setIsWaitingForInitialJd(false);
+          setInitialJdHandled(true);
+
+          // Save to localStorage so we can restore this view later
+          try {
+            localStorage.setItem('lastViewedScoringJdId', initialJdId);
+          } catch (e) {
+            console.error('Failed to save last viewed JD:', e);
+          }
+
+          // If show_progress is requested, open the job progress modal
+          if (initialShowProgress) {
+            console.log('[ResumeScoringPage] Show progress requested, opening progress modal');
+            const jobProgress: JobScoringProgress = {
+              jobId: historyItem.jobId,
+              jobTitle: historyItem.jobTitle,
+              total: historyItem.totalScored,
+              queued: 0,
+              inProgress: 0,
+              completed: historyItem.scoredResumes.length,
+              failed: historyItem.totalScored - historyItem.scoredResumes.length,
+            };
+            setJobProgressData([jobProgress]);
+            setShowJobProgressModal(true);
+          }
+        } else {
+          console.log('[ResumeScoringPage] No history item found for JD:', initialJdId);
+          // History is loaded but JD not found - stop waiting and show history view
+          setIsWaitingForInitialJd(false);
+          setInitialJdHandled(true);
         }
-      } else {
-        console.log('[ResumeScoringPage] No history item found for JD:', initialJdId);
       }
     }
-    // Removed: Auto-restore from localStorage - users should start at history view
-    // when navigating to Resume Scoring without a specific JD in URL
-  }, [initialJdId, scoredHistory, initialShowProgress]);
+  }, [initialJdId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd]);
+
+  // Timeout for waiting state - don't wait forever for history to load
+  useEffect(() => {
+    if (isWaitingForInitialJd) {
+      const timeout = setTimeout(() => {
+        console.log('[ResumeScoringPage] Timeout waiting for initial JD, showing history view');
+        setIsWaitingForInitialJd(false);
+        setInitialJdHandled(true);
+      }, 5000); // 5 second timeout
+      return () => clearTimeout(timeout);
+    }
+  }, [isWaitingForInitialJd]);
 
   // Fetch available units on mount
   useEffect(() => {
@@ -611,6 +642,18 @@ export default function ResumeScoringPage({
     });
   };
 
+  // Show loading when waiting for initial JD's history to load
+  if (isWaitingForInitialJd) {
+    return (
+      <main className="flex-1 flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-gray-800 mx-auto mb-3" />
+          <p className="text-gray-600">Loading scored candidates...</p>
+        </div>
+      </main>
+    );
+  }
+
   // View Candidate Scoring Detail Page
   if (viewMode === 'candidateView' && selectedCandidateForView && selectedHistoryItem) {
     return (
@@ -781,6 +824,70 @@ export default function ResumeScoringPage({
             progressData={progressData}
             onClose={() => setShowProgressModal(false)}
             showJobTitleColumn={showJobTitleColumn}
+            onRetryFailed={async (item) => {
+              try {
+                // Update item status to "Scoring in progress"
+                setProgressData(prev => prev.map(p =>
+                  p.id === item.id
+                    ? { ...p, status: 'Scoring in progress' as const, errorReason: undefined }
+                    : p
+                ));
+
+                // Check quota before retry
+                const quotaResponse = await api.get('/usage/quota-status');
+                const quotas = quotaResponse.data?.data?.quotas;
+                const remainingUnits = quotas?.RS?.total_remaining || 0;
+
+                if (remainingUnits < 1) {
+                  setProgressData(prev => prev.map(p =>
+                    p.id === item.id
+                      ? { ...p, status: 'Failed' as const, errorReason: 'Insufficient scoring units' }
+                      : p
+                  ));
+                  toast.error('Insufficient scoring units for retry');
+                  return;
+                }
+
+                // Retry scoring
+                await scoringService.scoreResume(item.jobId, item.resumeId);
+
+                // Fetch updated score
+                const historyResponse = await jdService.getScoredResumes(item.jobId);
+                const scoredResume = historyResponse.resumes?.find(r => r.resume_id === item.resumeId);
+
+                // Update item with success status
+                setProgressData(prev => prev.map(p =>
+                  p.id === item.id
+                    ? {
+                        ...p,
+                        status: 'Scored successfully' as const,
+                        errorReason: undefined,
+                        scoredDateTime: new Date(),
+                        matchResult: scoredResume
+                          ? (scoredResume.match_score >= 85 ? 'Exact Match'
+                             : scoredResume.match_score >= 70 ? 'Partial Match'
+                             : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
+                          : undefined,
+                        score: scoredResume?.match_score
+                      }
+                    : p
+                ));
+
+                toast.success(`Successfully scored ${item.candidateName}`);
+              } catch (error: any) {
+                // Update item with failure status
+                setProgressData(prev => prev.map(p =>
+                  p.id === item.id
+                    ? {
+                        ...p,
+                        status: 'Failed' as const,
+                        errorReason: error?.message || 'Retry failed'
+                      }
+                    : p
+                ));
+                toast.error(`Failed to retry scoring for ${item.candidateName}`);
+              }
+            }}
           />
         )}
 
@@ -1558,6 +1665,70 @@ export default function ResumeScoringPage({
             progressData={progressData}
             onClose={() => setShowProgressModal(false)}
             showJobTitleColumn={showJobTitleColumn}
+            onRetryFailed={async (item) => {
+              try {
+                // Update item status to "Scoring in progress"
+                setProgressData(prev => prev.map(p =>
+                  p.id === item.id
+                    ? { ...p, status: 'Scoring in progress' as const, errorReason: undefined }
+                    : p
+                ));
+
+                // Check quota before retry
+                const quotaResponse = await api.get('/usage/quota-status');
+                const quotas = quotaResponse.data?.data?.quotas;
+                const remainingUnits = quotas?.RS?.total_remaining || 0;
+
+                if (remainingUnits < 1) {
+                  setProgressData(prev => prev.map(p =>
+                    p.id === item.id
+                      ? { ...p, status: 'Failed' as const, errorReason: 'Insufficient scoring units' }
+                      : p
+                  ));
+                  toast.error('Insufficient scoring units for retry');
+                  return;
+                }
+
+                // Retry scoring
+                await scoringService.scoreResume(item.jobId, item.resumeId);
+
+                // Fetch updated score
+                const historyResponse = await jdService.getScoredResumes(item.jobId);
+                const scoredResume = historyResponse.resumes?.find(r => r.resume_id === item.resumeId);
+
+                // Update item with success status
+                setProgressData(prev => prev.map(p =>
+                  p.id === item.id
+                    ? {
+                        ...p,
+                        status: 'Scored successfully' as const,
+                        errorReason: undefined,
+                        scoredDateTime: new Date(),
+                        matchResult: scoredResume
+                          ? (scoredResume.match_score >= 85 ? 'Exact Match'
+                             : scoredResume.match_score >= 70 ? 'Partial Match'
+                             : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
+                          : undefined,
+                        score: scoredResume?.match_score
+                      }
+                    : p
+                ));
+
+                toast.success(`Successfully scored ${item.candidateName}`);
+              } catch (error: any) {
+                // Update item with failure status
+                setProgressData(prev => prev.map(p =>
+                  p.id === item.id
+                    ? {
+                        ...p,
+                        status: 'Failed' as const,
+                        errorReason: error?.message || 'Retry failed'
+                      }
+                    : p
+                ));
+                toast.error(`Failed to retry scoring for ${item.candidateName}`);
+              }
+            }}
           />
         )}
 
@@ -1964,6 +2135,70 @@ export default function ResumeScoringPage({
           onClose={() => setShowProgressModal(false)}
           filterByJobId={filterByJobId}
           showJobTitleColumn={showJobTitleColumn}
+          onRetryFailed={async (item) => {
+            try {
+              // Update item status to "Scoring in progress"
+              setProgressData(prev => prev.map(p =>
+                p.id === item.id
+                  ? { ...p, status: 'Scoring in progress' as const, errorReason: undefined }
+                  : p
+              ));
+
+              // Check quota before retry
+              const quotaResponse = await api.get('/usage/quota-status');
+              const quotas = quotaResponse.data?.data?.quotas;
+              const remainingUnits = quotas?.RS?.total_remaining || 0;
+
+              if (remainingUnits < 1) {
+                setProgressData(prev => prev.map(p =>
+                  p.id === item.id
+                    ? { ...p, status: 'Failed' as const, errorReason: 'Insufficient scoring units' }
+                    : p
+                ));
+                toast.error('Insufficient scoring units for retry');
+                return;
+              }
+
+              // Retry scoring
+              await scoringService.scoreResume(item.jobId, item.resumeId);
+
+              // Fetch updated score
+              const historyResponse = await jdService.getScoredResumes(item.jobId);
+              const scoredResume = historyResponse.resumes?.find(r => r.resume_id === item.resumeId);
+
+              // Update item with success status
+              setProgressData(prev => prev.map(p =>
+                p.id === item.id
+                  ? {
+                      ...p,
+                      status: 'Scored successfully' as const,
+                      errorReason: undefined,
+                      scoredDateTime: new Date(),
+                      matchResult: scoredResume
+                        ? (scoredResume.match_score >= 85 ? 'Exact Match'
+                           : scoredResume.match_score >= 70 ? 'Partial Match'
+                           : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
+                        : undefined,
+                      score: scoredResume?.match_score
+                    }
+                  : p
+              ));
+
+              toast.success(`Successfully scored ${item.candidateName}`);
+            } catch (error: any) {
+              // Update item with failure status
+              setProgressData(prev => prev.map(p =>
+                p.id === item.id
+                  ? {
+                      ...p,
+                      status: 'Failed' as const,
+                      errorReason: error?.message || 'Retry failed'
+                    }
+                  : p
+              ));
+              toast.error(`Failed to retry scoring for ${item.candidateName}`);
+            }
+          }}
         />
       )}
 

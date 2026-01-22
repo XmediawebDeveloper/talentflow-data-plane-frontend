@@ -99,6 +99,24 @@ export default function FeaturePermissionManager({
         featurePermissionService.getAvailableFeatures()
       ]);
 
+      // Safety check: Ensure all_features exists and is an array
+      if (!availableFeatures || !Array.isArray(availableFeatures.all_features)) {
+        console.error('Invalid response from getAvailableFeatures:', availableFeatures);
+        toast.error('Failed to load features: Invalid data format');
+        setFeatures([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Safety check: Ensure enabled_features exists and is an array
+      if (!userFlags || !Array.isArray(userFlags.enabled_features)) {
+        console.error('Invalid response from getUserFeatureFlags:', userFlags);
+        toast.error('Failed to load user features: Invalid data format');
+        setFeatures([]);
+        setIsLoading(false);
+        return;
+      }
+
       const featureStates: FeatureState[] = availableFeatures.all_features.map(f => {
         const isEnabled = userFlags.enabled_features.includes(f.code);
         const deps = getFeatureDependencies(f.code);
@@ -132,7 +150,9 @@ export default function FeaturePermissionManager({
       const categories = [...new Set(featureStates.map(f => f.category))];
       setExpandedCategories(categories);
     } catch (error: any) {
+      console.error('Error loading features:', error);
       toast.error(error.message || 'Failed to load features');
+      setFeatures([]);
     } finally {
       setIsLoading(false);
     }

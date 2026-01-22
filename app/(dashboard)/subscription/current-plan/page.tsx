@@ -8,10 +8,11 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
+import { useQuota } from '@/contexts/QuotaContext';
 
-const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://localhost:8000/api/v1';
-const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8000';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+// Use backend API - no direct Admin API calls
+const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 interface PlanFeature {
   id: string;
@@ -109,13 +110,13 @@ interface CompanySettings {
   plan_expiry_date?: string;
   last_synced_at?: string;
   status: string;
-  max_seats: number;
-  max_jobs: number;
-  max_resume_uploads: number;
-  max_resume_searches: number;
-  max_assessments: number;
-  max_ai_interviews: number;
-  storage_limit_gb: number;
+  max_seats: number | string;  // Can be "unlimited"
+  max_jobs: number | string;   // Can be "unlimited"
+  max_resume_uploads: number | string;  // Can be "unlimited"
+  max_resume_searches: number | string; // Can be "unlimited"
+  max_assessments: number | string;     // Can be "unlimited"
+  max_ai_interviews: number | string;   // Can be "unlimited"
+  storage_limit_gb: number | string;    // Can be "unlimited"
   trial_start_date?: string;
   trial_end_date?: string;
   selected_plan_id?: number;
@@ -315,9 +316,24 @@ const formatCardNumber = (value: string): string => {
   return parts.length ? parts.join(' ') : value;
 };
 
+// Format quota values - handles "unlimited" string and large numbers
+const formatQuotaValue = (value: number | string | undefined | null): string => {
+  if (value === undefined || value === null) return '-';
+  if (value === 'unlimited' || value === 'Unlimited') return 'Unlimited';
+  if (typeof value === 'string' && value.toLowerCase() === 'unlimited') return 'Unlimited';
+  if (typeof value === 'number') {
+    if (value >= 999999) return 'Unlimited';
+    return value.toLocaleString();
+  }
+  return String(value);
+};
+
 function CurrentPlanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Use shared quota context - prevents duplicate API calls
+  const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
 
   // Get encoded plan from URL (from login redirect after signup)
   const encodedPlanFromUrl = searchParams.get('plan');
@@ -419,36 +435,10 @@ function CurrentPlanContent() {
       setError(null);
       setTenantStatus(null);
 
-      // Fetch quota status from backend API (calls external admin API)
-      let quotaData: any = null;
-      try {
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-          const quotaResponse = await fetch(`${API_URL}/usage/quota-status`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          });
-          if (quotaResponse.ok) {
-            const quotaResult = await quotaResponse.json();
-            quotaData = quotaResult.data || quotaResult;
-            console.log('[CurrentPlan] Quota status:', quotaData);
-          } else if (quotaResponse.status === 403) {
-            // Handle TENANT_INACTIVE error
-            const errorData = await quotaResponse.json();
-            if (errorData?.detail?.error === 'TENANT_INACTIVE') {
-              setTenantStatus({
-                status: errorData.detail.status || 'PENDING',
-                message: errorData.detail.message || 'Your account is pending activation.',
-              });
-              console.log('[CurrentPlan] Tenant inactive:', errorData.detail);
-            }
-          }
-        }
-      } catch (quotaError) {
-        console.log('Could not fetch quota status');
-      }
+      // Use shared quota data from context (prevents duplicate API calls)
+      // The sharedQuotaData comes from QuotaContext which is fetched once at dashboard layout level
+      const quotaData: any = sharedQuotaData;
+      console.log('[CurrentPlan] Using shared quota data from context:', quotaData ? 'available' : 'not yet loaded');
 
       // Fetch free trial settings from API
       let trialSettings: FreeTrialSettings | null = null;
@@ -557,16 +547,19 @@ function CurrentPlanContent() {
 
         console.log('[CurrentPlan] isTrial:', isTrial, 'trialSettings:', trialSettings?.features);
 
-        // Extract base_price from plan_info if available (only for paid plans)
-        if (!isTrial && quotaData.plan_info?.base_price !== undefined) {
-          setCurrentPlanPrice(quotaData.plan_info.base_price);
-          console.log('[CurrentPlan] Setting price from plan_info:', quotaData.plan_info.base_price);
+        // Extract subscribed_price from plan_info (what user is actually paying)
+        if (!isTrial && quotaData.plan_info?.subscribed_price !== undefined) {
+          setCurrentPlanPrice(quotaData.plan_info.subscribed_price);
+          console.log('[CurrentPlan] Setting price from plan_info.subscribed_price:', quotaData.plan_info.subscribed_price);
         } else if (isTrial) {
           setCurrentPlanPrice(0); // Free trial has no price
         }
 
+        // API returns billing_period (ANNUAL/MONTHLY) - this is the plan type
+        // billing_interval might be different (e.g., monthly payments on annual plan)
         if (quotaData.plan_info?.billing_period) {
           setCurrentPlanBillingPeriod(quotaData.plan_info.billing_period);
+          console.log('[CurrentPlan] Billing period:', quotaData.plan_info.billing_period, ', billing_interval:', quotaData.plan_info.billing_interval);
         }
       }
 
@@ -586,40 +579,9 @@ function CurrentPlanContent() {
         console.log('Could not fetch plan settings');
       }
 
-      let settings: CompanySettings | null = null;
-      try {
-        const settingsResponse = await api.get<CompanySettings>('/settings/company-settings');
-        settings = settingsResponse.data;
-        // Merge company-settings with quota data (quota data takes priority)
-        setCompanySettings(prev => {
-          if (!prev) return settings!;
-
-          // Quota-status data takes priority, fall back to company-settings only if quota data is missing
-          return {
-            ...settings!,
-            // Prioritize quota-status data over company-settings
-            current_plan_name: prev.current_plan_name || settings?.current_plan_name,
-            current_plan_id: prev.current_plan_id || settings?.current_plan_id,
-            trial_start_date: prev.trial_start_date || settings?.trial_start_date,
-            trial_end_date: prev.trial_end_date || settings?.trial_end_date,
-            plan_start_date: prev.plan_start_date || settings?.plan_start_date,
-            plan_expiry_date: prev.plan_expiry_date || settings?.plan_expiry_date,
-            subscription_status: prev.subscription_status || settings?.subscription_status,
-            status: prev.status || settings?.status,
-            max_seats: prev.max_seats || settings?.max_seats,
-            max_jobs: prev.max_jobs || settings?.max_jobs,
-            max_resume_uploads: prev.max_resume_uploads || settings?.max_resume_uploads,
-            max_resume_searches: prev.max_resume_searches || settings?.max_resume_searches,
-            max_assessments: prev.max_assessments || settings?.max_assessments,
-            max_ai_interviews: prev.max_ai_interviews || settings?.max_ai_interviews,
-            storage_limit_gb: prev.storage_limit_gb || settings?.storage_limit_gb,
-          };
-        });
-        console.log('[CurrentPlan] Merged company settings with quota data');
-      } catch (settingsError) {
-        console.log('Could not fetch company settings, using quota data only');
-        // Company settings API failed - quota data already set, no need to overwrite
-      }
+      // NOTE: All plan data now comes from /usage/quota-status API (Admin API)
+      // No need to call /settings/company-settings - quota-status is the single source of truth
+      console.log('[CurrentPlan] Using quota-status API as single source of truth for plan data');
 
       // Fetch tenant_id from /auth/me (using data-plane API)
       try {
@@ -686,9 +648,9 @@ function CurrentPlanContent() {
             ?.map(f => f.feature_name) || [];
 
           // Check if monthly or annual plan is the current plan
-          // Use multiple sources for current_plan_id: settings API, quota API, or plan name match
-          const currentPlanId = settings?.current_plan_id ?? quotaData?.plan_info?.plan_id;
-          const currentPlanName = settings?.current_plan_name ?? quotaData?.plan_name ?? quotaData?.plan_info?.plan_name;
+          // Use quota-status API as single source of truth for plan info
+          const currentPlanId = quotaData?.plan_info?.plan_id;
+          const currentPlanName = quotaData?.plan_name ?? quotaData?.plan_info?.plan_name;
 
           const isCurrentMonthly = currentPlanId !== undefined && currentPlanId !== null &&
             Number(currentPlanId) === Number(monthly?.id);
@@ -791,18 +753,33 @@ function CurrentPlanContent() {
 
       const data = await response.json();
 
-      if (response.ok && data.status === 'success') {
-        setSuccessMessage(`Successfully upgraded to ${selectedQueuedUpgrade.new_plan_name}!`);
+      if (response.ok && (data.status === 'success' || data.status === 'partial')) {
+        // Check if it was a partial success (local update succeeded but admin API failed)
+        if (data.status === 'partial') {
+          // Show warning message for partial success
+          const adminError = data.data?.admin_error || 'Admin system sync failed';
+          setError(`Plan upgraded locally, but sync with admin system failed: ${adminError}. Your plan is active but please contact support if you experience issues.`);
+        } else {
+          setSuccessMessage(`Successfully upgraded to ${selectedQueuedUpgrade.new_plan_name}!`);
+        }
+
         setShowTCModal(false);
         setSelectedQueuedUpgrade(null);
         setTcAccepted(false);
-        // Refresh data
-        await fetchData();
+
+        // Refresh shared quota context first (this updates the source of truth)
+        await refetchQuota();
+
+        // Reset the fetch flag so fetchData runs again with new quota data
+        hasFetchedRef.current = false;
+
+        // Refresh page data and queued upgrades
         await fetchQueuedUpgrades();
+
         // Notify Header component to refresh quota/plan display
         window.dispatchEvent(new CustomEvent('planChanged'));
       } else {
-        setError(data.detail || 'Failed to apply upgrade');
+        setError(data.detail || data.data?.message || 'Failed to apply upgrade');
       }
     } catch (err) {
       console.error('[CurrentPlan] Error applying upgrade:', err);
@@ -850,13 +827,18 @@ function CurrentPlanContent() {
   };
 
   useEffect(() => {
-    // Prevent duplicate calls on re-renders or React Strict Mode
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
+    // Wait for shared quota data to be loaded before fetching other data
+    if (quotaLoading) return;
 
-    fetchData();
-    fetchQueuedUpgrades();
-  }, []);
+    // Prevent duplicate calls on re-renders or React Strict Mode
+    if (hasFetchedRef.current && sharedQuotaData) return;
+
+    if (sharedQuotaData) {
+      hasFetchedRef.current = true;
+      fetchData();
+      fetchQueuedUpgrades();
+    }
+  }, [sharedQuotaData, quotaLoading]);
 
   // Auto-select plan from URL parameter (from pricing page flow)
   useEffect(() => {
@@ -924,7 +906,8 @@ function CurrentPlanContent() {
   };
 
   const handleChoosePlan = (plan: DisplayPlan) => {
-    if (!plan.price) {
+    // Check if plan has any pricing (monthly OR annual)
+    if (!plan.monthlyPrice && !plan.annualPrice) {
       setError('Cannot select a plan without a price');
       return;
     }
@@ -962,16 +945,44 @@ function CurrentPlanContent() {
       const token = localStorage.getItem('accessToken');
       const apiUrl = `${API_URL}/subscription/${tenantId}/select-plan`;
 
-      // Request body per API spec - use correct plan_id based on billing period
-      const planId = isYearly
-        ? (selectedPlanForPayment.annualPlanId || selectedPlanForPayment.numericId)
-        : (selectedPlanForPayment.monthlyPlanId || selectedPlanForPayment.numericId);
+      // Request body per API spec - use correct plan_id based on billing period AND availability
+      // If user selects yearly but only monthly exists, use monthly plan ID and MONTHLY interval
+      // If user selects monthly but only yearly exists, use yearly plan ID and ANNUAL interval
+      const hasAnnual = !!selectedPlanForPayment.annualPlanId;
+      const hasMonthly = !!selectedPlanForPayment.monthlyPlanId;
+
+      // Determine actual billing interval based on availability
+      let actualBillingInterval: 'ANNUAL' | 'MONTHLY';
+      let planId: number;
+
+      if (isYearly && hasAnnual) {
+        // User wants yearly and it's available
+        actualBillingInterval = 'ANNUAL';
+        planId = selectedPlanForPayment.annualPlanId!;
+      } else if (!isYearly && hasMonthly) {
+        // User wants monthly and it's available
+        actualBillingInterval = 'MONTHLY';
+        planId = selectedPlanForPayment.monthlyPlanId!;
+      } else if (hasAnnual) {
+        // Only annual available (user wanted monthly but it's not available)
+        actualBillingInterval = 'ANNUAL';
+        planId = selectedPlanForPayment.annualPlanId!;
+      } else if (hasMonthly) {
+        // Only monthly available (user wanted yearly but it's not available)
+        actualBillingInterval = 'MONTHLY';
+        planId = selectedPlanForPayment.monthlyPlanId!;
+      } else {
+        // Fallback to numericId (shouldn't happen with proper validation)
+        actualBillingInterval = isYearly ? 'ANNUAL' : 'MONTHLY';
+        planId = selectedPlanForPayment.numericId;
+      }
 
       console.log('[SelectPlan] Plan IDs available:', {
         monthlyPlanId: selectedPlanForPayment.monthlyPlanId,
         annualPlanId: selectedPlanForPayment.annualPlanId,
         numericId: selectedPlanForPayment.numericId,
         isYearly,
+        actualBillingInterval,
         selectedPlanId: planId,
       });
 
@@ -980,7 +991,7 @@ function CurrentPlanContent() {
         schema_per_tenant: isolationType === 'schema',
         database_per_tenant: isolationType === 'database',
         external_transaction_id: transactionId,
-        billing_interval: isYearly ? 'ANNUAL' : 'MONTHLY',
+        billing_interval: actualBillingInterval,
       };
 
       console.log('Calling API:', apiUrl);
@@ -1495,37 +1506,37 @@ function CurrentPlanContent() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {companySettings.max_seats || '-'}
+                    {formatQuotaValue(companySettings.max_seats)}
                   </p>
                   <p className="text-xs text-gray-600">Team Seats</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {companySettings.max_jobs || '-'}
+                    {formatQuotaValue(companySettings.max_jobs)}
                   </p>
                   <p className="text-xs text-gray-600">Job Postings</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {companySettings.max_resume_uploads || '-'}
+                    {formatQuotaValue(companySettings.max_resume_uploads)}
                   </p>
                   <p className="text-xs text-gray-600">Resume Uploads</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {companySettings.max_resume_searches || '-'}
+                    {formatQuotaValue(companySettings.max_resume_searches)}
                   </p>
-                  <p className="text-xs text-gray-600">Resume Searches</p>
+                  <p className="text-xs text-gray-600">Resume Scores</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {companySettings.max_assessments || '-'}
+                    {formatQuotaValue(companySettings.max_assessments)}
                   </p>
                   <p className="text-xs text-gray-600">Assessments</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {companySettings.max_ai_interviews || '-'}
+                    {formatQuotaValue(companySettings.max_ai_interviews)}
                   </p>
                   <p className="text-xs text-gray-600">AI Interviews</p>
                 </div>
@@ -1734,16 +1745,19 @@ function CurrentPlanContent() {
                             <span className="text-4xl font-bold text-gray-900">
                               {formatCurrency(
                                 isYearly
-                                  ? (plan.annualPrice || 0)
-                                  : (plan.monthlyPrice || 0),
+                                  ? (plan.annualPrice ?? plan.monthlyPrice ?? 0)
+                                  : (plan.monthlyPrice ?? plan.annualPrice ?? 0),
                                 plan.currency
                               )}
                             </span>
                             <span className="text-gray-500 text-sm">
-                              {isYearly ? '/year' : '/month'}
+                              {/* Show correct billing period based on what's available */}
+                              {isYearly
+                                ? (plan.annualPrice ? '/year' : '/month')
+                                : (plan.monthlyPrice ? '/month' : '/year')}
                             </span>
                           </div>
-                          {/* Show strikethrough price and discount badge when viewing yearly */}
+                          {/* Show strikethrough price and discount badge when viewing yearly and both prices exist */}
                           {isYearly && plan.monthlyPrice && plan.annualPrice && (plan.monthlyPrice * 12) > plan.annualPrice && (
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-sm text-gray-400 line-through">
@@ -1756,14 +1770,26 @@ function CurrentPlanContent() {
                               )}
                             </div>
                           )}
-                          {/* Show monthly equivalent hint when viewing yearly */}
-                          {isYearly && plan.monthlyPrice && (
+                          {/* Show note when yearly is selected but only monthly is available */}
+                          {isYearly && !plan.annualPrice && plan.monthlyPrice && (
+                            <p className="text-xs text-amber-600 mt-1">
+                              Billed monthly (yearly not available)
+                            </p>
+                          )}
+                          {/* Show note when monthly is selected but only yearly is available */}
+                          {!isYearly && !plan.monthlyPrice && plan.annualPrice && (
+                            <p className="text-xs text-amber-600 mt-1">
+                              Billed annually (monthly not available)
+                            </p>
+                          )}
+                          {/* Show monthly equivalent hint when viewing yearly and both exist */}
+                          {isYearly && plan.monthlyPrice && plan.annualPrice && (
                             <p className="text-xs text-gray-500 mt-1">
                               {formatCurrency(plan.monthlyPrice, plan.currency)}/month if billed monthly
                             </p>
                           )}
-                          {/* Show yearly option hint when viewing monthly */}
-                          {!isYearly && plan.annualPrice && (
+                          {/* Show yearly option hint when viewing monthly and both exist */}
+                          {!isYearly && plan.annualPrice && plan.monthlyPrice && (
                             <p className="text-xs text-gray-500 mt-1">
                               or {formatCurrency(plan.annualPrice, plan.currency)}/year
                               {plan.discountPercentage && plan.discountPercentage > 0 && (
@@ -1810,7 +1836,7 @@ function CurrentPlanContent() {
                             {displayQuotas.RS !== undefined && displayQuotas.RS >= 1 && (
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-900">{displayQuotas.RS.toLocaleString()}</span>
-                                <span className="text-gray-600">Resume Searches</span>
+                                <span className="text-gray-600">Resume Scores</span>
                               </div>
                             )}
                             {displayQuotas.AS !== undefined && displayQuotas.AS >= 1 && (
@@ -1823,12 +1849,6 @@ function CurrentPlanContent() {
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-900">{displayQuotas.AIU.toLocaleString()}</span>
                                 <span className="text-gray-600">AI Interviews</span>
-                              </div>
-                            )}
-                            {displayQuotas.storage_gb !== undefined && displayQuotas.storage_gb >= 1 && (
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-900">{displayQuotas.storage_gb}GB</span>
-                                <span className="text-gray-600">Storage</span>
                               </div>
                             )}
                           </div>
@@ -1853,13 +1873,13 @@ function CurrentPlanContent() {
 
                     <button
                       onClick={() => handleChoosePlan(plan)}
-                      disabled={isCurrentForToggle || isSelectingPlan || isSelectedPending || !plan.price || queuedUpgrades.length > 0}
+                      disabled={isCurrentForToggle || isSelectingPlan || isSelectedPending || (!plan.monthlyPrice && !plan.annualPrice) || queuedUpgrades.length > 0}
                       className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 mt-auto ${
                         isCurrentForToggle || isSelectedPending
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                           : queuedUpgrades.length > 0
                             ? "bg-amber-100 text-amber-600 cursor-not-allowed"
-                            : !plan.price
+                            : (!plan.monthlyPrice && !plan.annualPrice)
                               ? "bg-gray-100 text-gray-500 cursor-not-allowed"
                               : plan.popular
                                 ? "bg-gray-800 text-white hover:bg-gray-700"
@@ -1872,7 +1892,7 @@ function CurrentPlanContent() {
                         'Pending Payment'
                       ) : queuedUpgrades.length > 0 ? (
                         'Upgrade Queued'
-                      ) : !plan.price ? (
+                      ) : (!plan.monthlyPrice && !plan.annualPrice) ? (
                         'Contact Sales'
                       ) : isOnTrial || isLocked ? (
                         'Choose Plan'
@@ -1931,16 +1951,32 @@ function CurrentPlanContent() {
                       <span className="font-medium text-gray-900">{selectedPlanForPayment?.name}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">{isYearly ? 'Annual Price:' : 'Monthly Price:'}</span>
+                      <span className="text-gray-600">
+                        {/* Show correct billing label based on what's available */}
+                        {isYearly
+                          ? (selectedPlanForPayment?.annualPrice ? 'Annual Price:' : 'Monthly Price:')
+                          : (selectedPlanForPayment?.monthlyPrice ? 'Monthly Price:' : 'Annual Price:')}
+                      </span>
                       <span className="font-medium text-gray-900">
                         {formatCurrency(
                           isYearly
-                            ? (selectedPlanForPayment?.annualPrice || 0)
-                            : (selectedPlanForPayment?.monthlyPrice || 0),
+                            ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
+                            : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
                       </span>
                     </div>
+                    {/* Show note when billing period doesn't match available pricing */}
+                    {isYearly && !selectedPlanForPayment?.annualPrice && selectedPlanForPayment?.monthlyPrice && (
+                      <div className="text-xs text-amber-600">
+                        Yearly billing not available for this plan. Will be billed monthly.
+                      </div>
+                    )}
+                    {!isYearly && !selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice && (
+                      <div className="text-xs text-amber-600">
+                        Monthly billing not available for this plan. Will be billed annually.
+                      </div>
+                    )}
                     {isolationType === 'database' && (
                       <div className="flex justify-between text-amber-700">
                         <span>Database Isolation Fee{isYearly ? ' (12 months)' : ''}:</span>
@@ -1978,17 +2014,28 @@ function CurrentPlanContent() {
                     <div>
                       <span className="font-semibold">Total</span>
                       <p className="text-xs text-gray-300">
-                        {isYearly ? 'Billed annually (12× quotas)' : 'Billed monthly'}
+                        {/* Show actual billing period based on availability */}
+                        {(isYearly && selectedPlanForPayment?.annualPrice) || (!selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice)
+                          ? 'Billed annually (12× quotas)'
+                          : 'Billed monthly'}
                       </p>
                     </div>
                     <div className="text-right">
                       <span className="font-bold text-2xl">
                         {formatCurrency(
-                          isYearly
-                            ? (selectedPlanForPayment?.annualPrice || 0) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
-                            : (selectedPlanForPayment?.monthlyPrice || 0) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0),
+                          (() => {
+                            // Determine actual billing period based on availability
+                            const actuallyYearly = isYearly && selectedPlanForPayment?.annualPrice;
+                            const actuallyMonthly = !isYearly && selectedPlanForPayment?.monthlyPrice;
+                            const useYearlyPrice = actuallyYearly || (!actuallyMonthly && selectedPlanForPayment?.annualPrice);
+                            const basePrice = useYearlyPrice
+                              ? (selectedPlanForPayment?.annualPrice ?? 0)
+                              : (selectedPlanForPayment?.monthlyPrice ?? 0);
+                            const dbFee = isolationType === 'database'
+                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (useYearlyPrice ? 12 : 1)
+                              : 0;
+                            return basePrice + dbFee;
+                          })(),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
                       </span>
@@ -2227,15 +2274,6 @@ function CurrentPlanContent() {
                               User Seats:
                             </span>
                             <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.max_seats} seats</span>
-                          </div>
-                        )}
-                        {selectedPlanForPayment?.quotas?.storage_gb && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-green-700 flex items-center gap-1.5">
-                              <Database className="w-3.5 h-3.5" />
-                              Storage:
-                            </span>
-                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.storage_gb} GB</span>
                           </div>
                         )}
                         {selectedPlanForPayment?.quotas?.RS && (

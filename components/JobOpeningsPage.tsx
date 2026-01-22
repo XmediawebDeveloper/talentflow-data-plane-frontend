@@ -25,7 +25,8 @@ import {
   LayoutGrid,
   List,
   Archive,
-  Power
+  Power,
+  AlertCircle
 } from 'lucide-react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
@@ -52,6 +53,20 @@ export default function JobOpeningsPage() {
   // Quota info for job publishing limit
   const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | null>(null);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
+
+  // Unit quotas for JD creation blocking
+  const [unitQuotas, setUnitQuotas] = useState<{
+    RS: number;  // Resume Scoring
+    RU: number;  // Resume Upload
+    AS: number;  // Assessment
+  } | null>(null);
+  const [showInsufficientUnitsModal, setShowInsufficientUnitsModal] = useState(false);
+
+  // Check if all units are 0 - block JD creation
+  const hasInsufficientUnits = unitQuotas !== null &&
+    unitQuotas.RS === 0 &&
+    unitQuotas.RU === 0 &&
+    unitQuotas.AS === 0;
 
   // Stats
   const [stats, setStats] = useState({
@@ -128,17 +143,29 @@ export default function JobOpeningsPage() {
     fetchJobs();
   }, [activeFilter, currentPage, searchQuery, refetchKey]);
 
-  // Fetch quota status for job publishing limit
+  // Fetch quota status for job publishing limit and unit quotas
   useEffect(() => {
     const fetchQuota = async () => {
       try {
         const response = await api.get('/usage/quota-status');
-        if (response.data?.status === 'success' && response.data.data?.quotas?.max_jobs) {
-          const maxJobs = response.data.data.quotas.max_jobs;
-          setQuotaInfo({
-            remaining: maxJobs.total_remaining || 0,
-            limit: (maxJobs.subscription?.limit || 0) + (maxJobs.addon?.total_purchased || 0),
-            used: maxJobs.subscription?.used || 0,
+        if (response.data?.status === 'success' && response.data.data?.quotas) {
+          const quotas = response.data.data.quotas;
+
+          // Job quota
+          if (quotas.max_jobs) {
+            const maxJobs = quotas.max_jobs;
+            setQuotaInfo({
+              remaining: maxJobs.total_remaining || 0,
+              limit: (maxJobs.subscription?.limit || 0) + (maxJobs.addon?.total_purchased || 0),
+              used: maxJobs.subscription?.used || 0,
+            });
+          }
+
+          // Unit quotas (RS, RU, AS) for JD creation blocking
+          setUnitQuotas({
+            RS: quotas.RS?.total_remaining || 0,
+            RU: quotas.RU?.total_remaining || 0,
+            AS: quotas.AS?.total_remaining || 0,
           });
         }
       } catch (error) {
@@ -200,19 +227,33 @@ export default function JobOpeningsPage() {
             <h1 className="text-2xl font-semibold text-gray-900">Job Openings</h1>
             <p className="text-sm text-gray-500 mt-1">Manage and track all your job postings</p>
           </div>
-          <button
-            onClick={() => {
-              if (quotaInfo && quotaInfo.remaining <= 0) {
-                setShowQuotaModal(true);
-                return;
-              }
-              router.push('/recruitment/jd-creation');
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Create New Job
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={() => {
+                if (hasInsufficientUnits) {
+                  setShowInsufficientUnitsModal(true);
+                  return;
+                }
+                if (quotaInfo && quotaInfo.remaining <= 0) {
+                  setShowQuotaModal(true);
+                  return;
+                }
+                router.push('/recruitment/jd-creation');
+              }}
+              disabled={hasInsufficientUnits}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors font-medium shadow-sm ${
+                hasInsufficientUnits
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-800 text-white hover:bg-gray-900'
+              }`}
+            >
+              <Plus className="w-4 h-4" />
+              Create New Job
+            </button>
+            {hasInsufficientUnits && (
+              <span className="text-xs text-red-600 font-medium">Insufficient units</span>
+            )}
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -342,19 +383,33 @@ export default function JobOpeningsPage() {
                 : 'Create your first job posting to get started'}
             </p>
             {!searchQuery && activeFilter === 'all' && (
-              <button
-                onClick={() => {
-                  if (quotaInfo && quotaInfo.remaining <= 0) {
-                    setShowQuotaModal(true);
-                    return;
-                  }
-                  router.push('/recruitment/jd-creation');
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
-              >
-                <Plus className="w-4 h-4" />
-                Create New Job
-              </button>
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  onClick={() => {
+                    if (hasInsufficientUnits) {
+                      setShowInsufficientUnitsModal(true);
+                      return;
+                    }
+                    if (quotaInfo && quotaInfo.remaining <= 0) {
+                      setShowQuotaModal(true);
+                      return;
+                    }
+                    router.push('/recruitment/jd-creation');
+                  }}
+                  disabled={hasInsufficientUnits}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${
+                    hasInsufficientUnits
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-800 text-white hover:bg-gray-900'
+                  }`}
+                >
+                  <Plus className="w-4 h-4" />
+                  Create New Job
+                </button>
+                {hasInsufficientUnits && (
+                  <span className="text-xs text-red-600 font-medium">Insufficient units</span>
+                )}
+              </div>
             )}
           </div>
         ) : viewMode === 'grid' ? (
@@ -657,7 +712,7 @@ export default function JobOpeningsPage() {
         )}
       </div>
 
-      {/* Quota Exceeded Modal */}
+      {/* Job Quota Exceeded Modal */}
       {showQuotaModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
@@ -665,7 +720,7 @@ export default function JobOpeningsPage() {
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Briefcase className="w-8 h-8 text-red-600" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Insufficient Units</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Job Quota Exceeded</h3>
               <p className="text-gray-600 mb-6">
                 You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
               </p>
@@ -684,6 +739,69 @@ export default function JobOpeningsPage() {
                   className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium"
                 >
                   Upgrade Plan
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Insufficient Units Modal - when RS, RU, AS are all 0 */}
+      {showInsufficientUnitsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-8 h-8 text-orange-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Insufficient Units</h3>
+              <p className="text-gray-600 mb-4">
+                You cannot create a new job because all your units have been exhausted.
+              </p>
+
+              {/* Unit Details */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+                <p className="text-sm font-medium text-gray-700 mb-2">Current Unit Balance:</p>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Resume Upload (RU)</span>
+                    <span className={`font-medium ${unitQuotas?.RU === 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {unitQuotas?.RU || 0} units
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Resume Scoring (RS)</span>
+                    <span className={`font-medium ${unitQuotas?.RS === 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {unitQuotas?.RS || 0} units
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Assessment (AS)</span>
+                    <span className={`font-medium ${unitQuotas?.AS === 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {unitQuotas?.AS || 0} units
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-3">
+                  At least one unit type must have available units to create a job.
+                </p>
+              </div>
+
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowInsufficientUnitsModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowInsufficientUnitsModal(false);
+                    router.push('/subscription/usage-quotas');
+                  }}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium"
+                >
+                  Buy Units
                 </button>
               </div>
             </div>

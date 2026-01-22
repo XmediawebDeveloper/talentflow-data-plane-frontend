@@ -1,8 +1,9 @@
 'use client';
 
 import { TrendingUp, TrendingDown, Zap, Target, Video, ClipboardCheck, Calendar, Clock, DollarSign, ChevronDown, Download, Filter, Search, X, BarChart3, PieChart, AlertCircle, CheckCircle2, Loader2, AlertTriangle, ArrowUpRight, Plus, Send, Briefcase, Sparkles, ShoppingCart } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import QuotaDisplay from './QuotaDisplay';
+import { useQuota } from '@/contexts/QuotaContext';
 
 // Addon interface
 interface Addon {
@@ -77,7 +78,7 @@ interface SubscriptionSummary {
   trial_days_remaining?: number;
   plan: PlanInfo | null;
   subscription: SubscriptionInfo | null;
-  isolation_type: string;
+  isolation_type: 'SCHEMA' | 'DATABASE' | 'DEDICATED' | string | null;
 }
 
 interface RecordUsageRequest {
@@ -92,19 +93,28 @@ interface UsageDashboardProps {
   onBack?: () => void;
 }
 
+// Map quota_type to display names - defined at module level for use in processing
+const quotaTypeToModuleMap: Record<string, string> = {
+  'RU': 'Resume Upload',
+  'RS': 'Resume Scoring',
+  'AS': 'Assessment',
+  'AIU': 'AI Interview',
+  'storage_gb': 'Storage',
+  'max_seats': 'Max Users',
+};
+
 export default function UsageDashboard({ onBack }: UsageDashboardProps) {
+  // Use shared QuotaContext instead of making duplicate API calls
+  const { quotaData: contextQuotaData, loading: quotaLoading, error: quotaError, refetch: refetchQuota } = useQuota();
+
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
   const [selectedModule, setSelectedModule] = useState<'all' | 'Resume Upload' | 'Resume Scoring' | 'AI Interview' | 'Assessment'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [usageData, setUsageData] = useState<any>(null);
-  const [quotaData, setQuotaData] = useState<any>(null);
-  const [quotaSummary, setQuotaSummary] = useState<any>(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [usageHistory, setUsageHistory] = useState<any[]>([]);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showRecordModal, setShowRecordModal] = useState(false);
-  const [subscriptionSummary, setSubscriptionSummary] = useState<SubscriptionSummary | null>(null);
   const [recordingUsage, setRecordingUsage] = useState(false);
   const [recordSuccess, setRecordSuccess] = useState<string | null>(null);
   const [recordError, setRecordError] = useState<string | null>(null);
@@ -125,11 +135,11 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   const [addonPurchaseSuccess, setAddonPurchaseSuccess] = useState<string | null>(null);
   const [addonPurchaseError, setAddonPurchaseError] = useState<string | null>(null);
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-  const USAGE_API_BASE = process.env.NEXT_PUBLIC_USAGE_API_URL || 'http://localhost:8000/api/v1';
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
+  // Fetch usage history and addons on mount
   useEffect(() => {
-    fetchUsageData();
+    fetchUsageHistory();
     fetchAddons();
   }, []);
 
@@ -198,7 +208,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
           id: `local-${Date.now()}`,
           quota_type: request.quota_type,
           amount: request.amount || 1,
-          operation_type: request.operation_type || quotaTypeToModule[request.quota_type],
+          operation_type: request.operation_type || quotaTypeToModuleMap[request.quota_type],
           resource_id: request.resource_id,
           created_at: new Date().toISOString(),
         };
@@ -223,7 +233,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     const success = await recordUsage(recordForm);
 
     if (success) {
-      setRecordSuccess(`Successfully recorded ${recordForm.amount || 1} unit(s) of ${quotaTypeToModule[recordForm.quota_type]}`);
+      setRecordSuccess(`Successfully recorded ${recordForm.amount || 1} unit(s) of ${quotaTypeToModuleMap[recordForm.quota_type]}`);
       setRecordForm({ quota_type: 'RU', amount: 1, operation_type: '', resource_id: '' });
       setTimeout(() => {
         setShowRecordModal(false);
@@ -234,51 +244,18 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     setRecordingUsage(false);
   };
 
-  const fetchUsageData = async () => {
-    setLoading(true);
+  // Fetch usage history only (quota data comes from context)
+  const fetchUsageHistory = async () => {
+    setHistoryLoading(true);
     try {
       const token = localStorage.getItem('accessToken');
       if (!token) {
         console.warn('[UsageDashboard] No access token found');
-        setLoading(false);
+        setHistoryLoading(false);
         return;
       }
 
-      // Get tenant_id and plan_id from auth/me
-      let tenantId = localStorage.getItem('tenantApiKey');
-      let planId: number | null = null;
-      let isTrial = false;
-
-      const meResponse = await fetch(`${API_BASE}/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (meResponse.ok) {
-        const meData = await meResponse.json();
-        tenantId = meData.tenant_id;
-        planId = meData.plan_id;
-        isTrial = meData.plan_id === 1 || meData.is_trial === true;
-        if (tenantId) {
-          localStorage.setItem('tenantApiKey', tenantId);
-        }
-      }
-
-      if (!tenantId) {
-        console.warn('[UsageDashboard] Could not get tenant_id');
-        setLoading(false);
-        return;
-      }
-
-      console.log('[UsageDashboard] Fetching quota status for tenant:', tenantId, 'planId:', planId, 'isTrial:', isTrial);
-
-      let quotaStatusData: any = null;
-
-      // Always call /usage/quota-status - backend handles both trial and paid users
-      // Backend tries external API (talentflowapi.mo.vc) first, then falls back to local data
-      const quotaStatusResponse = await fetch(`${API_BASE}/usage/quota-status`, {
+      const historyResponse = await fetch(`${API_BASE}/usage/history?limit=50`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -286,197 +263,138 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         },
       });
 
-      if (quotaStatusResponse.ok) {
-        quotaStatusData = await quotaStatusResponse.json();
-        console.log('[UsageDashboard] Quota status from backend:', quotaStatusData);
-        console.log('[UsageDashboard] Data source:', quotaStatusData?.meta?.source);
-        console.log('[UsageDashboard] Quotas:', quotaStatusData?.data?.quotas);
+      if (historyResponse.ok) {
+        const historyData = await historyResponse.json();
+        console.log('[UsageDashboard] Usage history data:', historyData);
+        const records = historyData.data?.records || historyData.records || historyData.data || [];
+        setUsageHistory(Array.isArray(records) ? records : []);
       }
-
-      if (quotaStatusData) {
-        console.log('[UsageDashboard] Quota status data:', quotaStatusData);
-
-        // New response format from /usage/quota-status:
-        // { status, data: { tenant_id, plan_name, billing_period, quotas: { RU: { subscription: {...}, addon: {...}, total_remaining, status }, ... }, alerts }, meta }
-        const data = quotaStatusData.data || quotaStatusData;
-        const quotasMap = data.quotas || {};
-
-        // Convert external API quota format to our QuotaInfo format - DYNAMIC
-        const quotasList: QuotaInfo[] = [];
-
-        // Preferred order for display (any extras will be added at the end)
-        const preferredOrder = ['RU', 'RS', 'AS', 'AIU', 'storage_gb', 'max_jobs', 'max_seats'];
-
-        // Get all quota types from API response
-        const allQuotaTypes = Object.keys(quotasMap);
-
-        // Sort: preferred order first, then any remaining
-        const sortedQuotaTypes = [
-          ...preferredOrder.filter(qt => allQuotaTypes.includes(qt)),
-          ...allQuotaTypes.filter(qt => !preferredOrder.includes(qt))
-        ];
-
-        for (const quotaType of sortedQuotaTypes) {
-          const q = quotasMap[quotaType];
-          if (q) {
-            // New format: q.subscription contains { limit, used, remaining, percentage }
-            const sub = q.subscription || {};
-            const addon = q.addon || {};
-            // Handle "unlimited" values
-            const isUnlimited = sub.limit === 'unlimited' || sub.limit === -1;
-            // Include addon credits in the total limit for display
-            const addonRemaining = addon.remaining || 0;
-            const baseLimit = isUnlimited ? -1 : (sub.limit || 0);
-            const limit = isUnlimited ? -1 : (baseLimit + addonRemaining);
-            const used = sub.used || 0;
-            const remaining = isUnlimited ? -1 : (q.total_remaining !== undefined ? q.total_remaining : (sub.remaining || 0));
-            // Calculate percentage based on TOTAL limit (subscription + addon), not just subscription
-            const usagePercentage = isUnlimited ? 0 : (limit > 0 ? (used / limit) * 100 : 0);
-
-            // Log addon credits for debugging
-            if (addonRemaining > 0) {
-              console.log(`[UsageDashboard] ${quotaType} has ${addonRemaining} addon credits, total_remaining: ${q.total_remaining}`);
-            }
-
-            // Status: OK, WARNING, CRITICAL, EXCEEDED
-            const status = q.status || 'OK';
-            // Only consider low/exhausted if the quota has a limit > 0 (i.e., it's enabled for this plan)
-            const hasQuota = limit > 0;
-            const isLow = hasQuota && (status === 'WARNING' || status === 'CRITICAL' || usagePercentage >= 80);
-            const isExhausted = hasQuota && (status === 'EXCEEDED' || (remaining <= 0 && !isUnlimited));
-
-            quotasList.push({
-              quota_type: quotaType,
-              name: quotaTypeToModule[quotaType] || quotaType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-              limit: limit,
-              used: used,
-              remaining: remaining,
-              percentage_used: usagePercentage,
-              is_low: isLow,
-              is_exhausted: isExhausted,
-            });
-          }
-        }
-
-        // Check if any quotas are low or critical
-        const hasLowQuotas = quotasList.some(q => q.is_low || q.is_exhausted);
-        const lowQuotaTypes = quotasList.filter(q => q.is_low || q.is_exhausted).map(q => q.name);
-
-        // Handle alerts - can be array of strings or objects
-        let alertMessage = '';
-        if (data.alerts && Array.isArray(data.alerts)) {
-          alertMessage = data.alerts.map((alert: any) => {
-            if (typeof alert === 'string') return alert;
-            if (typeof alert === 'object') return alert.message || alert.text || JSON.stringify(alert);
-            return String(alert);
-          }).join(' ');
-        }
-
-        setQuotaSummary({
-          has_low_quotas: hasLowQuotas,
-          low_quota_types: lowQuotaTypes,
-          upgrade_message: alertMessage || (hasLowQuotas ? `Some quotas are running low: ${lowQuotaTypes.join(', ')}` : ''),
-          quotas: quotasList,
-          billing_period: data.billing_period,
-        });
-        setQuotaData({ quotas: quotasList });
-
-        // Calculate total usage stats from new format
-        const totalUsed = quotasList.reduce((sum, q) => sum + (q.used || 0), 0);
-        setUsageData({
-          total_units: totalUsed,
-          breakdown: {
-            resume_upload: { units: quotasMap.RU?.subscription?.used || 0 },
-            resume_scoring: { units: quotasMap.RS?.subscription?.used || 0 },
-            ai_interview: { units: quotasMap.AIU?.subscription?.used || 0 },
-            assessment: { units: quotasMap.AS?.subscription?.used || 0 },
-          }
-        });
-
-        // Set subscription summary from new format
-        if (data.tenant_id) {
-          // Extract price from plan_info if available
-          const basePrice = data.plan_info?.base_price || 0;
-          const billingInterval = data.plan_info?.billing_period?.toLowerCase() || 'month';
-
-          setSubscriptionSummary({
-            tenant_id: data.tenant_id,
-            tenant_name: data.tenant_id,
-            status: 'active',
-            is_trial: data.is_trial || false,
-            plan: {
-              id: data.plan_info?.plan_id || 0,
-              name: data.plan_name || 'Professional',
-              price: basePrice,
-              billing_interval: billingInterval,
-            },
-            subscription: data.billing_period ? {
-              id: 0,
-              status: 'active',
-              billing_interval: billingInterval,
-              start_date: data.billing_period.start,
-              current_period_start: data.billing_period.start,
-              current_period_end: data.billing_period.end,
-              days_until_renewal: data.billing_period.end ? Math.ceil((new Date(data.billing_period.end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 30,
-              price: basePrice,
-            } : null,
-            isolation_type: 'database',
-          });
-        }
-
-      } else {
-        console.error('[UsageDashboard] Failed to fetch quota status');
-        // Set default quotas on error
-        setQuotaSummary({
-          has_low_quotas: false,
-          quotas: [
-            { quota_type: 'RU', name: 'Resume Upload', limit: 0, used: 0, remaining: 0, percentage_used: 0, is_low: false, is_exhausted: false },
-            { quota_type: 'RS', name: 'Resume Scoring', limit: 0, used: 0, remaining: 0, percentage_used: 0, is_low: false, is_exhausted: false },
-            { quota_type: 'AS', name: 'Assessment', limit: 0, used: 0, remaining: 0, percentage_used: 0, is_low: false, is_exhausted: false },
-            { quota_type: 'AIU', name: 'AI Interview', limit: 0, used: 0, remaining: 0, percentage_used: 0, is_low: false, is_exhausted: false },
-          ],
-        });
-      }
-
-      // Subscription summary endpoint commented out - using quota-status data only
-      // Fetch usage history for Recent Activity table
-      try {
-        const historyResponse = await fetch(`${API_BASE}/usage/history?limit=50`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (historyResponse.ok) {
-          const historyData = await historyResponse.json();
-          console.log('[UsageDashboard] Usage history data:', historyData);
-          // Backend returns: {status, data: {records: [...], total, limit, offset}}
-          const records = historyData.data?.records || historyData.records || historyData.data || [];
-          setUsageHistory(Array.isArray(records) ? records : []);
-        }
-      } catch (historyError) {
-        console.warn('[UsageDashboard] Could not fetch usage history:', historyError);
-      }
-
     } catch (error) {
-      console.error('[UsageDashboard] Error fetching usage data:', error);
+      console.error('[UsageDashboard] Error fetching usage history:', error);
     } finally {
-      setLoading(false);
+      setHistoryLoading(false);
     }
   };
 
-  // Map quota_type to display names
-  const quotaTypeToModule: Record<string, string> = {
-    'RU': 'Resume Upload',
-    'RS': 'Resume Scoring',
-    'AS': 'Assessment',
-    'AIU': 'AI Interview',
-    'storage_gb': 'Storage',
-    'max_jobs': 'Max Jobs',
-    'max_seats': 'Max Users',
-  };
+  // Derive quotaSummary from context data
+  const quotaSummary = useMemo(() => {
+    if (!contextQuotaData) return null;
+
+    const quotasMap = contextQuotaData.quotas || {};
+    const quotasList: QuotaInfo[] = [];
+
+    // Preferred order for display
+    const preferredOrder = ['RU', 'RS', 'AS', 'AIU', 'storage_gb', 'max_seats'];
+    const excludedQuotaTypes = ['max_jobs'];
+    const allQuotaTypes = Object.keys(quotasMap).filter(qt => !excludedQuotaTypes.includes(qt));
+
+    const sortedQuotaTypes = [
+      ...preferredOrder.filter(qt => allQuotaTypes.includes(qt)),
+      ...allQuotaTypes.filter(qt => !preferredOrder.includes(qt))
+    ];
+
+    for (const quotaType of sortedQuotaTypes) {
+      const q = quotasMap[quotaType as keyof typeof quotasMap];
+      if (q) {
+        const sub = q.subscription || {};
+        const addon = q.addon || {};
+        const isUnlimited = sub.limit === 'unlimited' || sub.limit === -1;
+        const addonRemaining = addon.remaining || 0;
+        const baseLimit = isUnlimited ? -1 : (typeof sub.limit === 'number' ? sub.limit : 0);
+        const limit = isUnlimited ? -1 : (baseLimit + addonRemaining);
+        const used = sub.used || 0;
+        const remaining = isUnlimited ? -1 : (q.total_remaining !== undefined ? (typeof q.total_remaining === 'number' ? q.total_remaining : 0) : (typeof sub.remaining === 'number' ? sub.remaining : 0));
+        const usagePercentage = isUnlimited ? 0 : (limit > 0 ? (used / limit) * 100 : 0);
+
+        const status = q.status || 'OK';
+        const hasQuota = limit > 0;
+        const isLow = hasQuota && (status === 'WARNING' || status === 'CRITICAL' || usagePercentage >= 80);
+        const isExhausted = hasQuota && (status === 'EXCEEDED' || (remaining <= 0 && !isUnlimited));
+
+        quotasList.push({
+          quota_type: quotaType,
+          name: quotaTypeToModuleMap[quotaType] || quotaType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          limit: limit,
+          used: used,
+          remaining: remaining,
+          percentage_used: usagePercentage,
+          is_low: isLow,
+          is_exhausted: isExhausted,
+        });
+      }
+    }
+
+    const hasLowQuotas = quotasList.some(q => q.is_low || q.is_exhausted);
+    const lowQuotaTypes = quotasList.filter(q => q.is_low || q.is_exhausted).map(q => q.name);
+
+    return {
+      has_low_quotas: hasLowQuotas,
+      low_quota_types: lowQuotaTypes,
+      upgrade_message: hasLowQuotas ? `Some quotas are running low: ${lowQuotaTypes.join(', ')}` : '',
+      quotas: quotasList,
+      billing_period: contextQuotaData.billing_period,
+    };
+  }, [contextQuotaData]);
+
+  // Derive subscriptionSummary from context data
+  const subscriptionSummary = useMemo((): SubscriptionSummary | null => {
+    if (!contextQuotaData) return null;
+
+    const basePrice = contextQuotaData.plan_info?.subscribed_price ?? contextQuotaData.plan_info?.current_plan_price ?? 0;
+    const billingInterval = contextQuotaData.plan_info?.billing_period?.toLowerCase() || contextQuotaData.plan_info?.billing_interval?.toLowerCase() || 'month';
+
+    return {
+      tenant_id: contextQuotaData.tenant_id || '',
+      tenant_name: contextQuotaData.tenant_id || '',
+      status: contextQuotaData.subscription_status || 'active',
+      is_trial: contextQuotaData.is_trial || false,
+      plan: {
+        id: contextQuotaData.plan_info?.plan_id || 0,
+        name: contextQuotaData.plan_name || 'Professional',
+        price: basePrice,
+        billing_interval: billingInterval,
+      },
+      subscription: contextQuotaData.billing_period ? {
+        id: 0,
+        status: 'active',
+        billing_interval: billingInterval,
+        start_date: contextQuotaData.billing_period.start || '',
+        current_period_start: contextQuotaData.billing_period.start || '',
+        current_period_end: contextQuotaData.billing_period.end || '',
+        days_until_renewal: contextQuotaData.billing_period.end ? Math.ceil((new Date(contextQuotaData.billing_period.end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 30,
+        price: basePrice,
+      } : null,
+      isolation_type: contextQuotaData.isolation_type || null,
+    };
+  }, [contextQuotaData]);
+
+  // Derive usageData from context
+  const usageData = useMemo(() => {
+    if (!contextQuotaData?.quotas) return null;
+    const quotasMap = contextQuotaData.quotas;
+    const totalUsed = (quotasMap.RU?.subscription?.used || 0) +
+                      (quotasMap.RS?.subscription?.used || 0) +
+                      (quotasMap.AS?.subscription?.used || 0) +
+                      (quotasMap.AIU?.subscription?.used || 0);
+    return {
+      total_units: totalUsed,
+      breakdown: {
+        resume_upload: { units: quotasMap.RU?.subscription?.used || 0 },
+        resume_scoring: { units: quotasMap.RS?.subscription?.used || 0 },
+        ai_interview: { units: quotasMap.AIU?.subscription?.used || 0 },
+        assessment: { units: quotasMap.AS?.subscription?.used || 0 },
+      }
+    };
+  }, [contextQuotaData]);
+
+  // Derive quotaData from quotaSummary
+  const quotaData = useMemo(() => {
+    if (!quotaSummary) return null;
+    return { quotas: quotaSummary.quotas };
+  }, [quotaSummary]);
+
+  // Combined loading state - show loading if quota data hasn't arrived yet
+  const loading = !contextQuotaData && !quotaError;
 
   // Calculate statistics - use API data
   const getQuotaValue = (type: string, field: 'used' | 'limit' | 'remaining') => {
@@ -521,8 +439,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   // Transform API history to display format
   const transformedHistory = usageHistory.map((record: any) => ({
     id: record.id,
-    module: quotaTypeToModule[record.quota_type] || record.quota_type,
-    operation: record.operation_type || quotaTypeToModule[record.quota_type] || 'Usage',
+    module: quotaTypeToModuleMap[record.quota_type] || record.quota_type,
+    operation: record.operation_type || quotaTypeToModuleMap[record.quota_type] || 'Usage',
     unitsConsumed: record.amount || 1,
     timestamp: new Date(record.created_at),
     details: record.resource_id ? `Resource: ${record.resource_id}` : 'Usage recorded',
@@ -696,7 +614,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       // Refresh quota data to show updated credits after a short delay
       setTimeout(async () => {
         console.log('[UsageDashboard] Refreshing quota data after addon purchase...');
-        await fetchUsageData();
+        await refetchQuota();
         setShowAddonModal(false);
         setAddonPurchaseSuccess(null);
       }, 1500);
@@ -809,7 +727,10 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 )}
                 {subscriptionSummary.isolation_type && (
                   <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 text-xs font-medium text-gray-800 bg-gray-100 rounded-full">
-                    {subscriptionSummary.isolation_type === 'database' ? 'Database Isolation' : 'Schema Isolation'}
+                    {subscriptionSummary.isolation_type === 'DEDICATED' ? 'Dedicated Server' :
+                     subscriptionSummary.isolation_type === 'DATABASE' ? 'Dedicated Database' :
+                     subscriptionSummary.isolation_type === 'SCHEMA' ? 'Schema Isolation' :
+                     subscriptionSummary.isolation_type}
                   </span>
                 )}
               </div>
@@ -860,7 +781,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         'RS': 'resume scoring',
                         'AS': 'assessment',
                         'AIU': 'ai interview',
-                        'max_jobs': 'max jobs',
                         'max_seats': 'max seats',
                       };
                       const addonPattern = quotaToAddonMap[quota.quota_type] || '';

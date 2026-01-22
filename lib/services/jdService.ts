@@ -400,6 +400,7 @@ export const jdService = {
     callbacks: {
       onChunk: (content: string) => void;
       onTitle?: (title: string) => void;
+      onTextComplete?: () => void;  // Called when text streaming is done, before param extraction
       onComplete: (data: JDGenerateResponse) => void;
       onError: (message: string, errorCode?: string) => void;
     }
@@ -422,6 +423,7 @@ export const jdService = {
         },
         onChunk: callbacks.onChunk,
         onTitle: callbacks.onTitle,
+        onTextComplete: callbacks.onTextComplete,
         onComplete: (data) => {
           callbacks.onComplete({
             title: data.title,

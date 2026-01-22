@@ -2,7 +2,7 @@
  * Assessment Service
  */
 
-import api, { handleApiError } from './api';
+import api, { handleApiError, dispatchUnitsConsumed } from './api';
 
 export interface AssessmentCreate {
   jd_id: string;
@@ -393,6 +393,8 @@ export const assessmentService = {
         `/assessments/${assessmentId}/invite`,
         data
       );
+      // Dispatch event to refresh header quota display
+      dispatchUnitsConsumed();
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -411,6 +413,8 @@ export const assessmentService = {
         `/assessments/${assessmentId}/invite/bulk`,
         { candidates }
       );
+      // Dispatch event to refresh header quota display
+      dispatchUnitsConsumed();
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

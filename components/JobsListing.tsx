@@ -5,6 +5,51 @@ import { useState, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 
+// Utility function to format employment type for display
+// Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
+const formatEmploymentType = (type: string | undefined): string => {
+  if (!type) return '-';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+// Utility function to format last updated time
+// Within 24 hours: show "X hours ago"
+// More than 24 hours: show actual date
+// Server returns UTC time, add 5:30 hours for IST
+const formatLastUpdated = (dateString: string | undefined): string => {
+  if (!dateString) return '-';
+
+  // Server returns UTC, convert to IST by adding 5:30 hours
+  const utcDate = new Date(dateString);
+  const istOffsetMs = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes
+  const istDate = new Date(utcDate.getTime() + istOffsetMs);
+
+  const now = new Date();
+
+  const diffInSeconds = Math.floor((now.getTime() - istDate.getTime()) / 1000);
+  const diffInHours = Math.floor(diffInSeconds / 3600);
+
+  // Within 24 hours - show hours ago
+  if (diffInHours >= 0 && diffInHours < 24) {
+    if (diffInHours === 0) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      if (minutes < 1) return 'Just now';
+      return `${minutes} ${minutes === 1 ? 'min' : 'mins'} ago`;
+    }
+    return `${diffInHours} ${diffInHours === 1 ? 'hour' : 'hours'} ago`;
+  }
+
+  // More than 24 hours - show actual date
+  return istDate.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+};
+
 interface JobsListingProps {
   jobs: Job[];
   onCreateNew: () => void;
@@ -57,7 +102,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
   const [applicantsFilter, setApplicantsFilter] = useState<string>('all');
 
   // Sort and Bulk Actions states
-  const [sortBy, setSortBy] = useState<'date' | 'applicants' | 'title' | 'status' | 'department'>('date');
+  const [sortBy, setSortBy] = useState<'date' | 'applicants' | 'title' | 'status' | 'industry'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
@@ -79,9 +124,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
       job.industry_type?.toLowerCase().includes(searchLower) ||
       job.department?.toLowerCase().includes(searchLower) ||
       job.employmentType?.toLowerCase().includes(searchLower) ||
+      formatEmploymentType(job.employmentType).toLowerCase().includes(searchLower) ||  // Also search formatted version (e.g., "Full Time")
       job.experience?.toLowerCase().includes(searchLower) ||
       job.postedBy?.toLowerCase().includes(searchLower) ||  // Created by
-      (job as any).workMode?.toLowerCase().includes(searchLower)  // Work mode (onsite, hybrid, remote)
+      (job as any).workMode?.toLowerCase().includes(searchLower) ||  // Work mode (onsite, hybrid, remote)
+      formatEmploymentType((job as any).workMode).toLowerCase().includes(searchLower)  // Also search formatted work mode
     );
 
     const matchesStatus = statusFilter === 'all' || job.status.toLowerCase() === statusFilter.toLowerCase();
@@ -160,14 +207,16 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
       case 'status':
         comparison = a.status.localeCompare(b.status);
         break;
-      case 'department':
-        // Case-insensitive department sort, push empty departments to the end
-        const deptA = (a.department || '').trim().toLowerCase();
-        const deptB = (b.department || '').trim().toLowerCase();
-        // If one is empty and the other isn't, put empty ones last
-        if (!deptA && deptB) comparison = 1;
-        else if (deptA && !deptB) comparison = -1;
-        else comparison = deptA.localeCompare(deptB);
+      case 'industry':
+        // Case-insensitive industry sort, empty industries always at end
+        const indA = (a.industry_type || '').trim().toLowerCase();
+        const indB = (b.industry_type || '').trim().toLowerCase();
+        // Empty industries always go to end
+        if (!indA && indB) return 1;
+        if (indA && !indB) return -1;
+        if (!indA && !indB) return 0;
+        // Both have values - normal comparison respects sortOrder
+        comparison = indA.localeCompare(indB);
         break;
       default:
         comparison = 0;
@@ -176,6 +225,15 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
     // 'desc' inverts the comparison (largest/newest first), 'asc' keeps natural order
     return sortOrder === 'desc' ? -comparison : comparison;
   });
+
+  // Debug: Log sorted jobs order - show first 5 with their departments
+  console.log('Sorted by:', sortBy, 'Order:', sortOrder);
+  console.table(sortedJobs.slice(0, 10).map((j, i) => ({
+    '#': i + 1,
+    title: j.title?.substring(0, 30),
+    department: j.department || '(empty)',
+    industry: j.industry_type || '(empty)'
+  })));
 
   // Bulk action handlers
   const handleSelectAll = () => {
@@ -695,7 +753,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                       >
                         <option value="all">All Types</option>
                         {uniqueEmploymentTypes.map(type => (
-                          <option key={type} value={type}>{type}</option>
+                          <option key={type} value={type}>{formatEmploymentType(type)}</option>
                         ))}
                       </select>
                     </div>
@@ -853,21 +911,30 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 <span className="text-base text-gray-600">Sort by:</span>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                  onChange={(e) => {
+                    const value = e.target.value as 'date' | 'applicants' | 'title' | 'status' | 'industry';
+                    console.log('Sort by changed to:', value);
+                    setSortBy(value);
+                  }}
+                  className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base cursor-pointer"
                 >
                   <option value="date">Date Posted</option>
                   <option value="applicants">Applicants</option>
                   <option value="title">Job Title</option>
                   <option value="status">Status</option>
-                  <option value="department">Department</option>
+                  <option value="industry">Industry Type</option>
                 </select>
                 <button
-                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  className="p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log('Sort order button clicked! Current order:', sortOrder, 'Switching to:', sortOrder === 'asc' ? 'desc' : 'asc');
+                    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                  }}
+                  className="p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                  title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                 >
-                  <ArrowUpDown className={`w-5 h-5 ${sortOrder === 'desc' ? 'rotate-180' : ''} transition-transform`} />
+                  <ArrowUpDown className={`w-5 h-5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
                 </button>
               </div>
             </div>
@@ -922,6 +989,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                     {/* Card Body */}
                     <div className="p-6">
                       <div className="space-y-3 mb-5">
+                        {job.department && (
+                          <div className="flex items-center gap-3 text-base text-gray-600">
+                            <Briefcase className="w-5 h-5 text-gray-400" />
+                            <span>{job.department}</span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-3 text-base text-gray-600">
                           <Building2 className="w-5 h-5 text-gray-400" />
                           <span>{job.industry_type || '-'}</span>
@@ -932,7 +1005,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         </div>
                         <div className="flex items-center gap-3 text-base text-gray-600">
                           <Briefcase className="w-5 h-5 text-gray-400" />
-                          <span>{job.employmentType || '-'}</span>
+                          <span>{formatEmploymentType(job.employmentType)}</span>
                         </div>
                         {(job as any).workMode && (
                           <div className="flex items-center gap-3 text-base text-gray-600">
@@ -956,6 +1029,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           <div className="flex items-center gap-3 text-base text-gray-600">
                             <User className="w-5 h-5 text-gray-400" />
                             <span>By {job.postedBy}</span>
+                          </div>
+                        )}
+                        {job.updated_at && (
+                          <div className="flex items-center gap-3 text-base text-gray-600">
+                            <Clock className="w-5 h-5 text-gray-400" />
+                            <span>Last Updated: {formatLastUpdated(job.updated_at)}</span>
                           </div>
                         )}
                       </div>
@@ -1135,6 +1214,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
                         {/* Primary Info Row */}
                         <div className="flex flex-wrap items-center gap-5 text-base text-gray-600 mb-3">
+                          {job.department && (
+                            <span className="flex items-center gap-2">
+                              <Briefcase className="w-5 h-5 text-gray-400" />
+                              {job.department}
+                            </span>
+                          )}
                           <span className="flex items-center gap-2">
                             <Building2 className="w-5 h-5 text-gray-400" />
                             {job.industry_type || '-'}
@@ -1145,7 +1230,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           </span>
                           <span className="flex items-center gap-2">
                             <Briefcase className="w-5 h-5 text-gray-400" />
-                            {job.employmentType || '-'}
+                            {formatEmploymentType(job.employmentType)}
                           </span>
                           {(job as any).workMode && (
                             <span className="flex items-center gap-2">
@@ -1169,6 +1254,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                             <span className="flex items-center gap-2">
                               <User className="w-5 h-5 text-gray-400" />
                               By {job.postedBy}
+                            </span>
+                          )}
+                          {job.updated_at && (
+                            <span className="flex items-center gap-2">
+                              <Clock className="w-5 h-5 text-gray-400" />
+                              Last Updated: {formatLastUpdated(job.updated_at)}
                             </span>
                           )}
                           <span className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">

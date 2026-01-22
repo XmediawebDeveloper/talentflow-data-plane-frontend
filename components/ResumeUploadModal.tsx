@@ -128,14 +128,67 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
     ));
 
     try {
-      // Mark all files as valid after a brief check
-      // In production, this would call an API to check for real duplicates
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // CLIENT-SIDE DUPLICATE DETECTION
+      // Check if any files have the same base name (ignoring extension)
+      // This catches PDF/DOC/DOCX of the same file uploaded together
 
-      // Mark all checking files as valid
-      setFilesWithStatus(prev => prev.map(f =>
-        f.status === 'checking' ? { ...f, status: 'valid' as const } : f
-      ));
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Helper function to get base name without extension
+      const getBaseName = (fileName: string): string => {
+        // Remove extension and normalize
+        return fileName.replace(/\.(pdf|doc|docx|txt|rtf)$/i, '').toLowerCase().trim();
+      };
+
+      // Group files by base name
+      const filesByBaseName = new Map<string, FileWithStatus[]>();
+      files.forEach(fileWithStatus => {
+        const baseName = getBaseName(fileWithStatus.file.name);
+        if (!filesByBaseName.has(baseName)) {
+          filesByBaseName.set(baseName, []);
+        }
+        filesByBaseName.get(baseName)!.push(fileWithStatus);
+      });
+
+      // Check for duplicates (same base name, different extensions)
+      const updatedFiles: FileWithStatus[] = [];
+      let hasDuplicates = false;
+
+      filesByBaseName.forEach((filesGroup, baseName) => {
+        if (filesGroup.length > 1) {
+          // Multiple files with same base name = DUPLICATES!
+          hasDuplicates = true;
+
+          // Mark all files in this group as duplicates
+          filesGroup.forEach((fileWithStatus, index) => {
+            const otherFiles = filesGroup
+              .filter((_, i) => i !== index)
+              .map(f => f.file.name)
+              .join(', ');
+
+            updatedFiles.push({
+              ...fileWithStatus,
+              status: 'error',
+              error: `Duplicate file detected! This file is the same as: ${otherFiles}. Please upload only ONE version of each resume.`
+            });
+          });
+        } else {
+          // Only one file with this base name - mark as valid
+          updatedFiles.push({
+            ...filesGroup[0],
+            status: 'valid'
+          });
+        }
+      });
+
+      // Update files with validation results
+      setFilesWithStatus(updatedFiles);
+
+      // If duplicates found, show error message
+      if (hasDuplicates) {
+        // Error will be shown in the UI via status badges and error messages
+        console.warn('Duplicate files detected in upload');
+      }
 
     } catch (error) {
       console.error('Error checking duplicates:', error);
@@ -339,51 +392,83 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                 </div>
                 <div className="space-y-2">
                   {filesWithStatus.map((fileWithStatus, index) => (
-                    <div
-                      key={index}
-                      className={`flex items-center gap-3 p-3 rounded-lg border ${
-                        fileWithStatus.status === 'duplicate'
-                          ? 'bg-red-50 border-red-200'
-                          : fileWithStatus.status === 'version'
-                          ? 'bg-amber-50 border-amber-200'
-                          : fileWithStatus.status === 'valid'
-                          ? 'bg-green-50 border-green-200'
-                          : 'bg-gray-50 border-gray-200'
-                      }`}
-                    >
-                      <div className={`p-2 rounded-lg ${
-                        fileWithStatus.status === 'duplicate'
-                          ? 'bg-red-100'
-                          : fileWithStatus.status === 'version'
-                          ? 'bg-amber-100'
-                          : fileWithStatus.status === 'valid'
-                          ? 'bg-green-100'
-                          : 'bg-gray-100'
-                      }`}>
-                        <FileText className="w-5 h-5 text-gray-800" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-900 truncate">{fileWithStatus.file.name}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <p className="text-xs text-gray-500">{formatFileSize(fileWithStatus.file.size)}</p>
-                          {fileWithStatus.existingResume && (
-                            <p className="text-xs text-gray-500">
-                              • Matches: {fileWithStatus.existingResume.candidate_name}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      {getStatusBadge(fileWithStatus)}
-                      {getStatusIcon(fileWithStatus.status)}
-                      <button
-                        onClick={() => removeFile(index)}
-                        className="p-1.5 hover:bg-gray-200 rounded-md transition-colors flex-shrink-0"
+                    <div key={index} className="space-y-1">
+                      <div
+                        className={`flex items-center gap-3 p-3 rounded-lg border ${
+                          fileWithStatus.status === 'error'
+                            ? 'bg-red-50 border-red-300'
+                            : fileWithStatus.status === 'duplicate'
+                            ? 'bg-red-50 border-red-200'
+                            : fileWithStatus.status === 'version'
+                            ? 'bg-amber-50 border-amber-200'
+                            : fileWithStatus.status === 'valid'
+                            ? 'bg-green-50 border-green-200'
+                            : 'bg-gray-50 border-gray-200'
+                        }`}
                       >
-                        <X className="w-4 h-4 text-gray-500" />
-                      </button>
+                        <div className={`p-2 rounded-lg ${
+                          fileWithStatus.status === 'error'
+                            ? 'bg-red-100'
+                            : fileWithStatus.status === 'duplicate'
+                            ? 'bg-red-100'
+                            : fileWithStatus.status === 'version'
+                            ? 'bg-amber-100'
+                            : fileWithStatus.status === 'valid'
+                            ? 'bg-green-100'
+                            : 'bg-gray-100'
+                        }`}>
+                          <FileText className="w-5 h-5 text-gray-800" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-900 truncate">{fileWithStatus.file.name}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-xs text-gray-500">{formatFileSize(fileWithStatus.file.size)}</p>
+                            {fileWithStatus.existingResume && (
+                              <p className="text-xs text-gray-500">
+                                • Matches: {fileWithStatus.existingResume.candidate_name}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {getStatusBadge(fileWithStatus)}
+                        {getStatusIcon(fileWithStatus.status)}
+                        <button
+                          onClick={() => removeFile(index)}
+                          className="p-1.5 hover:bg-gray-200 rounded-md transition-colors flex-shrink-0"
+                        >
+                          <X className="w-4 h-4 text-gray-500" />
+                        </button>
+                      </div>
+                      {/* Show error message below file */}
+                      {fileWithStatus.status === 'error' && fileWithStatus.error && (
+                        <div className="ml-12 px-3 py-2 bg-red-100 border border-red-200 rounded-lg">
+                          <p className="text-xs text-red-800 font-medium">
+                            {fileWithStatus.error}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
+
+                {/* Error Files Summary (Client-Side Duplicates) */}
+                {errorFiles.length > 0 && (
+                  <div className="mt-4 p-4 bg-red-50 border border-red-300 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h5 className="text-sm font-medium text-red-900 mb-1">Cannot Upload - Duplicate Files Detected!</h5>
+                        <p className="text-xs text-red-800 mb-2">
+                          You've selected {errorFiles.length} file{errorFiles.length > 1 ? 's' : ''} that {errorFiles.length > 1 ? 'are' : 'is'} the same resume in different formats (PDF, DOC, DOCX).
+                          Please <strong>remove the duplicate files</strong> and keep only ONE version of each resume.
+                        </p>
+                        <p className="text-xs text-red-700 font-medium">
+                          ❌ Upload button is disabled until duplicates are removed.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Duplicate/Version Summary */}
                 {(duplicateFiles.length > 0 || versionFiles.length > 0) && (
@@ -470,6 +555,11 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                 <span className="text-gray-500 animate-pulse flex items-center gap-1">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   {isCheckingDuplicates ? 'Checking for duplicates...' : 'Checking quota...'}
+                </span>
+              ) : errorFiles.length > 0 ? (
+                <span className="text-red-600 flex items-center gap-1 font-medium">
+                  <XCircle className="w-4 h-4" />
+                  Remove duplicate files to continue
                 </span>
               ) : needsResolution ? (
                 <span className="text-amber-600 flex items-center gap-1">
