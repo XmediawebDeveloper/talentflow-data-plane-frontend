@@ -100,6 +100,9 @@ export interface User {
   // RBAC06: Feature flags
   featureFlags?: FeatureFlags;
   enabledFeatures?: string[];
+  // UI control flags (for role-based UI rendering)
+  can_upgrade_plan?: boolean;
+  can_manage_billing?: boolean;
 }
 
 export interface PlanLimits {

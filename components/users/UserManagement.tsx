@@ -14,7 +14,8 @@ import {
   UserCog,
   Check,
   Settings2,
-  Link2
+  Link2,
+  AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import authService from '@/lib/services/authService';
@@ -105,7 +106,7 @@ interface ApiUser {
 
 // Default role labels for known roles - RBAC01-07
 const defaultRoleLabels: Record<string, string> = {
-  tenant_admin: 'Admin',
+  tenant_admin: 'Tenant Admin',
   admin: 'Admin',
   recruiter: 'Recruiter',
   viewer: 'Viewer',
@@ -255,6 +256,8 @@ export default function UserManagement() {
   const [editSelectedRoleId, setEditSelectedRoleId] = useState<number | null>(null);
   const [selectedPermissionIds, setSelectedPermissionIds] = useState<Set<number>>(new Set());
   const [editSelectedPermissionIds, setEditSelectedPermissionIds] = useState<Set<number>>(new Set());
+  const [editOriginalPermissionIds, setEditOriginalPermissionIds] = useState<Set<number>>(new Set());
+  const [editOriginalRoleId, setEditOriginalRoleId] = useState<number | null>(null);
 
   // RBAC06-07: Feature permission states
   const [featurePermissionUser, setFeaturePermissionUser] = useState<ApiUser | null>(null);
@@ -278,6 +281,20 @@ export default function UserManagement() {
     permissions: { ...defaultPermissions },
   });
 
+  // Email validation states
+  const [emailCheckResult, setEmailCheckResult] = useState<{
+    warning: string | null;
+    otherTenants: Array<{ tenant_name: string; subdomain: string }>;
+  }>({
+    warning: null,
+    otherTenants: [],
+  });
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const emailCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Current user state (for hiding Edit/Delete buttons on self)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
 
@@ -286,6 +303,9 @@ export default function UserManagement() {
     const checkPermission = async () => {
       try {
         const currentUser = await authService.getCurrentUser();
+
+        // Store current user ID for hiding Edit/Delete buttons on self
+        setCurrentUserId(currentUser.id);
 
         // Check if user has permission to access User Management
         const hasPermission = currentUser.role === 'tenant_admin' || currentUser.permissions?.can_manage_users;
@@ -412,6 +432,44 @@ export default function UserManagement() {
       }
       return newSet;
     });
+  };
+
+  // Email validation with debounce (500ms)
+  const checkEmailAvailability = async (email: string) => {
+    // Clear previous timeout
+    if (emailCheckTimeoutRef.current) {
+      clearTimeout(emailCheckTimeoutRef.current);
+    }
+
+    // Reset warnings
+    setEmailCheckResult({ warning: null, otherTenants: [] });
+
+    // Skip validation if email is empty or invalid
+    if (!email || !email.includes('@')) {
+      return;
+    }
+
+    // Set loading state
+    setIsCheckingEmail(true);
+
+    // Debounce - wait 500ms after user stops typing
+    emailCheckTimeoutRef.current = setTimeout(async () => {
+      try {
+        const result = await userService.checkEmailAvailability(email);
+
+        if (result.exists_in_other_tenants && result.warning) {
+          setEmailCheckResult({
+            warning: result.warning,
+            otherTenants: result.other_tenants || [],
+          });
+        }
+      } catch (error) {
+        console.error('Error checking email:', error);
+        // Don't show error to user - just skip validation
+      } finally {
+        setIsCheckingEmail(false);
+      }
+    }, 500);
   };
 
   const loadUsers = async () => {
@@ -556,17 +614,111 @@ export default function UserManagement() {
     setSelectedPermissionIds(new Set());
     setRoleDropdownOpen(false);
     setIsCreateModalOpen(false);
+    // Clear email validation state
+    setEmailCheckResult({ warning: null, otherTenants: [] });
+    setIsCheckingEmail(false);
+    if (emailCheckTimeoutRef.current) {
+      clearTimeout(emailCheckTimeoutRef.current);
+    }
   };
 
   const openEditModal = async (user: ApiUser) => {
     setEditingUser(user);
-    // Find the role ID based on user's current role and load its permissions
+
+    // Find the role ID based on user's current role
     const matchingRole = availableRoles.find(r => r.code.toLowerCase() === user.role.toLowerCase());
-    if (matchingRole) {
-      await selectRole(matchingRole.id, true);
-    } else {
-      setEditSelectedRoleId(null);
+    setEditSelectedRoleId(matchingRole?.id || null);
+
+    // CRITICAL FIX: Pre-select user's CURRENT permissions, not role defaults
+    // Fetch fresh user data to get current permission state
+    try {
+      const freshUserData = await userService.getUser(user.id);
+
+      // Map user's current permissions (boolean fields) to permission IDs
+      const currentPermissionIds = new Set<number>();
+
+      // For each permission in allPermissions, check if user has it enabled
+      allPermissions.forEach(perm => {
+        // Map permission code to user's boolean permission fields
+        // This requires checking various permission patterns
+        let hasPermission = false;
+
+        // Job Descriptions
+        if (perm.code === 'jd:create' && freshUserData.permissions.can_create_jd) hasPermission = true;
+        if (perm.code === 'jd:read' && (freshUserData.permissions.can_manage_jd || freshUserData.permissions.can_view_jd)) hasPermission = true;
+        if (perm.code === 'jd:update' && (freshUserData.permissions.can_manage_jd || freshUserData.permissions.can_update_jd)) hasPermission = true;
+        if (perm.code === 'jd:delete' && (freshUserData.permissions.can_manage_jd || freshUserData.permissions.can_delete_jd)) hasPermission = true;
+
+        // Resumes
+        if (perm.code === 'resumes:create' && (freshUserData.permissions.can_upload_resumes || freshUserData.permissions.can_create_resumes)) hasPermission = true;
+        if (perm.code === 'resumes:read' && (freshUserData.permissions.can_view_resumes || freshUserData.permissions.can_view_resumes_granular)) hasPermission = true;
+        if (perm.code === 'resumes:update' && (freshUserData.permissions.can_upload_resumes || freshUserData.permissions.can_update_resumes)) hasPermission = true;
+        if (perm.code === 'resumes:delete' && freshUserData.permissions.can_delete_resumes) hasPermission = true;
+
+        // Internal Database
+        if (perm.code === 'internal_db:read' && (freshUserData.permissions.can_access_internal_db || freshUserData.permissions.can_view_internal_db)) hasPermission = true;
+        if (perm.code === 'internal_db:create' && freshUserData.permissions.can_create_internal_db) hasPermission = true;
+        if (perm.code === 'internal_db:update' && freshUserData.permissions.can_update_internal_db) hasPermission = true;
+        if (perm.code === 'internal_db:delete' && freshUserData.permissions.can_delete_internal_db) hasPermission = true;
+
+        // Assessments
+        if (perm.code === 'assessments:create' && freshUserData.permissions.can_create_assessments) hasPermission = true;
+        if (perm.code === 'assessments:read' && freshUserData.permissions.can_view_assessments) hasPermission = true;
+        if (perm.code === 'assessments:update' && freshUserData.permissions.can_update_assessments) hasPermission = true;
+        if (perm.code === 'assessments:delete' && freshUserData.permissions.can_delete_assessments) hasPermission = true;
+
+        // Analytics
+        if (perm.code === 'analytics:read' && (freshUserData.permissions.can_view_analytics || freshUserData.permissions.can_view_analytics_granular)) hasPermission = true;
+        if (perm.code === 'analytics:export' && freshUserData.permissions.can_export_analytics) hasPermission = true;
+
+        // Settings
+        if (perm.code === 'settings:read' && freshUserData.permissions.can_view_settings) hasPermission = true;
+        if (perm.code === 'settings:update' && (freshUserData.permissions.can_manage_settings || freshUserData.permissions.can_update_settings)) hasPermission = true;
+        if (perm.code === 'settings:delete' && freshUserData.permissions.can_delete_settings) hasPermission = true;
+
+        // Users
+        if (perm.code === 'users:read' && freshUserData.permissions.can_view_users) hasPermission = true;
+        if (perm.code === 'users:create' && freshUserData.permissions.can_create_users) hasPermission = true;
+        if (perm.code === 'users:update' && (freshUserData.permissions.can_manage_users || freshUserData.permissions.can_update_users)) hasPermission = true;
+        if (perm.code === 'users:delete' && freshUserData.permissions.can_delete_users) hasPermission = true;
+
+        // Roles
+        if (perm.code === 'roles:read' && freshUserData.permissions.can_view_roles) hasPermission = true;
+        if (perm.code === 'roles:create' && freshUserData.permissions.can_create_roles) hasPermission = true;
+        if (perm.code === 'roles:update' && freshUserData.permissions.can_update_roles) hasPermission = true;
+        if (perm.code === 'roles:delete' && freshUserData.permissions.can_delete_roles) hasPermission = true;
+
+        // Billing
+        if (perm.code === 'billing:read' && (freshUserData.permissions.can_view_billing || freshUserData.permissions.can_view_billing_granular)) hasPermission = true;
+        if (perm.code === 'billing:update' && freshUserData.permissions.can_update_billing) hasPermission = true;
+        if (perm.code === 'billing:manage' && freshUserData.permissions.can_manage_billing) hasPermission = true;
+
+        // Invoices
+        if (perm.code === 'invoices:read' && (freshUserData.permissions.can_view_invoices || freshUserData.permissions.can_view_invoices_granular)) hasPermission = true;
+        if (perm.code === 'invoices:create' && freshUserData.permissions.can_create_invoices) hasPermission = true;
+        if (perm.code === 'invoices:update' && freshUserData.permissions.can_update_invoices) hasPermission = true;
+        if (perm.code === 'invoices:delete' && freshUserData.permissions.can_delete_invoices) hasPermission = true;
+
+        // Usage
+        if (perm.code === 'usage:read' && (freshUserData.permissions.can_view_usage || freshUserData.permissions.can_view_usage_granular)) hasPermission = true;
+        if (perm.code === 'usage:manage' && freshUserData.permissions.can_manage_usage) hasPermission = true;
+
+        if (hasPermission) {
+          currentPermissionIds.add(perm.id);
+        }
+      });
+
+      // Set the user's CURRENT permissions (not role defaults)
+      setEditSelectedPermissionIds(currentPermissionIds);
+      // Store original permissions for comparison later
+      setEditOriginalPermissionIds(new Set(currentPermissionIds));
+      setEditOriginalRoleId(matchingRole?.id || null);
+      console.log(`[EDIT USER] Pre-selected ${currentPermissionIds.size} permissions for user ${user.email}`);
+    } catch (error) {
+      console.error('Error fetching user permissions for edit:', error);
+      // Fallback to empty permissions if fetch fails
       setEditSelectedPermissionIds(new Set());
+      setEditOriginalPermissionIds(new Set());
     }
   };
 
@@ -574,6 +726,8 @@ export default function UserManagement() {
     setEditingUser(null);
     setEditSelectedRoleId(null);
     setEditSelectedPermissionIds(new Set());
+    setEditOriginalPermissionIds(new Set());
+    setEditOriginalRoleId(null);
     setEditRoleDropdownOpen(false);
   };
 
@@ -655,6 +809,39 @@ export default function UserManagement() {
     const selectedRole = availableRoles.find(r => r.id === editSelectedRoleId);
     const roleCode = selectedRole?.code || editingUser.role;
 
+    // Check if role has changed
+    const roleChanged = editSelectedRoleId !== editOriginalRoleId;
+
+    // Check if permissions have changed
+    const permissionsChanged =
+      editSelectedPermissionIds.size !== editOriginalPermissionIds.size ||
+      ![...editSelectedPermissionIds].every(id => editOriginalPermissionIds.has(id));
+
+    // Build request body
+    const requestBody: any = {
+      name: editingUser.name,
+      role: roleCode,
+      role_id: editSelectedRoleId,
+    };
+
+    // Only include permission_ids if they were explicitly changed
+    // Backend logic:
+    // - If permission_ids provided → use those
+    // - If role changed and no permission_ids → use new role defaults
+    // - If role NOT changed and no permission_ids → preserve existing
+    if (permissionsChanged) {
+      requestBody.permission_ids = Array.from(editSelectedPermissionIds);
+      console.log('[EDIT USER] Permissions changed, sending updated permission_ids');
+    } else if (roleChanged) {
+      // Role changed but permissions weren't explicitly modified
+      // Don't send permission_ids - backend will apply new role defaults
+      console.log('[EDIT USER] Role changed, backend will apply new role defaults');
+    } else {
+      // Neither role nor permissions changed
+      // Don't send permission_ids - backend will preserve existing
+      console.log('[EDIT USER] No changes to role or permissions, backend will preserve existing');
+    }
+
     setIsSaving(true);
     try {
       const response = await fetch(`${API_URL}/users/${editingUser.id}`, {
@@ -663,12 +850,7 @@ export default function UserManagement() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
         },
-        body: JSON.stringify({
-          name: editingUser.name,
-          role: roleCode,
-          role_id: editSelectedRoleId,
-          permission_ids: Array.from(editSelectedPermissionIds),
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -900,20 +1082,28 @@ export default function UserManagement() {
                       >
                         <Settings2 className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => openEditModal(user)}
-                        className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                        title="Edit User"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete User"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+
+                      {/* Hide Edit button for tenant admins and current user */}
+                      {!(user.role.toLowerCase() === 'tenant_admin' || user.role.toLowerCase() === 'admin') && user.id !== currentUserId && (
+                        <button
+                          onClick={() => openEditModal(user)}
+                          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                          title="Edit User"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      {/* Hide Delete button for tenant admins and current user */}
+                      {!(user.role.toLowerCase() === 'tenant_admin' || user.role.toLowerCase() === 'admin') && user.id !== currentUserId && (
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete User"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -964,10 +1154,50 @@ export default function UserManagement() {
                 <input
                   type="email"
                   value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  onChange={(e) => {
+                    setNewUser({ ...newUser, email: e.target.value });
+                    checkEmailAvailability(e.target.value);
+                  }}
                   placeholder="user@company.com"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                 />
+
+                {/* Email validation feedback */}
+                {isCheckingEmail && (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Checking email availability...</span>
+                  </div>
+                )}
+
+                {emailCheckResult.warning && (
+                  <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm text-yellow-800 font-medium">
+                          {emailCheckResult.warning}
+                        </p>
+                        {emailCheckResult.otherTenants.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-xs text-yellow-700 mb-1">Exists in tenants:</p>
+                            <ul className="list-disc list-inside space-y-1">
+                              {emailCheckResult.otherTenants.map((tenant, idx) => (
+                                <li key={idx} className="text-xs text-yellow-700">
+                                  <span className="font-medium">{tenant.tenant_name}</span>
+                                  <span className="text-yellow-600"> ({tenant.subdomain})</span>
+                                </li>
+                              ))}
+                            </ul>
+                            <p className="text-xs text-yellow-700 mt-2 italic">
+                              Note: User will need to specify tenant subdomain during login.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

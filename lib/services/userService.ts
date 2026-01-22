@@ -28,6 +28,9 @@ export interface ApiUser {
   permissions: UserPermissions;
   last_login?: string;
   created_at: string;
+  // UI control flags (for role-based UI rendering)
+  can_upgrade_plan?: boolean;
+  can_manage_billing?: boolean;
 }
 
 export interface CreateUserRequest {
@@ -82,6 +85,18 @@ export interface RolePermissionsResponse {
     can_manage_settings: boolean;
     can_manage_users: boolean;
   };
+}
+
+export interface TenantOption {
+  tenant_name: string;
+  subdomain: string;
+}
+
+export interface EmailCheckResponse {
+  available: boolean;
+  exists_in_other_tenants: boolean;
+  warning: string | null;
+  other_tenants?: TenantOption[];
 }
 
 export const userService = {
@@ -209,6 +224,25 @@ export const userService = {
           can_manage_settings: false,
           can_manage_users: false,
         },
+      };
+    }
+  },
+
+  /**
+   * Check if email exists in other tenants
+   * Used for real-time validation during user creation
+   */
+  async checkEmailAvailability(email: string): Promise<EmailCheckResponse> {
+    try {
+      const response = await api.get<EmailCheckResponse>(`/users/check-email/${email}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error checking email availability:', error);
+      // Return available by default on error (don't block user creation)
+      return {
+        available: true,
+        exists_in_other_tenants: false,
+        warning: null,
       };
     }
   },
