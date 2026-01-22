@@ -28,6 +28,7 @@ export interface Resume {
   location?: string;
   notice_period?: string;
   professional_summary?: string;
+  extracted_text?: string;  // Full extracted content from resume
   file_name: string;
   file_size_kb?: number;
   file_type?: string;
