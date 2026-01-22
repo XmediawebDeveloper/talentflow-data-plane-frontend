@@ -196,10 +196,10 @@ export default function ResumeScoringRoute() {
             console.error('[ResumeScoringRoute] Error clearing pendingScoringBatch:', e);
           }
 
-          // Reload scored history to show new results
-          setTimeout(() => {
-            loadScoredHistory();
-            // Redirect to show the scored results
+          // Reload scored history to show new results, then redirect
+          setTimeout(async () => {
+            await loadScoredHistory();
+            // Redirect to show the scored results after history is loaded
             window.location.href = `/recruitment/resume-scoring?jd_id=${status.jd_id}`;
           }, 2000);
         }

@@ -100,6 +100,8 @@ interface JDCreationProps {
   selectedJob?: Job | null;
   onPublish?: (job: Job) => void;
   editingJD?: EditingJDData | null;  // JD data when editing a draft
+  isJDInUse?: boolean;  // Whether JD is used in scoring/assessment/AI match
+  jdUsageMessage?: string;  // Message explaining why JD can't be edited
 }
 
 interface DraggableSkillProps {
@@ -459,7 +461,7 @@ const FALLBACK_INDUSTRY_TYPES: IndustryType[] = [
   { id: 8, code: 'others', label: 'Other', sort_order: 99, is_active: true },
 ];
 
-export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }: JDCreationProps = {}) {
+export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage }: JDCreationProps = {}) {
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
@@ -2644,6 +2646,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
             </div>
           </div>
           {renderStepIndicator()}
+
+          {/* Warning banner when JD is in use */}
+          {isJDInUse && (
+            <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-orange-800">This Job Description cannot be edited</p>
+                  <p className="text-xs text-orange-700 mt-1">
+                    {jdUsageMessage || 'This job description has been used in Resume Scoring, Assessments, or AI Talent Match and cannot be modified. Please create a new JD instead.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Scrollable Content */}
@@ -2803,9 +2820,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                       </div>
                     )}
 
+                    {/* Warning when JD is in use */}
+                    {isJDInUse && (
+                      <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                        <div className="flex items-start gap-3">
+                          <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-orange-800">This JD cannot be edited</p>
+                            <p className="text-xs text-orange-700 mt-1">
+                              {jdUsageMessage || 'This job description has been used in Resume Scoring, Assessments, or AI Talent Match and cannot be modified. Please create a new JD instead.'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <button
                       onClick={handleGenerateJD}
                       disabled={
+                        isJDInUse ||
                         !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
                         (!editingId && !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max)) ||
                         aiPrompt.length > VALIDATION.AI_PROMPT.max ||
@@ -3038,8 +3071,38 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                   )
                 ) : (
                   manualJD ? (
-                    <div className="h-[600px] overflow-y-auto p-4 border border-gray-300 rounded-md bg-gray-50">
-                      <pre className="whitespace-pre-wrap text-sm text-gray-700">{manualJD}</pre>
+                    <div className="h-[600px] overflow-y-auto px-6 py-4 border border-gray-300 rounded-md bg-white markdown-content">
+                      <ReactMarkdown>{
+                        // Auto-format common JD section headers to bold/headers
+                        manualJD
+                          // Convert ALL CAPS headers to markdown headers (like JOB DESCRIPTION, REQUIREMENTS, etc.)
+                          .replace(/^([A-Z][A-Z\s\/&-]{2,})$/gm, (match) => `## ${match.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ')}`)
+                          // Dynamically detect section headers: Title Case text on its own line
+                          .replace(/^([A-Z][a-zA-Z]*(?:[\s&\/\-]+[A-Za-z()]+){0,6})\s*$/gm, (match, p1) => {
+                            const trimmed = p1.trim();
+                            const words = trimmed.split(/\s+/);
+                            const wordCount = words.length;
+
+                            // Skip if too long (likely a sentence)
+                            if (wordCount > 6 || trimmed.length > 50) return match;
+
+                            // Skip if starts with action verbs (likely a bullet point)
+                            const actionVerbs = /^(Design|Develop|Write|Build|Create|Implement|Maintain|Manage|Lead|Work|Collaborate|Participate|Fix|Optimize|Test|Review|Ensure|Prepare|Provide|Support|Assist|Handle|Conduct|Perform|Execute|Analyze|Monitor|Strong|Good|Basic|Experience|Familiarity|Knowledge|Understanding|Ability|Hands-on|Exposure|Proficiency|Excellent|Proven|Demonstrated)/i;
+                            if (actionVerbs.test(trimmed)) return match;
+
+                            // Skip if contains lowercase words that aren't connectors (likely a sentence)
+                            const connectors = ['&', 'and', 'or', 'of', 'to', 'for', 'the', 'a', 'an', 'in', 'on', 'with'];
+                            const hasContentWords = words.some((w, i) => {
+                              if (i === 0) return false; // Skip first word
+                              const cleanWord = w.replace(/[()\/&-]/g, '').toLowerCase();
+                              return cleanWord.length > 2 && /^[a-z]/.test(w) && !connectors.includes(cleanWord);
+                            });
+                            if (hasContentWords) return match;
+
+                            // Looks like a header
+                            return `## ${trimmed}`;
+                          })
+                      }</ReactMarkdown>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-[600px] bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
@@ -4382,7 +4445,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 {/* JD12: Save as Draft button */}
                 <button
                   onClick={handleSaveDraft}
-                  disabled={isSavingDraft}
+                  disabled={isSavingDraft || isJDInUse}
+                  title={isJDInUse ? 'This JD is in use and cannot be modified' : ''}
                   className="flex items-center gap-2 px-6 py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
                   {isSavingDraft ? (
@@ -4399,13 +4463,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
                 </button>
                 <button
                   onClick={handleConfirmPublish}
-                  disabled={isPublishing || !validationStatus.isValid}
+                  disabled={isPublishing || !validationStatus.isValid || isJDInUse}
                   className={`flex items-center gap-2 px-8 py-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                    validationStatus.isValid
+                    validationStatus.isValid && !isJDInUse
                       ? 'bg-green-600 text-white hover:bg-green-700'
                       : 'bg-gray-300 text-gray-500'
                   }`}
-                  title={!validationStatus.isValid ? 'Complete all required fields to publish' : ''}
+                  title={isJDInUse ? 'This JD is in use and cannot be modified' : !validationStatus.isValid ? 'Complete all required fields to publish' : ''}
                 >
                   {isPublishing ? (
                     <>

@@ -32,6 +32,8 @@ function AccessBlockedError({
         return <ShieldX className="w-16 h-16 text-yellow-500" />;
       case 'UNAUTHENTICATED':
         return <LogIn className="w-16 h-16 text-blue-500" />;
+      case 'JD_IN_USE':
+        return <AlertTriangle className="w-16 h-16 text-orange-500" />;
       default:
         return <AlertTriangle className="w-16 h-16 text-red-500" />;
     }
@@ -51,6 +53,8 @@ function AccessBlockedError({
         return 'Authentication Required';
       case 'JOB_QUOTA_EXCEEDED':
         return 'Job Quota Exceeded';
+      case 'JD_IN_USE':
+        return 'Job Description In Use';
       default:
         return 'Access Denied';
     }
@@ -176,6 +180,8 @@ function JDCreationContent() {
   const [loading, setLoading] = useState(true); // Start with loading true for access check
   const [accessCheck, setAccessCheck] = useState<JDAccessCheckResponse | null>(null);
   const [accessError, setAccessError] = useState<{ code: string; message: string } | null>(null);
+  const [isJDInUse, setIsJDInUse] = useState(false);
+  const [jdUsageMessage, setJdUsageMessage] = useState<string | undefined>(undefined);
 
   // JD01: Pre-condition validation on page load
   useEffect(() => {
@@ -206,6 +212,32 @@ function JDCreationContent() {
               creation_stage: jd.creation_stage,
               status: jd.status
             });
+
+            // Check usage status for published JDs - prevent editing if in use
+            if (jd.status === 'published') {
+              try {
+                const usageStatus = await jdService.getUsageStatus(jdId);
+                console.log('[TalentFlow] Usage status for JD:', usageStatus);
+
+                if (usageStatus && usageStatus.is_used) {
+                  // JD is in use - set flag to show warning and disable editing
+                  setIsJDInUse(true);
+                  const usageDetails = [
+                    usageStatus.usage?.resume_scores_count ? `Resume Scoring (${usageStatus.usage.resume_scores_count})` : '',
+                    usageStatus.usage?.assessments_count ? `Assessments (${usageStatus.usage.assessments_count})` : '',
+                    usageStatus.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : ''
+                  ].filter(Boolean).join(', ');
+                  setJdUsageMessage(
+                    usageStatus.edit_restriction_reason ||
+                    `This job description has been used in: ${usageDetails}. It cannot be modified. Please create a new JD instead.`
+                  );
+                }
+              } catch (usageError) {
+                console.error('[TalentFlow] Failed to check usage status:', usageError);
+                // Continue if usage check fails - backend will validate on save
+              }
+            }
+
             setEditingJD(jd);
           } catch (error) {
             console.error('Failed to fetch JD:', error);
@@ -297,6 +329,8 @@ function JDCreationContent() {
         <JDCreation
           onBack={handleViewAllJobs}
           editingJD={memoizedEditingJD}
+          isJDInUse={isJDInUse}
+          jdUsageMessage={jdUsageMessage}
         />
       </div>
     </DndProvider>
