@@ -4,6 +4,8 @@ import { User as UserType } from '@/lib/types/tenant';
 import NotificationCenter from './NotificationCenter';
 import QuickActions from './QuickActions';
 import api from '@/lib/services/api';
+// FIX-010: Import Tooltip for icon buttons
+import { Tooltip } from '@/components/ui/tooltip';
 
 interface HeaderProps {
   onLogout: () => void;
@@ -62,34 +64,47 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     fetchQuotaStatus();
   }, [user?.id]);
 
-  // Listen for plan changes to refresh quota data
+  // Listen for plan changes and unit consumption to refresh quota data
   useEffect(() => {
     const handlePlanChange = () => {
       console.log('[Header] Plan changed, refreshing quota...');
       fetchQuotaStatus();
     };
 
+    const handleUnitsConsumed = () => {
+      console.log('[Header] Units consumed, refreshing quota...');
+      fetchQuotaStatus();
+    };
+
     window.addEventListener('planChanged', handlePlanChange);
-    return () => window.removeEventListener('planChanged', handlePlanChange);
+    window.addEventListener('unitsConsumed', handleUnitsConsumed);
+    return () => {
+      window.removeEventListener('planChanged', handlePlanChange);
+      window.removeEventListener('unitsConsumed', handleUnitsConsumed);
+    };
   }, [user]);
   
-  // Calculate total units (RU + RS + AS + AIU + max_jobs + max_seats)
+  // Calculate total units across all quota types (RU + RS + AS + AIU + max_seats)
   const calculateTotalUnits = () => {
     if (!quotaData?.quotas) return { remaining: 0, limit: 0, used: 0 };
 
     const quotas = quotaData.quotas;
-    // Include ALL quota types - both consumable units and limits
-    const allQuotaTypes = ['RU', 'RS', 'AS', 'AIU', 'max_jobs', 'max_seats'];
+    // Include all unit types: Resume Upload, Resume Scoring, Assessment, AI Interview, Max Users
+    const allUnitTypes = ['RU', 'RS', 'AS', 'AIU', 'max_seats'];
 
     let totalRemaining = 0;
     let totalLimit = 0;
     let totalUsed = 0;
 
-    allQuotaTypes.forEach(quotaType => {
+    allUnitTypes.forEach(quotaType => {
       if (quotas[quotaType]) {
-        totalRemaining += quotas[quotaType].total_remaining || 0;
-        totalLimit += (quotas[quotaType].subscription?.limit || 0) + (quotas[quotaType].addon?.total_purchased || 0);
-        totalUsed += quotas[quotaType].subscription?.used || 0;
+        const quota = quotas[quotaType];
+        // Skip unlimited quotas in the calculation
+        if (quota.is_unlimited) return;
+
+        totalRemaining += quota.total_remaining || 0;
+        totalLimit += (quota.subscription?.limit || 0) + (quota.addon?.total_purchased || 0);
+        totalUsed += quota.subscription?.used || 0;
       }
     });
 
@@ -138,15 +153,17 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
       </div>
 
       <div className="flex items-center gap-3 ml-8">
-        {/* Keyboard Shortcuts Button */}
+        {/* FIX-010: Keyboard Shortcuts Button with Tooltip */}
         {onOpenShortcuts && (
-          <button
-            onClick={onOpenShortcuts}
-            className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors border border-gray-300 hover:border-gray-400"
-            title="Keyboard Shortcuts (Cmd/Ctrl + /)"
-          >
-            <Command className="w-5 h-5" />
-          </button>
+          <Tooltip content="Keyboard Shortcuts (Cmd/Ctrl + /)" position="bottom">
+            <button
+              onClick={onOpenShortcuts}
+              className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors border border-gray-300 hover:border-gray-400"
+              aria-label="Keyboard Shortcuts"
+            >
+              <Command className="w-5 h-5" />
+            </button>
+          </Tooltip>
         )}
 
         {/* Quick Tour Button */}
@@ -161,20 +178,22 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           </button>
         )}
 
-        {/* Help & Support */}
+        {/* FIX-010: Help & Support with Tooltip */}
         <div className="relative">
-          <button
-            onClick={() => {
-              setShowHelpMenu(!showHelpMenu);
-              setShowNotifications(false);
-              setShowPlanMenu(false);
-              setShowUserMenu(false);
-            }}
-            className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Help & Support"
-          >
-            <HelpCircle className="w-5 h-5" />
-          </button>
+          <Tooltip content="Help & Support" position="bottom">
+            <button
+              onClick={() => {
+                setShowHelpMenu(!showHelpMenu);
+                setShowNotifications(false);
+                setShowPlanMenu(false);
+                setShowUserMenu(false);
+              }}
+              className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Help & Support"
+            >
+              <HelpCircle className="w-5 h-5" />
+            </button>
+          </Tooltip>
 
           {showHelpMenu && (
             <>
@@ -289,22 +308,24 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           )}
         </div>
 
-        {/* Notifications */}
+        {/* FIX-010: Notifications with Tooltip */}
         <div className="relative">
-          <button
-            onClick={() => {
-              setShowNotifications(!showNotifications);
-              setShowHelpMenu(false);
-              setShowPlanMenu(false);
-              setShowUserMenu(false);
-            }}
-            className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Notifications"
-          >
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
-            <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">5</span>
-          </button>
+          <Tooltip content="Notifications" position="bottom">
+            <button
+              onClick={() => {
+                setShowNotifications(!showNotifications);
+                setShowHelpMenu(false);
+                setShowPlanMenu(false);
+                setShowUserMenu(false);
+              }}
+              className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Notifications"
+            >
+              <Bell className="w-5 h-5" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+              <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">5</span>
+            </button>
+          </Tooltip>
 
           {showNotifications && (
             <>
@@ -445,9 +466,46 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           )}
         </div>
 
-        <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-          <Settings className="w-5 h-5" />
-        </button>
+        {/* Plan & Unit Balance Display - FIX-001 */}
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg">
+          <CreditCard className="w-4 h-4 text-gray-500" />
+          <div className="flex flex-col">
+            <span className="text-xs font-medium text-gray-900 leading-tight">
+              {loadingQuota ? 'Loading...' : planName}
+            </span>
+            {!loadingQuota && !quotaError && !isPendingStatus && (
+              <span className="text-xs text-gray-500 leading-tight">
+                {totalUnits.remaining.toLocaleString()} units left
+              </span>
+            )}
+            {isPendingStatus && (
+              <span className="text-xs text-orange-600 leading-tight">
+                {tenantStatus}
+              </span>
+            )}
+          </div>
+          {!loadingQuota && !quotaError && !isPendingStatus && totalUnits.limit > 0 && (
+            <div className="w-12 h-1.5 bg-gray-200 rounded-full overflow-hidden ml-1">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  usagePercentage > 90 ? 'bg-red-500' :
+                  usagePercentage > 70 ? 'bg-yellow-500' : 'bg-green-500'
+                }`}
+                style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* FIX-010: Settings with Tooltip */}
+        <Tooltip content="Settings" position="bottom">
+          <button
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="Settings"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+        </Tooltip>
 
         <div className="h-8 w-px bg-gray-200 mx-2" />
 
