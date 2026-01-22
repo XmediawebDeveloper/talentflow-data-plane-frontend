@@ -8,8 +8,9 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
+import { useQuota } from '@/contexts/QuotaContext';
 
-const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://localhost:8001/api/v1';
+// Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -109,13 +110,13 @@ interface CompanySettings {
   plan_expiry_date?: string;
   last_synced_at?: string;
   status: string;
-  max_seats: number;
-  max_jobs: number;
-  max_resume_uploads: number;
-  max_resume_searches: number;
-  max_assessments: number;
-  max_ai_interviews: number;
-  storage_limit_gb: number;
+  max_seats: number | string;  // Can be "unlimited"
+  max_jobs: number | string;   // Can be "unlimited"
+  max_resume_uploads: number | string;  // Can be "unlimited"
+  max_resume_searches: number | string; // Can be "unlimited"
+  max_assessments: number | string;     // Can be "unlimited"
+  max_ai_interviews: number | string;   // Can be "unlimited"
+  storage_limit_gb: number | string;    // Can be "unlimited"
   trial_start_date?: string;
   trial_end_date?: string;
   selected_plan_id?: number;
@@ -315,9 +316,24 @@ const formatCardNumber = (value: string): string => {
   return parts.length ? parts.join(' ') : value;
 };
 
+// Format quota values - handles "unlimited" string and large numbers
+const formatQuotaValue = (value: number | string | undefined | null): string => {
+  if (value === undefined || value === null) return '-';
+  if (value === 'unlimited' || value === 'Unlimited') return 'Unlimited';
+  if (typeof value === 'string' && value.toLowerCase() === 'unlimited') return 'Unlimited';
+  if (typeof value === 'number') {
+    if (value >= 999999) return 'Unlimited';
+    return value.toLocaleString();
+  }
+  return String(value);
+};
+
 function CurrentPlanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Use shared quota context - prevents duplicate API calls
+  const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
 
   // Get encoded plan from URL (from login redirect after signup)
   const encodedPlanFromUrl = searchParams.get('plan');
@@ -419,36 +435,10 @@ function CurrentPlanContent() {
       setError(null);
       setTenantStatus(null);
 
-      // Fetch quota status from backend API (calls external admin API)
-      let quotaData: any = null;
-      try {
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-          const quotaResponse = await fetch(`${API_URL}/usage/quota-status`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          });
-          if (quotaResponse.ok) {
-            const quotaResult = await quotaResponse.json();
-            quotaData = quotaResult.data || quotaResult;
-            console.log('[CurrentPlan] Quota status:', quotaData);
-          } else if (quotaResponse.status === 403) {
-            // Handle TENANT_INACTIVE error
-            const errorData = await quotaResponse.json();
-            if (errorData?.detail?.error === 'TENANT_INACTIVE') {
-              setTenantStatus({
-                status: errorData.detail.status || 'PENDING',
-                message: errorData.detail.message || 'Your account is pending activation.',
-              });
-              console.log('[CurrentPlan] Tenant inactive:', errorData.detail);
-            }
-          }
-        }
-      } catch (quotaError) {
-        console.log('Could not fetch quota status');
-      }
+      // Use shared quota data from context (prevents duplicate API calls)
+      // The sharedQuotaData comes from QuotaContext which is fetched once at dashboard layout level
+      const quotaData: any = sharedQuotaData;
+      console.log('[CurrentPlan] Using shared quota data from context:', quotaData ? 'available' : 'not yet loaded');
 
       // Fetch free trial settings from API
       let trialSettings: FreeTrialSettings | null = null;
@@ -557,16 +547,19 @@ function CurrentPlanContent() {
 
         console.log('[CurrentPlan] isTrial:', isTrial, 'trialSettings:', trialSettings?.features);
 
-        // Extract base_price from plan_info if available (only for paid plans)
-        if (!isTrial && quotaData.plan_info?.base_price !== undefined) {
-          setCurrentPlanPrice(quotaData.plan_info.base_price);
-          console.log('[CurrentPlan] Setting price from plan_info:', quotaData.plan_info.base_price);
+        // Extract subscribed_price from plan_info (what user is actually paying)
+        if (!isTrial && quotaData.plan_info?.subscribed_price !== undefined) {
+          setCurrentPlanPrice(quotaData.plan_info.subscribed_price);
+          console.log('[CurrentPlan] Setting price from plan_info.subscribed_price:', quotaData.plan_info.subscribed_price);
         } else if (isTrial) {
           setCurrentPlanPrice(0); // Free trial has no price
         }
 
+        // API returns billing_period (ANNUAL/MONTHLY) - this is the plan type
+        // billing_interval might be different (e.g., monthly payments on annual plan)
         if (quotaData.plan_info?.billing_period) {
           setCurrentPlanBillingPeriod(quotaData.plan_info.billing_period);
+          console.log('[CurrentPlan] Billing period:', quotaData.plan_info.billing_period, ', billing_interval:', quotaData.plan_info.billing_interval);
         }
       }
 
@@ -586,40 +579,9 @@ function CurrentPlanContent() {
         console.log('Could not fetch plan settings');
       }
 
-      let settings: CompanySettings | null = null;
-      try {
-        const settingsResponse = await api.get<CompanySettings>('/settings/company-settings');
-        settings = settingsResponse.data;
-        // Merge company-settings with quota data (quota data takes priority)
-        setCompanySettings(prev => {
-          if (!prev) return settings!;
-
-          // Quota-status data takes priority, fall back to company-settings only if quota data is missing
-          return {
-            ...settings!,
-            // Prioritize quota-status data over company-settings
-            current_plan_name: prev.current_plan_name || settings?.current_plan_name,
-            current_plan_id: prev.current_plan_id || settings?.current_plan_id,
-            trial_start_date: prev.trial_start_date || settings?.trial_start_date,
-            trial_end_date: prev.trial_end_date || settings?.trial_end_date,
-            plan_start_date: prev.plan_start_date || settings?.plan_start_date,
-            plan_expiry_date: prev.plan_expiry_date || settings?.plan_expiry_date,
-            subscription_status: prev.subscription_status || settings?.subscription_status,
-            status: prev.status || settings?.status,
-            max_seats: prev.max_seats || settings?.max_seats,
-            max_jobs: prev.max_jobs || settings?.max_jobs,
-            max_resume_uploads: prev.max_resume_uploads || settings?.max_resume_uploads,
-            max_resume_searches: prev.max_resume_searches || settings?.max_resume_searches,
-            max_assessments: prev.max_assessments || settings?.max_assessments,
-            max_ai_interviews: prev.max_ai_interviews || settings?.max_ai_interviews,
-            storage_limit_gb: prev.storage_limit_gb || settings?.storage_limit_gb,
-          };
-        });
-        console.log('[CurrentPlan] Merged company settings with quota data');
-      } catch (settingsError) {
-        console.log('Could not fetch company settings, using quota data only');
-        // Company settings API failed - quota data already set, no need to overwrite
-      }
+      // NOTE: All plan data now comes from /usage/quota-status API (Admin API)
+      // No need to call /settings/company-settings - quota-status is the single source of truth
+      console.log('[CurrentPlan] Using quota-status API as single source of truth for plan data');
 
       // Fetch tenant_id from /auth/me (using data-plane API)
       try {
@@ -686,9 +648,9 @@ function CurrentPlanContent() {
             ?.map(f => f.feature_name) || [];
 
           // Check if monthly or annual plan is the current plan
-          // Use multiple sources for current_plan_id: settings API, quota API, or plan name match
-          const currentPlanId = settings?.current_plan_id ?? quotaData?.plan_info?.plan_id;
-          const currentPlanName = settings?.current_plan_name ?? quotaData?.plan_name ?? quotaData?.plan_info?.plan_name;
+          // Use quota-status API as single source of truth for plan info
+          const currentPlanId = quotaData?.plan_info?.plan_id;
+          const currentPlanName = quotaData?.plan_name ?? quotaData?.plan_info?.plan_name;
 
           const isCurrentMonthly = currentPlanId !== undefined && currentPlanId !== null &&
             Number(currentPlanId) === Number(monthly?.id);
@@ -791,18 +753,33 @@ function CurrentPlanContent() {
 
       const data = await response.json();
 
-      if (response.ok && data.status === 'success') {
-        setSuccessMessage(`Successfully upgraded to ${selectedQueuedUpgrade.new_plan_name}!`);
+      if (response.ok && (data.status === 'success' || data.status === 'partial')) {
+        // Check if it was a partial success (local update succeeded but admin API failed)
+        if (data.status === 'partial') {
+          // Show warning message for partial success
+          const adminError = data.data?.admin_error || 'Admin system sync failed';
+          setError(`Plan upgraded locally, but sync with admin system failed: ${adminError}. Your plan is active but please contact support if you experience issues.`);
+        } else {
+          setSuccessMessage(`Successfully upgraded to ${selectedQueuedUpgrade.new_plan_name}!`);
+        }
+
         setShowTCModal(false);
         setSelectedQueuedUpgrade(null);
         setTcAccepted(false);
-        // Refresh data
-        await fetchData();
+
+        // Refresh shared quota context first (this updates the source of truth)
+        await refetchQuota();
+
+        // Reset the fetch flag so fetchData runs again with new quota data
+        hasFetchedRef.current = false;
+
+        // Refresh page data and queued upgrades
         await fetchQueuedUpgrades();
+
         // Notify Header component to refresh quota/plan display
         window.dispatchEvent(new CustomEvent('planChanged'));
       } else {
-        setError(data.detail || 'Failed to apply upgrade');
+        setError(data.detail || data.data?.message || 'Failed to apply upgrade');
       }
     } catch (err) {
       console.error('[CurrentPlan] Error applying upgrade:', err);
@@ -850,13 +827,18 @@ function CurrentPlanContent() {
   };
 
   useEffect(() => {
-    // Prevent duplicate calls on re-renders or React Strict Mode
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
+    // Wait for shared quota data to be loaded before fetching other data
+    if (quotaLoading) return;
 
-    fetchData();
-    fetchQueuedUpgrades();
-  }, []);
+    // Prevent duplicate calls on re-renders or React Strict Mode
+    if (hasFetchedRef.current && sharedQuotaData) return;
+
+    if (sharedQuotaData) {
+      hasFetchedRef.current = true;
+      fetchData();
+      fetchQueuedUpgrades();
+    }
+  }, [sharedQuotaData, quotaLoading]);
 
   // Auto-select plan from URL parameter (from pricing page flow)
   useEffect(() => {
@@ -1524,37 +1506,37 @@ function CurrentPlanContent() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {companySettings.max_seats || '-'}
+                    {formatQuotaValue(companySettings.max_seats)}
                   </p>
                   <p className="text-xs text-gray-600">Team Seats</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {companySettings.max_jobs || '-'}
+                    {formatQuotaValue(companySettings.max_jobs)}
                   </p>
                   <p className="text-xs text-gray-600">Job Postings</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {companySettings.max_resume_uploads || '-'}
+                    {formatQuotaValue(companySettings.max_resume_uploads)}
                   </p>
                   <p className="text-xs text-gray-600">Resume Uploads</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {companySettings.max_resume_searches || '-'}
+                    {formatQuotaValue(companySettings.max_resume_searches)}
                   </p>
                   <p className="text-xs text-gray-600">Resume Scores</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {companySettings.max_assessments || '-'}
+                    {formatQuotaValue(companySettings.max_assessments)}
                   </p>
                   <p className="text-xs text-gray-600">Assessments</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
-                    {companySettings.max_ai_interviews || '-'}
+                    {formatQuotaValue(companySettings.max_ai_interviews)}
                   </p>
                   <p className="text-xs text-gray-600">AI Interviews</p>
                 </div>

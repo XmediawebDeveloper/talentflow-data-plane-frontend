@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { FileDown, FileText, Users, Briefcase, ClipboardList, Calendar, Filter, Download, CheckSquare, Square, BarChart3, FileSpreadsheet, FileJson, Mail } from 'lucide-react';
+import { FileDown, FileText, Users, Briefcase, ClipboardList, Calendar, Filter, Download, CheckSquare, Square, BarChart3, FileSpreadsheet, FileJson, Mail, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function ReportsExports() {
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
   const [selectedFormat, setSelectedFormat] = useState<'excel' | 'pdf' | 'csv' | 'json'>('excel');
+  const [isGenerating, setIsGenerating] = useState(false); // FIX-005: Add loading state
 
   const reportCategories = [
     {
@@ -154,21 +156,59 @@ export default function ReportsExports() {
     }
   };
 
-  const handleGenerateReports = () => {
+  // FIX-005: Replace alert() with toast notifications
+  const handleGenerateReports = async () => {
     if (selectedReports.length === 0) {
-      alert('Please select at least one report to generate');
+      toast.error('No reports selected', {
+        description: 'Please select at least one report to generate',
+      });
       return;
     }
+
+    setIsGenerating(true);
+    const reportCount = selectedReports.length;
+    const formatLabel = selectedFormat.toUpperCase();
+
+    // Show progress toast
+    const toastId = toast.loading(`Generating ${reportCount} report${reportCount !== 1 ? 's' : ''}...`, {
+      description: `Preparing ${formatLabel} export`,
+    });
+
     console.log('Generating reports:', {
       reports: selectedReports,
       format: selectedFormat,
       dateRange
     });
-    alert(`Generating ${selectedReports.length} report${selectedReports.length !== 1 ? 's' : ''} in ${selectedFormat.toUpperCase()} format`);
+
+    // Simulate report generation (replace with actual API call)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      toast.success(`${reportCount} report${reportCount !== 1 ? 's' : ''} generated!`, {
+        id: toastId,
+        description: `${formatLabel} files are ready for download`,
+        action: {
+          label: 'Download',
+          onClick: () => console.log('Downloading reports...'),
+        },
+      });
+
+      // Clear selection after successful generation
+      setSelectedReports([]);
+    } catch (error) {
+      toast.error('Failed to generate reports', {
+        id: toastId,
+        description: 'Please try again or contact support if the issue persists',
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleScheduleReport = () => {
-    alert('Schedule Reports feature - Configure automated report delivery');
+    toast.info('Schedule Reports', {
+      description: 'Configure automated report delivery - Coming soon!',
+    });
   };
 
   const getFormatIcon = () => {
@@ -248,11 +288,20 @@ export default function ReportsExports() {
             <div className="flex items-end gap-2">
               <button
                 onClick={handleGenerateReports}
-                disabled={selectedReports.length === 0}
+                disabled={selectedReports.length === 0 || isGenerating}
                 className="flex-1 px-4 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {getFormatIcon()}
-                Generate ({selectedReports.length})
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    {getFormatIcon()}
+                    Generate ({selectedReports.length})
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -14,12 +14,14 @@ import {
   UserCog,
   Check,
   Settings2,
-  Link2
+  Link2,
+  AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
+import { tenantService } from '@/lib/services/tenantService';
 import { RoleListItem, Permission } from '@/lib/types/rbac';
 import { UserRole } from '@/lib/types/tenant';
 import FeaturePermissionManager from './FeaturePermissionManager';
@@ -105,7 +107,7 @@ interface ApiUser {
 
 // Default role labels for known roles - RBAC01-07
 const defaultRoleLabels: Record<string, string> = {
-  tenant_admin: 'Admin',
+  tenant_admin: 'Tenant Admin',
   admin: 'Admin',
   recruiter: 'Recruiter',
   viewer: 'Viewer',
@@ -255,6 +257,8 @@ export default function UserManagement() {
   const [editSelectedRoleId, setEditSelectedRoleId] = useState<number | null>(null);
   const [selectedPermissionIds, setSelectedPermissionIds] = useState<Set<number>>(new Set());
   const [editSelectedPermissionIds, setEditSelectedPermissionIds] = useState<Set<number>>(new Set());
+  const [editOriginalPermissionIds, setEditOriginalPermissionIds] = useState<Set<number>>(new Set());
+  const [editOriginalRoleId, setEditOriginalRoleId] = useState<number | null>(null);
 
   // RBAC06-07: Feature permission states
   const [featurePermissionUser, setFeaturePermissionUser] = useState<ApiUser | null>(null);
@@ -278,6 +282,25 @@ export default function UserManagement() {
     permissions: { ...defaultPermissions },
   });
 
+  // Tenant email domain (locked part of email)
+  const [tenantEmailDomain, setTenantEmailDomain] = useState<string>('');
+  const [emailUsername, setEmailUsername] = useState<string>(''); // Just the username part before @
+  const [showAtBlockedMessage, setShowAtBlockedMessage] = useState(false);
+
+  // Email validation states
+  const [emailCheckResult, setEmailCheckResult] = useState<{
+    error: string | null;
+    available: boolean;
+  }>({
+    error: null,
+    available: true,
+  });
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const emailCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Current user state (for hiding Edit/Delete buttons on self)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
 
@@ -286,6 +309,9 @@ export default function UserManagement() {
     const checkPermission = async () => {
       try {
         const currentUser = await authService.getCurrentUser();
+
+        // Store current user ID for hiding Edit/Delete buttons on self
+        setCurrentUserId(currentUser.id);
 
         // Check if user has permission to access User Management
         const hasPermission = currentUser.role === 'tenant_admin' || currentUser.permissions?.can_manage_users;
@@ -303,6 +329,21 @@ export default function UserManagement() {
 
     checkPermission();
   }, [router]);
+
+  // Fetch tenant email domain on mount
+  useEffect(() => {
+    const fetchTenantDomain = async () => {
+      try {
+        const domain = await tenantService.getTenantEmailDomain();
+        setTenantEmailDomain(domain);
+      } catch (error) {
+        console.error('Failed to fetch tenant domain:', error);
+        toast.error('Failed to load organization email domain');
+      }
+    };
+
+    fetchTenantDomain();
+  }, []);
 
   // Load users, roles, and permissions
   useEffect(() => {
@@ -414,6 +455,50 @@ export default function UserManagement() {
     });
   };
 
+  // Email validation with debounce (500ms)
+  const checkEmailAvailability = async (username: string) => {
+    // Clear previous timeout
+    if (emailCheckTimeoutRef.current) {
+      clearTimeout(emailCheckTimeoutRef.current);
+    }
+
+    // Reset validation state
+    setEmailCheckResult({ error: null, available: true });
+
+    // Skip validation if username is empty or domain not loaded
+    if (!username || !tenantEmailDomain) {
+      return;
+    }
+
+    // Construct full email
+    const fullEmail = `${username}@${tenantEmailDomain}`;
+
+    // Set loading state
+    setIsCheckingEmail(true);
+
+    // Debounce - wait 500ms after user stops typing
+    emailCheckTimeoutRef.current = setTimeout(async () => {
+      try {
+        const result = await userService.checkEmailAvailability(fullEmail);
+
+        // Update validation result
+        setEmailCheckResult({
+          error: result.error,
+          available: result.available,
+        });
+      } catch (error) {
+        console.error('Error checking email:', error);
+        // Show error to user
+        setEmailCheckResult({
+          error: 'Failed to validate email. Please try again.',
+          available: false,
+        });
+      } finally {
+        setIsCheckingEmail(false);
+      }
+    }, 500);
+  };
+
   const loadUsers = async () => {
     setIsLoading(true);
     try {
@@ -484,8 +569,14 @@ export default function UserManagement() {
   };
 
   const handleCreateUser = async () => {
-    if (!newUser.name || !newUser.email || !newUser.password) {
+    // Validate username instead of email
+    if (!newUser.name || !emailUsername || !newUser.password) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (!tenantEmailDomain) {
+      toast.error('Organization email domain not loaded. Please refresh the page.');
       return;
     }
 
@@ -498,6 +589,15 @@ export default function UserManagement() {
       toast.error('Password must be at least 6 characters');
       return;
     }
+
+    // Check email domain validation
+    if (!emailCheckResult.available) {
+      toast.error(emailCheckResult.error || 'Email domain validation failed');
+      return;
+    }
+
+    // Construct full email from username + domain
+    const fullEmail = `${emailUsername}@${tenantEmailDomain}`;
 
     const selectedRole = availableRoles.find(r => r.id === selectedRoleId);
     const roleCode = selectedRole?.code || 'viewer';
@@ -512,7 +612,7 @@ export default function UserManagement() {
         },
         body: JSON.stringify({
           name: newUser.name,
-          email: newUser.email,
+          email: fullEmail, // Use constructed full email
           password: newUser.password,
           role: roleCode,
           role_id: selectedRoleId,
@@ -522,11 +622,36 @@ export default function UserManagement() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+
         // Handle user limit exceeded error
         if (errorData.detail?.error === 'USER_LIMIT_EXCEEDED') {
           toast.error(errorData.detail.message || 'User limit exceeded. Please upgrade your plan.');
+          return;
+        }
+
+        // Handle Pydantic validation errors (array format)
+        if (Array.isArray(errorData.detail)) {
+          const validationError = errorData.detail[0];
+          if (validationError?.msg) {
+            // Show user-friendly error message
+            if (validationError.msg.includes('email')) {
+              toast.error('Invalid email format. Please check the username.');
+            } else {
+              toast.error(validationError.msg);
+            }
+          } else {
+            toast.error('Validation error. Please check all fields.');
+          }
+          return;
+        }
+
+        // Handle other error formats
+        if (typeof errorData.detail === 'string') {
+          toast.error(errorData.detail);
+        } else if (errorData.detail?.message) {
+          toast.error(errorData.detail.message);
         } else {
-          toast.error(errorData.detail?.message || errorData.detail || 'Failed to create user');
+          toast.error('Failed to create user. Please try again.');
         }
         return;
       }
@@ -552,21 +677,131 @@ export default function UserManagement() {
       role: 'viewer',
       permissions: { ...defaultPermissions },
     });
+    setEmailUsername(''); // Reset email username
+    setEmailCheckResult({ error: null, available: true }); // Reset validation
     setSelectedRoleId(null);
     setSelectedPermissionIds(new Set());
     setRoleDropdownOpen(false);
     setIsCreateModalOpen(false);
+    // Clear email validation state
+    setEmailCheckResult({ error: null, available: true });
+    setIsCheckingEmail(false);
+    if (emailCheckTimeoutRef.current) {
+      clearTimeout(emailCheckTimeoutRef.current);
+    }
   };
 
   const openEditModal = async (user: ApiUser) => {
+    console.log('[EDIT USER] Opening edit modal for:', user.email);
+    console.log('[EDIT USER] allPermissions loaded?', allPermissions.length > 0, 'Count:', allPermissions.length);
     setEditingUser(user);
-    // Find the role ID based on user's current role and load its permissions
+
+    // Find the role ID based on user's current role
     const matchingRole = availableRoles.find(r => r.code.toLowerCase() === user.role.toLowerCase());
-    if (matchingRole) {
-      await selectRole(matchingRole.id, true);
-    } else {
-      setEditSelectedRoleId(null);
+    setEditSelectedRoleId(matchingRole?.id || null);
+
+    // Fetch fresh user data with permission_ids
+    try {
+      const freshUserData = await userService.getUser(user.id);
+
+      // Use permission_ids directly from backend response
+      const currentPermissionIds = new Set<number>();
+
+      // Backend now returns permission_ids array - use it directly!
+      if (freshUserData.permission_ids && Array.isArray(freshUserData.permission_ids)) {
+        freshUserData.permission_ids.forEach((id: number) => {
+          currentPermissionIds.add(id);
+        });
+        console.log('[EDIT USER] Loaded permission IDs from backend:', Array.from(currentPermissionIds));
+      } else {
+        // Fallback: Map user's current permissions (boolean fields) to permission IDs if permission_ids not available
+        console.log('[EDIT USER] permission_ids not available, falling back to boolean mapping');
+        console.log('[EDIT USER] allPermissions array length:', allPermissions.length);
+        console.log('[EDIT USER] freshUserData.permissions:', freshUserData.permissions);
+        allPermissions.forEach(perm => {
+        // Map permission code to user's boolean permission fields
+        // This requires checking various permission patterns
+        let hasPermission = false;
+
+        // Job Descriptions
+        if (perm.code === 'jd:create' && freshUserData.permissions.can_create_jd) hasPermission = true;
+        if (perm.code === 'jd:read' && (freshUserData.permissions.can_manage_jd || freshUserData.permissions.can_view_jd)) hasPermission = true;
+        if (perm.code === 'jd:update' && (freshUserData.permissions.can_manage_jd || freshUserData.permissions.can_update_jd)) hasPermission = true;
+        if (perm.code === 'jd:delete' && (freshUserData.permissions.can_manage_jd || freshUserData.permissions.can_delete_jd)) hasPermission = true;
+
+        // Resumes
+        if (perm.code === 'resumes:create' && (freshUserData.permissions.can_upload_resumes || freshUserData.permissions.can_create_resumes)) hasPermission = true;
+        if (perm.code === 'resumes:read' && (freshUserData.permissions.can_view_resumes || freshUserData.permissions.can_view_resumes_granular)) hasPermission = true;
+        if (perm.code === 'resumes:update' && (freshUserData.permissions.can_upload_resumes || freshUserData.permissions.can_update_resumes)) hasPermission = true;
+        if (perm.code === 'resumes:delete' && freshUserData.permissions.can_delete_resumes) hasPermission = true;
+
+        // Internal Database
+        if (perm.code === 'internal_db:read' && (freshUserData.permissions.can_access_internal_db || freshUserData.permissions.can_view_internal_db)) hasPermission = true;
+        if (perm.code === 'internal_db:create' && freshUserData.permissions.can_create_internal_db) hasPermission = true;
+        if (perm.code === 'internal_db:update' && freshUserData.permissions.can_update_internal_db) hasPermission = true;
+        if (perm.code === 'internal_db:delete' && freshUserData.permissions.can_delete_internal_db) hasPermission = true;
+
+        // Assessments
+        if (perm.code === 'assessments:create' && freshUserData.permissions.can_create_assessments) hasPermission = true;
+        if (perm.code === 'assessments:read' && freshUserData.permissions.can_view_assessments) hasPermission = true;
+        if (perm.code === 'assessments:update' && freshUserData.permissions.can_update_assessments) hasPermission = true;
+        if (perm.code === 'assessments:delete' && freshUserData.permissions.can_delete_assessments) hasPermission = true;
+
+        // Analytics
+        if (perm.code === 'analytics:read' && (freshUserData.permissions.can_view_analytics || freshUserData.permissions.can_view_analytics_granular)) hasPermission = true;
+        if (perm.code === 'analytics:export' && freshUserData.permissions.can_export_analytics) hasPermission = true;
+
+        // Settings
+        if (perm.code === 'settings:read' && freshUserData.permissions.can_view_settings) hasPermission = true;
+        if (perm.code === 'settings:update' && (freshUserData.permissions.can_manage_settings || freshUserData.permissions.can_update_settings)) hasPermission = true;
+        if (perm.code === 'settings:delete' && freshUserData.permissions.can_delete_settings) hasPermission = true;
+
+        // Users
+        if (perm.code === 'users:read' && freshUserData.permissions.can_view_users) hasPermission = true;
+        if (perm.code === 'users:create' && freshUserData.permissions.can_create_users) hasPermission = true;
+        if (perm.code === 'users:update' && (freshUserData.permissions.can_manage_users || freshUserData.permissions.can_update_users)) hasPermission = true;
+        if (perm.code === 'users:delete' && freshUserData.permissions.can_delete_users) hasPermission = true;
+
+        // Roles
+        if (perm.code === 'roles:read' && freshUserData.permissions.can_view_roles) hasPermission = true;
+        if (perm.code === 'roles:create' && freshUserData.permissions.can_create_roles) hasPermission = true;
+        if (perm.code === 'roles:update' && freshUserData.permissions.can_update_roles) hasPermission = true;
+        if (perm.code === 'roles:delete' && freshUserData.permissions.can_delete_roles) hasPermission = true;
+
+        // Billing
+        if (perm.code === 'billing:read' && (freshUserData.permissions.can_view_billing || freshUserData.permissions.can_view_billing_granular)) hasPermission = true;
+        if (perm.code === 'billing:update' && freshUserData.permissions.can_update_billing) hasPermission = true;
+        if (perm.code === 'billing:manage' && freshUserData.permissions.can_manage_billing) hasPermission = true;
+
+        // Invoices
+        if (perm.code === 'invoices:read' && (freshUserData.permissions.can_view_invoices || freshUserData.permissions.can_view_invoices_granular)) hasPermission = true;
+        if (perm.code === 'invoices:create' && freshUserData.permissions.can_create_invoices) hasPermission = true;
+        if (perm.code === 'invoices:update' && freshUserData.permissions.can_update_invoices) hasPermission = true;
+        if (perm.code === 'invoices:delete' && freshUserData.permissions.can_delete_invoices) hasPermission = true;
+
+        // Usage
+        if (perm.code === 'usage:read' && (freshUserData.permissions.can_view_usage || freshUserData.permissions.can_view_usage_granular)) hasPermission = true;
+        if (perm.code === 'usage:manage' && freshUserData.permissions.can_manage_usage) hasPermission = true;
+
+        if (hasPermission) {
+          currentPermissionIds.add(perm.id);
+          console.log('[EDIT USER] ✓ Matched permission:', perm.code, 'ID:', perm.id);
+        }
+      });
+        console.log('[EDIT USER] Fallback mapping complete. Total permissions found:', currentPermissionIds.size);
+      }  // Close the else block
+
+      // Set the user's CURRENT permissions (not role defaults)
+      setEditSelectedPermissionIds(currentPermissionIds);
+      // Store original permissions for comparison later
+      setEditOriginalPermissionIds(new Set(currentPermissionIds));
+      setEditOriginalRoleId(matchingRole?.id || null);
+      console.log(`[EDIT USER] Pre-selected ${currentPermissionIds.size} permissions for user ${user.email}`);
+    } catch (error) {
+      console.error('Error fetching user permissions for edit:', error);
+      // Fallback to empty permissions if fetch fails
       setEditSelectedPermissionIds(new Set());
+      setEditOriginalPermissionIds(new Set());
     }
   };
 
@@ -574,6 +809,8 @@ export default function UserManagement() {
     setEditingUser(null);
     setEditSelectedRoleId(null);
     setEditSelectedPermissionIds(new Set());
+    setEditOriginalPermissionIds(new Set());
+    setEditOriginalRoleId(null);
     setEditRoleDropdownOpen(false);
   };
 
@@ -655,6 +892,39 @@ export default function UserManagement() {
     const selectedRole = availableRoles.find(r => r.id === editSelectedRoleId);
     const roleCode = selectedRole?.code || editingUser.role;
 
+    // Check if role has changed
+    const roleChanged = editSelectedRoleId !== editOriginalRoleId;
+
+    // Check if permissions have changed
+    const permissionsChanged =
+      editSelectedPermissionIds.size !== editOriginalPermissionIds.size ||
+      ![...editSelectedPermissionIds].every(id => editOriginalPermissionIds.has(id));
+
+    // Build request body
+    const requestBody: any = {
+      name: editingUser.name,
+      role: roleCode,
+      role_id: editSelectedRoleId,
+    };
+
+    // Only include permission_ids if they were explicitly changed
+    // Backend logic:
+    // - If permission_ids provided → use those
+    // - If role changed and no permission_ids → use new role defaults
+    // - If role NOT changed and no permission_ids → preserve existing
+    if (permissionsChanged) {
+      requestBody.permission_ids = Array.from(editSelectedPermissionIds);
+      console.log('[EDIT USER] Permissions changed, sending updated permission_ids');
+    } else if (roleChanged) {
+      // Role changed but permissions weren't explicitly modified
+      // Don't send permission_ids - backend will apply new role defaults
+      console.log('[EDIT USER] Role changed, backend will apply new role defaults');
+    } else {
+      // Neither role nor permissions changed
+      // Don't send permission_ids - backend will preserve existing
+      console.log('[EDIT USER] No changes to role or permissions, backend will preserve existing');
+    }
+
     setIsSaving(true);
     try {
       const response = await fetch(`${API_URL}/users/${editingUser.id}`, {
@@ -663,12 +933,7 @@ export default function UserManagement() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
         },
-        body: JSON.stringify({
-          name: editingUser.name,
-          role: roleCode,
-          role_id: editSelectedRoleId,
-          permission_ids: Array.from(editSelectedPermissionIds),
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -892,28 +1157,38 @@ export default function UserManagement() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-2">
-                      {/* RBAC06: Feature Permissions button */}
-                      <button
-                        onClick={() => setFeaturePermissionUser(user)}
-                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Feature Permissions"
-                      >
-                        <Settings2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => openEditModal(user)}
-                        className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                        title="Edit User"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete User"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {/* RBAC06: Feature Permissions button - Hide ONLY for tenant admins (Super Admin with all permissions) */}
+                      {user.role.toLowerCase() !== 'tenant_admin' && (
+                        <button
+                          onClick={() => setFeaturePermissionUser(user)}
+                          className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Feature Permissions"
+                        >
+                          <Settings2 className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      {/* Hide Edit button ONLY for tenant admins and current user */}
+                      {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
+                        <button
+                          onClick={() => openEditModal(user)}
+                          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                          title="Edit User"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      {/* Hide Delete button ONLY for tenant admins and current user */}
+                      {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete User"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -961,13 +1236,78 @@ export default function UserManagement() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Email <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="email"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  placeholder="user@company.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
+
+                {/* Email input with locked domain */}
+                <div className="relative flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-600 overflow-hidden">
+                  {/* Username input */}
+                  <input
+                    type="text"
+                    value={emailUsername}
+                    onChange={(e) => {
+                      let value = e.target.value;
+                      const hadAtSymbol = value.includes('@');
+
+                      // Remove @ symbol if user tries to type it
+                      value = value.replace(/@/g, '');
+
+                      // Show brief message if @ was blocked
+                      if (hadAtSymbol && value !== e.target.value) {
+                        setShowAtBlockedMessage(true);
+                        setTimeout(() => setShowAtBlockedMessage(false), 2000);
+                      }
+
+                      setEmailUsername(value);
+                      checkEmailAvailability(value);
+                    }}
+                    placeholder="username"
+                    className="flex-1 px-4 py-2.5 border-0 focus:outline-none focus:ring-0"
+                  />
+
+                  {/* @ symbol and locked domain */}
+                  <div className="flex items-center px-4 py-2.5 bg-gray-100 text-gray-600 font-medium border-l border-gray-300">
+                    <span className="text-gray-900">@</span>
+                    <span className="ml-1">
+                      {tenantEmailDomain || 'loading...'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Preview of full email */}
+                {emailUsername && tenantEmailDomain && (
+                  <div className="mt-1 text-xs text-gray-500">
+                    Full email: <span className="font-medium">{emailUsername}@{tenantEmailDomain}</span>
+                  </div>
+                )}
+
+                {/* @ symbol blocked message */}
+                {showAtBlockedMessage && (
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-700">
+                      ℹ️ Just type the username. Domain is added automatically.
+                    </p>
+                  </div>
+                )}
+
+                {/* Email validation feedback */}
+                {isCheckingEmail && (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Validating email...</span>
+                  </div>
+                )}
+
+                {emailCheckResult.error && (
+                  <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm text-red-800 font-medium">
+                          {emailCheckResult.error}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1081,8 +1421,8 @@ export default function UserManagement() {
               </button>
               <button
                 onClick={handleCreateUser}
-                disabled={isSaving}
-                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
+                disabled={isSaving || !emailCheckResult.available || isCheckingEmail}
+                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 Create User

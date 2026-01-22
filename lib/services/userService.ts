@@ -28,6 +28,11 @@ export interface ApiUser {
   permissions: UserPermissions;
   last_login?: string;
   created_at: string;
+  // UI control flags (for role-based UI rendering)
+  can_upgrade_plan?: boolean;
+  can_manage_billing?: boolean;
+  // RBAC: Permission IDs assigned to user (from user_permissions table)
+  permission_ids?: number[];  // Array of permission IDs for edit modal
 }
 
 export interface CreateUserRequest {
@@ -82,6 +87,16 @@ export interface RolePermissionsResponse {
     can_manage_settings: boolean;
     can_manage_users: boolean;
   };
+}
+
+export interface TenantOption {
+  tenant_name: string;
+  subdomain: string;
+}
+
+export interface EmailCheckResponse {
+  available: boolean;
+  error: string | null;
 }
 
 export const userService = {
@@ -209,6 +224,24 @@ export const userService = {
           can_manage_settings: false,
           can_manage_users: false,
         },
+      };
+    }
+  },
+
+  /**
+   * Check if email exists in other tenants
+   * Used for real-time validation during user creation
+   */
+  async checkEmailAvailability(email: string): Promise<EmailCheckResponse> {
+    try {
+      const response = await api.get<EmailCheckResponse>(`/users/check-email/${email}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error checking email availability:', error);
+      // Return error on API failure
+      return {
+        available: false,
+        error: 'Failed to validate email. Please try again.',
       };
     }
   },

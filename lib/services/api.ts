@@ -109,6 +109,17 @@ const dispatchPaymentPendingEvent = (detail: PaymentPendingDetail) => {
   }
 };
 
+// Custom event for units consumed - triggers header quota refresh
+export const UNITS_CONSUMED_EVENT = 'unitsConsumed';
+
+// Dispatch units consumed event to refresh quota display in header
+export const dispatchUnitsConsumed = () => {
+  if (typeof window !== 'undefined') {
+    console.log('[API] Dispatching unitsConsumed event');
+    window.dispatchEvent(new CustomEvent(UNITS_CONSUMED_EVENT));
+  }
+};
+
 // Response interceptor - handle token refresh and subscription errors
 api.interceptors.response.use(
   (response) => response,
