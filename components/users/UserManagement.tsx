@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
+import { tenantService } from '@/lib/services/tenantService';
 import { RoleListItem, Permission } from '@/lib/types/rbac';
 import { UserRole } from '@/lib/types/tenant';
 import FeaturePermissionManager from './FeaturePermissionManager';
@@ -281,13 +282,18 @@ export default function UserManagement() {
     permissions: { ...defaultPermissions },
   });
 
+  // Tenant email domain (locked part of email)
+  const [tenantEmailDomain, setTenantEmailDomain] = useState<string>('');
+  const [emailUsername, setEmailUsername] = useState<string>(''); // Just the username part before @
+  const [showAtBlockedMessage, setShowAtBlockedMessage] = useState(false);
+
   // Email validation states
   const [emailCheckResult, setEmailCheckResult] = useState<{
-    warning: string | null;
-    otherTenants: Array<{ tenant_name: string; subdomain: string }>;
+    error: string | null;
+    available: boolean;
   }>({
-    warning: null,
-    otherTenants: [],
+    error: null,
+    available: true,
   });
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const emailCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -323,6 +329,21 @@ export default function UserManagement() {
 
     checkPermission();
   }, [router]);
+
+  // Fetch tenant email domain on mount
+  useEffect(() => {
+    const fetchTenantDomain = async () => {
+      try {
+        const domain = await tenantService.getTenantEmailDomain();
+        setTenantEmailDomain(domain);
+      } catch (error) {
+        console.error('Failed to fetch tenant domain:', error);
+        toast.error('Failed to load organization email domain');
+      }
+    };
+
+    fetchTenantDomain();
+  }, []);
 
   // Load users, roles, and permissions
   useEffect(() => {
@@ -435,19 +456,22 @@ export default function UserManagement() {
   };
 
   // Email validation with debounce (500ms)
-  const checkEmailAvailability = async (email: string) => {
+  const checkEmailAvailability = async (username: string) => {
     // Clear previous timeout
     if (emailCheckTimeoutRef.current) {
       clearTimeout(emailCheckTimeoutRef.current);
     }
 
-    // Reset warnings
-    setEmailCheckResult({ warning: null, otherTenants: [] });
+    // Reset validation state
+    setEmailCheckResult({ error: null, available: true });
 
-    // Skip validation if email is empty or invalid
-    if (!email || !email.includes('@')) {
+    // Skip validation if username is empty or domain not loaded
+    if (!username || !tenantEmailDomain) {
       return;
     }
+
+    // Construct full email
+    const fullEmail = `${username}@${tenantEmailDomain}`;
 
     // Set loading state
     setIsCheckingEmail(true);
@@ -455,17 +479,20 @@ export default function UserManagement() {
     // Debounce - wait 500ms after user stops typing
     emailCheckTimeoutRef.current = setTimeout(async () => {
       try {
-        const result = await userService.checkEmailAvailability(email);
+        const result = await userService.checkEmailAvailability(fullEmail);
 
-        if (result.exists_in_other_tenants && result.warning) {
-          setEmailCheckResult({
-            warning: result.warning,
-            otherTenants: result.other_tenants || [],
-          });
-        }
+        // Update validation result
+        setEmailCheckResult({
+          error: result.error,
+          available: result.available,
+        });
       } catch (error) {
         console.error('Error checking email:', error);
-        // Don't show error to user - just skip validation
+        // Show error to user
+        setEmailCheckResult({
+          error: 'Failed to validate email. Please try again.',
+          available: false,
+        });
       } finally {
         setIsCheckingEmail(false);
       }
@@ -542,8 +569,14 @@ export default function UserManagement() {
   };
 
   const handleCreateUser = async () => {
-    if (!newUser.name || !newUser.email || !newUser.password) {
+    // Validate username instead of email
+    if (!newUser.name || !emailUsername || !newUser.password) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (!tenantEmailDomain) {
+      toast.error('Organization email domain not loaded. Please refresh the page.');
       return;
     }
 
@@ -556,6 +589,15 @@ export default function UserManagement() {
       toast.error('Password must be at least 6 characters');
       return;
     }
+
+    // Check email domain validation
+    if (!emailCheckResult.available) {
+      toast.error(emailCheckResult.error || 'Email domain validation failed');
+      return;
+    }
+
+    // Construct full email from username + domain
+    const fullEmail = `${emailUsername}@${tenantEmailDomain}`;
 
     const selectedRole = availableRoles.find(r => r.id === selectedRoleId);
     const roleCode = selectedRole?.code || 'viewer';
@@ -570,7 +612,7 @@ export default function UserManagement() {
         },
         body: JSON.stringify({
           name: newUser.name,
-          email: newUser.email,
+          email: fullEmail, // Use constructed full email
           password: newUser.password,
           role: roleCode,
           role_id: selectedRoleId,
@@ -580,11 +622,36 @@ export default function UserManagement() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+
         // Handle user limit exceeded error
         if (errorData.detail?.error === 'USER_LIMIT_EXCEEDED') {
           toast.error(errorData.detail.message || 'User limit exceeded. Please upgrade your plan.');
+          return;
+        }
+
+        // Handle Pydantic validation errors (array format)
+        if (Array.isArray(errorData.detail)) {
+          const validationError = errorData.detail[0];
+          if (validationError?.msg) {
+            // Show user-friendly error message
+            if (validationError.msg.includes('email')) {
+              toast.error('Invalid email format. Please check the username.');
+            } else {
+              toast.error(validationError.msg);
+            }
+          } else {
+            toast.error('Validation error. Please check all fields.');
+          }
+          return;
+        }
+
+        // Handle other error formats
+        if (typeof errorData.detail === 'string') {
+          toast.error(errorData.detail);
+        } else if (errorData.detail?.message) {
+          toast.error(errorData.detail.message);
         } else {
-          toast.error(errorData.detail?.message || errorData.detail || 'Failed to create user');
+          toast.error('Failed to create user. Please try again.');
         }
         return;
       }
@@ -610,12 +677,14 @@ export default function UserManagement() {
       role: 'viewer',
       permissions: { ...defaultPermissions },
     });
+    setEmailUsername(''); // Reset email username
+    setEmailCheckResult({ error: null, available: true }); // Reset validation
     setSelectedRoleId(null);
     setSelectedPermissionIds(new Set());
     setRoleDropdownOpen(false);
     setIsCreateModalOpen(false);
     // Clear email validation state
-    setEmailCheckResult({ warning: null, otherTenants: [] });
+    setEmailCheckResult({ error: null, available: true });
     setIsCheckingEmail(false);
     if (emailCheckTimeoutRef.current) {
       clearTimeout(emailCheckTimeoutRef.current);
@@ -623,22 +692,33 @@ export default function UserManagement() {
   };
 
   const openEditModal = async (user: ApiUser) => {
+    console.log('[EDIT USER] Opening edit modal for:', user.email);
+    console.log('[EDIT USER] allPermissions loaded?', allPermissions.length > 0, 'Count:', allPermissions.length);
     setEditingUser(user);
 
     // Find the role ID based on user's current role
     const matchingRole = availableRoles.find(r => r.code.toLowerCase() === user.role.toLowerCase());
     setEditSelectedRoleId(matchingRole?.id || null);
 
-    // CRITICAL FIX: Pre-select user's CURRENT permissions, not role defaults
-    // Fetch fresh user data to get current permission state
+    // Fetch fresh user data with permission_ids
     try {
       const freshUserData = await userService.getUser(user.id);
 
-      // Map user's current permissions (boolean fields) to permission IDs
+      // Use permission_ids directly from backend response
       const currentPermissionIds = new Set<number>();
 
-      // For each permission in allPermissions, check if user has it enabled
-      allPermissions.forEach(perm => {
+      // Backend now returns permission_ids array - use it directly!
+      if (freshUserData.permission_ids && Array.isArray(freshUserData.permission_ids)) {
+        freshUserData.permission_ids.forEach((id: number) => {
+          currentPermissionIds.add(id);
+        });
+        console.log('[EDIT USER] Loaded permission IDs from backend:', Array.from(currentPermissionIds));
+      } else {
+        // Fallback: Map user's current permissions (boolean fields) to permission IDs if permission_ids not available
+        console.log('[EDIT USER] permission_ids not available, falling back to boolean mapping');
+        console.log('[EDIT USER] allPermissions array length:', allPermissions.length);
+        console.log('[EDIT USER] freshUserData.permissions:', freshUserData.permissions);
+        allPermissions.forEach(perm => {
         // Map permission code to user's boolean permission fields
         // This requires checking various permission patterns
         let hasPermission = false;
@@ -705,8 +785,11 @@ export default function UserManagement() {
 
         if (hasPermission) {
           currentPermissionIds.add(perm.id);
+          console.log('[EDIT USER] ✓ Matched permission:', perm.code, 'ID:', perm.id);
         }
       });
+        console.log('[EDIT USER] Fallback mapping complete. Total permissions found:', currentPermissionIds.size);
+      }  // Close the else block
 
       // Set the user's CURRENT permissions (not role defaults)
       setEditSelectedPermissionIds(currentPermissionIds);
@@ -1074,17 +1157,19 @@ export default function UserManagement() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-2">
-                      {/* RBAC06: Feature Permissions button */}
-                      <button
-                        onClick={() => setFeaturePermissionUser(user)}
-                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Feature Permissions"
-                      >
-                        <Settings2 className="w-4 h-4" />
-                      </button>
+                      {/* RBAC06: Feature Permissions button - Hide ONLY for tenant admins (Super Admin with all permissions) */}
+                      {user.role.toLowerCase() !== 'tenant_admin' && (
+                        <button
+                          onClick={() => setFeaturePermissionUser(user)}
+                          className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Feature Permissions"
+                        >
+                          <Settings2 className="w-4 h-4" />
+                        </button>
+                      )}
 
-                      {/* Hide Edit button for tenant admins and current user */}
-                      {!(user.role.toLowerCase() === 'tenant_admin' || user.role.toLowerCase() === 'admin') && user.id !== currentUserId && (
+                      {/* Hide Edit button ONLY for tenant admins and current user */}
+                      {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
                         <button
                           onClick={() => openEditModal(user)}
                           className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -1094,8 +1179,8 @@ export default function UserManagement() {
                         </button>
                       )}
 
-                      {/* Hide Delete button for tenant admins and current user */}
-                      {!(user.role.toLowerCase() === 'tenant_admin' || user.role.toLowerCase() === 'admin') && user.id !== currentUserId && (
+                      {/* Hide Delete button ONLY for tenant admins and current user */}
+                      {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
                         <button
                           onClick={() => handleDeleteUser(user.id)}
                           className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -1151,49 +1236,74 @@ export default function UserManagement() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Email <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="email"
-                  value={newUser.email}
-                  onChange={(e) => {
-                    setNewUser({ ...newUser, email: e.target.value });
-                    checkEmailAvailability(e.target.value);
-                  }}
-                  placeholder="user@company.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
+
+                {/* Email input with locked domain */}
+                <div className="relative flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-600 overflow-hidden">
+                  {/* Username input */}
+                  <input
+                    type="text"
+                    value={emailUsername}
+                    onChange={(e) => {
+                      let value = e.target.value;
+                      const hadAtSymbol = value.includes('@');
+
+                      // Remove @ symbol if user tries to type it
+                      value = value.replace(/@/g, '');
+
+                      // Show brief message if @ was blocked
+                      if (hadAtSymbol && value !== e.target.value) {
+                        setShowAtBlockedMessage(true);
+                        setTimeout(() => setShowAtBlockedMessage(false), 2000);
+                      }
+
+                      setEmailUsername(value);
+                      checkEmailAvailability(value);
+                    }}
+                    placeholder="username"
+                    className="flex-1 px-4 py-2.5 border-0 focus:outline-none focus:ring-0"
+                  />
+
+                  {/* @ symbol and locked domain */}
+                  <div className="flex items-center px-4 py-2.5 bg-gray-100 text-gray-600 font-medium border-l border-gray-300">
+                    <span className="text-gray-900">@</span>
+                    <span className="ml-1">
+                      {tenantEmailDomain || 'loading...'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Preview of full email */}
+                {emailUsername && tenantEmailDomain && (
+                  <div className="mt-1 text-xs text-gray-500">
+                    Full email: <span className="font-medium">{emailUsername}@{tenantEmailDomain}</span>
+                  </div>
+                )}
+
+                {/* @ symbol blocked message */}
+                {showAtBlockedMessage && (
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-700">
+                      ℹ️ Just type the username. Domain is added automatically.
+                    </p>
+                  </div>
+                )}
 
                 {/* Email validation feedback */}
                 {isCheckingEmail && (
                   <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Checking email availability...</span>
+                    <span>Validating email...</span>
                   </div>
                 )}
 
-                {emailCheckResult.warning && (
-                  <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                {emailCheckResult.error && (
+                  <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                     <div className="flex items-start gap-2">
-                      <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <p className="text-sm text-yellow-800 font-medium">
-                          {emailCheckResult.warning}
+                        <p className="text-sm text-red-800 font-medium">
+                          {emailCheckResult.error}
                         </p>
-                        {emailCheckResult.otherTenants.length > 0 && (
-                          <div className="mt-2">
-                            <p className="text-xs text-yellow-700 mb-1">Exists in tenants:</p>
-                            <ul className="list-disc list-inside space-y-1">
-                              {emailCheckResult.otherTenants.map((tenant, idx) => (
-                                <li key={idx} className="text-xs text-yellow-700">
-                                  <span className="font-medium">{tenant.tenant_name}</span>
-                                  <span className="text-yellow-600"> ({tenant.subdomain})</span>
-                                </li>
-                              ))}
-                            </ul>
-                            <p className="text-xs text-yellow-700 mt-2 italic">
-                              Note: User will need to specify tenant subdomain during login.
-                            </p>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -1311,8 +1421,8 @@ export default function UserManagement() {
               </button>
               <button
                 onClick={handleCreateUser}
-                disabled={isSaving}
-                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
+                disabled={isSaving || !emailCheckResult.available || isCheckingEmail}
+                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 Create User

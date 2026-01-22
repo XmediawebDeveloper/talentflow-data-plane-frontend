@@ -31,6 +31,8 @@ export interface ApiUser {
   // UI control flags (for role-based UI rendering)
   can_upgrade_plan?: boolean;
   can_manage_billing?: boolean;
+  // RBAC: Permission IDs assigned to user (from user_permissions table)
+  permission_ids?: number[];  // Array of permission IDs for edit modal
 }
 
 export interface CreateUserRequest {
@@ -94,9 +96,7 @@ export interface TenantOption {
 
 export interface EmailCheckResponse {
   available: boolean;
-  exists_in_other_tenants: boolean;
-  warning: string | null;
-  other_tenants?: TenantOption[];
+  error: string | null;
 }
 
 export const userService = {
@@ -238,11 +238,10 @@ export const userService = {
       return response.data;
     } catch (error) {
       console.error('Error checking email availability:', error);
-      // Return available by default on error (don't block user creation)
+      // Return error on API failure
       return {
-        available: true,
-        exists_in_other_tenants: false,
-        warning: null,
+        available: false,
+        error: 'Failed to validate email. Please try again.',
       };
     }
   },

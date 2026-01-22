@@ -2,11 +2,12 @@
 
 ## Summary of Changes
 
-All three issues in the Users Page have been fixed:
+All issues in the Users Page have been fixed:
 
 1. ✅ **Role Display Fixed** - Now shows "Tenant Admin" instead of "Admin"
 2. ✅ **Edit/Delete Buttons Hidden** - Tenant Admin users cannot be edited or deleted
 3. ✅ **Feature Permissions Error Fixed** - Added safety checks to prevent undefined errors
+4. ✅ **Feature Permissions Hidden for Tenant Admins** - Super Admins don't need feature management (they have all access)
 
 ---
 
@@ -213,6 +214,89 @@ if (!userFlags || !Array.isArray(userFlags.enabled_features)) {
 
 ---
 
+## Issue 4: Feature Permissions Button Shown for Tenant Admins
+
+### Problem
+Tenant Admin users had a Feature Permissions button (⚙️) in their Actions column, which was confusing because:
+- Tenant Admins are Super Admins with ALL permissions by default
+- They don't need granular permission management
+- The button suggested they could/should manage their own permissions
+- Inconsistent with Edit/Delete buttons being hidden for admins
+
+### Solution
+Hidden the Feature Permissions button for Tenant Admin and Admin users.
+
+**File Changed:** `components/users/UserManagement.tsx` (Lines 1086-1095)
+
+**Before:**
+```tsx
+{/* RBAC06: Feature Permissions button */}
+<button
+  onClick={() => setFeaturePermissionUser(user)}
+  className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+  title="Feature Permissions"
+>
+  <Settings2 className="w-4 h-4" />
+</button>
+```
+
+**After:**
+```tsx
+{/* RBAC06: Feature Permissions button - Hide ONLY for tenant admins (Super Admin) */}
+{user.role.toLowerCase() !== 'tenant_admin' && (
+  <button
+    onClick={() => setFeaturePermissionUser(user)}
+    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+    title="Feature Permissions"
+  >
+    <Settings2 className="w-4 h-4" />
+  </button>
+)}
+```
+
+### Result
+- **Tenant Admin users**: No Feature Permissions button (Super Admin - has all access by default)
+- **Admin users**: Feature Permissions button IS visible (Admin is a regular manageable role)
+- **Regular users** (Recruiter, Viewer, etc.): Feature Permissions button is visible
+- **Consistent behavior**: Only Tenant Admin has no action buttons (Super Admin cannot be managed)
+
+### Rationale
+**Tenant Admin = Super Admin:**
+- Has access to ALL features automatically
+- Doesn't need granular permission management
+- Can create and manage ALL roles including Admin
+- Cannot be managed by anyone (highest privilege)
+- Should not see action buttons on their own row
+
+**Admin = Regular Manageable Role:**
+- Created by Tenant Admin
+- Can have granular feature permissions managed
+- Can be edited and deleted by Tenant Admin
+- Has all three action buttons visible
+
+**Regular Users:**
+- Have limited permissions by default
+- Need explicit feature grants
+- Tenant Admin controls their feature access via the button
+
+### Visual Behavior
+
+| User Type | Feature Permissions | Edit | Delete |
+|-----------|---------------------|------|--------|
+| **Tenant Admin** | ❌ Hidden | ❌ Hidden | ❌ Hidden |
+| **Admin** | ✅ Visible | ✅ Visible | ✅ Visible |
+| Recruiter | ✅ Visible | ✅ Visible | ✅ Visible |
+| Viewer | ✅ Visible | ✅ Visible | ✅ Visible |
+| Standard User | ✅ Visible | ✅ Visible | ✅ Visible |
+| Current User (any role) | ❌ Hidden | ❌ Hidden | ❌ Hidden |
+
+**Key Points:**
+- **Tenant Admin** = Super Admin (cannot be managed)
+- **Admin** = Manageable by Tenant Admin (has all buttons)
+- **Current User** = Any logged-in user viewing their own row (cannot self-manage)
+
+---
+
 ## What is Feature Permissions For?
 
 **Feature Permissions** is a granular permission system that allows you to control which specific features each user can access, beyond their basic role permissions.
@@ -369,8 +453,9 @@ All requested issues have been fixed:
 | Role display shows "Admin" | ✅ Fixed | Shows "Tenant Admin" correctly |
 | Edit/Delete buttons visible for admins | ✅ Fixed | Buttons hidden for tenant admins |
 | Feature Permissions crashes | ✅ Fixed | Error handling with user-friendly messages |
+| Feature Permissions button for Tenant Admins | ✅ Fixed | Hidden for Super Admins (they have all access) |
 
-**Result:** Users Page is now fully functional with proper security controls and error handling!
+**Result:** Users Page is now fully functional with proper security controls, clear role distinctions, and error handling!
 
 ---
 
