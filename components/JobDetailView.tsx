@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User, Ban, Archive, History, FileText, Edit, XCircle, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import ReactMarkdown from 'react-markdown';
@@ -82,13 +82,14 @@ interface JobDetailViewProps {
   onDisable?: (job: Job) => void; // Disable job
   onEnable?: (job: Job) => void; // JD15: Enable job (re-enable disabled JD)
   onArchive?: (job: Job) => void; // Archive job
+  onUnarchive?: (job: Job) => void; // Unarchive job
   onDelete?: (job: Job) => void; // Delete job
   onViewAssessmentResult?: (assessmentResult: any, jobTitle: string) => void; // Navigate to assessment result detail
   onRepublish?: (job: Job) => void; // JD13: Republish job after editing
   isTenantAdmin?: boolean; // JD15: Whether user is Tenant Admin (for disable/enable buttons)
 }
 
-export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false }: JobDetailViewProps) {
   const handleEdit = () => {
     if (onEdit) {
       onEdit(job);
@@ -204,7 +205,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const fetchScoredResumes = async () => {
     setLoadingScoredResumes(true);
     try {
+      console.log('[JobDetailView] Fetching scored resumes for JD:', job.id);
       const response = await jdService.getScoredResumes(job.id, { page_size: 100 });
+      console.log('[JobDetailView] Scored resumes response:', response);
 
       // Convert API response to ScoredResume format
       const convertedResumes = (response.items || []).map((item: any) => {
@@ -260,14 +263,16 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       setScoredResumes(convertedResumes);
 
       // Update stats from response
-      setScoredResumesStats({
+      const stats = {
         total: response.total || convertedResumes.length,
         exactMatch: response.excellent_count || convertedResumes.filter((r: any) => r.matchStatus === 'Exact Match').length,
         partialMatch: response.partial_count || convertedResumes.filter((r: any) => r.matchStatus === 'Partial Match').length,
         noMatch: response.no_match_count || convertedResumes.filter((r: any) => r.matchStatus === 'No Match').length,
-      });
+      };
+      console.log('[JobDetailView] Setting scored resumes stats:', stats);
+      setScoredResumesStats(stats);
     } catch (error) {
-      console.error('Failed to fetch scored resumes:', error);
+      console.error('[JobDetailView] Failed to fetch scored resumes:', error);
       setScoredResumes([]);
       setScoredResumesStats({ total: 0, exactMatch: 0, partialMatch: 0, noMatch: 0 });
     } finally {
@@ -629,24 +634,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   {getDisplayStatus(job.status, job.currentVersion)}
                 </span>
               </div>
+              {job.location && (
               <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
-                <div className="flex items-center gap-1">
-                  <Briefcase className="w-4 h-4" />
-                  {job.industry_type || '-'}
-                </div>
-                {job.location && (
                 <div className="flex items-center gap-1">
                   <MapPin className="w-4 h-4" />
                   {job.location}
                 </div>
-                )}
-                {job.experience && (
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    {job.experience}
-                  </div>
-                )}
               </div>
+              )}
 
               {/* Job Meta Information */}
               <div className="flex items-center gap-6 pt-4 border-t border-gray-200">
@@ -835,6 +830,30 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 )}
               </div>
             )}
+
+            {/* Action Buttons - For Archived jobs */}
+            {job.status === 'Archived' && (
+              <div className="flex items-center gap-2">
+                {onUnarchive && (
+                  <button
+                    onClick={() => onUnarchive(job)}
+                    className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all flex items-center gap-2"
+                  >
+                    <ArchiveRestore className="w-4 h-4" />
+                    <span className="font-medium">Unarchive</span>
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    onClick={handleDelete}
+                    className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
+                    title="Delete Job"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
         </div>
@@ -931,12 +950,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <span>{job.location}</span>
                 </div>
                 )}
-                {job.experience && (
-                  <div className="flex items-center gap-1.5">
-                    <Briefcase className="w-4 h-4 text-blue-600" />
-                    <span>{job.experience}</span>
-                  </div>
-                )}
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-4 h-4 text-blue-600" />
                   <span>Posted {job.postedDate
@@ -980,22 +993,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 )}
 
-               
-
-                {/* Must-Have Comments */}
-                {job.mustHaveComments && job.mustHaveComments.length > 0 && (
-                  <div>
-                    <h2 className="text-base font-semibold text-gray-900 mb-4">
-                      Must-Have Comments
-                    </h2>
-                    <div className="h-px bg-gray-200 mb-4"></div>
-                    <ul className="list-disc list-inside space-y-2 text-gray-700">
-                      {job.mustHaveComments.map((comment, index) => (
-                        <li key={index}>{comment}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
 
                 {/* Compensation */}
                 {(job.salaryMin || job.salaryMax) && (
@@ -1144,7 +1141,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <span className="text-gray-900">{scoredResumesStats.total}</span>
                 </div>
                 <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: '100%' }}></div>
+                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: scoredResumesStats.total > 0 ? '100%' : '0%' }}></div>
                 </div>
               </div>
               <div>

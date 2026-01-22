@@ -196,10 +196,10 @@ export default function ResumeScoringRoute() {
             console.error('[ResumeScoringRoute] Error clearing pendingScoringBatch:', e);
           }
 
-          // Reload scored history to show new results
-          setTimeout(() => {
-            loadScoredHistory();
-            // Redirect to show the scored results
+          // Reload scored history to show new results, then redirect
+          setTimeout(async () => {
+            await loadScoredHistory();
+            // Redirect to show the scored results after history is loaded
             window.location.href = `/recruitment/resume-scoring?jd_id=${status.jd_id}`;
           }, 2000);
         }
@@ -212,10 +212,10 @@ export default function ResumeScoringRoute() {
   }, [pendingBatchId]);
 
   const loadScoredHistory = async () => {
-    // Load scored history from the API - fetch scored resumes for all published JDs
+    // Load scored history from the API - fetch scored resumes for all JDs (including disabled/archived)
     try {
-      // Get list of JDs
-      const jdResponse = await jdService.list({ status: 'published', page_size: 100 });
+      // Get list of all JDs (no status filter - include published, disabled, archived)
+      const jdResponse = await jdService.list({ page_size: 100 });
 
       const historyPromises = jdResponse.items.map(async (jd: JDResponse) => {
         try {
@@ -370,9 +370,9 @@ export default function ResumeScoringRoute() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch JDs from tenant database
+      // Fetch JDs from tenant database - only published JDs for scoring dropdown
       const [jdResponse, resumeResponse, folderResponse] = await Promise.all([
-        jdService.list({ page_size: 100 }),
+        jdService.list({ status: 'published', page_size: 100 }),
         resumeService.list({ page_size: 100 }).catch(() => ({ items: [] })),
         folderService.list().catch(() => []),
       ]);

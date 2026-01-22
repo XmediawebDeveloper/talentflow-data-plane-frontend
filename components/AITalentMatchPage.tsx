@@ -68,6 +68,8 @@ export default function AITalentMatchPage({
 
   // Track if we're in an active matching session to prevent URL effect interference
   const isMatchingInProgress = useRef(false);
+  // Track if user manually changed view (to prevent useEffect from resetting)
+  const userChangedView = useRef(false);
 
   // Helper function to format uploaded by name (avoid showing UUIDs)
   const formatUploadedBy = (name?: string, id?: string) => {
@@ -79,21 +81,11 @@ export default function AITalentMatchPage({
     return 'System';
   };
 
-  // Helper to update URL params
+  // Helper to update URL params - use shallow routing to prevent full page reload
   const updateUrlParams = (params: { jdId?: string; view?: string }) => {
-    const newParams = new URLSearchParams();
-
-    if (params.jdId) {
-      newParams.set('jdId', params.jdId);
-    }
-
-    if (params.view) {
-      newParams.set('view', params.view);
-    }
-
-    const queryString = newParams.toString();
-    const newUrl = queryString ? `/recruitment/ai-talent-match?${queryString}` : '/recruitment/ai-talent-match';
-    router.replace(newUrl, { scroll: false });
+    // Don't update URL - just let state handle the view changes
+    // This prevents flickering and navigation issues
+    return;
   };
   
   // History filters
@@ -117,6 +109,11 @@ export default function AITalentMatchPage({
   useEffect(() => {
     // Skip if we're in an active matching session
     if (isMatchingInProgress.current) return;
+    // Skip if user manually changed the view (prevents resetting after clicking View Details)
+    if (userChangedView.current) {
+      userChangedView.current = false; // Reset for next time
+      return;
+    }
 
     // First check URL params (for refresh persistence)
     const urlJdId = searchParams.get('jdId');
@@ -858,9 +855,9 @@ export default function AITalentMatchPage({
                 <div
                   key={item.id}
                   onClick={() => {
+                    userChangedView.current = true; // Prevent useEffect from resetting view
                     setSelectedHistoryItem(item);
                     setViewMode('details');
-                    updateUrlParams({ jdId: item.jobId, view: 'details' });
                   }}
                   className="bg-white rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all p-6 cursor-pointer group"
                   role="button"
@@ -894,7 +891,15 @@ export default function AITalentMatchPage({
                     </div>
 
                     {/* View Details Button */}
-                    <button className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 font-medium">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        userChangedView.current = true; // Prevent useEffect from resetting view
+                        setSelectedHistoryItem(item);
+                        setViewMode('details');
+                      }}
+                      className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 font-medium"
+                    >
                       View Details
                       <ArrowLeft className="w-4 h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
                     </button>

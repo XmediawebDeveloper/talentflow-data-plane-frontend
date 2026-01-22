@@ -21,6 +21,16 @@ import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeS
 import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // Helper function to format date in IST (UTC+5:30)
 const formatDateIST = (dateString: string | null | undefined): string => {
@@ -97,6 +107,14 @@ export default function MyResumesPage() {
   // ZIP download confirmation modal state
   const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+
+  // Delete folder confirmation state
+  const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<{
+    isOpen: boolean;
+    folderId: string | null;
+    folderName: string;
+    resumeCount: number;
+  }>({ isOpen: false, folderId: null, folderName: '', resumeCount: 0 });
 
   useEffect(() => {
     fetchData();
@@ -437,13 +455,26 @@ export default function MyResumesPage() {
       console.log('[DEBUG] Creating folder:', { name, parentId });
       const newFolder = await folderService.create(name, parentId);
       console.log('[DEBUG] Folder created:', newFolder);
-      const converted: FolderType = {
-        id: newFolder.id,
-        name: newFolder.name,
-        count: 0,
-        parentId: newFolder.parent_id,
+
+      // Reload folders from backend to get proper tree structure
+      const folderResponse = await folderService.list();
+      const convertApiFolder = (f: ApiFolder): FolderType => ({
+        id: f.id,
+        name: f.name,
+        count: f.resume_count || 0,
+        parentId: f.parent_id,
+        children: f.children?.map(convertApiFolder),
+      });
+      const apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+
+      // Add "All Resumes" virtual folder at the top
+      const allResumesFolder: FolderType = {
+        id: 'all',
+        name: 'All Resumes',
+        count: resumes.length,
       };
-      setFolders(prev => [...prev, converted]);
+      setFolders([allResumesFolder, ...apiFolders]);
+
       toast.success('Folder created');
     } catch (error: any) {
       console.error('[DEBUG] Failed to create folder:', error);
@@ -462,7 +493,7 @@ export default function MyResumesPage() {
     }
   };
 
-  const handleDeleteFolder = async (id: string) => {
+  const handleDeleteFolder = (id: string) => {
     // Find the folder to check if it's the root folder
     const folderToDelete = folders.find(f => f.id === id);
 
@@ -475,30 +506,42 @@ export default function MyResumesPage() {
     // Count resumes in this folder
     const resumesInFolder = resumes.filter(r => r.folderId === id);
 
-    if (resumesInFolder.length > 0) {
-      // Confirm deletion with user
-      const confirmed = window.confirm(
-        `This folder contains ${resumesInFolder.length} resume(s). Deleting the folder will also delete all resumes inside. Are you sure?`
-      );
-      if (!confirmed) return;
+    // Show confirmation dialog
+    setDeleteFolderConfirm({
+      isOpen: true,
+      folderId: id,
+      folderName: folderToDelete?.name || 'this folder',
+      resumeCount: resumesInFolder.length,
+    });
+  };
 
-      // Delete all resumes in the folder first
+  const confirmDeleteFolder = async () => {
+    const { folderId, resumeCount } = deleteFolderConfirm;
+    if (!folderId) return;
+
+    // Delete all resumes in the folder first if any
+    if (resumeCount > 0) {
+      const resumesInFolder = resumes.filter(r => r.folderId === folderId);
       try {
         await Promise.all(resumesInFolder.map(r => resumeService.delete(r.id)));
-        setResumes(prev => prev.filter(r => r.folderId !== id));
+        setResumes(prev => prev.filter(r => r.folderId !== folderId));
       } catch (error) {
         toast.error('Failed to delete resumes in folder');
+        setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0 });
         return;
       }
     }
 
     try {
-      await folderService.delete(id);
-      setFolders(prev => prev.filter(f => f.id !== id));
-      toast.success('Folder and its contents deleted');
+      await folderService.delete(folderId);
+      setFolders(prev => prev.filter(f => f.id !== folderId));
+      toast.success('Folder deleted successfully');
     } catch (error) {
       toast.error('Failed to delete folder');
     }
+
+    // Close dialog
+    setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0 });
   };
 
   // Helper function to find or create "root" folder
@@ -968,8 +1011,7 @@ export default function MyResumesPage() {
       <StatsCards
         cards={[
           { type: 'total', value: totalResumes },
-          { type: 'applied', value: appliedResumes },
-          { type: 'available', value: availableResumes }
+          { type: 'applied', value: appliedResumes }
         ]}
       />
 
@@ -1892,6 +1934,39 @@ export default function MyResumesPage() {
           onClose={() => setSelectedHistoryItem(null)}
         />
       )}
+
+      {/* Delete Folder Confirmation Dialog */}
+      <AlertDialog
+        open={deleteFolderConfirm.isOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0 });
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Folder</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{deleteFolderConfirm.folderName}&quot;?
+              {deleteFolderConfirm.resumeCount > 0 && (
+                <span className="block mt-2 text-red-600 font-medium">
+                  This will also permanently delete {deleteFolderConfirm.resumeCount} resume{deleteFolderConfirm.resumeCount !== 1 ? 's' : ''} inside this folder.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteFolder}
+              className="bg-red-600 text-white hover:bg-red-700 focus:ring-red-500"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
     </DndProvider>
   );

@@ -2,7 +2,7 @@
 
 import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
 import { Job } from '@/lib/types/types';
@@ -100,11 +100,8 @@ interface JDCreationProps {
   selectedJob?: Job | null;
   onPublish?: (job: Job) => void;
   editingJD?: EditingJDData | null;  // JD data when editing a draft
-  // FIX-003: Props for embedded mode in sheet/modal
-  editingJDId?: string | null;  // JD ID to fetch and edit
-  onClose?: () => void;  // Callback when closed
-  onSuccess?: () => void;  // Callback on successful create/update
-  isEmbedded?: boolean;  // Flag to indicate embedded mode
+  isJDInUse?: boolean;  // Whether JD is used in scoring/assessment/AI match
+  jdUsageMessage?: string;  // Message explaining why JD can't be edited
 }
 
 interface DraggableSkillProps {
@@ -464,7 +461,7 @@ const FALLBACK_INDUSTRY_TYPES: IndustryType[] = [
   { id: 8, code: 'others', label: 'Other', sort_order: 99, is_active: true },
 ];
 
-export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, editingJDId, onClose, onSuccess, isEmbedded }: JDCreationProps = {}) {
+export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage }: JDCreationProps = {}) {
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
@@ -629,6 +626,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [extractedDataModified, setExtractedDataModified] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showExtractedSummary, setShowExtractedSummary] = useState(false);
+
+  // Track if we've loaded from editingJD to prevent re-initialization on re-renders
+  const hasLoadedFromEditingJD = useRef(false);
+
+  // Track original values from last extraction to skip re-extraction if unchanged
+  const [lastExtractedJD, setLastExtractedJD] = useState<string>('');
+
+  // Track if we've already formatted for review to skip re-formatting if no changes
+  const [hasFormattedForReview, setHasFormattedForReview] = useState(false);
 
   // Validation errors for inline display
   const [validationErrors, setValidationErrors] = useState<{
@@ -952,12 +958,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         must_have_comments: params.must_have_comments,
       });
 
+      // During AI generation, don't overwrite comments - they will be properly extracted when user clicks "Next"
+      // Only update skills and other basic fields here
       setExtractedData(prev => ({
         ...prev,
         mustHaveSkills: params.must_have_skills?.length > 0 ? params.must_have_skills : (isEditMode ? prev.mustHaveSkills : []),
-        mustHaveComments: params.must_have_comments?.length > 0 ? params.must_have_comments : (isEditMode ? prev.mustHaveComments : []),
+        // Don't overwrite comments during AI generation - preserve existing or keep empty for proper extraction later
+        mustHaveComments: params.must_have_comments?.length > 0 ? params.must_have_comments : prev.mustHaveComments,
         niceToHaveSkills: params.nice_to_have_skills?.length > 0 ? params.nice_to_have_skills : (isEditMode ? prev.niceToHaveSkills : []),
-        niceToHaveComments: params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : (isEditMode ? prev.niceToHaveComments : []),
+        // Don't overwrite comments during AI generation - preserve existing or keep empty for proper extraction later
+        niceToHaveComments: params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : prev.niceToHaveComments,
         education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || (isEditMode ? prev.education : ''),
         experience: expValue || prev.experience,
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
@@ -1056,10 +1066,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               processExtractedParams(response.extracted_params);
             }
 
-            toast.success({
-              title: 'JD Generated Successfully',
-              description: 'AI has created a comprehensive job description.'
-            });
+            // Note: Toast removed here to prevent it showing in stage 2 when user moves quickly
+            // The JD is already visible (streamed), so toast is redundant
           }
         },
         onError: (message: string, errorCode?: string) => {
@@ -1109,6 +1117,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
+    // Check if JD has changed since last extraction - if not, skip extraction and go to step 2
+    if (lastExtractedJD && jdText.trim() === lastExtractedJD.trim()) {
+      console.log('[TalentFlow] JD unchanged, skipping extraction and going directly to step 2');
+      setHasProceededToExtract(true);
+      setStep('extract');
+      return;
+    }
+
     setIsExtracting(true);
     setHasProceededToExtract(true); // Disable regenerate button immediately when Next is clicked
 
@@ -1128,6 +1144,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience_mandatory: params.experience_mandatory,
         education_mandatory: params.education_mandatory,
         industry_mandatory: params.industry_mandatory
+      });
+      console.log('[TalentFlow] Comments from API:', {
+        must_have_comments: params.must_have_comments,
+        must_have_comments_length: params.must_have_comments?.length || 0,
+        nice_to_have_comments: params.nice_to_have_comments,
+        nice_to_have_comments_length: params.nice_to_have_comments?.length || 0
       });
       console.log('[TalentFlow] Will set UI checkboxes:', {
         experienceRequired: params.experience_mandatory || false,
@@ -1404,7 +1426,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         suggestedLanguages: extraction.suggestedLanguages
       });
 
+      console.log('[TalentFlow] Setting extractedData with comments:', {
+        mustHaveComments: extraction.mustHaveComments,
+        niceToHaveComments: extraction.niceToHaveComments
+      });
       setExtractedData(extraction);
+      setLastExtractedJD(jdText);  // Track JD text to skip extraction if unchanged on next "Next" click
+      console.log('[TalentFlow] Moving to extract step...');
       setStep('extract');
 
       // Save JD with creation_stage: 'extract' so refresh preserves the stage
@@ -1761,6 +1789,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       education?: string;
       experience?: string;
       industryType?: string;
+      locations?: string;
     } = {};
 
     // Must have at least one must-have skill
@@ -1787,10 +1816,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       errors.experience = 'Experience is required';
     }
 
-    // Industry Type is required
-    if (!extractedData.industryType) {
+    // Industry Type is required - check for empty string, null, undefined
+    if (!extractedData.industryType || extractedData.industryType.trim() === '') {
       missingFields.push('Industry Type');
       errors.industryType = 'Industry Type is required';
+    }
+
+    // Location validation - if location is marked as required but no locations added, show error
+    if (extractedData.locationsRequired && extractedData.locations.length === 0) {
+      missingFields.push('At least one Location');
+      errors.locations = 'Location is marked as required but no locations added';
     }
 
     // Set validation errors for inline display
@@ -1806,8 +1841,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // BEFORE going to review, reformat the JD description using AI (Odoo-style)
     // If user has modified extracted data (skills/comments), regenerate JD with those changes
+    // For published JDs being edited, ALWAYS reformat to ensure latest changes are included
+    // Skip formatting only if already formatted and no changes were made AND not editing a published JD
+    // NOTE: Validation above runs BEFORE this check, so required fields are always validated
+    if (hasFormattedForReview && !extractedDataModified && !isEditingPublished) {
+      console.log('[DEBUG] Skipping reformat - already formatted and no changes made');
+      console.log('[DEBUG] Experience value at skip:', extractedData.experience);
+      setStep('review');
+      return;
+    }
+
     console.log('[DEBUG] Reformatting JD description with extracted parameters...');
-    console.log('[DEBUG] extractedDataModified:', extractedDataModified);
+    console.log('[DEBUG] extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview);
     setIsRegenerating(true);
 
     // Track the final description to use (avoiding React state async issues)
@@ -1823,13 +1868,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                            mustHaveComments.length > 0 ||
                            niceToHaveComments.length > 0;
 
-      if (extractedDataModified || mode === 'ai' || (mode === 'manual' && hasParameters)) {
+      // Always reformat when there are skills/comments to incorporate OR when editing a published JD
+      const shouldReformat = extractedDataModified || mode === 'ai' || (mode === 'manual' && hasParameters) || isEditingPublished || hasParameters;
+
+      if (shouldReformat) {
         console.log('[DEBUG] Calling reformat API with parameters...');
-        console.log('[DEBUG] Mode:', mode, 'extractedDataModified:', extractedDataModified, 'hasParameters:', hasParameters);
+        console.log('[DEBUG] Mode:', mode, 'extractedDataModified:', extractedDataModified, 'hasParameters:', hasParameters, 'isEditingPublished:', isEditingPublished);
+        console.log('[DEBUG] Skills to include - mustHave:', extractedData.mustHaveSkills.length, 'niceToHave:', extractedData.niceToHaveSkills.length);
+        console.log('[DEBUG] Comments to include - mustHave:', mustHaveComments.length, 'niceToHave:', niceToHaveComments.length);
 
         if (editingId) {
           console.log('[DEBUG] Passing parameters - must_have_comments:', mustHaveComments.length, 'nice_to_have_comments:', niceToHaveComments.length);
           console.log('[DEBUG] Nice-to-have comments:', niceToHaveComments);
+          console.log('[DEBUG] Must-have skills:', extractedData.mustHaveSkills);
+          console.log('[DEBUG] Nice-to-have skills:', extractedData.niceToHaveSkills);
 
           // Parse experience for saving
           let experienceMin: number | undefined;
@@ -1857,7 +1909,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
           // Call reformat endpoint with ALL parameters directly in the request
           // This ensures nice-to-have comments are passed to the AI
-          const reformattedJD = await jdService.reformatWithParams(editingId, {
+          const reformatParams = {
             must_have_skills: extractedData.mustHaveSkills,
             nice_to_have_skills: extractedData.niceToHaveSkills,
             must_have_comments: mustHaveComments,
@@ -1868,9 +1920,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             certifications: extractedData.certifications,
             coding_required: extractedData.codingRequired,
             supported_languages: extractedData.suggestedLanguages,
-          });
+          };
+
+          console.log('[DEBUG] Sending reformat request with params:', JSON.stringify(reformatParams, null, 2));
+
+          const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
 
           console.log('[DEBUG] Reformat successful, updated description length:', reformattedJD.description?.length);
+          console.log('[DEBUG] Reformatted description preview (first 500 chars):', reformattedJD.description?.substring(0, 500));
+          console.log('[DEBUG] Full reformatted JD:', reformattedJD.description);
+          console.log('[DEBUG] JD contains "mongo db":', reformattedJD.description?.toLowerCase().includes('mongo'));
+          console.log('[DEBUG] JD contains "neo4j":', reformattedJD.description?.toLowerCase().includes('neo4j'));
+          console.log('[DEBUG] JD contains "postegres":', reformattedJD.description?.toLowerCase().includes('postegres') || reformattedJD.description?.toLowerCase().includes('postgres'));
 
           // Store the reformatted description for saving (React state is async)
           finalDescription = reformattedJD.description;
@@ -1888,6 +1949,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             title: 'JD Reformatted',
             description: 'Job description has been regenerated with your changes.',
           });
+        } else {
+          console.error('[DEBUG] Cannot reformat - editingId is null. This should not happen in stage 2.');
+          toast.warning({
+            title: 'Cannot Reformat',
+            description: 'JD not saved yet. Your changes will be included when saving.',
+          });
         }
       } else {
         console.log('[DEBUG] No modifications, keeping original JD');
@@ -1904,6 +1971,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Go to review step to show the reformatted summary
     setStep('review');
+    setHasFormattedForReview(true);  // Mark as formatted so we can skip on next "Next" click
+    setExtractedDataModified(false);  // Reset modified flag after formatting
 
     // Save JD with creation_stage: 'review' so refresh preserves the stage
     try {
@@ -2037,8 +2106,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       missingFields.push('Experience');
     }
 
-    // Industry Type is required
-    if (!extractedData.industryType) {
+    // Industry Type is required - check for empty string, null, undefined
+    if (!extractedData.industryType || extractedData.industryType.trim() === '') {
       missingFields.push('Industry Type');
     }
 
@@ -2538,7 +2607,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // - Draft JD: editingId is already set in useState, so saves will update the same draft
   // - Published JD: editingId is null, so saves will create a new draft
   useEffect(() => {
-    if (editingJD) {
+    if (editingJD && !hasLoadedFromEditingJD.current) {
+      // Only load from editingJD once on initial mount to prevent overwriting user edits
+      hasLoadedFromEditingJD.current = true;
+
       console.log('[TalentFlow] Restoring JD state from editingJD:', {
         id: editingJD.id,
         title: editingJD.title,
@@ -2547,26 +2619,38 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         status: editingJD.status
       });
 
-      setJobTitle(editingJD.title);
-      setGeneratedJD(editingJD.description);
+      // Use functional updates to preserve user edits if they exist
+      setJobTitle(prev => prev || editingJD.title);
+      setGeneratedJD(prev => prev || editingJD.description);
 
       // Populate AI prompt field with saved ai_prompt (not description)
+      // Only set if current value is empty to avoid overwriting user edits
       if (editingJD.creation_method === 'ai_generated') {
-        setAiPrompt(editingJD.ai_prompt || '');  // Use saved AI prompt
+        setAiPrompt(prev => prev || editingJD.ai_prompt || '');  // Preserve user edits
       } else if (editingJD.creation_method === 'manual') {
-        setManualJD(editingJD.description || '');
+        setManualJD(prev => prev || editingJD.description || '');  // Preserve user edits
       }
+
+      // Set lastExtractedJD to the loaded description so we can detect changes
+      setLastExtractedJD(editingJD.description || '');
 
       setStep(editingJD.creation_stage);
       console.log('[TalentFlow] Set step to:', editingJD.creation_stage);
+
+      // If already at review stage, mark as formatted to skip reformatting on next "Next" click
+      if (editingJD.creation_stage === 'review') {
+        setHasFormattedForReview(true);
+      }
 
       // Restore the creation mode based on saved creation_method
       if (editingJD.creation_method) {
         setMode(editingJD.creation_method === 'ai_generated' ? 'ai' : 'manual');
       }
 
-      // Load extracted data if we're past the create step
-      if (editingJD.creation_stage !== 'create') {
+      // Load extracted data if:
+      // 1. We're past the create step (draft JDs), OR
+      // 2. It's a published JD (always has data regardless of stage)
+      if (editingJD.creation_stage !== 'create' || editingJD.status === 'published') {
         // Calculate actual values first, then set Required based on whether value exists
         const educationValue = editingJD.education_requirements?.degree || '';
 
@@ -2603,6 +2687,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         const industryValue = editingJD.industry_type || '';
 
         console.log('[DEBUG] Loading editingJD data:');
+        console.log('[DEBUG] - experience_min from API:', editingJD.experience_min);
+        console.log('[DEBUG] - experience_max from API:', editingJD.experience_max);
+        console.log('[DEBUG] - mapped experienceValue:', experienceValue);
         console.log('[DEBUG] - nice_to_have_comments from API:', editingJD.nice_to_have_comments);
         console.log('[DEBUG] - must_have_comments from API:', editingJD.must_have_comments);
 
@@ -2689,6 +2776,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             </div>
           </div>
           {renderStepIndicator()}
+
+          {/* Warning banner when JD is in use */}
+          {isJDInUse && (
+            <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-orange-800">This Job Description cannot be edited</p>
+                  <p className="text-xs text-orange-700 mt-1">
+                    {jdUsageMessage || 'This job description has been used in Resume Scoring, Assessments, or AI Talent Match and cannot be modified. Please create a new JD instead.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Scrollable Content */}
@@ -2778,10 +2880,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setJobTitle(e.target.value)}
                         maxLength={VALIDATION.JOB_TITLE.max}
                         placeholder="e.g., Senior Java Developer – Banking Domain"
+                        disabled={isJDInUse}
                         className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
-                          jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
-                            ? 'border-red-300 bg-red-50'
-                            : 'border-gray-300'
+                          isJDInUse
+                            ? 'bg-gray-100 cursor-not-allowed'
+                            : jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
+                              ? 'border-red-300 bg-red-50'
+                              : 'border-gray-300'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
@@ -2809,12 +2914,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         maxLength={VALIDATION.AI_PROMPT.max}
                         placeholder={editingId ? "Add additional details or context to regenerate the job description..." : "Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"}
                         rows={12}
+                        disabled={isJDInUse}
                         className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
-                          aiPrompt.length > 0 && !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max) && !editingId
-                            ? 'border-orange-300 bg-orange-50'
-                            : aiPrompt.length > VALIDATION.AI_PROMPT.max
-                            ? 'border-red-300 bg-red-50'
-                            : 'border-gray-300'
+                          isJDInUse
+                            ? 'bg-gray-100 cursor-not-allowed'
+                            : aiPrompt.length > 0 && !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max) && !editingId
+                              ? 'border-orange-300 bg-orange-50'
+                              : aiPrompt.length > VALIDATION.AI_PROMPT.max
+                                ? 'border-red-300 bg-red-50'
+                                : 'border-gray-300'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
@@ -2848,9 +2956,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       </div>
                     )}
 
+                    {/* Warning when JD is in use */}
+                    {isJDInUse && (
+                      <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                        <div className="flex items-start gap-3">
+                          <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-orange-800">This JD cannot be edited</p>
+                            <p className="text-xs text-orange-700 mt-1">
+                              {jdUsageMessage || 'This job description has been used in Resume Scoring, Assessments, or AI Talent Match and cannot be modified. Please create a new JD instead.'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <button
                       onClick={handleGenerateJD}
                       disabled={
+                        isJDInUse ||
                         !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
                         (!editingId && !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max)) ||
                         aiPrompt.length > VALIDATION.AI_PROMPT.max ||
@@ -2911,10 +3035,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setJobTitle(e.target.value)}
                         maxLength={VALIDATION.JOB_TITLE.max}
                         placeholder="e.g., Senior Java Developer"
+                        disabled={isJDInUse}
                         className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
-                          jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
-                            ? 'border-red-300 bg-red-50'
-                            : 'border-gray-300'
+                          isJDInUse
+                            ? 'bg-gray-100 cursor-not-allowed'
+                            : jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
+                              ? 'border-red-300 bg-red-50'
+                              : 'border-gray-300'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
@@ -3031,12 +3158,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {/* Toggle Edit/View Button */}
                       <div className="absolute top-2 right-2 z-10">
                         <button
-                          onClick={() => setIsEditingJD(!isEditingJD)}
+                          onClick={() => {
+                            if (isJDInUse) {
+                              toast.error({
+                                title: 'Cannot Edit Job Description',
+                                description: jdUsageMessage || 'This job description has been used in Resume Scoring, Assessments, or AI Talent Match and cannot be modified. Please create a new JD instead.'
+                              });
+                              return;
+                            }
+                            setIsEditingJD(!isEditingJD);
+                          }}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            isEditingJD
-                              ? 'bg-gray-800 text-white hover:bg-gray-900'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            isJDInUse
+                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                              : isEditingJD
+                                ? 'bg-gray-800 text-white hover:bg-gray-900'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
+                          title={isJDInUse ? 'This JD is in use and cannot be edited' : ''}
                         >
                           {isEditingJD ? (
                             <>
@@ -3056,7 +3195,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <textarea
                           value={generatedJD}
                           onChange={(e) => setGeneratedJD(e.target.value)}
-                          className="w-full h-[600px] px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent font-mono text-sm"
+                          readOnly={isJDInUse}
+                          className={`w-full h-[600px] px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent font-mono text-sm ${isJDInUse ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         />
                       ) : (
                         <div className="h-[600px] overflow-y-auto px-6 py-4 border border-gray-300 rounded-md bg-white markdown-content">
@@ -3083,8 +3223,38 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   )
                 ) : (
                   manualJD ? (
-                    <div className="h-[600px] overflow-y-auto p-4 border border-gray-300 rounded-md bg-gray-50">
-                      <pre className="whitespace-pre-wrap text-sm text-gray-700">{manualJD}</pre>
+                    <div className="h-[600px] overflow-y-auto px-6 py-4 border border-gray-300 rounded-md bg-white markdown-content">
+                      <ReactMarkdown>{
+                        // Auto-format common JD section headers to bold/headers
+                        manualJD
+                          // Convert ALL CAPS headers to markdown headers (like JOB DESCRIPTION, REQUIREMENTS, etc.)
+                          .replace(/^([A-Z][A-Z\s\/&-]{2,})$/gm, (match) => `## ${match.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ')}`)
+                          // Dynamically detect section headers: Title Case text on its own line
+                          .replace(/^([A-Z][a-zA-Z]*(?:[\s&\/\-]+[A-Za-z()]+){0,6})\s*$/gm, (match, p1) => {
+                            const trimmed = p1.trim();
+                            const words = trimmed.split(/\s+/);
+                            const wordCount = words.length;
+
+                            // Skip if too long (likely a sentence)
+                            if (wordCount > 6 || trimmed.length > 50) return match;
+
+                            // Skip if starts with action verbs (likely a bullet point)
+                            const actionVerbs = /^(Design|Develop|Write|Build|Create|Implement|Maintain|Manage|Lead|Work|Collaborate|Participate|Fix|Optimize|Test|Review|Ensure|Prepare|Provide|Support|Assist|Handle|Conduct|Perform|Execute|Analyze|Monitor|Strong|Good|Basic|Experience|Familiarity|Knowledge|Understanding|Ability|Hands-on|Exposure|Proficiency|Excellent|Proven|Demonstrated)/i;
+                            if (actionVerbs.test(trimmed)) return match;
+
+                            // Skip if contains lowercase words that aren't connectors (likely a sentence)
+                            const connectors = ['&', 'and', 'or', 'of', 'to', 'for', 'the', 'a', 'an', 'in', 'on', 'with'];
+                            const hasContentWords = words.some((w, i) => {
+                              if (i === 0) return false; // Skip first word
+                              const cleanWord = w.replace(/[()\/&-]/g, '').toLowerCase();
+                              return cleanWord.length > 2 && /^[a-z]/.test(w) && !connectors.includes(cleanWord);
+                            });
+                            if (hasContentWords) return match;
+
+                            // Looks like a header
+                            return `## ${trimmed}`;
+                          })
+                      }</ReactMarkdown>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-[600px] bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
@@ -4074,6 +4244,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                   {/* JD Content */}
                   <div className="markdown-content text-gray-700 leading-relaxed">
+                    {console.log('[DEBUG] Review stage showing JD, mode:', mode, 'length:', (mode === 'ai' ? generatedJD : manualJD)?.length)}
                     <ReactMarkdown>
                       {(mode === 'ai' ? generatedJD : manualJD)
                         .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
@@ -4427,7 +4598,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* JD12: Save as Draft button */}
                 <button
                   onClick={handleSaveDraft}
-                  disabled={isSavingDraft}
+                  disabled={isSavingDraft || isJDInUse}
+                  title={isJDInUse ? 'This JD is in use and cannot be modified' : ''}
                   className="flex items-center gap-2 px-6 py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
                   {isSavingDraft ? (
@@ -4444,13 +4616,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </button>
                 <button
                   onClick={handleConfirmPublish}
-                  disabled={isPublishing || !validationStatus.isValid}
+                  disabled={isPublishing || !validationStatus.isValid || isJDInUse}
                   className={`flex items-center gap-2 px-8 py-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                    validationStatus.isValid
+                    validationStatus.isValid && !isJDInUse
                       ? 'bg-green-600 text-white hover:bg-green-700'
                       : 'bg-gray-300 text-gray-500'
                   }`}
-                  title={!validationStatus.isValid ? 'Complete all required fields to publish' : ''}
+                  title={isJDInUse ? 'This JD is in use and cannot be modified' : !validationStatus.isValid ? 'Complete all required fields to publish' : ''}
                 >
                   {isPublishing ? (
                     <>
