@@ -140,7 +140,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   };
   
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm">
+    <header className="h-[72px] bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm">
       <div className="flex items-center flex-1 max-w-2xl">
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -467,29 +467,32 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
         </div>
 
         {/* Plan & Unit Balance Display - FIX-001 */}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg">
-          <CreditCard className="w-4 h-4 text-gray-500" />
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-gray-900 leading-tight">
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl">
+          <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm border border-indigo-100">
+            <CreditCard className="w-5 h-5 text-indigo-600" />
+          </div>
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-sm font-semibold text-gray-900 truncate max-w-[140px]" title={loadingQuota ? 'Loading...' : planName}>
               {loadingQuota ? 'Loading...' : planName}
             </span>
             {!loadingQuota && !quotaError && !isPendingStatus && (
-              <span className="text-xs text-gray-500 leading-tight">
-                {totalUnits.remaining.toLocaleString()} units left
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-bold text-indigo-600">{totalUnits.remaining.toLocaleString()}</span>
+                <span className="text-xs text-gray-500">units left</span>
+              </div>
             )}
             {isPendingStatus && (
-              <span className="text-xs text-orange-600 leading-tight">
+              <span className="text-xs text-orange-600 font-medium">
                 {tenantStatus}
               </span>
             )}
           </div>
           {!loadingQuota && !quotaError && !isPendingStatus && totalUnits.limit > 0 && (
-            <div className="w-12 h-1.5 bg-gray-200 rounded-full overflow-hidden ml-1">
+            <div className="w-16 h-2 bg-white/60 rounded-full overflow-hidden border border-indigo-100">
               <div
                 className={`h-full rounded-full transition-all ${
                   usagePercentage > 90 ? 'bg-red-500' :
-                  usagePercentage > 70 ? 'bg-yellow-500' : 'bg-green-500'
+                  usagePercentage > 70 ? 'bg-yellow-500' : 'bg-indigo-500'
                 }`}
                 style={{ width: `${Math.min(usagePercentage, 100)}%` }}
               />
