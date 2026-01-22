@@ -1730,6 +1730,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       education?: string;
       experience?: string;
       industryType?: string;
+      locations?: string;
     } = {};
 
     // Must have at least one must-have skill
@@ -1762,6 +1763,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       errors.industryType = 'Industry Type is required';
     }
 
+    // Location validation - if location is marked as required but no locations added, show error
+    if (extractedData.locationsRequired && extractedData.locations.length === 0) {
+      missingFields.push('At least one Location');
+      errors.locations = 'Location is marked as required but no locations added';
+    }
+
     // Set validation errors for inline display
     setValidationErrors(errors);
 
@@ -1777,8 +1784,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // If user has modified extracted data (skills/comments), regenerate JD with those changes
     // For published JDs being edited, ALWAYS reformat to ensure latest changes are included
     // Skip formatting only if already formatted and no changes were made AND not editing a published JD
+    // NOTE: Validation above runs BEFORE this check, so required fields are always validated
     if (hasFormattedForReview && !extractedDataModified && !isEditingPublished) {
       console.log('[DEBUG] Skipping reformat - already formatted and no changes made');
+      console.log('[DEBUG] Experience value at skip:', extractedData.experience);
       setStep('review');
       return;
     }
@@ -1800,13 +1809,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                            mustHaveComments.length > 0 ||
                            niceToHaveComments.length > 0;
 
-      if (extractedDataModified || mode === 'ai' || (mode === 'manual' && hasParameters)) {
+      // Always reformat when there are skills/comments to incorporate OR when editing a published JD
+      const shouldReformat = extractedDataModified || mode === 'ai' || (mode === 'manual' && hasParameters) || isEditingPublished || hasParameters;
+
+      if (shouldReformat) {
         console.log('[DEBUG] Calling reformat API with parameters...');
-        console.log('[DEBUG] Mode:', mode, 'extractedDataModified:', extractedDataModified, 'hasParameters:', hasParameters);
+        console.log('[DEBUG] Mode:', mode, 'extractedDataModified:', extractedDataModified, 'hasParameters:', hasParameters, 'isEditingPublished:', isEditingPublished);
+        console.log('[DEBUG] Skills to include - mustHave:', extractedData.mustHaveSkills.length, 'niceToHave:', extractedData.niceToHaveSkills.length);
+        console.log('[DEBUG] Comments to include - mustHave:', mustHaveComments.length, 'niceToHave:', niceToHaveComments.length);
 
         if (editingId) {
           console.log('[DEBUG] Passing parameters - must_have_comments:', mustHaveComments.length, 'nice_to_have_comments:', niceToHaveComments.length);
           console.log('[DEBUG] Nice-to-have comments:', niceToHaveComments);
+          console.log('[DEBUG] Must-have skills:', extractedData.mustHaveSkills);
+          console.log('[DEBUG] Nice-to-have skills:', extractedData.niceToHaveSkills);
 
           // Parse experience for saving
           let experienceMin: number | undefined;
@@ -1834,7 +1850,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
           // Call reformat endpoint with ALL parameters directly in the request
           // This ensures nice-to-have comments are passed to the AI
-          const reformattedJD = await jdService.reformatWithParams(editingId, {
+          const reformatParams = {
             must_have_skills: extractedData.mustHaveSkills,
             nice_to_have_skills: extractedData.niceToHaveSkills,
             must_have_comments: mustHaveComments,
@@ -1845,9 +1861,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             certifications: extractedData.certifications,
             coding_required: extractedData.codingRequired,
             supported_languages: extractedData.suggestedLanguages,
-          });
+          };
+
+          console.log('[DEBUG] Sending reformat request with params:', JSON.stringify(reformatParams, null, 2));
+
+          const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
 
           console.log('[DEBUG] Reformat successful, updated description length:', reformattedJD.description?.length);
+          console.log('[DEBUG] Reformatted description preview (first 500 chars):', reformattedJD.description?.substring(0, 500));
+          console.log('[DEBUG] Full reformatted JD:', reformattedJD.description);
+          console.log('[DEBUG] JD contains "mongo db":', reformattedJD.description?.toLowerCase().includes('mongo'));
+          console.log('[DEBUG] JD contains "neo4j":', reformattedJD.description?.toLowerCase().includes('neo4j'));
+          console.log('[DEBUG] JD contains "postegres":', reformattedJD.description?.toLowerCase().includes('postegres') || reformattedJD.description?.toLowerCase().includes('postgres'));
 
           // Store the reformatted description for saving (React state is async)
           finalDescription = reformattedJD.description;
@@ -1864,6 +1889,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           toast.success({
             title: 'JD Reformatted',
             description: 'Job description has been regenerated with your changes.',
+          });
+        } else {
+          console.error('[DEBUG] Cannot reformat - editingId is null. This should not happen in stage 2.');
+          toast.warning({
+            title: 'Cannot Reformat',
+            description: 'JD not saved yet. Your changes will be included when saving.',
           });
         }
       } else {
@@ -2589,6 +2620,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         const industryValue = editingJD.industry_type || '';
 
         console.log('[DEBUG] Loading editingJD data:');
+        console.log('[DEBUG] - experience_min from API:', editingJD.experience_min);
+        console.log('[DEBUG] - experience_max from API:', editingJD.experience_max);
+        console.log('[DEBUG] - mapped experienceValue:', experienceValue);
         console.log('[DEBUG] - nice_to_have_comments from API:', editingJD.nice_to_have_comments);
         console.log('[DEBUG] - must_have_comments from API:', editingJD.must_have_comments);
 
@@ -4130,6 +4164,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                   {/* JD Content */}
                   <div className="markdown-content text-gray-700 leading-relaxed">
+                    {console.log('[DEBUG] Review stage showing JD, mode:', mode, 'length:', (mode === 'ai' ? generatedJD : manualJD)?.length)}
                     <ReactMarkdown>
                       {(mode === 'ai' ? generatedJD : manualJD)
                         .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
