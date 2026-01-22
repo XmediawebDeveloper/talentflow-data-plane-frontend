@@ -102,6 +102,11 @@ interface JDCreationProps {
   editingJD?: EditingJDData | null;  // JD data when editing a draft
   isJDInUse?: boolean;  // Whether JD is used in scoring/assessment/AI match
   jdUsageMessage?: string;  // Message explaining why JD can't be edited
+  // FIX-003: Props for embedded mode in sheet/modal
+  editingJDId?: string | null;  // JD ID to fetch and edit
+  onClose?: () => void;  // Callback when closed
+  onSuccess?: () => void;  // Callback on successful create/update
+  isEmbedded?: boolean;  // Flag to indicate embedded mode
 }
 
 interface DraggableSkillProps {
@@ -473,7 +478,7 @@ const FALLBACK_INDUSTRY_TYPES: IndustryType[] = [
   { id: 8, code: 'others', label: 'Other', sort_order: 99, is_active: true },
 ];
 
-export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage }: JDCreationProps = {}) {
+export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, editingJDId, onClose, onSuccess, isEmbedded }: JDCreationProps = {}) {
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
@@ -481,31 +486,90 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Determine if we're editing a draft or a published JD
   // Draft JD: can be updated directly (editingId is set)
   // Published JD: can also be updated directly (editingId is set) - creates a new version on publish
-  const isEditingDraft = editingJD?.status === 'draft';
-  const isEditingPublished = editingJD?.status === 'published';
+  // FIX-003: Use effectiveEditingJD (loaded or prop data) - computed below after loading
 
   // If editing a draft or published JD, we can update it directly.
   const [editingId, setEditingId] = useState<string | null>(null);
   // sourceJdId tracks the original JD for reference
   const [sourceJdId, setSourceJdId] = useState<string | null>(null);
 
+  // FIX-003: State for loading JD in embedded mode
+  const [loadingJD, setLoadingJD] = useState(false);
+  const [loadedJDData, setLoadedJDData] = useState<EditingJDData | null>(null);
+
+  // FIX-003: Fetch JD when editingJDId is provided (embedded mode)
+  useEffect(() => {
+    if (editingJDId && isEmbedded) {
+      const fetchJD = async () => {
+        setLoadingJD(true);
+        try {
+          const jd = await jdService.get(editingJDId);
+          const jdData: EditingJDData = {
+            id: jd.id,
+            title: jd.title,
+            description: jd.description,
+            status: jd.status,
+            creation_stage: jd.creation_stage || 'create',
+            creation_method: jd.creation_method,
+            ai_prompt: jd.ai_prompt,
+            must_have_skills: jd.must_have_skills,
+            nice_to_have_skills: jd.nice_to_have_skills,
+            education_requirements: jd.education_requirements,
+            experience_min: jd.experience_min,
+            experience_max: jd.experience_max,
+            industry_type: jd.industry_type,
+            salary_min: jd.salary_min,
+            salary_max: jd.salary_max,
+            compensation_type: jd.compensation_type,
+            employment_type: jd.employment_type,
+            remote_type: jd.remote_type,
+            assessment_guidance: jd.assessment_guidance,
+            internal_comments: jd.internal_comments,
+            must_have_comments: jd.must_have_comments,
+            nice_to_have_comments: jd.nice_to_have_comments,
+            allow_overqualified: jd.allow_overqualified,
+            locations: jd.locations?.map(loc => ({
+              city: loc.city || '',
+              radius_km: loc.radius_km,
+              is_required: loc.is_required,
+            })),
+          };
+          setLoadedJDData(jdData);
+        } catch (error) {
+          console.error('[JDCreation] Failed to fetch JD:', error);
+          toast.error('Failed to load JD');
+        } finally {
+          setLoadingJD(false);
+        }
+      };
+      fetchJD();
+    }
+  }, [editingJDId, isEmbedded]);
+
+  // Use loaded JD data or prop data
+  const effectiveEditingJD = loadedJDData || editingJD;
+
+  // FIX-003: Computed values for editing state
+  const isEditingDraft = effectiveEditingJD?.status === 'draft';
+  const isEditingPublished = effectiveEditingJD?.status === 'published';
+
   // Set editingId when component mounts or editingJD changes
   useEffect(() => {
-    if (editingJD) {
-      console.log('[DEBUG] editingJD received:', { id: editingJD.id, status: editingJD.status });
-      if (editingJD.status === 'draft') {
+    if (effectiveEditingJD) {
+      console.log('[DEBUG] editingJD received:', { id: effectiveEditingJD.id, status: effectiveEditingJD.status });
+      if (effectiveEditingJD.status === 'draft') {
         // Editing a draft - update it directly
-        setEditingId(editingJD.id);
+        setEditingId(effectiveEditingJD.id);
         setSourceJdId(null);
-        console.log('[DEBUG] Setting editingId for draft:', editingJD.id);
-      } else if (editingJD.status === 'published') {
+        console.log('[DEBUG] Setting editingId for draft:', effectiveEditingJD.id);
+      } else if (effectiveEditingJD.status === 'published') {
         // Editing published JD - update it directly (creates new version on republish)
-        setEditingId(editingJD.id);
-        setSourceJdId(editingJD.id);
-        console.log('[DEBUG] Setting editingId for published:', editingJD.id);
+        setEditingId(effectiveEditingJD.id);
+        setSourceJdId(effectiveEditingJD.id);
+        console.log('[DEBUG] Setting editingId for published:', effectiveEditingJD.id);
       }
     }
-  }, [editingJD]);
+  }, [effectiveEditingJD]);
 
   // Quota check for max_jobs
   const { checkQuota, status: quotaStatus, canProceed: hasQuota, isChecking: isCheckingQuota, quotaError } = useQuotaCheck();
@@ -2355,6 +2419,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           }
         });
       }
+
+      // FIX-003: Call onSuccess in embedded mode
+      if (isEmbedded && onSuccess) {
+        onSuccess();
+      }
     } catch (error) {
       console.error('[ERROR] Failed to publish JD:', error);
       setIsPublishing(false);
@@ -2407,7 +2476,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       console.log('[DEBUG] No unsaved data or already published, skipping save');
     }
     // Always navigate back after saving (or if no unsaved data)
-    if (onBack) {
+    // FIX-003: In embedded mode, call onClose instead of onBack
+    if (isEmbedded && onClose) {
+      onClose();
+    } else if (onBack) {
       onBack();
     }
   };
@@ -2779,6 +2851,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   }, [editingJD]);
 
+  // FIX-003: Show loading state when fetching JD in embedded mode
+  if (loadingJD) {
+    return (
+      <div className="h-full flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-800 mx-auto mb-3" />
+          <p className="text-gray-600">Loading job description...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="h-full flex flex-col">
@@ -2798,7 +2882,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     : 'Create professional job descriptions with AI-powered extraction'}
                 </p>
               </div>
-              {onBack && (
+              {/* FIX-003: Show back/close button in both normal and embedded mode */}
+              {(onBack || (isEmbedded && onClose)) && (
                 <button
                   onClick={handleBackClick}
                   disabled={isNavigatingBack || isSavingDraft}

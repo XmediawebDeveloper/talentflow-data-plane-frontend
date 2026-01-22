@@ -260,11 +260,11 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm h-screen">
-      {/* Logo */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg flex items-center justify-center shadow-md">
-            <Sparkles className="w-5 h-5 text-white" />
+      {/* Logo - matches header height h-[72px] */}
+      <div className="h-[72px] px-6 border-b border-gray-200 flex items-center">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-md">
+            <Sparkles className="w-6 h-6 text-white" />
           </div>
           <span className="text-xl font-bold text-gray-900">TalentFlow</span>
         </div>
