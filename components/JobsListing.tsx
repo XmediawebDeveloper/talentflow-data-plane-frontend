@@ -15,33 +15,39 @@ const formatEmploymentType = (type: string | undefined): string => {
     .join(' ');
 };
 
-// Utility function to format relative time (e.g., "2 hours ago", "3 days ago")
-const formatRelativeTime = (dateString: string | undefined): string => {
+// Utility function to format last updated time
+// Within 24 hours: show "X hours ago"
+// More than 24 hours: show actual date
+// Server returns UTC time, add 5:30 hours for IST
+const formatLastUpdated = (dateString: string | undefined): string => {
   if (!dateString) return '-';
 
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  // Server returns UTC, convert to IST by adding 5:30 hours
+  const utcDate = new Date(dateString);
+  const istOffsetMs = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes
+  const istDate = new Date(utcDate.getTime() + istOffsetMs);
 
-  if (diffInSeconds < 60) return 'Just now';
-  if (diffInSeconds < 3600) {
-    const minutes = Math.floor(diffInSeconds / 60);
-    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+  const now = new Date();
+
+  const diffInSeconds = Math.floor((now.getTime() - istDate.getTime()) / 1000);
+  const diffInHours = Math.floor(diffInSeconds / 3600);
+
+  // Within 24 hours - show hours ago
+  if (diffInHours >= 0 && diffInHours < 24) {
+    if (diffInHours === 0) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      if (minutes < 1) return 'Just now';
+      return `${minutes} ${minutes === 1 ? 'min' : 'mins'} ago`;
+    }
+    return `${diffInHours} ${diffInHours === 1 ? 'hour' : 'hours'} ago`;
   }
-  if (diffInSeconds < 86400) {
-    const hours = Math.floor(diffInSeconds / 3600);
-    return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-  }
-  if (diffInSeconds < 604800) {
-    const days = Math.floor(diffInSeconds / 86400);
-    return `${days} ${days === 1 ? 'day' : 'days'} ago`;
-  }
-  if (diffInSeconds < 2592000) {
-    const weeks = Math.floor(diffInSeconds / 604800);
-    return `${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
-  }
-  // For older dates, show the actual date
-  return date.toLocaleDateString();
+
+  // More than 24 hours - show actual date
+  return istDate.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
 };
 
 interface JobsListingProps {
@@ -1028,7 +1034,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         {job.updated_at && (
                           <div className="flex items-center gap-3 text-base text-gray-600">
                             <Clock className="w-5 h-5 text-gray-400" />
-                            <span>Updated {formatRelativeTime(job.updated_at)}</span>
+                            <span>Last Updated: {formatLastUpdated(job.updated_at)}</span>
                           </div>
                         )}
                       </div>
@@ -1253,7 +1259,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           {job.updated_at && (
                             <span className="flex items-center gap-2">
                               <Clock className="w-5 h-5 text-gray-400" />
-                              Updated {formatRelativeTime(job.updated_at)}
+                              Last Updated: {formatLastUpdated(job.updated_at)}
                             </span>
                           )}
                           <span className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">

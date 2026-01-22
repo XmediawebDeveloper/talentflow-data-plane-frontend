@@ -2548,8 +2548,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         setMode(editingJD.creation_method === 'ai_generated' ? 'ai' : 'manual');
       }
 
-      // Load extracted data if we're past the create step
-      if (editingJD.creation_stage !== 'create') {
+      // Load extracted data if:
+      // 1. We're past the create step (draft JDs), OR
+      // 2. It's a published JD (always has data regardless of stage)
+      if (editingJD.creation_stage !== 'create' || editingJD.status === 'published') {
         // Calculate actual values first, then set Required based on whether value exists
         const educationValue = editingJD.education_requirements?.degree || '';
 
