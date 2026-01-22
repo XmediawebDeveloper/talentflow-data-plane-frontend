@@ -15,6 +15,35 @@ const formatEmploymentType = (type: string | undefined): string => {
     .join(' ');
 };
 
+// Utility function to format relative time (e.g., "2 hours ago", "3 days ago")
+const formatRelativeTime = (dateString: string | undefined): string => {
+  if (!dateString) return '-';
+
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return 'Just now';
+  if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+  }
+  if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  }
+  if (diffInSeconds < 604800) {
+    const days = Math.floor(diffInSeconds / 86400);
+    return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+  }
+  if (diffInSeconds < 2592000) {
+    const weeks = Math.floor(diffInSeconds / 604800);
+    return `${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
+  }
+  // For older dates, show the actual date
+  return date.toLocaleDateString();
+};
+
 interface JobsListingProps {
   jobs: Job[];
   onCreateNew: () => void;
@@ -996,6 +1025,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                             <span>By {job.postedBy}</span>
                           </div>
                         )}
+                        {job.updated_at && (
+                          <div className="flex items-center gap-3 text-base text-gray-600">
+                            <Clock className="w-5 h-5 text-gray-400" />
+                            <span>Updated {formatRelativeTime(job.updated_at)}</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Salary & Skills Info */}
@@ -1213,6 +1248,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                             <span className="flex items-center gap-2">
                               <User className="w-5 h-5 text-gray-400" />
                               By {job.postedBy}
+                            </span>
+                          )}
+                          {job.updated_at && (
+                            <span className="flex items-center gap-2">
+                              <Clock className="w-5 h-5 text-gray-400" />
+                              Updated {formatRelativeTime(job.updated_at)}
                             </span>
                           )}
                           <span className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">

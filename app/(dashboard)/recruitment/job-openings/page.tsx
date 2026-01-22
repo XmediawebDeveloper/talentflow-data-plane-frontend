@@ -81,6 +81,7 @@ export default function JobOpeningsPage() {
         employmentType: jd.employment_type,
         workMode: jd.remote_type, // onsite, hybrid, remote
         created_at: jd.created_at, // For accurate sorting
+        updated_at: jd.updated_at, // For last updated display
         creation_stage: jd.creation_stage, // For draft JDs
         creation_method: jd.creation_method, // AI or Manual
         currentVersion: jd.current_version, // For republished status

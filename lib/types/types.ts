@@ -128,6 +128,7 @@ export interface Job {
   versionHistory?: JobSnapshot[];
   assignedTo?: string; // Team member ID
   created_at?: string; // ISO timestamp for sorting
+  updated_at?: string; // ISO timestamp for last update
   creation_method?: 'manual' | 'ai_generated'; // JD creation method
   creation_stage?: string; // Stage where draft JD was left off (create, skills, assessment, review)
   coding_required?: boolean; // Whether JD requires coding assessment
