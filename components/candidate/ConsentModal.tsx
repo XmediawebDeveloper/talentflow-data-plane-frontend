@@ -16,7 +16,9 @@ import {
   RefreshCcw,
   Coffee,
   HelpCircle,
-  Check
+  Check,
+  Users,
+  ArrowRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AssessmentInfo } from '@/lib/services/candidateService';
@@ -101,179 +103,199 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header - Full Width */}
-      <header className="w-full bg-gray-900 border-b border-gray-800">
-        <div className="max-w-5xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Image
-                src="/talent_flow_logo.png"
-                alt="TalentFlow"
-                width={140}
-                height={36}
-                className="h-9 w-auto brightness-0 invert"
-                priority
-                unoptimized
-              />
-            </div>
-            <a
-              href="mailto:support@talentflow.com"
-              className="flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors"
-            >
-              <HelpCircle className="w-4 h-4" />
-              Need help?
-            </a>
-          </div>
-        </div>
-      </header>
-
-      {/* Progress Stepper - Full Width */}
-      <div className="w-full bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-5xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-center gap-2">
-            {steps.map((step, index) => (
-              <div key={index} className="flex items-center">
-                <div className="flex items-center gap-2">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
-                    step.completed
-                      ? 'bg-green-500 text-white'
-                      : step.active
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-300 text-gray-600'
-                  }`}>
-                    {step.completed ? <Check className="w-4 h-4" /> : index + 1}
-                  </div>
-                  <span className={`text-sm font-medium hidden sm:block ${
-                    step.active ? 'text-gray-900' : step.completed ? 'text-green-600' : 'text-gray-500'
-                  }`}>
-                    {step.label}
-                  </span>
-                </div>
-                {index < steps.length - 1 && (
-                  <div className={`w-8 sm:w-16 h-0.5 mx-2 ${
-                    step.completed ? 'bg-green-500' : 'bg-gray-300'
-                  }`} />
-                )}
+      {/* Sticky Header Container */}
+      <div className="sticky top-0 z-50">
+        {/* Header - Full Width */}
+        <header className="w-full bg-white border-b border-gray-200">
+          <div className="w-full px-6 lg:px-12 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Image
+                  src="/talent_flow_logo.png"
+                  alt="TalentFlow"
+                  width={160}
+                  height={40}
+                  className="h-10 w-auto"
+                  priority
+                  unoptimized
+                />
               </div>
-            ))}
+              <a
+                href="mailto:support@talentflow.com"
+                className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <HelpCircle className="w-4 h-4" />
+                Need help?
+              </a>
+            </div>
+          </div>
+        </header>
+
+        {/* Progress Stepper - Full Width */}
+        <div className="w-full bg-white border-b border-gray-200">
+          <div className="w-full px-6 lg:px-12 py-4">
+            <div className="flex items-center justify-center gap-2">
+              {steps.map((step, index) => (
+                <div key={index} className="flex items-center">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
+                      step.completed
+                        ? 'bg-green-500 text-white'
+                        : step.active
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-300 text-gray-600'
+                    }`}>
+                      {step.completed ? <Check className="w-4 h-4" /> : index + 1}
+                    </div>
+                    <span className={`text-sm font-medium hidden sm:block ${
+                      step.active ? 'text-gray-900' : step.completed ? 'text-green-600' : 'text-gray-500'
+                    }`}>
+                      {step.label}
+                    </span>
+                  </div>
+                  {index < steps.length - 1 && (
+                    <div className={`w-8 sm:w-16 h-0.5 mx-2 ${
+                      step.completed ? 'bg-green-500' : 'bg-gray-300'
+                    }`} />
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-8">
-        {/* Main Card Container */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          {/* Welcome Header */}
-          <div className="text-center py-8 px-6 border-b border-gray-100">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome, {assessmentInfo.candidate_name}!</h1>
-            <p className="text-gray-600">Please review and accept the terms before starting your assessment</p>
-          </div>
+      {/* Hero Section */}
+      <div className="w-full bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 py-10">
+        <div className="w-full px-6 lg:px-12 text-center">
+          <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2">Welcome, {assessmentInfo.candidate_name}!</h1>
+          <p className="text-blue-100 text-lg">
+            Please review and accept the terms before starting your assessment
+          </p>
+        </div>
+      </div>
 
-          {/* Assessment Info Banner */}
-          <div className="bg-purple-50 border-b border-purple-100 px-6 py-5">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center border border-purple-200">
-                  <FileText className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">{assessmentInfo.assessment_title}</h2>
-                  <p className="text-purple-600 text-sm">{assessmentInfo.jd_title}</p>
-                </div>
+      {/* Assessment Info Section */}
+      <div className="w-full bg-white border-b border-gray-200 py-6">
+        <div className="w-full px-6 lg:px-12">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center">
+                <FileText className="w-7 h-7 text-blue-600" />
               </div>
-              <div className="flex items-center gap-3">
-                <span className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-purple-200">
-                  <Clock className="w-4 h-4 text-purple-600" />
-                  <span className="font-semibold text-purple-700 text-sm">{assessmentInfo.duration_minutes} minutes</span>
-                </span>
-                <span className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-purple-200">
-                  <Shield className="w-4 h-4 text-purple-600" />
-                  <span className="font-semibold text-purple-700 text-sm">Proctored</span>
-                </span>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">{assessmentInfo.assessment_title}</h2>
+                <p className="text-blue-600">{assessmentInfo.jd_title}</p>
               </div>
             </div>
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+                <Clock className="w-5 h-5 text-blue-600" />
+                <span className="font-semibold text-blue-700">{assessmentInfo.duration_minutes} minutes</span>
+              </span>
+              <span className="flex items-center gap-2 bg-purple-50 px-4 py-2 rounded-lg border border-purple-200">
+                <Shield className="w-5 h-5 text-purple-600" />
+                <span className="font-semibold text-purple-700">Proctored</span>
+              </span>
+            </div>
           </div>
+        </div>
+      </div>
 
-          {/* Content Section */}
-          <div className="p-6">
-            {/* Content Grid */}
-            <div className="grid lg:grid-cols-2 gap-4 mb-6">
-              {/* Important Instructions Card */}
-              <div className="bg-amber-50 rounded-xl p-5 border border-amber-200">
-                <div className="flex items-center gap-2 mb-4">
-                  <AlertCircle className="w-5 h-5 text-amber-600" />
-                  <h3 className="font-semibold text-gray-900">Important Instructions</h3>
+      {/* Main Content - Full Width */}
+      <main className="flex-1 w-full">
+        {/* Important Instructions & Proctoring Section */}
+        <div className="w-full bg-white border-b border-gray-200 py-8">
+          <div className="w-full px-6 lg:px-12">
+            <div className="grid lg:grid-cols-2 gap-8">
+              {/* Important Instructions */}
+              <div className="bg-amber-50 rounded-xl p-6 border border-amber-200">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                    <AlertCircle className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900 text-lg">Important Instructions</h3>
                 </div>
-                <ul className="space-y-3">
+                <ul className="space-y-4">
                   {importantInstructions.map((instruction, index) => (
                     <li key={index} className="flex items-start gap-3">
-                      <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <instruction.icon className="w-3.5 h-3.5 text-amber-600" />
+                      <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <instruction.icon className="w-4 h-4 text-amber-600" />
                       </div>
-                      <span className="text-sm text-gray-700 pt-1">{instruction.text}</span>
+                      <span className="text-gray-700 pt-1">{instruction.text}</span>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              {/* AI Proctoring Card */}
-              <div className="bg-purple-50 rounded-xl p-5 border border-purple-200">
-                <div className="flex items-center gap-2 mb-4">
-                  <Monitor className="w-5 h-5 text-purple-600" />
-                  <h3 className="font-semibold text-gray-900">AI Proctoring & Monitoring</h3>
+              {/* AI Proctoring */}
+              <div className="bg-purple-50 rounded-xl p-6 border border-purple-200">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <Monitor className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900 text-lg">AI Proctoring & Monitoring</h3>
                 </div>
-                <p className="text-xs text-gray-500 mb-3">
+                <p className="text-sm text-gray-600 mb-4">
                   This assessment uses AI-powered proctoring to ensure fairness:
                 </p>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {proctoringFeatures.map((feature, index) => (
                     <div key={index} className="flex items-start gap-3">
-                      <div className="w-7 h-7 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <feature.icon className="w-3.5 h-3.5 text-purple-600" />
+                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <feature.icon className="w-4 h-4 text-purple-600" />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-900 font-medium">{feature.label}</p>
-                        <p className="text-xs text-gray-500">{feature.description}</p>
+                        <p className="text-gray-900 font-medium">{feature.label}</p>
+                        <p className="text-sm text-gray-500">{feature.description}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* Terms & Conditions Card */}
-            <div className="bg-gray-50 rounded-xl p-5 border border-gray-200 mb-6">
-              <div className="flex items-center gap-2 mb-3">
+        {/* Terms & Conditions Section */}
+        <div className="w-full bg-gray-50 border-b border-gray-200 py-8">
+          <div className="w-full px-6 lg:px-12">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
                 <FileText className="w-5 h-5 text-gray-600" />
-                <h3 className="font-semibold text-gray-900">Terms & Conditions</h3>
               </div>
-              <div className="bg-white rounded-lg p-4 max-h-40 overflow-y-auto border border-gray-200">
-                <div className="space-y-4">
-                  {termsAndConditions.map((term, index) => (
-                    <div key={index}>
-                      <p className="font-medium text-gray-900 text-sm">{term.title}</p>
-                      <p className="text-sm text-gray-600 mt-1">{term.content}</p>
-                    </div>
-                  ))}
-                </div>
+              <h3 className="font-semibold text-gray-900 text-lg">Terms & Conditions</h3>
+            </div>
+            <div className="bg-white rounded-xl p-6 max-h-60 overflow-y-auto border border-gray-200">
+              <div className="space-y-5">
+                {termsAndConditions.map((term, index) => (
+                  <div key={index}>
+                    <p className="font-semibold text-gray-900">{term.title}</p>
+                    <p className="text-gray-600 mt-1">{term.content}</p>
+                  </div>
+                ))}
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* Consent Checkboxes */}
-            <div className="space-y-3 mb-6">
+        {/* Consent Checkboxes Section */}
+        <div className="w-full bg-white border-b border-gray-200 py-8">
+          <div className="w-full px-6 lg:px-12">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-6">Your Consent</h3>
+            <div className="space-y-4">
               {/* Terms Checkbox */}
               <label
-                className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                className={`flex items-start gap-4 p-5 rounded-xl border-2 cursor-pointer transition-all ${
                   agreedTerms
                     ? 'border-green-500 bg-green-50'
                     : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                 }`}
               >
-                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
+                <div className={`w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
                   agreedTerms ? 'bg-green-500 border-green-500' : 'border-gray-400'
                 }`}>
-                  {agreedTerms && <Check className="w-3 h-3 text-white" />}
+                  {agreedTerms && <Check className="w-4 h-4 text-white" />}
                 </div>
                 <input
                   type="checkbox"
@@ -281,25 +303,25 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                   onChange={(e) => setAgreedTerms(e.target.checked)}
                   className="sr-only"
                 />
-                <span className="text-sm">
+                <span>
                   <strong className="text-gray-900">I have read and agree to the Terms & Conditions</strong>
                   <br />
-                  <span className="text-gray-500 text-xs">I understand that violation of these terms may result in disqualification.</span>
+                  <span className="text-gray-500 text-sm">I understand that violation of these terms may result in disqualification.</span>
                 </span>
               </label>
 
               {/* Proctoring Checkbox */}
               <label
-                className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                className={`flex items-start gap-4 p-5 rounded-xl border-2 cursor-pointer transition-all ${
                   agreedProctoring
                     ? 'border-green-500 bg-green-50'
                     : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                 }`}
               >
-                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
+                <div className={`w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
                   agreedProctoring ? 'bg-green-500 border-green-500' : 'border-gray-400'
                 }`}>
-                  {agreedProctoring && <Check className="w-3 h-3 text-white" />}
+                  {agreedProctoring && <Check className="w-4 h-4 text-white" />}
                 </div>
                 <input
                   type="checkbox"
@@ -307,20 +329,24 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                   onChange={(e) => setAgreedProctoring(e.target.checked)}
                   className="sr-only"
                 />
-                <span className="text-sm">
+                <span>
                   <strong className="text-gray-900">I consent to AI proctoring and monitoring</strong>
                   <br />
-                  <span className="text-gray-500 text-xs">I understand that my activity will be tracked to ensure test integrity.</span>
+                  <span className="text-gray-500 text-sm">I understand that my activity will be tracked to ensure test integrity.</span>
                 </span>
               </label>
             </div>
+          </div>
+        </div>
 
-            {/* Action Footer */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-gray-200">
+        {/* Action Footer */}
+        <div className="w-full bg-white py-8">
+          <div className="w-full px-6 lg:px-12">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
               <Button
                 variant="outline"
                 onClick={onDecline}
-                className="px-6 border-gray-300 text-gray-700 hover:bg-gray-100"
+                className="px-8 py-5 border-gray-300 text-gray-700 hover:bg-gray-100"
               >
                 Cancel
               </Button>
@@ -328,9 +354,9 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                 onClick={handleAccept}
                 disabled={!canAccept || isSubmitting}
                 size="lg"
-                className={`px-8 py-5 ${
+                className={`px-10 py-6 text-lg font-semibold rounded-xl ${
                   canAccept
-                    ? 'bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700'
+                    ? 'bg-blue-600 hover:bg-blue-700'
                     : 'bg-gray-300 cursor-not-allowed'
                 } text-white`}
               >
@@ -344,8 +370,8 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5" />
                     I Agree - Continue
+                    <ArrowRight className="w-5 h-5" />
                   </span>
                 )}
               </Button>
@@ -355,10 +381,10 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
       </main>
 
       {/* Footer */}
-      <footer className="w-full py-4 text-center border-t border-gray-200">
-        <p className="text-sm text-gray-500">
+      <footer className="w-full py-6 text-center bg-white border-t border-gray-200">
+        <p className="text-gray-500">
           Having trouble? Contact us at{' '}
-          <a href="mailto:support@talentflow.com" className="text-purple-600 hover:underline">
+          <a href="mailto:support@talentflow.com" className="text-blue-600 hover:underline font-medium">
             support@talentflow.com
           </a>
         </p>

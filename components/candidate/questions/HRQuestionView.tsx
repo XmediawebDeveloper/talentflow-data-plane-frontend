@@ -34,14 +34,12 @@ export function HRQuestionView({ question, answer, onAnswerChange }: HRQuestionV
           value={answer.text_response || ''}
           onChange={(e) => onAnswerChange({ ...answer, text_response: e.target.value })}
           placeholder="Type your response here... Be specific and provide examples where relevant."
+          maxLength={3000}
           className="w-full h-64 p-4 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-200 resize-none"
         />
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-end mt-2">
           <p className="text-sm text-gray-500">
-            {(answer.text_response || '').split(/\s+/).filter(Boolean).length} words
-          </p>
-          <p className="text-sm text-gray-500">
-            Tip: Use the STAR method (Situation, Task, Action, Result)
+            {3000 - (answer.text_response || '').length} characters remaining
           </p>
         </div>
       </div>

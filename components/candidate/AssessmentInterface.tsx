@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, RefObject } from 'react';
+import Image from 'next/image';
 import {
   Clock,
   ChevronRight,
@@ -13,7 +14,10 @@ import {
   Users,
   Camera,
   Mic,
-  ShieldAlert
+  ShieldAlert,
+  X,
+  Check,
+  HelpCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -325,6 +329,14 @@ export function AssessmentInterface({
   // Determine if proctoring devices are disabled
   const isDeviceDisabled = !isCameraActive || !isMicrophoneActive;
 
+  // Progress steps
+  const progressSteps = [
+    { label: 'Terms & Consent', active: false, completed: true },
+    { label: 'Assessment Details', active: false, completed: true },
+    { label: 'System Check', active: false, completed: true },
+    { label: 'Assessment', active: true, completed: false }
+  ];
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Proctoring Device Disabled Blocker Overlay */}
@@ -398,24 +410,117 @@ export function AssessmentInterface({
         </div>
       )}
 
-      {/* Top Bar */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo & Title */}
-          <div className="flex items-center gap-4">
-            <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">TF</span>
+      {/* Sticky Header Container */}
+      <div className="sticky top-0 z-50">
+        {/* Main Header */}
+        <header className="bg-white border-b border-gray-200 px-4 py-3">
+          <div className="w-full px-2 lg:px-6 flex items-center justify-between">
+            {/* Logo & Title */}
+            <div className="flex items-center gap-4">
+              <Image
+                src="/talent_flow_logo.png"
+                alt="TalentFlow"
+                width={120}
+                height={30}
+                className="h-8 w-auto"
+                priority
+                unoptimized
+              />
+              <div className="hidden sm:block">
+                <h1 className="font-semibold text-gray-800">{assessmentInfo.assessment_title}</h1>
+                <p className="text-sm text-gray-500">{assessmentInfo.candidate_name}</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-semibold text-gray-800">{assessmentInfo.assessment_title}</h1>
-              <p className="text-sm text-gray-500">{assessmentInfo.candidate_name}</p>
+
+            {/* Right Side - Timer, Progress, Camera */}
+            <div className="flex items-center gap-4">
+              {/* Global Assessment Timer */}
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
+                globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+              }`}>
+                <Clock className="w-4 h-4" />
+                <div className="flex flex-col items-center">
+                  <span className="font-mono font-bold text-lg">{formatTime(globalTimeRemaining)}</span>
+                  <span className="text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
+                </div>
+              </div>
+
+              {/* Question Timer */}
+              {timeRemaining !== null && (
+                <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+                  timeRemaining < 30 ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-700'
+                }`}>
+                  <span className="text-xs text-gray-500">Q:</span>
+                  <span className="font-mono font-medium text-sm">{formatTime(timeRemaining)}</span>
+                </div>
+              )}
+
+              {/* Overall Progress */}
+              <div className="hidden sm:flex items-center gap-2">
+                <span className="text-sm text-gray-500">
+                  {currentQuestion.question_number} / {currentQuestion.total_questions}
+                </span>
+                <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gray-800 transition-all duration-300"
+                    style={{ width: `${(currentQuestion.question_number / currentQuestion.total_questions) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Camera Preview */}
+              <div className="w-20 h-14 bg-gray-900 rounded-lg overflow-hidden relative">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              </div>
             </div>
           </div>
+        </header>
 
-          {/* Progress */}
-          <div className="flex items-center gap-6">
-            {/* Round Progress */}
-            <div className="hidden md:flex items-center gap-2">
+        {/* Progress Stepper */}
+        <div className="w-full bg-white border-b border-gray-200">
+          <div className="w-full px-4 lg:px-8 py-3">
+            <div className="flex items-center justify-center gap-2">
+              {progressSteps.map((step, index) => (
+                <div key={index} className="flex items-center">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
+                      step.completed
+                        ? 'bg-green-500 text-white'
+                        : step.active
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-300 text-gray-600'
+                    }`}>
+                      {step.completed ? <Check className="w-3 h-3" /> : index + 1}
+                    </div>
+                    <span className={`text-xs font-medium hidden md:block ${
+                      step.active ? 'text-gray-900' : step.completed ? 'text-green-600' : 'text-gray-500'
+                    }`}>
+                      {step.label}
+                    </span>
+                  </div>
+                  {index < progressSteps.length - 1 && (
+                    <div className={`w-6 sm:w-12 h-0.5 mx-2 ${
+                      step.completed ? 'bg-green-500' : 'bg-gray-300'
+                    }`} />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Round Progress Bar */}
+        <div className="w-full bg-gray-50 border-b border-gray-200">
+          <div className="w-full px-4 lg:px-8 py-2">
+            <div className="flex items-center justify-center gap-3">
               {rounds.map((round, idx) => {
                 const Icon = getRoundIcon(round.round_type);
                 const isActive = round.round_type === currentQuestion.round_type;
@@ -423,7 +528,7 @@ export function AssessmentInterface({
                   <div
                     key={`${round.round_type}-${idx}`}
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
-                      isActive ? 'bg-gray-100' : ''
+                      isActive ? 'bg-white shadow-sm border border-gray-200' : ''
                     }`}
                   >
                     <div className={`w-6 h-6 rounded ${getRoundColor(round.round_type)} flex items-center justify-center`}>
@@ -436,56 +541,9 @@ export function AssessmentInterface({
                 );
               })}
             </div>
-
-            {/* Global Assessment Timer */}
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-              globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
-              globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
-            }`}>
-              <Clock className="w-4 h-4" />
-              <div className="flex flex-col items-center">
-                <span className="font-mono font-bold text-lg">{formatTime(globalTimeRemaining)}</span>
-                <span className="text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
-              </div>
-            </div>
-
-            {/* Question Timer */}
-            {timeRemaining !== null && (
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
-                timeRemaining < 30 ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-700'
-              }`}>
-                <span className="text-xs text-gray-500">Q:</span>
-                <span className="font-mono font-medium text-sm">{formatTime(timeRemaining)}</span>
-              </div>
-            )}
-
-            {/* Overall Progress */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">
-                {currentQuestion.question_number} / {currentQuestion.total_questions}
-              </span>
-              <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gray-800 transition-all duration-300"
-                  style={{ width: `${(currentQuestion.question_number / currentQuestion.total_questions) * 100}%` }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Camera Preview */}
-          <div className="w-24 h-16 bg-gray-900 rounded-lg overflow-hidden relative">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute bottom-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
@@ -526,10 +584,7 @@ export function AssessmentInterface({
                   </div>
                   <div>
                     <p className="font-medium text-gray-800">
-                      {currentQuestion.round_name} - Question {currentQuestion.round_progress.current}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {currentQuestion.points} points | {currentQuestion.difficulty}
+                      {currentQuestion.round_name}
                     </p>
                   </div>
                 </div>
@@ -650,7 +705,16 @@ export function AssessmentInterface({
       {/* Complete Confirmation Modal */}
       {showCompleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowCompleteConfirm(false)}
+              className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100 transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+
             <div className="flex items-center gap-4 mb-4">
               <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
                 <CheckCircle className="w-6 h-6 text-green-600" />

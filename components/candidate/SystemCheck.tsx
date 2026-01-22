@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import {
   Camera,
   Mic,
@@ -11,7 +12,9 @@ import {
   AlertCircle,
   RefreshCw,
   ArrowLeft,
-  ArrowRight
+  ArrowRight,
+  Check,
+  HelpCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { candidateService, SystemCheckResult } from '@/lib/services/candidateService';
@@ -254,37 +257,96 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     }
   };
 
+  // Progress steps
+  const steps = [
+    { label: 'Terms & Consent', active: false, completed: true },
+    { label: 'Assessment Details', active: false, completed: true },
+    { label: 'System Check', active: true, completed: false },
+    { label: 'Assessment', active: false, completed: false }
+  ];
+
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="w-full bg-gray-900 border-b border-gray-800 sticky top-0 z-10">
-        <div className="w-[70%] mx-auto py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">TF</span>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Sticky Header Container */}
+      <div className="sticky top-0 z-50">
+        {/* Header */}
+        <header className="w-full bg-white border-b border-gray-200">
+          <div className="w-full px-6 lg:px-12 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Image
+                  src="/talent_flow_logo.png"
+                  alt="TalentFlow"
+                  width={160}
+                  height={40}
+                  className="h-10 w-auto"
+                  priority
+                  unoptimized
+                />
+              </div>
+              <a
+                href="mailto:support@talentflow.com"
+                className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <HelpCircle className="w-4 h-4" />
+                Need help?
+              </a>
             </div>
-            <span className="text-xl font-semibold text-white">TalentFlow</span>
+          </div>
+        </header>
+
+        {/* Progress Stepper */}
+        <div className="w-full bg-white border-b border-gray-200">
+          <div className="w-full px-6 lg:px-12 py-4">
+            <div className="flex items-center justify-center gap-2">
+              {steps.map((step, index) => (
+                <div key={index} className="flex items-center">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
+                      step.completed
+                        ? 'bg-green-500 text-white'
+                        : step.active
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-300 text-gray-600'
+                    }`}>
+                      {step.completed ? <Check className="w-4 h-4" /> : index + 1}
+                    </div>
+                    <span className={`text-sm font-medium hidden sm:block ${
+                      step.active ? 'text-gray-900' : step.completed ? 'text-green-600' : 'text-gray-500'
+                    }`}>
+                      {step.label}
+                    </span>
+                  </div>
+                  {index < steps.length - 1 && (
+                    <div className={`w-8 sm:w-16 h-0.5 mx-2 ${
+                      step.completed ? 'bg-green-500' : 'bg-gray-300'
+                    }`} />
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </header>
+      </div>
 
-      {/* Main Content - 70% Width */}
-      <main className="w-[70%] mx-auto py-8">
-        {/* Title Section */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">System Check</h1>
-          <p className="text-gray-600">
+      {/* Hero Section */}
+      <div className="w-full bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 py-10">
+        <div className="w-full px-6 lg:px-12 text-center">
+          <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2">System Check</h1>
+          <p className="text-blue-100 text-lg">
             Let's make sure your system is ready for the assessment
           </p>
         </div>
+      </div>
 
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-
-          <div className="grid md:grid-cols-2 gap-6 p-8">
+      {/* Main Content */}
+      <main className="flex-1 w-full bg-white">
+        <div className="w-full px-6 lg:px-12 py-10">
+          <div className="grid lg:grid-cols-2 gap-10">
             {/* Camera Preview */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800">Camera Preview</h3>
-              <div className="aspect-video bg-gray-900 rounded-xl overflow-hidden relative">
+            <div>
+              <h3 className="font-semibold text-gray-900 text-xl mb-4">Camera Preview</h3>
+              <div className="aspect-video bg-gray-900 rounded-2xl overflow-hidden relative">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -294,19 +356,18 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                 />
                 {cameraCheck.status !== 'success' && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Camera className="w-16 h-16 text-gray-600" />
+                    <Camera className="w-20 h-20 text-gray-600" />
                   </div>
                 )}
               </div>
             </div>
 
             {/* Checks */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-gray-800">System Requirements</h3>
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900 text-xl">System Requirements</h3>
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={runAllChecks}
                   disabled={isChecking}
                 >
@@ -315,13 +376,15 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                 </Button>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {/* Browser */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <Monitor className="w-5 h-5 text-gray-600" />
+                <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                      <Monitor className="w-6 h-6 text-blue-600" />
+                    </div>
                     <div>
-                      <p className="font-medium text-gray-800">Browser</p>
+                      <p className="font-semibold text-gray-900">Browser</p>
                       <p className="text-sm text-gray-500">{browserCheck.message}</p>
                     </div>
                   </div>
@@ -329,11 +392,13 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                 </div>
 
                 {/* Internet */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <Wifi className="w-5 h-5 text-gray-600" />
+                <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                      <Wifi className="w-6 h-6 text-green-600" />
+                    </div>
                     <div>
-                      <p className="font-medium text-gray-800">Internet Connection</p>
+                      <p className="font-semibold text-gray-900">Internet Connection</p>
                       <p className="text-sm text-gray-500">{internetCheck.message}</p>
                     </div>
                   </div>
@@ -341,11 +406,13 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                 </div>
 
                 {/* Camera */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <Camera className="w-5 h-5 text-gray-600" />
+                <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                      <Camera className="w-6 h-6 text-purple-600" />
+                    </div>
                     <div>
-                      <p className="font-medium text-gray-800">Camera</p>
+                      <p className="font-semibold text-gray-900">Camera</p>
                       <p className="text-sm text-gray-500">{cameraCheck.message}</p>
                     </div>
                   </div>
@@ -353,11 +420,13 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                 </div>
 
                 {/* Microphone */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <Mic className="w-5 h-5 text-gray-600" />
+                <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+                      <Mic className="w-6 h-6 text-amber-600" />
+                    </div>
                     <div>
-                      <p className="font-medium text-gray-800">Microphone</p>
+                      <p className="font-semibold text-gray-900">Microphone</p>
                       <p className="text-sm text-gray-500">{micCheck.message}</p>
                     </div>
                   </div>
@@ -365,11 +434,13 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                 </div>
 
                 {/* Screen Share */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <Monitor className="w-5 h-5 text-gray-600" />
+                <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
+                      <Monitor className="w-6 h-6 text-indigo-600" />
+                    </div>
                     <div>
-                      <p className="font-medium text-gray-800">Screen Sharing</p>
+                      <p className="font-semibold text-gray-900">Screen Sharing</p>
                       <p className="text-sm text-gray-500">{screenCheck.message}</p>
                     </div>
                   </div>
@@ -379,39 +450,42 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
               {/* Status Message */}
               {allChecksComplete && (
-                <div className="p-4 bg-green-50 rounded-xl flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                  <p className="text-green-700 font-medium">All checks passed! You're ready to start.</p>
+                <div className="mt-6 p-5 bg-green-50 rounded-xl flex items-center gap-4">
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                  <p className="text-green-700 font-semibold">All checks passed! You're ready to start.</p>
                 </div>
               )}
 
               {!allChecksComplete && cameraCheck.status !== 'pending' && (
-                <div className="p-4 bg-amber-50 rounded-xl flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-600" />
-                  <p className="text-amber-700">Some checks failed. Please resolve the issues above.</p>
+                <div className="mt-6 p-5 bg-amber-50 rounded-xl flex items-center gap-4">
+                  <AlertCircle className="w-6 h-6 text-amber-600" />
+                  <p className="text-amber-700 font-medium">Some checks failed. Please resolve the issues above.</p>
                 </div>
               )}
             </div>
           </div>
-
-          {/* Actions */}
-          <div className="px-8 py-6 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-            <Button variant="ghost" onClick={onBack}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Go Back
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleProceed}
-              disabled={!allChecksComplete || isSubmitting}
-              loading={isSubmitting}
-            >
-              Start Assessment
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </div>
         </div>
       </main>
+
+      {/* Actions Footer */}
+      <div className="w-full bg-gray-50 border-t border-gray-200 py-6">
+        <div className="w-full px-6 lg:px-12 flex items-center justify-between">
+          <Button variant="ghost" onClick={onBack} className="text-gray-600">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Go Back
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleProceed}
+            disabled={!allChecksComplete || isSubmitting}
+            loading={isSubmitting}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-6 text-lg font-semibold rounded-xl"
+          >
+            Start Assessment
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
