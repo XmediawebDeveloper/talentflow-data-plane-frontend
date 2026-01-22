@@ -1398,7 +1398,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience: experienceValue || (isEditMode ? extractedData.experience : ''),
         // Use API's mandatory flag for experience
         experienceRequired: params.experience_mandatory || false,
-        industryType: industryValue || (isEditMode ? extractedData.industryType : ''),
+        industryType: industryValue, // Only from extraction, no fallback - user must select if not extracted
         // Use API's mandatory flag for industry
         industryTypeRequired: params.industry_mandatory || false,
         allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
@@ -1816,6 +1816,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       industryType: extractedData.industryType,
       industryTypeTrimmed: extractedData.industryType?.trim() || '',
     });
+
+    // DEFENSIVE CHECK: Early return if critical fields are empty
+    // This prevents any edge case where button might be clickable
+    const earlyCheckFailed = [];
+    if (!extractedData.education?.trim()) earlyCheckFailed.push('Education');
+    if (!extractedData.experience?.trim()) earlyCheckFailed.push('Experience');
+    if (!extractedData.industryType?.trim()) earlyCheckFailed.push('Industry Type');
+
+    if (earlyCheckFailed.length > 0) {
+      console.log('[TalentFlow] BLOCKED: Missing required fields:', earlyCheckFailed);
+      toast.error({
+        title: 'Missing Required Fields',
+        description: `Please select: ${earlyCheckFailed.join(', ')}`,
+      });
+      return;
+    }
 
     // Validate mandatory fields
     const missingFields: string[] = [];
@@ -2736,7 +2752,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         };
 
         const experienceValue = mapExpToLevel(editingJD.experience_min, editingJD.experience_max);
-        const industryValue = editingJD.industry_type || '';
+        // Industry type should only come from extraction, not pre-filled from saved data
+        // User must select it manually or it must come from extraction API
+        const industryValue = '';
 
         console.log('[DEBUG] Loading editingJD data:');
         console.log('[DEBUG] - experience_min from API:', editingJD.experience_min);
