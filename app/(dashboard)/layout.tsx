@@ -8,6 +8,7 @@ import Header from '@/components/Header';
 import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
 import { toast } from 'sonner';
 import { scoringService } from '@/lib/services/scoringService';
+import { QuotaProvider } from '@/contexts/QuotaContext';
 
 // Storage key for scoring batch persistence
 const SCORING_BATCH_STORAGE_KEY = 'talentflow_scoring_batch';
@@ -166,24 +167,26 @@ export default function DashboardLayout({
   console.log('[DASHBOARD] Authenticated, rendering dashboard');
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar user={user || undefined} tenant={tenant || undefined} />
+    <QuotaProvider>
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar user={user || undefined} tenant={tenant || undefined} />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header
-          user={user}
-          tenant={tenant}
-          onLogout={logout}
-          onOpenSettings={() => router.push('/settings')}
-        />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header
+            user={user}
+            tenant={tenant}
+            onLogout={logout}
+            onOpenSettings={() => router.push('/settings')}
+          />
 
-        <div className="flex-1 overflow-y-auto">
-          {children}
+          <div className="flex-1 overflow-y-auto">
+            {children}
+          </div>
         </div>
-      </div>
 
-      {/* Global subscription inactive modal - shown on all dashboard pages */}
-      <SubscriptionInactiveModal />
-    </div>
+        {/* Global subscription inactive modal - shown on all dashboard pages */}
+        <SubscriptionInactiveModal />
+      </div>
+    </QuotaProvider>
   );
 }

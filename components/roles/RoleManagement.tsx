@@ -166,12 +166,114 @@ export default function RoleManagement() {
 
   const getAuditActionLabel = (action: string) => {
     const labels: Record<string, string> = {
+      role_create: 'Role Created',
       role_created: 'Role Created',
+      role_update: 'Role Updated',
       role_updated: 'Role Updated',
+      role_delete: 'Role Deleted',
       role_deleted: 'Role Deleted',
+      user_role_change: 'User Roles Changed',
       user_roles_updated: 'User Roles Changed',
+      permission_update: 'Permission Updated',
     };
-    return labels[action] || action;
+    return labels[action] || action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  const formatAuditChanges = (action: string, changes: Record<string, unknown> | undefined) => {
+    if (!changes) return null;
+
+    // For role_create - show role info
+    if (action === 'role_create' || action === 'role_created') {
+      const roleName = changes.role_name as string;
+      const permCount = (changes.permissions as number[])?.length || 0;
+      return (
+        <div className="space-y-1">
+          <div className="text-sm text-gray-700">
+            <span className="font-medium">Role:</span> {roleName}
+          </div>
+          {permCount > 0 && (
+            <div className="text-xs text-gray-500">
+              {permCount} permission{permCount !== 1 ? 's' : ''} assigned
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // For role_delete - show deleted role info
+    if (action === 'role_delete' || action === 'role_deleted') {
+      const roleName = changes.role_name as string;
+      const roleCode = changes.role_code as string;
+      return (
+        <div className="space-y-1">
+          <div className="text-sm text-gray-700">
+            <span className="font-medium">Deleted:</span> {roleName}
+          </div>
+          {roleCode && (
+            <div className="text-xs text-gray-500">Code: {roleCode}</div>
+          )}
+        </div>
+      );
+    }
+
+    // For role_update - show what changed
+    if (action === 'role_update' || action === 'role_updated') {
+      const changesData = changes.changes as Record<string, { from: unknown; to: unknown }> | undefined;
+      if (!changesData) {
+        return <span className="text-sm text-gray-500">Settings updated</span>;
+      }
+
+      return (
+        <div className="space-y-1">
+          {Object.entries(changesData).map(([field, change]) => {
+            if (field === 'permissions') {
+              const fromCount = Array.isArray(change.from) ? change.from.length : 0;
+              const toCount = Array.isArray(change.to) ? change.to.length : 0;
+              return (
+                <div key={field} className="text-xs text-gray-600">
+                  <span className="font-medium">Permissions:</span> {fromCount} → {toCount}
+                </div>
+              );
+            }
+            return (
+              <div key={field} className="text-xs text-gray-600">
+                <span className="font-medium capitalize">{field.replace(/_/g, ' ')}:</span>{' '}
+                <span className="text-gray-400">{String(change.from || '—')}</span>
+                <span className="mx-1">→</span>
+                <span className="text-gray-700">{String(change.to || '—')}</span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // For user_role_change - show role changes
+    if (action === 'user_role_change' || action === 'user_roles_updated') {
+      const oldRoles = changes.old_roles as string[] | undefined;
+      const newRoles = changes.new_roles as string[] | undefined;
+      return (
+        <div className="space-y-1">
+          {oldRoles && oldRoles.length > 0 && (
+            <div className="text-xs text-gray-500">
+              <span className="font-medium">From:</span> {oldRoles.join(', ') || 'None'}
+            </div>
+          )}
+          {newRoles && (
+            <div className="text-xs text-gray-700">
+              <span className="font-medium">To:</span> {newRoles.join(', ') || 'None'}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Default: show summary
+    return (
+      <span className="text-xs text-gray-500">
+        {Object.keys(changes).length} field{Object.keys(changes).length !== 1 ? 's' : ''} modified
+      </span>
+    );
   };
 
   return (
@@ -444,11 +546,7 @@ export default function RoleManagement() {
                     <div className="text-sm text-gray-600">{formatDate(log.performed_at)}</div>
                   </td>
                   <td className="px-6 py-4">
-                    {log.changes && (
-                      <pre className="text-xs text-gray-500 max-w-xs truncate">
-                        {JSON.stringify(log.changes, null, 2)}
-                      </pre>
-                    )}
+                    {formatAuditChanges(log.action, log.changes)}
                   </td>
                 </tr>
               ))}

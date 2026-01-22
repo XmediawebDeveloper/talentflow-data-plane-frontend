@@ -51,7 +51,8 @@ interface DisplayPlan {
   features: string[];
 }
 
-const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://localhost:8001/api/v1';
+// Use backend proxy instead of direct Admin API calls
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 // Icon mapping based on plan name
 const getIconForPlan = (planName: string): typeof Users | typeof Building2 | typeof Zap => {
@@ -86,11 +87,12 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [trialDays, setTrialDays] = useState<number>(14);
 
-  // Fetch trial days from API
+  // Fetch trial days from backend proxy (which calls Admin API)
   useEffect(() => {
     const fetchTrialDays = async () => {
       try {
-        const response = await fetch(`${ADMIN_API_URL}/public/settings/free-trial`);
+        // Use backend proxy endpoint for free trial settings
+        const response = await fetch(`${API_URL}/subscription/public/free-trial`);
         if (response.ok) {
           const result = await response.json();
           const days = result?.data?.trial_days || 14;
@@ -103,15 +105,15 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     fetchTrialDays();
   }, []);
 
-  // Fetch plans from API
+  // Fetch plans from backend proxy (which calls Admin API)
   useEffect(() => {
     const fetchPlans = async () => {
       try {
         setIsLoading(true);
         setError(null);
 
-        // Use public endpoint that doesn't require authentication
-        const response = await fetch(`${ADMIN_API_URL}/subscription/public`);
+        // Use backend proxy endpoint for public plans
+        const response = await fetch(`${API_URL}/subscription/public/plans`);
 
         if (!response.ok) {
           throw new Error(`Failed to fetch plans: ${response.status}`);

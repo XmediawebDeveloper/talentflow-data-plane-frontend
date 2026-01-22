@@ -3,9 +3,9 @@ import { useState, useEffect } from 'react';
 import { User as UserType } from '@/lib/types/tenant';
 import NotificationCenter from './NotificationCenter';
 import QuickActions from './QuickActions';
-import api from '@/lib/services/api';
 // FIX-010: Import Tooltip for icon buttons
 import { Tooltip } from '@/components/ui/tooltip';
+import { useQuota } from '@/contexts/QuotaContext';
 
 interface HeaderProps {
   onLogout: () => void;
@@ -22,47 +22,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
-  const [quotaData, setQuotaData] = useState<any>(null);
-  const [loadingQuota, setLoadingQuota] = useState(true);
-  const [quotaError, setQuotaError] = useState<boolean>(false);
   const [tenantStatus, setTenantStatus] = useState<string | null>(null);
 
-  // Fetch quota status from API
-  const fetchQuotaStatus = async () => {
-    if (!user) {
-      setQuotaData(null);
-      setLoadingQuota(false);
-      return;
-    }
-
-    setLoadingQuota(true);
-    setQuotaError(false);
-    setTenantStatus(null);
-    try {
-      const response = await api.get('/usage/quota-status');
-      if (response.data?.status === 'success') {
-        setQuotaData(response.data.data);
-        setQuotaError(false);
-      } else {
-        setQuotaError(true);
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch quota status:', error);
-      // Handle TENANT_INACTIVE error specifically
-      if (error.response?.status === 403 && error.response?.data?.detail?.error === 'TENANT_INACTIVE') {
-        setTenantStatus(error.response.data.detail.status || 'PENDING');
-      }
-      setQuotaError(true);
-      setQuotaData(null);
-    } finally {
-      setLoadingQuota(false);
-    }
-  };
-
-  // Re-fetch when user changes
-  useEffect(() => {
-    fetchQuotaStatus();
-  }, [user?.id]);
+  // Use shared quota context instead of separate API call
+  const { quotaData, loading: loadingQuota, error: quotaError, refetch: fetchQuotaStatus } = useQuota();
 
   // Listen for plan changes and unit consumption to refresh quota data
   useEffect(() => {
@@ -140,7 +103,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   };
   
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm">
+    <header className="h-[72px] bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm">
       <div className="flex items-center flex-1 max-w-2xl">
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -467,29 +430,32 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
         </div>
 
         {/* Plan & Unit Balance Display - FIX-001 */}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg">
-          <CreditCard className="w-4 h-4 text-gray-500" />
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-gray-900 leading-tight">
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl">
+          <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm border border-indigo-100">
+            <CreditCard className="w-5 h-5 text-indigo-600" />
+          </div>
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-sm font-semibold text-gray-900 truncate max-w-[140px]" title={loadingQuota ? 'Loading...' : planName}>
               {loadingQuota ? 'Loading...' : planName}
             </span>
             {!loadingQuota && !quotaError && !isPendingStatus && (
-              <span className="text-xs text-gray-500 leading-tight">
-                {totalUnits.remaining.toLocaleString()} units left
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-bold text-indigo-600">{totalUnits.remaining.toLocaleString()}</span>
+                <span className="text-xs text-gray-500">units left</span>
+              </div>
             )}
             {isPendingStatus && (
-              <span className="text-xs text-orange-600 leading-tight">
+              <span className="text-xs text-orange-600 font-medium">
                 {tenantStatus}
               </span>
             )}
           </div>
           {!loadingQuota && !quotaError && !isPendingStatus && totalUnits.limit > 0 && (
-            <div className="w-12 h-1.5 bg-gray-200 rounded-full overflow-hidden ml-1">
+            <div className="w-16 h-2 bg-white/60 rounded-full overflow-hidden border border-indigo-100">
               <div
                 className={`h-full rounded-full transition-all ${
                   usagePercentage > 90 ? 'bg-red-500' :
-                  usagePercentage > 70 ? 'bg-yellow-500' : 'bg-green-500'
+                  usagePercentage > 70 ? 'bg-yellow-500' : 'bg-indigo-500'
                 }`}
                 style={{ width: `${Math.min(usagePercentage, 100)}%` }}
               />

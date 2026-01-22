@@ -1,13 +1,14 @@
 /**
  * Usage Tracking Service
  *
- * Records usage/quota consumption via the external API.
- * Uses X-API-Key header for tenant identification.
+ * Records usage/quota consumption via the backend proxy.
+ * Uses Bearer token for authentication.
  *
- * Endpoint: POST /api/v1/external/usage/record
+ * Endpoint: POST /api/v1/usage/record (proxies to Admin API)
  */
 
-const USAGE_API_BASE = process.env.NEXT_PUBLIC_USAGE_API_URL || 'http://localhost:8001/api/v1';
+// Use backend API - no direct Admin API calls
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 // Quota type codes
 export type QuotaType = 'RU' | 'RS' | 'AS' | 'AIU' | 'storage_gb';
@@ -44,47 +45,12 @@ export interface RecordUsageResponse {
   error?: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
-
 /**
- * Get the API key (tenant_id) for the logged-in tenant
- * Fetches from /auth/me endpoint using access token
+ * Get access token for authenticated requests
  */
-const getApiKey = async (): Promise<string | null> => {
+const getAccessToken = (): string | null => {
   if (typeof window === 'undefined') return null;
-
-  // Check if already cached in localStorage
-  let apiKey = localStorage.getItem('tenantApiKey');
-
-  if (!apiKey) {
-    // Fetch tenant_id from /auth/me endpoint
-    const accessToken = localStorage.getItem('accessToken');
-    if (accessToken) {
-      try {
-        const response = await fetch(`${API_URL}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          // Use tenant_id as the API key
-          apiKey = data.tenant_id;
-          if (apiKey) {
-            // Cache it for future use
-            localStorage.setItem('tenantApiKey', apiKey);
-            console.log('[UsageTracking] Tenant API key cached:', apiKey);
-          }
-        }
-      } catch (error) {
-        console.warn('[UsageTracking] Could not fetch tenant_id:', error);
-      }
-    }
-  }
-
-  return apiKey;
+  return localStorage.getItem('accessToken');
 };
 
 /**
@@ -108,23 +74,24 @@ const getApiKey = async (): Promise<string | null> => {
  * });
  */
 export async function recordUsage(request: RecordUsageRequest): Promise<RecordUsageResponse> {
-  const apiKey = await getApiKey();
+  const token = getAccessToken();
 
-  if (!apiKey) {
-    console.warn('[UsageTracking] No API key found - user may not be logged in');
+  if (!token) {
+    console.warn('[UsageTracking] No access token found - user may not be logged in');
     return {
       status: 'error',
-      error: 'No API key available. Please ensure you are logged in.',
+      error: 'Not authenticated. Please ensure you are logged in.',
     };
   }
 
   try {
     console.log('[UsageTracking] Recording usage:', request.quota_type, request.operation_type);
 
-    const response = await fetch(`${USAGE_API_BASE}/external/usage/record`, {
+    // Call backend proxy endpoint (which calls Admin API)
+    const response = await fetch(`${API_URL}/usage/record`, {
       method: 'POST',
       headers: {
-        'X-API-Key': apiKey,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(request),
