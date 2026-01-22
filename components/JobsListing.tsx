@@ -156,11 +156,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
   const sortedJobs = [...filteredJobs].sort((a, b) => {
     let comparison = 0;
 
-    // Debug: log department values when sorting by department
-    if (sortBy === 'department') {
-      console.log('[SORT DEBUG] Comparing:', a.department, 'vs', b.department, '| sortOrder:', sortOrder);
-    }
-
     switch (sortBy) {
       case 'date':
         // Use created_at if available, fallback to postedDate

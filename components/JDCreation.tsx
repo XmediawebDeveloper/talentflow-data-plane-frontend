@@ -1741,8 +1741,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       errors.experience = 'Experience is required';
     }
 
-    // Industry Type is required
-    if (!extractedData.industryType) {
+    // Industry Type is required - check for empty string, null, undefined
+    if (!extractedData.industryType || extractedData.industryType.trim() === '') {
       missingFields.push('Industry Type');
       errors.industryType = 'Industry Type is required';
     }
@@ -2000,8 +2000,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD }
       missingFields.push('Experience');
     }
 
-    // Industry Type is required
-    if (!extractedData.industryType) {
+    // Industry Type is required - check for empty string, null, undefined
+    if (!extractedData.industryType || extractedData.industryType.trim() === '') {
       missingFields.push('Industry Type');
     }
 
