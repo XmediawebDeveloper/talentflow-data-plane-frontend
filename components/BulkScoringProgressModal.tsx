@@ -1,8 +1,9 @@
-import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader, Database, FolderOpen, Target, TrendingUp } from 'lucide-react';
+import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader, Database, FolderOpen, Target, TrendingUp, RotateCcw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export interface ScoringProgressItem {
   id: string;
+  resumeId: string;  // Added: Resume ID for retry
   candidateName: string;
   jobTitle: string;  // Added: Which job this scoring belongs to
   jobId: string;     // Added: Job identifier
@@ -19,18 +20,37 @@ interface BulkScoringProgressModalProps {
   progressData?: ScoringProgressItem[];
   filterByJobId?: string;  // Added: Optional filter to show only specific job
   showJobTitleColumn?: boolean; // Added: Explicitly control job title column visibility
+  onRetryFailed?: (item: ScoringProgressItem) => Promise<void>; // Added: Retry failed individual
 }
 
 export default function BulkScoringProgressModal({
   onClose,
   progressData = [],
   filterByJobId,
-  showJobTitleColumn = true
+  showJobTitleColumn = true,
+  onRetryFailed
 }: BulkScoringProgressModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
+
+  // Handle retry for a failed item
+  const handleRetry = async (item: ScoringProgressItem) => {
+    if (!onRetryFailed || retryingItems.has(item.id)) return;
+
+    setRetryingItems(prev => new Set(prev).add(item.id));
+    try {
+      await onRetryFailed(item);
+    } finally {
+      setRetryingItems(prev => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  };
 
   // Real-time update simulation - updates every second
   useEffect(() => {
@@ -370,6 +390,7 @@ export default function BulkScoringProgressModal({
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Status</th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Scored Date & Time</th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Match Result</th>
+                  {onRetryFailed && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -447,6 +468,34 @@ export default function BulkScoringProgressModal({
                         <span className="text-sm text-gray-400">Pending</span>
                       )}
                     </td>
+                    {onRetryFailed && (
+                      <td className="py-4 px-4">
+                        {item.status === 'Failed' && (
+                          <button
+                            onClick={() => handleRetry(item)}
+                            disabled={retryingItems.has(item.id)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                              retryingItems.has(item.id)
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                            }`}
+                            title="Retry scoring for this resume"
+                          >
+                            {retryingItems.has(item.id) ? (
+                              <>
+                                <Loader className="w-3 h-3 animate-spin" />
+                                Retrying...
+                              </>
+                            ) : (
+                              <>
+                                <RotateCcw className="w-3 h-3" />
+                                Retry
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

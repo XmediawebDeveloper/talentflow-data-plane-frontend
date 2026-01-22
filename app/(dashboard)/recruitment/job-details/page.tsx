@@ -225,6 +225,16 @@ function JobDetailsContent() {
     }
   };
 
+  const handleUnarchive = async (job: Job) => {
+    try {
+      await jdService.updateStatus(job.id, 'published');
+      toast.success(`"${job.title}" has been unarchived and published`);
+      fetchJobDetails();
+    } catch (error) {
+      toast.error('Failed to unarchive job');
+    }
+  };
+
   const handleDelete = async (job: Job) => {
     try {
       await jdService.delete(job.id);
@@ -313,6 +323,7 @@ function JobDetailsContent() {
         onDisable={handleDisable}
         onEnable={handleEnable}  // JD15: Enable handler
         onArchive={handleArchive}
+        onUnarchive={handleUnarchive}  // Unarchive handler for archived JDs
         onDelete={handleDelete}
         onNavigateToAITalentMatch={handleNavigateToAITalentMatch}
         onRepublish={handleRepublish}  // JD13: Republish handler
