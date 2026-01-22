@@ -899,12 +899,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         must_have_comments: params.must_have_comments,
       });
 
+      // During AI generation, don't overwrite comments - they will be properly extracted when user clicks "Next"
+      // Only update skills and other basic fields here
       setExtractedData(prev => ({
         ...prev,
         mustHaveSkills: params.must_have_skills?.length > 0 ? params.must_have_skills : (isEditMode ? prev.mustHaveSkills : []),
-        mustHaveComments: params.must_have_comments?.length > 0 ? params.must_have_comments : (isEditMode ? prev.mustHaveComments : []),
+        // Don't overwrite comments during AI generation - preserve existing or keep empty for proper extraction later
+        mustHaveComments: params.must_have_comments?.length > 0 ? params.must_have_comments : prev.mustHaveComments,
         niceToHaveSkills: params.nice_to_have_skills?.length > 0 ? params.nice_to_have_skills : (isEditMode ? prev.niceToHaveSkills : []),
-        niceToHaveComments: params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : (isEditMode ? prev.niceToHaveComments : []),
+        // Don't overwrite comments during AI generation - preserve existing or keep empty for proper extraction later
+        niceToHaveComments: params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : prev.niceToHaveComments,
         education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || (isEditMode ? prev.education : ''),
         experience: expValue || prev.experience,
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
@@ -1003,10 +1007,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               processExtractedParams(response.extracted_params);
             }
 
-            toast.success({
-              title: 'JD Generated Successfully',
-              description: 'AI has created a comprehensive job description.'
-            });
+            // Note: Toast removed here to prevent it showing in stage 2 when user moves quickly
+            // The JD is already visible (streamed), so toast is redundant
           }
         },
         onError: (message: string, errorCode?: string) => {
@@ -1083,6 +1085,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience_mandatory: params.experience_mandatory,
         education_mandatory: params.education_mandatory,
         industry_mandatory: params.industry_mandatory
+      });
+      console.log('[TalentFlow] Comments from API:', {
+        must_have_comments: params.must_have_comments,
+        must_have_comments_length: params.must_have_comments?.length || 0,
+        nice_to_have_comments: params.nice_to_have_comments,
+        nice_to_have_comments_length: params.nice_to_have_comments?.length || 0
       });
       console.log('[TalentFlow] Will set UI checkboxes:', {
         experienceRequired: params.experience_mandatory || false,
@@ -1359,8 +1367,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         suggestedLanguages: extraction.suggestedLanguages
       });
 
+      console.log('[TalentFlow] Setting extractedData with comments:', {
+        mustHaveComments: extraction.mustHaveComments,
+        niceToHaveComments: extraction.niceToHaveComments
+      });
       setExtractedData(extraction);
       setLastExtractedJD(jdText);  // Track JD text to skip extraction if unchanged on next "Next" click
+      console.log('[TalentFlow] Moving to extract step...');
       setStep('extract');
 
       // Save JD with creation_stage: 'extract' so refresh preserves the stage
@@ -2750,10 +2763,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setJobTitle(e.target.value)}
                         maxLength={VALIDATION.JOB_TITLE.max}
                         placeholder="e.g., Senior Java Developer – Banking Domain"
+                        disabled={isJDInUse}
                         className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
-                          jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
-                            ? 'border-red-300 bg-red-50'
-                            : 'border-gray-300'
+                          isJDInUse
+                            ? 'bg-gray-100 cursor-not-allowed'
+                            : jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
+                              ? 'border-red-300 bg-red-50'
+                              : 'border-gray-300'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
@@ -2781,12 +2797,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         maxLength={VALIDATION.AI_PROMPT.max}
                         placeholder={editingId ? "Add additional details or context to regenerate the job description..." : "Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"}
                         rows={12}
+                        disabled={isJDInUse}
                         className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
-                          aiPrompt.length > 0 && !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max) && !editingId
-                            ? 'border-orange-300 bg-orange-50'
-                            : aiPrompt.length > VALIDATION.AI_PROMPT.max
-                            ? 'border-red-300 bg-red-50'
-                            : 'border-gray-300'
+                          isJDInUse
+                            ? 'bg-gray-100 cursor-not-allowed'
+                            : aiPrompt.length > 0 && !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max) && !editingId
+                              ? 'border-orange-300 bg-orange-50'
+                              : aiPrompt.length > VALIDATION.AI_PROMPT.max
+                                ? 'border-red-300 bg-red-50'
+                                : 'border-gray-300'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
@@ -2899,10 +2918,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setJobTitle(e.target.value)}
                         maxLength={VALIDATION.JOB_TITLE.max}
                         placeholder="e.g., Senior Java Developer"
+                        disabled={isJDInUse}
                         className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
-                          jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
-                            ? 'border-red-300 bg-red-50'
-                            : 'border-gray-300'
+                          isJDInUse
+                            ? 'bg-gray-100 cursor-not-allowed'
+                            : jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
+                              ? 'border-red-300 bg-red-50'
+                              : 'border-gray-300'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
@@ -3019,12 +3041,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {/* Toggle Edit/View Button */}
                       <div className="absolute top-2 right-2 z-10">
                         <button
-                          onClick={() => setIsEditingJD(!isEditingJD)}
+                          onClick={() => {
+                            if (isJDInUse) {
+                              toast.error({
+                                title: 'Cannot Edit Job Description',
+                                description: jdUsageMessage || 'This job description has been used in Resume Scoring, Assessments, or AI Talent Match and cannot be modified. Please create a new JD instead.'
+                              });
+                              return;
+                            }
+                            setIsEditingJD(!isEditingJD);
+                          }}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            isEditingJD
-                              ? 'bg-gray-800 text-white hover:bg-gray-900'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            isJDInUse
+                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                              : isEditingJD
+                                ? 'bg-gray-800 text-white hover:bg-gray-900'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
+                          title={isJDInUse ? 'This JD is in use and cannot be edited' : ''}
                         >
                           {isEditingJD ? (
                             <>
@@ -3044,7 +3078,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <textarea
                           value={generatedJD}
                           onChange={(e) => setGeneratedJD(e.target.value)}
-                          className="w-full h-[600px] px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent font-mono text-sm"
+                          readOnly={isJDInUse}
+                          className={`w-full h-[600px] px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent font-mono text-sm ${isJDInUse ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         />
                       ) : (
                         <div className="h-[600px] overflow-y-auto px-6 py-4 border border-gray-300 rounded-md bg-white markdown-content">

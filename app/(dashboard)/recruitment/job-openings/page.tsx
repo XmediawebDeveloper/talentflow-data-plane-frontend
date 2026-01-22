@@ -146,11 +146,39 @@ export default function JobOpeningsPage() {
     }
   };
 
-  const handleEditJob = (job: Job) => {
+  const handleEditJob = async (job: Job) => {
     // For Draft JDs, open at the stage where they left off
-    // For Published JDs, go to first stage (create) for editing
-    const stage = job.status === 'Draft' ? (job.creation_stage || 'create') : 'create';
-    router.push(`/recruitment/jd-creation?id=${job.id}&stage=${stage}`);
+    if (job.status === 'Draft') {
+      const stage = job.creation_stage || 'create';
+      router.push(`/recruitment/jd-creation?id=${job.id}&stage=${stage}`);
+      return;
+    }
+
+    // For Published JDs, check if modules are in use before allowing edit
+    try {
+      const usageStatus = await jdService.getUsageStatus(job.id);
+      if (usageStatus && usageStatus.is_used) {
+        // JD has modules in use - show error and block edit
+        const usageDetails = [
+          usageStatus.usage?.resume_scores_count ? `Resume Scoring (${usageStatus.usage.resume_scores_count})` : '',
+          usageStatus.usage?.assessments_count ? `Assessments (${usageStatus.usage.assessments_count})` : '',
+          usageStatus.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : ''
+        ].filter(Boolean).join(', ');
+
+        toast.error(
+          usageStatus.edit_restriction_reason ||
+          `This job description cannot be edited because it has been used in: ${usageDetails}. Please create a new JD instead.`
+        );
+        return;
+      }
+
+      // JD not in use - allow edit
+      router.push(`/recruitment/jd-creation?id=${job.id}&stage=create`);
+    } catch (error) {
+      console.error('Failed to check JD usage status:', error);
+      // If usage check fails, allow navigation (backend will validate on save)
+      router.push(`/recruitment/jd-creation?id=${job.id}&stage=create`);
+    }
   };
 
   const handlePublishJob = async (job: Job) => {
