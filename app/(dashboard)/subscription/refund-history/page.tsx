@@ -3,7 +3,8 @@
 import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
-const EXTERNAL_API_URL = 'https://talentflowapi.mo.vc/api/v1/external/invoices';
+// Use backend proxy instead of direct Admin API calls
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 interface LineItem {
   description: string;
@@ -65,32 +66,18 @@ export default function RefundHistoryPage() {
     setError(null);
 
     try {
-      // Get tenant_id from localStorage - check all possible keys
-      let tenantId = localStorage.getItem('tenantApiKey') || localStorage.getItem('apiKey') || localStorage.getItem('tenantId') || localStorage.getItem('tenant_id');
-
-      // Also check the user object stored in talentflow_user
-      if (!tenantId) {
-        try {
-          const userStr = localStorage.getItem('talentflow_user');
-          if (userStr) {
-            const user = JSON.parse(userStr);
-            tenantId = user.tenantId || user.tenant_id;
-          }
-        } catch (e) {
-          console.error('[RefundHistory] Error parsing user:', e);
-        }
-      }
-
-      if (!tenantId) {
-        setError('Tenant ID not found. Please login again.');
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setError('Not authenticated. Please login again.');
         setLoading(false);
         return;
       }
 
-      // Fetch refund invoices from external API with tenant_id
-      const refundResponse = await fetch(`${EXTERNAL_API_URL}/refund?tenant_id=${tenantId}&skip=0&limit=100`, {
+      // Fetch refund invoices from backend proxy (which calls Admin API)
+      const refundResponse = await fetch(`${API_URL}/billing/invoices/refunds?skip=0&limit=100`, {
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
       });
 

@@ -3,9 +3,9 @@ import { useState, useEffect } from 'react';
 import { User as UserType } from '@/lib/types/tenant';
 import NotificationCenter from './NotificationCenter';
 import QuickActions from './QuickActions';
-import api from '@/lib/services/api';
 // FIX-010: Import Tooltip for icon buttons
 import { Tooltip } from '@/components/ui/tooltip';
+import { useQuota } from '@/contexts/QuotaContext';
 
 interface HeaderProps {
   onLogout: () => void;
@@ -22,47 +22,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
-  const [quotaData, setQuotaData] = useState<any>(null);
-  const [loadingQuota, setLoadingQuota] = useState(true);
-  const [quotaError, setQuotaError] = useState<boolean>(false);
   const [tenantStatus, setTenantStatus] = useState<string | null>(null);
 
-  // Fetch quota status from API
-  const fetchQuotaStatus = async () => {
-    if (!user) {
-      setQuotaData(null);
-      setLoadingQuota(false);
-      return;
-    }
-
-    setLoadingQuota(true);
-    setQuotaError(false);
-    setTenantStatus(null);
-    try {
-      const response = await api.get('/usage/quota-status');
-      if (response.data?.status === 'success') {
-        setQuotaData(response.data.data);
-        setQuotaError(false);
-      } else {
-        setQuotaError(true);
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch quota status:', error);
-      // Handle TENANT_INACTIVE error specifically
-      if (error.response?.status === 403 && error.response?.data?.detail?.error === 'TENANT_INACTIVE') {
-        setTenantStatus(error.response.data.detail.status || 'PENDING');
-      }
-      setQuotaError(true);
-      setQuotaData(null);
-    } finally {
-      setLoadingQuota(false);
-    }
-  };
-
-  // Re-fetch when user changes
-  useEffect(() => {
-    fetchQuotaStatus();
-  }, [user?.id]);
+  // Use shared quota context instead of separate API call
+  const { quotaData, loading: loadingQuota, error: quotaError, refetch: fetchQuotaStatus } = useQuota();
 
   // Listen for plan changes and unit consumption to refresh quota data
   useEffect(() => {
