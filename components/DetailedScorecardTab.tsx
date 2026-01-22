@@ -137,8 +137,8 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
       const rawScore = value.score ?? 0;
       const rating = rawScore <= 10 ? Math.round(rawScore) : convertToRating(rawScore);
       const displayName = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
-      // Determine if essential based on key or is_essential flag
-      const isEssential = value.is_essential === true || ['job_title', 'experience', 'must_have_skills', 'education', 'must_have_comments'].includes(key);
+      // Use is_essential flag from backend API
+      const isEssential = value.is_essential === true;
       return {
         name: displayName,
         rating: rating,

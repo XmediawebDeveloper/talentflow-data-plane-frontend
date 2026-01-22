@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User, Ban, Archive, History, FileText, Edit, XCircle, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import ReactMarkdown from 'react-markdown';
@@ -82,13 +82,14 @@ interface JobDetailViewProps {
   onDisable?: (job: Job) => void; // Disable job
   onEnable?: (job: Job) => void; // JD15: Enable job (re-enable disabled JD)
   onArchive?: (job: Job) => void; // Archive job
+  onUnarchive?: (job: Job) => void; // Unarchive job
   onDelete?: (job: Job) => void; // Delete job
   onViewAssessmentResult?: (assessmentResult: any, jobTitle: string) => void; // Navigate to assessment result detail
   onRepublish?: (job: Job) => void; // JD13: Republish job after editing
   isTenantAdmin?: boolean; // JD15: Whether user is Tenant Admin (for disable/enable buttons)
 }
 
-export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false }: JobDetailViewProps) {
   const handleEdit = () => {
     if (onEdit) {
       onEdit(job);
@@ -825,6 +826,30 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   >
                     <Archive className="w-4 h-4" />
                     <span className="font-medium">Archive</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Action Buttons - For Archived jobs */}
+            {job.status === 'Archived' && (
+              <div className="flex items-center gap-2">
+                {onUnarchive && (
+                  <button
+                    onClick={() => onUnarchive(job)}
+                    className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all flex items-center gap-2"
+                  >
+                    <ArchiveRestore className="w-4 h-4" />
+                    <span className="font-medium">Unarchive</span>
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    onClick={handleDelete}
+                    className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
+                    title="Delete Job"
+                  >
+                    <Trash2 className="w-5 h-5" />
                   </button>
                 )}
               </div>
