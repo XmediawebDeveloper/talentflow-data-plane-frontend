@@ -156,6 +156,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
   const sortedJobs = [...filteredJobs].sort((a, b) => {
     let comparison = 0;
 
+    // Debug: log department values when sorting by department
+    if (sortBy === 'department') {
+      console.log('[SORT DEBUG] Comparing:', a.department, 'vs', b.department, '| sortOrder:', sortOrder);
+    }
+
     switch (sortBy) {
       case 'date':
         // Use created_at if available, fallback to postedDate
@@ -173,13 +178,15 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
         comparison = a.status.localeCompare(b.status);
         break;
       case 'department':
-        // Case-insensitive department sort, push empty departments to the end
+        // Case-insensitive department sort, empty departments always at end
         const deptA = (a.department || '').trim().toLowerCase();
         const deptB = (b.department || '').trim().toLowerCase();
-        // If one is empty and the other isn't, put empty ones last
-        if (!deptA && deptB) comparison = 1;
-        else if (deptA && !deptB) comparison = -1;
-        else comparison = deptA.localeCompare(deptB);
+        // Empty departments always go to end (return early to bypass sortOrder inversion)
+        if (!deptA && deptB) return 1;
+        if (deptA && !deptB) return -1;
+        if (!deptA && !deptB) return 0;
+        // Both have values - normal comparison respects sortOrder
+        comparison = deptA.localeCompare(deptB);
         break;
       default:
         comparison = 0;
@@ -938,6 +945,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                     {/* Card Body */}
                     <div className="p-6">
                       <div className="space-y-3 mb-5">
+                        {job.department && (
+                          <div className="flex items-center gap-3 text-base text-gray-600">
+                            <Briefcase className="w-5 h-5 text-gray-400" />
+                            <span>{job.department}</span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-3 text-base text-gray-600">
                           <Building2 className="w-5 h-5 text-gray-400" />
                           <span>{job.industry_type || '-'}</span>
@@ -1151,6 +1164,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
                         {/* Primary Info Row */}
                         <div className="flex flex-wrap items-center gap-5 text-base text-gray-600 mb-3">
+                          {job.department && (
+                            <span className="flex items-center gap-2">
+                              <Briefcase className="w-5 h-5 text-gray-400" />
+                              {job.department}
+                            </span>
+                          )}
                           <span className="flex items-center gap-2">
                             <Building2 className="w-5 h-5 text-gray-400" />
                             {job.industry_type || '-'}
