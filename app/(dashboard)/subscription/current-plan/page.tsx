@@ -9,9 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
 
-const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://localhost:8001/api/v1';
-const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+const ADMIN_API_URL = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://localhost:8000/api/v1';
+const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 interface PlanFeature {
   id: string;

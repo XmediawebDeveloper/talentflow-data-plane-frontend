@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 interface AuditLog {
   id: string;

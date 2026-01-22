@@ -1131,13 +1131,26 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             <div className="flex items-center gap-3">
               <div className="text-right">
                 <div className="text-sm text-gray-600">Overall Score</div>
-                <div className={`text-3xl ${getScoreColor(selectedCandidateData?.percentage || 0)}`}>
-                  {selectedCandidateData?.percentage}%
+                <div className={`text-3xl ${getScoreColor(
+                  detailedResult?.overall_score ?? selectedCandidateData?.percentage ?? 0
+                )}`}>
+                  {detailedResult?.overall_score ?? selectedCandidateData?.percentage}%
                 </div>
               </div>
-              <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm border ${getStatusColor(selectedCandidateData?.status || '')}`}>
-                {selectedCandidateData?.status}
-              </span>
+              {/* Use detailed result status when scoring is complete, otherwise fall back to list status */}
+              {(() => {
+                let displayStatus = selectedCandidateData?.status || 'Under Review';
+                if (detailedResult && detailedResult.scoring_status === 'completed') {
+                  displayStatus = detailedResult.passed === true ? 'Passed' : detailedResult.passed === false ? 'Failed' : 'Under Review';
+                } else if (detailedResult && detailedResult.scoring_status === 'processing') {
+                  displayStatus = 'Under Review';
+                }
+                return (
+                  <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm border ${getStatusColor(displayStatus)}`}>
+                    {displayStatus}
+                  </span>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1336,6 +1349,85 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           </div>
         </div>
 
+        {/* Candidate Insights - AI Generated Analysis */}
+        {detailedResult && detailedResult.candidate_insights && detailedResult.scoring_status === 'completed' && (
+          <div className="bg-white rounded-lg border-2 border-blue-200 overflow-hidden shadow-lg mb-6">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+              <h2 className="text-white flex items-center gap-2">
+                <Award className="w-5 h-5" />
+                AI-Generated Candidate Insights
+              </h2>
+              <p className="text-blue-100 text-sm mt-1">Summary of candidate performance and recommendations</p>
+            </div>
+            <div className="p-6">
+              {/* Summary */}
+              {detailedResult.candidate_insights.summary && (
+                <div className="mb-6">
+                  <h3 className="text-gray-900 font-medium mb-2">Summary</h3>
+                  <p className="text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    {detailedResult.candidate_insights.summary}
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-6">
+                {/* Strengths */}
+                {detailedResult.candidate_insights.strengths && detailedResult.candidate_insights.strengths.length > 0 && (
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                    <h3 className="text-green-800 font-medium mb-3 flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4" />
+                      Strengths
+                    </h3>
+                    <ul className="space-y-2">
+                      {detailedResult.candidate_insights.strengths.map((s: string, i: number) => (
+                        <li key={i} className="text-sm text-green-700 flex items-start gap-2">
+                          <span className="text-green-500 mt-1">•</span>
+                          <span>{s}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Areas for Improvement / Weaknesses */}
+                {(detailedResult.candidate_insights.improvement_areas || detailedResult.candidate_insights.weaknesses) &&
+                 (detailedResult.candidate_insights.improvement_areas?.length > 0 || detailedResult.candidate_insights.weaknesses?.length > 0) && (
+                  <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                    <h3 className="text-orange-800 font-medium mb-3 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      Areas for Improvement
+                    </h3>
+                    <ul className="space-y-2">
+                      {(detailedResult.candidate_insights.improvement_areas || detailedResult.candidate_insights.weaknesses || []).map((a: string, i: number) => (
+                        <li key={i} className="text-sm text-orange-700 flex items-start gap-2">
+                          <span className="text-orange-500 mt-1">•</span>
+                          <span>{a}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Hiring Recommendation */}
+              {detailedResult.hiring_recommendation && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <h3 className="text-gray-900 font-medium mb-2">Hiring Recommendation</h3>
+                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${
+                    detailedResult.hiring_recommendation === 'strong_yes' || detailedResult.hiring_recommendation === 'yes'
+                      ? 'bg-green-100 text-green-800 border border-green-200'
+                      : detailedResult.hiring_recommendation === 'maybe'
+                      ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                      : 'bg-red-100 text-red-800 border border-red-200'
+                  }`}>
+                    <span className="font-medium capitalize">{detailedResult.hiring_recommendation.replace('_', ' ')}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Detailed Answers */}
         <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-lg">
           <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5">
@@ -1351,6 +1443,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     ? 'bg-green-500/20 text-green-100 border border-green-400/30'
                     : detailedResult.scoring_status === 'processing'
                     ? 'bg-yellow-500/20 text-yellow-100 border border-yellow-400/30'
+                    : detailedResult.scoring_status === 'error'
+                    ? 'bg-red-500/20 text-red-100 border border-red-400/30'
                     : 'bg-gray-500/20 text-gray-100 border border-gray-400/30'
                 }`}>
                   {detailedResult.scoring_status === 'processing' && (
@@ -1362,10 +1456,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   {detailedResult.scoring_status === 'pending' && (
                     <Clock className="w-4 h-4" />
                   )}
+                  {detailedResult.scoring_status === 'error' && (
+                    <XCircle className="w-4 h-4" />
+                  )}
                   <span className="text-sm font-medium">
                     {detailedResult.scoring_status === 'completed' && 'Scoring Complete'}
                     {detailedResult.scoring_status === 'processing' && 'AI Agent Processing...'}
                     {detailedResult.scoring_status === 'pending' && 'Scoring Pending'}
+                    {detailedResult.scoring_status === 'error' && 'Scoring Failed - Needs Retry'}
                   </span>
                 </div>
               )}
@@ -1572,6 +1670,21 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                           </div>
                                         );
                                       })}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Ideal/Model Answer (for text questions) */}
+                                {q.ideal_answer && (!q.correct_answer || q.correct_answer.length === 0) && (
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <FileText className="w-4 h-4 text-blue-600" />
+                                      </div>
+                                      <div className="text-sm font-medium text-blue-900">MODEL ANSWER</div>
+                                    </div>
+                                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                      <p className="text-blue-800 leading-relaxed">{q.ideal_answer}</p>
                                     </div>
                                   </div>
                                 )}

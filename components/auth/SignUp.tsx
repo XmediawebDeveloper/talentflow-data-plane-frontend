@@ -9,7 +9,7 @@ import {
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 // List of blocked personal email domains
 const BLOCKED_EMAIL_DOMAINS = [

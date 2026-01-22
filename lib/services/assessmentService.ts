@@ -47,6 +47,7 @@ export interface AssessmentResponse {
   created_by_name?: string;
   title: string;
   description?: string;
+  version: number;  // Assessment version - increments on each edit/publish
   duration_minutes: number;
   hr_enabled: boolean;
   hr_percentage: number;
@@ -145,6 +146,7 @@ export interface QuestionEvaluation {
   candidate_code_submission?: string;
   options?: { id: string; text: string }[];
   correct_answer?: string[];
+  ideal_answer?: string;  // Model/ideal answer for text questions (what a good answer should include)
   points_possible: number;
   points_earned: number;
   is_correct: boolean;
@@ -352,6 +354,18 @@ export const assessmentService = {
   async publish(id: string): Promise<AssessmentResponse> {
     try {
       const response = await api.post<AssessmentResponse>(`/assessments/${id}/publish`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Close/complete assessment
+   */
+  async close(id: string): Promise<AssessmentResponse> {
+    try {
+      const response = await api.post<AssessmentResponse>(`/assessments/${id}/close`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

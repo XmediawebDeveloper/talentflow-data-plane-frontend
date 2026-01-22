@@ -357,6 +357,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Use API assessments only (no local state needed - all assessments are saved to DB)
   const assessments = apiAssessments;
 
+  // Handle edit assessment - redirect to config page instead of modal
+  const handleEditAssessment = (assessment: any) => {
+    // Check if candidates have been invited - if so, block editing
+    if (assessment.invitations_count > 0 || assessment.candidates > 0) {
+      alert(`Cannot edit this assessment - ${assessment.invitations_count || assessment.candidates} candidate(s) have already been invited. Please create a new assessment instead.`);
+      return;
+    }
+
+    // Redirect to the assessment creation page with edit mode
+    router.push(`/recruitment/assessments/create?step=configure&jd_id=${assessment.jd_id}&edit=${assessment.id}`);
+  };
+
   // Reload quota from API
   const reloadQuota = async () => {
     try {
@@ -478,7 +490,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
 
     // Check if quota is available
-    if (availableUnits !== null && availableUnits <= 0) {
+    if (totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0) {
       alert('Assessment quota exhausted. Please upgrade your plan or purchase add-on credits to continue.');
       return;
     }
@@ -563,6 +575,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
+  // Mark assessment as completed (uses dedicated /close endpoint)
+  const handleCompleteAssessment = async (assessmentId: string) => {
+    if (!confirm('Mark this assessment as completed?')) return;
+
+    try {
+      await assessmentService.close(assessmentId);
+      await reloadAssessments();
+      setOpenMenuId(null);
+    } catch (error: any) {
+      console.error('Failed to complete assessment:', error);
+      const errorMessage = error?.message || 'Unknown error';
+      if (errorMessage.includes('403') || errorMessage.toLowerCase().includes('forbidden')) {
+        alert('Permission denied: You do not have permission to complete this assessment. Please contact your administrator.');
+      } else {
+        alert(`Failed to complete assessment: ${errorMessage}`);
+      }
+      setOpenMenuId(null);
+    }
+  };
+
   if (showCreation) {
     return (
       <AssessmentCreation
@@ -605,8 +637,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           }}
           onEdit={() => {
             // Keep details view open, modal will overlay on top
-            setSelectedAssessmentForEdit(selectedAssessmentForDetails);
-            setShowEditModal(true);
+            handleEditAssessment(selectedAssessmentForDetails);
           }}
           onPreview={() => {
             // Keep details view open, modal will overlay on top
@@ -697,23 +728,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Assessment Quota Badge with color coding */}
-            {availableUnits !== null && (
+            {/* Assessment Quota Badge with color coding - use stats.units_consumed for consistency */}
+            {totalUnits > 0 && (
               <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 shadow-sm ${
                 isUnlimited
                   ? 'bg-green-50 border-green-300'
-                  : availableUnits === 0
+                  : (totalUnits - stats.units_consumed) <= 0
                   ? 'bg-red-50 border-red-300'
-                  : availableUnits <= 2
+                  : (totalUnits - stats.units_consumed) <= 2
                   ? 'bg-orange-50 border-orange-300'
                   : 'bg-gray-50 border-gray-200'
               }`}>
                 <Zap className={`w-4 h-4 ${
                   isUnlimited
                     ? 'text-green-600'
-                    : availableUnits === 0
+                    : (totalUnits - stats.units_consumed) <= 0
                     ? 'text-red-600'
-                    : availableUnits <= 2
+                    : (totalUnits - stats.units_consumed) <= 2
                     ? 'text-orange-600'
                     : 'text-gray-600'
                 }`} />
@@ -724,14 +755,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <span className="text-sm font-bold text-green-700">Unlimited</span>
                     ) : (
                       <>
-                        <span className={`text-sm font-bold ${
-                          availableUnits === 0
-                            ? 'text-red-700'
-                            : availableUnits <= 2
-                            ? 'text-orange-700'
-                            : 'text-gray-900'
-                        }`}>{availableUnits}</span>
-                        <span className="text-xs text-gray-500">/ {totalUnits} available</span>
+                        {/* Use stats.units_consumed to calculate remaining for consistency */}
+                        {(() => {
+                          const calculatedRemaining = Math.max(0, totalUnits - stats.units_consumed);
+                          return (
+                            <>
+                              <span className={`text-sm font-bold ${
+                                calculatedRemaining === 0
+                                  ? 'text-red-700'
+                                  : calculatedRemaining <= 2
+                                  ? 'text-orange-700'
+                                  : 'text-gray-900'
+                              }`}>{calculatedRemaining}</span>
+                              <span className="text-xs text-gray-500">/ {totalUnits} available</span>
+                            </>
+                          );
+                        })()}
                       </>
                     )}
                   </div>
@@ -749,9 +788,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             )}
             <button
               onClick={handleOpenCreation}
-              disabled={!isUnlimited && availableUnits !== null && availableUnits <= 0}
+              disabled={!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg transition-colors shadow-sm ${
-                !isUnlimited && availableUnits !== null && availableUnits <= 0
+                !isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-gray-800 text-white hover:bg-gray-900'
               }`}
@@ -763,7 +802,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         </div>
 
         {/* Low Quota Warning Banner */}
-        {!isUnlimited && availableUnits !== null && availableUnits > 0 && availableUnits <= 3 && (
+        {!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) > 0 && (totalUnits - stats.units_consumed) <= 3 && (
           <div className="mb-6 bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-orange-200 flex items-center justify-center flex-shrink-0">
@@ -772,7 +811,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <div className="flex-1">
                 <h3 className="text-sm font-semibold text-orange-900 mb-1">Low Assessment Quota</h3>
                 <p className="text-sm text-orange-800">
-                  You have only <span className="font-bold">{availableUnits}</span> assessment unit{availableUnits !== 1 ? 's' : ''} remaining out of {totalUnits}.
+                  You have only <span className="font-bold">{Math.max(0, totalUnits - stats.units_consumed)}</span> assessment unit{(totalUnits - stats.units_consumed) !== 1 ? 's' : ''} remaining out of {totalUnits}.
                   {' '}Consider purchasing add-on credits to avoid interruptions.
                 </p>
               </div>
@@ -787,7 +826,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         )}
 
         {/* Quota Exhausted Banner */}
-        {!isUnlimited && availableUnits !== null && availableUnits <= 0 && (
+        {!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 && (
           <div className="mb-6 bg-red-50 border-2 border-red-300 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-200 flex items-center justify-center flex-shrink-0">
@@ -1594,7 +1633,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {filteredAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
-                    onClick={() => router.push(`/recruitment/assessments/${assessment.id}`)}
+                    onClick={() => {
+                      if (assessment.status === 'Draft') {
+                        // For drafts, open edit modal to continue editing
+                        handleEditAssessment(assessment);
+                      } else {
+                        router.push(`/recruitment/assessments/${assessment.id}`);
+                      }
+                    }}
                     className="p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
                   >
                     {/* Grid Card Header */}
@@ -1702,8 +1748,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <div className="absolute right-4 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-20">
                           <button
                             onClick={() => {
-                              setSelectedAssessmentForEdit(assessment);
-                              setShowEditModal(true);
+                              handleEditAssessment(assessment);
                               setOpenMenuId(null);
                             }}
                             className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
@@ -1769,6 +1814,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             Copy Link
                           </button>
                           <div className="border-t border-gray-100 my-1"></div>
+                          {assessment.status !== 'Completed' && (
+                            <button
+                              onClick={() => handleCompleteAssessment(assessment.id)}
+                              className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                            >
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                              Completed
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleArchiveAssessment(assessment.id)}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                          >
+                            <Archive className="w-4 h-4 text-gray-600" />
+                            Archive
+                          </button>
                           <button
                             onClick={() => handleDeleteAssessment(assessment.id)}
                             className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2.5"
@@ -1788,7 +1849,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {filteredAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
-                    onClick={() => router.push(`/recruitment/assessments/${assessment.id}`)}
+                    onClick={() => {
+                      if (assessment.status === 'Draft') {
+                        // For drafts, open edit modal to continue editing
+                        handleEditAssessment(assessment);
+                      } else {
+                        router.push(`/recruitment/assessments/${assessment.id}`);
+                      }
+                    }}
                     className="p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
                   >
                     <div className="flex items-center justify-between">
@@ -1872,6 +1940,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               ? 'bg-purple-100 text-purple-700'
                               : assessment.status === 'Completed'
                               ? 'bg-blue-100 text-blue-700'
+                              : assessment.status === 'Paused'
+                              ? 'bg-orange-100 text-orange-700'
                               : 'bg-gray-100 text-gray-700'
                           }`}
                         >
@@ -1900,8 +1970,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-20">
                                 <button
                                   onClick={() => {
-                                    setSelectedAssessmentForEdit(assessment);
-                                    setShowEditModal(true);
+                                    handleEditAssessment(assessment);
                                     setOpenMenuId(null);
                                   }}
                                   className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
@@ -1986,21 +2055,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Duplicate
                                 </button>
                                 <div className="border-t border-gray-100 my-1"></div>
-                                {assessment.status === 'Active' ? (
-                                  <button
-                                    onClick={() => handlePauseAssessment(assessment.id)}
-                                    className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
-                                  >
-                                    <PauseCircle className="w-4 h-4 text-yellow-600" />
-                                    Pause
-                                  </button>
-                                ) : (
+                                {assessment.status !== 'Active' && (
                                   <button
                                     onClick={() => handleActivateAssessment(assessment.id)}
                                     className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
                                   >
                                     <Play className="w-4 h-4 text-green-600" />
                                     Activate
+                                  </button>
+                                )}
+                                {assessment.status === 'Active' && (
+                                  <button
+                                    onClick={() => handleCompleteAssessment(assessment.id)}
+                                    className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                  >
+                                    <CheckCircle className="w-4 h-4 text-green-600" />
+                                    Completed
                                   </button>
                                 )}
                                 <button

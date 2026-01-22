@@ -125,8 +125,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   const [addonPurchaseSuccess, setAddonPurchaseSuccess] = useState<string | null>(null);
   const [addonPurchaseError, setAddonPurchaseError] = useState<string | null>(null);
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
-  const USAGE_API_BASE = process.env.NEXT_PUBLIC_USAGE_API_URL || 'http://localhost:8001/api/v1';
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+  const USAGE_API_BASE = process.env.NEXT_PUBLIC_USAGE_API_URL || 'http://localhost:8000/api/v1';
 
   useEffect(() => {
     fetchUsageData();

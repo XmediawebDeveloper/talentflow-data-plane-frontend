@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   candidateService,
+  sessionTokenManager,
   AssessmentInfo,
   CurrentQuestion,
   StartAssessmentResponse,
@@ -87,8 +88,11 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     setStep(newStep);
   }, []);
 
-  // Enable refresh prevention during active assessment
-  const isAssessmentActive = step === 'assessment' || step === 'completing' || step === 'completed';
+  // Enable refresh prevention during active assessment (includes completing but not completed)
+  const isAssessmentActive = step === 'assessment' || step === 'completing';
+  // Proctoring should stop when assessment is completed
+  const isProctoringActive = step === 'assessment';
+
   useRefreshPrevention({
     enabled: isAssessmentActive,
     message: 'You have an ongoing assessment. Leaving this page will end your session.',
@@ -98,10 +102,11 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   });
 
   // Advanced proctoring monitoring (voice detection, camera obstruction, etc.)
+  // Only active during actual assessment, stops when completed
   const { state: proctoringState } = useProctoringMonitor({
     token,
     stream: cameraStream,
-    enabled: isAssessmentActive,
+    enabled: isProctoringActive,
     onWarning: (warning: ProctoringWarning) => {
       console.log('[PROCTORING] Warning:', warning.type, warning.message);
       addWarning(warning);
@@ -154,10 +159,14 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     loadAssessmentInfo();
   }, [token]);
 
-  // Setup proctoring when assessment starts
+  // Setup proctoring when assessment starts, stop when completed
   useEffect(() => {
     if (step === 'assessment') {
       startProctoring();
+    } else if (step === 'completing' || step === 'completed' || step === 'results') {
+      // Explicitly stop proctoring when assessment ends
+      stopProctoring();
+      console.log('[PROCTORING] Stopped - assessment ended');
     }
     return () => {
       stopProctoring();
@@ -197,6 +206,13 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     }
 
     console.log('[DEBUG] loadAssessmentInfo ALLOWED - current step:', currentStep);
+
+    // Ensure session token context is set BEFORE any API calls (critical for page refresh recovery)
+    sessionTokenManager.setAssessmentToken(token);
+    const existingSessionToken = sessionTokenManager.getToken(token);
+    if (existingSessionToken) {
+      console.log('[DEBUG] Session token found in storage - will be sent with API requests');
+    }
 
     try {
       setStepSafe('loading');
@@ -703,7 +719,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
           currentQuestion={currentQuestion}
           progress={progress}
           rounds={assessmentData?.rounds || []}
-          startedAt={assessmentData?.started_at || new Date().toISOString()}
+          startedAt={assessmentData?.started_at || assessmentInfo?.attempt_started_at || new Date().toISOString()}
           durationMinutes={assessmentInfo?.duration_minutes || 30}
           onAnswerSubmit={handleAnswerSubmit}
           onComplete={handleCompleteAssessment}

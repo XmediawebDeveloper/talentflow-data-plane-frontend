@@ -413,7 +413,7 @@ export const jdService = {
       }
 
       const { JDStreamClient } = await import('../utils/sseClient');
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
       const client = new JDStreamClient(apiBaseUrl, accessToken);
 
       await client.stream(prompt, {

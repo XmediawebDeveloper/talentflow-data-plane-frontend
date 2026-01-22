@@ -5,37 +5,75 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 // ===================== Session Token Management =====================
-// Manages single-session enforcement token
+// Manages single-session enforcement token with improved persistence
 
 let currentSessionToken: string | null = null;
+let currentAssessmentToken: string | null = null;
 
 export const sessionTokenManager = {
-  setToken(token: string) {
+  setToken(token: string, assessmentToken?: string) {
     currentSessionToken = token;
-    // Also store in sessionStorage for tab refresh persistence (but not across devices)
+    if (assessmentToken) {
+      currentAssessmentToken = assessmentToken;
+    }
+    // Store in both sessionStorage (tab-specific) and localStorage (persistent)
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('assessment_session_token', token);
+      const storageKey = currentAssessmentToken
+        ? `assessment_session_${currentAssessmentToken}`
+        : 'assessment_session_token';
+      sessionStorage.setItem(storageKey, token);
+      sessionStorage.setItem('assessment_session_token', token); // Fallback key
+      // Also store in localStorage for refresh resilience
+      localStorage.setItem(storageKey, token);
+      localStorage.setItem('assessment_session_token', token);
+      console.log('[SESSION] Token stored with key:', storageKey);
     }
   },
-  getToken(): string | null {
+  getToken(assessmentToken?: string): string | null {
+    // First check memory
     if (currentSessionToken) return currentSessionToken;
-    // Try to recover from sessionStorage
+
     if (typeof window !== 'undefined') {
-      const stored = sessionStorage.getItem('assessment_session_token');
+      const token = assessmentToken || currentAssessmentToken;
+      const storageKey = token ? `assessment_session_${token}` : 'assessment_session_token';
+
+      // Try sessionStorage first (same tab)
+      let stored = sessionStorage.getItem(storageKey);
+      if (!stored) {
+        stored = sessionStorage.getItem('assessment_session_token');
+      }
+
+      // Fall back to localStorage (survives refresh/browser close)
+      if (!stored) {
+        stored = localStorage.getItem(storageKey);
+      }
+      if (!stored) {
+        stored = localStorage.getItem('assessment_session_token');
+      }
+
       if (stored) {
         currentSessionToken = stored;
+        console.log('[SESSION] Token recovered from storage');
         return stored;
       }
     }
     return null;
   },
-  clearToken() {
+  setAssessmentToken(token: string) {
+    currentAssessmentToken = token;
+  },
+  clearToken(assessmentToken?: string) {
     currentSessionToken = null;
     if (typeof window !== 'undefined') {
+      const token = assessmentToken || currentAssessmentToken;
+      const storageKey = token ? `assessment_session_${token}` : 'assessment_session_token';
+      sessionStorage.removeItem(storageKey);
       sessionStorage.removeItem('assessment_session_token');
+      localStorage.removeItem(storageKey);
+      localStorage.removeItem('assessment_session_token');
     }
   }
 };
@@ -50,7 +88,23 @@ const candidateApi = axios.create({
 
 // Add request interceptor to include session token
 candidateApi.interceptors.request.use((config) => {
-  const sessionToken = sessionTokenManager.getToken();
+  // Try to get session token - the manager will check memory first, then storage
+  let sessionToken = sessionTokenManager.getToken();
+
+  // If no token found and URL contains assessment token, try to extract and recover
+  if (!sessionToken && config.url) {
+    const match = config.url.match(/\/assessment\/([a-zA-Z0-9_-]+)/);
+    if (match) {
+      const assessmentToken = match[1];
+      // Set the assessment context and try again
+      sessionTokenManager.setAssessmentToken(assessmentToken);
+      sessionToken = sessionTokenManager.getToken(assessmentToken);
+      if (sessionToken) {
+        console.log('[SESSION] Recovered token from URL-based lookup:', assessmentToken.substring(0, 10) + '...');
+      }
+    }
+  }
+
   if (sessionToken) {
     config.headers['X-Session-Token'] = sessionToken;
   }
@@ -79,9 +133,11 @@ export interface AssessmentInfo {
   expires_at: string | null;
   attempt_id: string | null;
   attempt_status: string | null;
+  attempt_started_at: string | null;  // When attempt started - for timer resume on page refresh
   can_start: boolean;
   can_resume: boolean;
   message: string;
+  session_token?: string;  // Session token for page refresh support
 }
 
 export interface ConsentResponse {
@@ -324,6 +380,13 @@ export const candidateService = {
   async getAssessmentInfo(token: string): Promise<AssessmentInfo> {
     try {
       const response = await candidateApi.get<AssessmentInfo>(`/candidate/assessment/${token}`);
+
+      // Store session token if returned (for page refresh support)
+      if (response.data.session_token) {
+        sessionTokenManager.setToken(response.data.session_token, token);
+        console.log('[SESSION] Stored session token from assessment info');
+      }
+
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -350,7 +413,7 @@ export const candidateService = {
 
       // Store session token if returned (for single-session enforcement)
       if (response.data.session_token) {
-        sessionTokenManager.setToken(response.data.session_token);
+        sessionTokenManager.setToken(response.data.session_token, token);  // Pass assessment token for better storage key
         console.log('[CONSENT] Session token stored for single-session enforcement');
       }
 
@@ -437,7 +500,7 @@ export const candidateService = {
       );
       // Store session token for single-session enforcement
       if (response.data.session_token) {
-        sessionTokenManager.setToken(response.data.session_token);
+        sessionTokenManager.setToken(response.data.session_token, token);  // Pass assessment token for better storage key
       }
       return response.data;
     } catch (error) {

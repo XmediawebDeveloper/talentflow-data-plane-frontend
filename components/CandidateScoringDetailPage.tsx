@@ -198,7 +198,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
       }
 
       // Call the backend API to get PDF
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
       const response = await fetch(`${API_URL}/scoring/scores/${fullResumeData.id}/download-pdf`, {
         method: 'GET',
         headers: {
