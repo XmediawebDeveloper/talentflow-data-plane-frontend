@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Download, FileText, User, History, Clock, Loader2 } from 'lucide-react';
-import { Resume } from '@/lib/types/types';
+import { Resume, ResumeVersion } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
 import { Resume as ApiResume } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
@@ -159,13 +159,14 @@ export default function ResumeDetailPage() {
     }
   };
 
-  const handleDownloadVersion = async (versionId: string) => {
+  const handleDownloadVersion = async (version: ResumeVersion) => {
     try {
-      const blob = await resumeService.download(versionId);
+      const blob = await resumeService.download(version.id);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${resume?.name || 'resume'}_version.pdf`;
+      // Use original filename from version to preserve file extension
+      a.download = version.fileName || `${resume?.name || 'resume'}_v${version.version || 'version'}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -505,7 +506,7 @@ export default function ResumeDetailPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => handleDownloadVersion(version.id)}
+                              onClick={() => handleDownloadVersion(version)}
                               className={`p-2 rounded-lg transition-colors ${
                                 index === 0 ? 'text-gray-800 hover:bg-gray-100' : 'text-gray-600 hover:bg-gray-100'
                               }`}

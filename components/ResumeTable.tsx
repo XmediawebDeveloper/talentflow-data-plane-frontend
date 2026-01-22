@@ -453,7 +453,8 @@ export default function ResumeTable({
                             const url = window.URL.createObjectURL(blob);
                             const a = document.createElement('a');
                             a.href = url;
-                            a.download = `${resume.name || 'resume'}.pdf`;
+                            // Use original filename to preserve file extension (pdf, doc, docx, etc.)
+                            a.download = resume.fileName || `${resume.name || 'resume'}.pdf`;
                             document.body.appendChild(a);
                             a.click();
                             window.URL.revokeObjectURL(url);

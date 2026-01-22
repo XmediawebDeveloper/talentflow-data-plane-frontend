@@ -76,6 +76,8 @@ export interface ResumeVersion {
   uploadDate: string;
   size: string;
   uploadedBy: string;
+  fileName?: string; // Original filename with extension
+  version?: number; // Version number
 }
 
 export interface Folder {

@@ -213,6 +213,8 @@ export default function MyResumesPage() {
           name: typeof lang === 'string' ? lang : (lang.name || lang.language || ''),
           proficiency: typeof lang === 'string' ? 'Fluent' : (lang.proficiency || lang.level || 'Fluent'),
         })),
+        fileName: r.file_name, // Original file name with extension
+        fileType: r.file_type, // File type (pdf, doc, docx)
       }));
 
       // Convert API Folder to component Folder type
@@ -306,7 +308,8 @@ export default function MyResumesPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${resume?.name || 'resume'}.pdf`;
+      // Use original fileName to preserve file extension (pdf, doc, docx, etc.)
+      a.download = resume?.fileName || `${resume?.name || 'resume'}_resume`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -336,12 +339,14 @@ export default function MyResumesPage() {
       for (let i = 0; i < selectedResumes.length; i++) {
         const resumeId = selectedResumes[i];
         const resume = resumes.find(r => r.id === resumeId);
-        const fileName = `resumes/${resume?.name || `resume_${i + 1}`}.pdf`;
+        // Use original fileName to preserve file extension (pdf, doc, docx, etc.)
+        const fileName = resume?.fileName || `${resume?.name || `resume_${i + 1}`}_resume`;
+        const zipPath = `resumes/${fileName}`;
 
         try {
           const blob = await resumeService.download(resumeId);
           const arrayBuffer = await blob.arrayBuffer();
-          files[fileName] = new Uint8Array(arrayBuffer);
+          files[zipPath] = new Uint8Array(arrayBuffer);
         } catch (err) {
           console.error(`Failed to download ${fileName}:`, err);
         }
@@ -1367,7 +1372,8 @@ export default function MyResumesPage() {
                                     const url = window.URL.createObjectURL(blob);
                                     const a = document.createElement('a');
                                     a.href = url;
-                                    a.download = resume.fileName || `${resume.name}.pdf`;
+                                    // Use original fileName to preserve file extension (pdf, doc, docx, etc.)
+                                    a.download = resume.fileName || `${resume.name}_resume`;
                                     a.click();
                                     window.URL.revokeObjectURL(url);
                                   } catch (err) {
