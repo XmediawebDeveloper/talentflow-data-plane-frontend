@@ -1,13 +1,197 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Download, Mail, Phone, MapPin, Briefcase, Calendar, Award,
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ExternalLink, Linkedin, Globe, FileText, Clock, History,
-  User, File, HardDrive, Loader2, Share2
+  User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
+  AlignLeft, Hash
 } from 'lucide-react';
+
+// Full Resume Content Component with better UI
+function FullResumeContent({ text }: { text: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<'formatted' | 'raw'>('formatted');
+
+  // Parse text into sections
+  const sections = useMemo(() => {
+    const lines = text.split('\n');
+    const result: { title: string; content: string[] }[] = [];
+    let currentSection: { title: string; content: string[] } = { title: 'Overview', content: [] };
+
+    // Common section headers in resumes
+    const sectionHeaders = [
+      'experience', 'work experience', 'employment', 'professional experience',
+      'education', 'academic', 'qualifications',
+      'skills', 'technical skills', 'core competencies', 'expertise',
+      'summary', 'professional summary', 'objective', 'profile',
+      'certifications', 'certificates', 'licenses',
+      'projects', 'key projects',
+      'achievements', 'accomplishments', 'awards',
+      'languages', 'contact', 'personal', 'references'
+    ];
+
+    lines.forEach((line) => {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) {
+        if (currentSection.content.length > 0) {
+          currentSection.content.push('');
+        }
+        return;
+      }
+
+      // Check if this line is a section header
+      const lowerLine = trimmedLine.toLowerCase().replace(/[:\-_]/g, ' ').trim();
+      const isHeader = sectionHeaders.some(header =>
+        lowerLine === header ||
+        lowerLine.startsWith(header + ' ') ||
+        lowerLine.endsWith(' ' + header)
+      );
+
+      if (isHeader && trimmedLine.length < 50) {
+        // Save previous section if it has content
+        if (currentSection.content.length > 0 || currentSection.title !== 'Overview') {
+          result.push(currentSection);
+        }
+        currentSection = { title: trimmedLine, content: [] };
+      } else {
+        currentSection.content.push(trimmedLine);
+      }
+    });
+
+    // Add last section
+    if (currentSection.content.length > 0) {
+      result.push(currentSection);
+    }
+
+    return result.filter(s => s.content.some(c => c.trim()));
+  }, [text]);
+
+  // Stats
+  const wordCount = text.split(/\s+/).filter(w => w).length;
+  const charCount = text.length;
+  const lineCount = text.split('\n').filter(l => l.trim()).length;
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const maxHeight = isExpanded ? 'max-h-[2000px]' : 'max-h-96';
+
+  return (
+    <div className="bg-gray-50 border border-gray-300 rounded-lg overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-100">
+        <div className="flex items-center gap-3">
+          <FileText className="w-5 h-5 text-gray-500" />
+          <h3 className="text-lg font-semibold text-gray-800">Full Resume Content</h3>
+          <div className="flex items-center gap-3 text-xs text-gray-500 ml-2">
+            <span className="flex items-center gap-1">
+              <Hash className="w-3 h-3" />
+              {wordCount.toLocaleString()} words
+            </span>
+            <span>•</span>
+            <span>{charCount.toLocaleString()} chars</span>
+            <span>•</span>
+            <span>{lineCount} lines</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Tab Toggle */}
+          <div className="flex bg-gray-200 rounded-lg p-0.5">
+            <button
+              onClick={() => setActiveTab('formatted')}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                activeTab === 'formatted'
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <AlignLeft className="w-3 h-3 inline mr-1" />
+              Sections
+            </button>
+            <button
+              onClick={() => setActiveTab('raw')}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                activeTab === 'raw'
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <FileText className="w-3 h-3 inline mr-1" />
+              Raw
+            </button>
+          </div>
+          {/* Copy Button */}
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+          >
+            {copied ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className={`${maxHeight} overflow-y-auto transition-all duration-300`}>
+        {activeTab === 'formatted' ? (
+          <div className="p-4 space-y-4">
+            {sections.map((section, idx) => (
+              <div key={idx} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+                  <h4 className="font-medium text-gray-800 text-sm">{section.title}</h4>
+                </div>
+                <div className="p-4">
+                  {section.content.map((line, lineIdx) => (
+                    line ? (
+                      <p key={lineIdx} className="text-sm text-gray-700 mb-2 last:mb-0 leading-relaxed">
+                        {line}
+                      </p>
+                    ) : (
+                      <div key={lineIdx} className="h-2" />
+                    )
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-4">
+            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono leading-relaxed bg-white border border-gray-200 rounded-lg p-4">
+              {text}
+            </pre>
+          </div>
+        )}
+      </div>
+
+      {/* Expand/Collapse Button */}
+      <div className="border-t border-gray-200 bg-gray-100 p-2">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="w-full flex items-center justify-center gap-2 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-colors"
+        >
+          {isExpanded ? (
+            <>
+              <ChevronUp className="w-4 h-4" />
+              Show Less
+            </>
+          ) : (
+            <>
+              <ChevronDown className="w-4 h-4" />
+              Show More
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
 import { Resume, Job } from '@/lib/types/types';
 import { resumeService, Resume as ApiResume } from '@/lib/services/resumeService';
 import { jdService } from '@/lib/services/jdService';
@@ -115,6 +299,7 @@ export default function ResumeViewPage() {
       uploadedBy: v.uploaded_by_name || 'Unknown',
     })),
     versionCount: r.version_count || versionsData.length || 1,
+    extractedText: r.extracted_text,
   });
 
   const handleDownload = async () => {
@@ -581,6 +766,11 @@ export default function ResumeViewPage() {
             </div>
           )}
 
+          {/* Full Resume Content - Hidden as per requirement, showing AI-extracted sections above instead */}
+          {/* {resume.extractedText && (
+            <FullResumeContent text={resume.extractedText} />
+          )} */}
+
           {/* Version History */}
           {resume.versions && resume.versions.length > 0 && (
             <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
@@ -644,7 +834,7 @@ export default function ResumeViewPage() {
                             const url = window.URL.createObjectURL(blob);
                             const link = document.createElement('a');
                             link.href = url;
-                            link.download = version.fileName || `resume-v${version.version}.pdf`;
+                            link.download = version.name || `resume-v${index + 1}.pdf`;
                             document.body.appendChild(link);
                             link.click();
                             document.body.removeChild(link);

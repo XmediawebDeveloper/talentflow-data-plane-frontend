@@ -121,20 +121,22 @@ interface DraggableSkillProps {
   onEditChange: (value: string) => void;
   onSaveEdit: () => void;
   onCancelEdit: () => void;
+  readOnly?: boolean;
 }
 
-const DraggableSkill = ({ 
-  skill, 
-  index, 
-  category, 
-  onMove, 
-  onRemove, 
+const DraggableSkill = ({
+  skill,
+  index,
+  category,
+  onMove,
+  onRemove,
   onStartEdit,
   isEditing,
   editingValue,
   onEditChange,
   onSaveEdit,
-  onCancelEdit
+  onCancelEdit,
+  readOnly = false
 }: DraggableSkillProps) => {
   const [{ isDragging }, drag, dragPreview] = useDrag(() => ({
     type: 'SKILL',
@@ -187,45 +189,49 @@ const DraggableSkill = ({
       ) : (
         <>
           <div className="flex items-center gap-2 flex-1">
-            <div
-              ref={drag}
-              className="cursor-move opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-600"
-              title="Drag to move"
-            >
-              <GripVertical className="w-4 h-4" />
-            </div>
+            {!readOnly && (
+              <div
+                ref={drag}
+                className="cursor-move opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-600"
+                title="Drag to move"
+              >
+                <GripVertical className="w-4 h-4" />
+              </div>
+            )}
             <CheckCircle className={`w-4 h-4 ${tickColor} flex-shrink-0`} />
             <span
-              className="text-sm text-gray-700 flex-1 cursor-pointer hover:text-gray-900"
-              onClick={() => onStartEdit(category, index, skill)}
-              title="Click to edit"
+              className={`text-sm text-gray-700 flex-1 ${readOnly ? '' : 'cursor-pointer hover:text-gray-900'}`}
+              onClick={() => !readOnly && onStartEdit(category, index, skill)}
+              title={readOnly ? '' : 'Click to edit'}
             >
               {skill}
             </span>
           </div>
-          <div className="flex gap-1">
-            <button
-              onClick={() => onStartEdit(category, index, skill)}
-              className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
-              title="Edit"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => onMove(skill, category, isMustHave ? 'niceToHaveSkills' : 'mustHaveSkills')}
-              className="text-xs text-gray-800 hover:text-gray-900 px-2"
-              title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
-            >
-              {isMustHave ? '→' : '←'}
-            </button>
-            <button
-              onClick={() => onRemove(category, index)}
-              className="text-red-600 hover:text-red-700"
-              title="Delete"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+          {!readOnly && (
+            <div className="flex gap-1">
+              <button
+                onClick={() => onStartEdit(category, index, skill)}
+                className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Edit"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => onMove(skill, category, isMustHave ? 'niceToHaveSkills' : 'mustHaveSkills')}
+                className="text-xs text-gray-800 hover:text-gray-900 px-2"
+                title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
+              >
+                {isMustHave ? '→' : '←'}
+              </button>
+              <button
+                onClick={() => onRemove(category, index)}
+                className="text-red-600 hover:text-red-700"
+                title="Delete"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -284,6 +290,7 @@ interface DraggableCommentProps {
   onEditChange: (value: string) => void;
   onSaveEdit: () => void;
   onCancelEdit: () => void;
+  readOnly?: boolean;
 }
 
 const DraggableComment = ({
@@ -297,7 +304,8 @@ const DraggableComment = ({
   editingValue,
   onEditChange,
   onSaveEdit,
-  onCancelEdit
+  onCancelEdit,
+  readOnly = false
 }: DraggableCommentProps) => {
   const [{ isDragging }, drag, dragPreview] = useDrag(() => ({
     type: 'COMMENT',
@@ -351,45 +359,49 @@ const DraggableComment = ({
       ) : (
         <>
           <div className="flex items-center gap-2 flex-1">
-            <div
-              ref={drag}
-              className="cursor-move opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-600"
-              title="Drag to move"
-            >
-              <GripVertical className="w-4 h-4" />
-            </div>
+            {!readOnly && (
+              <div
+                ref={drag}
+                className="cursor-move opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-600"
+                title="Drag to move"
+              >
+                <GripVertical className="w-4 h-4" />
+              </div>
+            )}
             <CheckCircle2 className={`w-4 h-4 ${iconColor} flex-shrink-0`} />
             <span
-              className="text-sm text-gray-900 flex-1 cursor-pointer hover:text-gray-800"
-              onClick={() => onStartEdit(category, index, comment)}
-              title="Click to edit"
+              className={`text-sm text-gray-900 flex-1 ${readOnly ? '' : 'cursor-pointer hover:text-gray-800'}`}
+              onClick={() => !readOnly && onStartEdit(category, index, comment)}
+              title={readOnly ? '' : 'Click to edit'}
             >
               {comment}
             </span>
           </div>
-          <div className="flex gap-1">
-            <button
-              onClick={() => onStartEdit(category, index, comment)}
-              className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
-              title="Edit"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => onMove(comment, category, isMustHave ? 'niceToHaveComments' : 'mustHaveComments')}
-              className="text-xs text-gray-800 hover:text-gray-900 px-2"
-              title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
-            >
-              {isMustHave ? '→' : '←'}
-            </button>
-            <button
-              onClick={() => onRemove(category, index)}
-              className={isMustHave ? 'text-red-600 hover:text-red-700' : 'text-blue-600 hover:text-blue-700'}
-              title="Delete"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+          {!readOnly && (
+            <div className="flex gap-1">
+              <button
+                onClick={() => onStartEdit(category, index, comment)}
+                className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Edit"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => onMove(comment, category, isMustHave ? 'niceToHaveComments' : 'mustHaveComments')}
+                className="text-xs text-gray-800 hover:text-gray-900 px-2"
+                title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
+              >
+                {isMustHave ? '→' : '←'}
+              </button>
+              <button
+                onClick={() => onRemove(category, index)}
+                className={isMustHave ? 'text-red-600 hover:text-red-700' : 'text-blue-600 hover:text-blue-700'}
+                title="Delete"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -708,6 +720,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Track if user has proceeded to extract stage (to disable regenerate button)
   const [hasProceededToExtract, setHasProceededToExtract] = useState(false);
+
+  // Track if user has proceeded to review stage (to make Stage 2 fields read-only)
+  const [hasProceededToReview, setHasProceededToReview] = useState(false);
+
+  // Track original Stage 1 values to detect modifications after returning from review
+  const [originalStage1Values, setOriginalStage1Values] = useState<{
+    jobTitle: string;
+    aiPrompt: string;
+    generatedJD: string;
+    manualJD: string;
+  } | null>(null);
 
   // Save to draft state
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -1122,8 +1145,61 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    // Check if JD has changed since last extraction - if not, skip extraction and go to step 2
-    if (lastExtractedJD && jdText.trim() === lastExtractedJD.trim()) {
+    // Check if any Stage 1 field has changed since last extraction
+    // If user has proceeded to review and comes back to Stage 1:
+    // - If ANY field is modified → trigger re-extraction
+    // - If NO fields modified → skip extraction, go directly to Stage 2
+    const hasStage1FieldsChanged = () => {
+      if (!originalStage1Values) {
+        console.log('[TalentFlow] No originalStage1Values, need extraction');
+        return true; // No original values, need extraction
+      }
+
+      const currentJobTitle = jobTitle.trim();
+      const currentAiPrompt = aiPrompt.trim();
+      const currentGeneratedJD = generatedJD.trim();
+      const currentManualJD = manualJD.trim();
+
+      const jobTitleChanged = currentJobTitle !== originalStage1Values.jobTitle.trim();
+      const aiPromptChanged = currentAiPrompt !== originalStage1Values.aiPrompt.trim();
+      const generatedJDChanged = currentGeneratedJD !== originalStage1Values.generatedJD.trim();
+      const manualJDChanged = currentManualJD !== originalStage1Values.manualJD.trim();
+
+      console.log('[TalentFlow] Stage 1 field comparison:', {
+        currentJobTitle,
+        originalJobTitle: originalStage1Values.jobTitle.trim(),
+        jobTitleChanged,
+        currentAiPrompt: currentAiPrompt.substring(0, 50),
+        originalAiPrompt: originalStage1Values.aiPrompt.trim().substring(0, 50),
+        aiPromptChanged,
+        currentGeneratedJDLength: currentGeneratedJD.length,
+        originalGeneratedJDLength: originalStage1Values.generatedJD.trim().length,
+        generatedJDChanged,
+        currentManualJDLength: currentManualJD.length,
+        originalManualJDLength: originalStage1Values.manualJD.trim().length,
+        manualJDChanged
+      });
+
+      return jobTitleChanged || aiPromptChanged || generatedJDChanged || manualJDChanged;
+    };
+
+    console.log('[TalentFlow] handleNext check:', { hasProceededToReview, hasOriginalStage1Values: !!originalStage1Values });
+
+    // If user has proceeded to review and returned to Stage 1
+    if (hasProceededToReview && originalStage1Values) {
+      if (!hasStage1FieldsChanged()) {
+        // No fields modified - skip extraction, go directly to Stage 2
+        console.log('[TalentFlow] No Stage 1 fields modified after review, skipping extraction');
+        setHasProceededToExtract(true);
+        setStep('extract');
+        return;
+      } else {
+        // Fields modified - need to re-extract, also reset hasProceededToReview
+        console.log('[TalentFlow] Stage 1 fields modified after review, triggering re-extraction');
+        setHasProceededToReview(false); // Reset so Stage 2 becomes editable again
+      }
+    } else if (lastExtractedJD && jdText.trim() === lastExtractedJD.trim()) {
+      // Normal flow: Check if JD has changed since last extraction
       console.log('[TalentFlow] JD unchanged, skipping extraction and going directly to step 2');
       setHasProceededToExtract(true);
       setStep('extract');
@@ -1437,6 +1513,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       });
       setExtractedData(extraction);
       setLastExtractedJD(jdText);  // Track JD text to skip extraction if unchanged on next "Next" click
+
+      // Save original Stage 1 values to detect modifications if user returns from review
+      setOriginalStage1Values({
+        jobTitle: jobTitle,
+        aiPrompt: aiPrompt,
+        generatedJD: generatedJD,
+        manualJD: manualJD
+      });
+
       console.log('[TalentFlow] Moving to extract step...');
       setStep('extract');
 
@@ -1786,6 +1871,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   };
 
   const handlePublish = async () => {
+    // Debug logging for validation
+    console.log('[TalentFlow] handlePublish validation check:', {
+      education: extractedData.education,
+      educationTrimmed: extractedData.education?.trim() || '',
+      experience: extractedData.experience,
+      experienceTrimmed: extractedData.experience?.trim() || '',
+      industryType: extractedData.industryType,
+      industryTypeTrimmed: extractedData.industryType?.trim() || '',
+    });
+
     // Validate mandatory fields
     const missingFields: string[] = [];
     const errors: {
@@ -1794,6 +1889,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       education?: string;
       experience?: string;
       industryType?: string;
+      locations?: string;
     } = {};
 
     // Must have at least one must-have skill
@@ -1808,22 +1904,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       errors.mustHaveComments = 'At least one Must-Have Comment is required';
     }
 
-    // Education is required
-    if (!extractedData.education) {
+    // Education is required - check for empty string, null, undefined, or whitespace only
+    if (!extractedData.education || extractedData.education.trim() === '') {
       missingFields.push('Education');
       errors.education = 'Education is required';
     }
 
-    // Experience is required
-    if (!extractedData.experience) {
+    // Experience is required - check for empty string, null, undefined, or whitespace only
+    if (!extractedData.experience || extractedData.experience.trim() === '') {
       missingFields.push('Experience');
       errors.experience = 'Experience is required';
     }
 
-    // Industry Type is required - check for empty string, null, undefined
+    // Industry Type is required - check for empty string, null, undefined, or whitespace only
     if (!extractedData.industryType || extractedData.industryType.trim() === '') {
       missingFields.push('Industry Type');
       errors.industryType = 'Industry Type is required';
+    }
+
+    // Location validation - if location is marked as required but no locations added, show error
+    if (extractedData.locationsRequired && extractedData.locations.length === 0) {
+      missingFields.push('At least one Location');
+      errors.locations = 'Location is marked as required but no locations added';
     }
 
     // Set validation errors for inline display
@@ -1841,9 +1943,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // If user has modified extracted data (skills/comments), regenerate JD with those changes
     // For published JDs being edited, ALWAYS reformat to ensure latest changes are included
     // Skip formatting only if already formatted and no changes were made AND not editing a published JD
+    // NOTE: Validation above runs BEFORE this check, so required fields are always validated
     if (hasFormattedForReview && !extractedDataModified && !isEditingPublished) {
       console.log('[DEBUG] Skipping reformat - already formatted and no changes made');
+      console.log('[DEBUG] Experience value at skip:', extractedData.experience);
       setStep('review');
+      setHasProceededToReview(true);  // Mark that user has proceeded to review (makes Stage 2 fields read-only)
       return;
     }
 
@@ -1864,13 +1969,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                            mustHaveComments.length > 0 ||
                            niceToHaveComments.length > 0;
 
-      if (extractedDataModified || mode === 'ai' || (mode === 'manual' && hasParameters)) {
+      // Always reformat when there are skills/comments to incorporate OR when editing a published JD
+      const shouldReformat = extractedDataModified || mode === 'ai' || (mode === 'manual' && hasParameters) || isEditingPublished || hasParameters;
+
+      if (shouldReformat) {
         console.log('[DEBUG] Calling reformat API with parameters...');
-        console.log('[DEBUG] Mode:', mode, 'extractedDataModified:', extractedDataModified, 'hasParameters:', hasParameters);
+        console.log('[DEBUG] Mode:', mode, 'extractedDataModified:', extractedDataModified, 'hasParameters:', hasParameters, 'isEditingPublished:', isEditingPublished);
+        console.log('[DEBUG] Skills to include - mustHave:', extractedData.mustHaveSkills.length, 'niceToHave:', extractedData.niceToHaveSkills.length);
+        console.log('[DEBUG] Comments to include - mustHave:', mustHaveComments.length, 'niceToHave:', niceToHaveComments.length);
 
         if (editingId) {
           console.log('[DEBUG] Passing parameters - must_have_comments:', mustHaveComments.length, 'nice_to_have_comments:', niceToHaveComments.length);
           console.log('[DEBUG] Nice-to-have comments:', niceToHaveComments);
+          console.log('[DEBUG] Must-have skills:', extractedData.mustHaveSkills);
+          console.log('[DEBUG] Nice-to-have skills:', extractedData.niceToHaveSkills);
 
           // Parse experience for saving
           let experienceMin: number | undefined;
@@ -1898,7 +2010,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
           // Call reformat endpoint with ALL parameters directly in the request
           // This ensures nice-to-have comments are passed to the AI
-          const reformattedJD = await jdService.reformatWithParams(editingId, {
+          const reformatParams = {
             must_have_skills: extractedData.mustHaveSkills,
             nice_to_have_skills: extractedData.niceToHaveSkills,
             must_have_comments: mustHaveComments,
@@ -1909,9 +2021,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             certifications: extractedData.certifications,
             coding_required: extractedData.codingRequired,
             supported_languages: extractedData.suggestedLanguages,
-          });
+          };
+
+          console.log('[DEBUG] Sending reformat request with params:', JSON.stringify(reformatParams, null, 2));
+
+          const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
 
           console.log('[DEBUG] Reformat successful, updated description length:', reformattedJD.description?.length);
+          console.log('[DEBUG] Reformatted description preview (first 500 chars):', reformattedJD.description?.substring(0, 500));
+          console.log('[DEBUG] Full reformatted JD:', reformattedJD.description);
+          console.log('[DEBUG] JD contains "mongo db":', reformattedJD.description?.toLowerCase().includes('mongo'));
+          console.log('[DEBUG] JD contains "neo4j":', reformattedJD.description?.toLowerCase().includes('neo4j'));
+          console.log('[DEBUG] JD contains "postegres":', reformattedJD.description?.toLowerCase().includes('postegres') || reformattedJD.description?.toLowerCase().includes('postgres'));
 
           // Store the reformatted description for saving (React state is async)
           finalDescription = reformattedJD.description;
@@ -1929,6 +2050,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             title: 'JD Reformatted',
             description: 'Job description has been regenerated with your changes.',
           });
+        } else {
+          console.error('[DEBUG] Cannot reformat - editingId is null. This should not happen in stage 2.');
+          toast.warning({
+            title: 'Cannot Reformat',
+            description: 'JD not saved yet. Your changes will be included when saving.',
+          });
         }
       } else {
         console.log('[DEBUG] No modifications, keeping original JD');
@@ -1945,6 +2072,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Go to review step to show the reformatted summary
     setStep('review');
+    setHasProceededToReview(true);  // Mark that user has proceeded to review (makes Stage 2 fields read-only)
     setHasFormattedForReview(true);  // Mark as formatted so we can skip on next "Next" click
     setExtractedDataModified(false);  // Reset modified flag after formatting
 
@@ -2070,18 +2198,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       missingFields.push('At least one Must-Have Comment');
     }
 
-    // Education is required
-    if (!extractedData.education) {
+    // Education is required - check for empty string, null, undefined, or whitespace only
+    const educationValue = extractedData.education?.trim() || '';
+    if (!educationValue) {
       missingFields.push('Education');
     }
 
-    // Experience is required
-    if (!extractedData.experience) {
+    // Experience is required - check for empty string, null, undefined, or whitespace only
+    const experienceValue = extractedData.experience?.trim() || '';
+    if (!experienceValue) {
       missingFields.push('Experience');
     }
 
-    // Industry Type is required - check for empty string, null, undefined
-    if (!extractedData.industryType || extractedData.industryType.trim() === '') {
+    // Industry Type is required - check for empty string, null, undefined, or whitespace only
+    const industryValue = extractedData.industryType?.trim() || '';
+    if (!industryValue) {
       missingFields.push('Industry Type');
     }
 
@@ -2090,6 +2221,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (salaryError) {
       missingFields.push('Valid Salary Range (min must be less than max)');
     }
+
+    // Debug logging
+    console.log('[TalentFlow] Validation check:', {
+      experience: experienceValue,
+      education: educationValue,
+      industryType: industryValue,
+      isValid: missingFields.length === 0,
+      missingFields
+    });
 
     return {
       isValid: missingFields.length === 0,
@@ -2612,8 +2752,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       console.log('[TalentFlow] Set step to:', editingJD.creation_stage);
 
       // If already at review stage, mark as formatted to skip reformatting on next "Next" click
+      // and mark as proceeded to review to make Stage 2 fields read-only
       if (editingJD.creation_stage === 'review') {
         setHasFormattedForReview(true);
+        setHasProceededToReview(true);
+
+        // Save original Stage 1 values so we can detect modifications if user goes back to Stage 1
+        setOriginalStage1Values({
+          jobTitle: editingJD.title || '',
+          aiPrompt: editingJD.ai_prompt || '',
+          generatedJD: editingJD.description || '',
+          manualJD: editingJD.creation_method === 'manual' ? (editingJD.description || '') : ''
+        });
       }
 
       // Restore the creation mode based on saved creation_method
@@ -2661,6 +2811,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         const industryValue = editingJD.industry_type || '';
 
         console.log('[DEBUG] Loading editingJD data:');
+        console.log('[DEBUG] - experience_min from API:', editingJD.experience_min);
+        console.log('[DEBUG] - experience_max from API:', editingJD.experience_max);
+        console.log('[DEBUG] - mapped experienceValue:', experienceValue);
         console.log('[DEBUG] - nice_to_have_comments from API:', editingJD.nice_to_have_comments);
         console.log('[DEBUG] - must_have_comments from API:', editingJD.must_have_comments);
 
@@ -3335,8 +3488,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
               <h2 className="text-gray-900 mb-6">Extracted Information</h2>
               <p className="text-sm text-gray-600 mb-6">
-                AI has extracted the following information from your JD. You can modify, add, or remove items.
+                {isRegenerating
+                  ? 'Processing... Fields are temporarily read-only.'
+                  : 'AI has extracted the following information from your JD. You can modify, add, or remove items.'
+                }
               </p>
+
+              {/* Read-only notice banner when processing */}
+              {isRegenerating && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+                  <Info className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                  <p className="text-sm text-blue-800">
+                    Fields are read-only while processing. Please wait...
+                  </p>
+                </div>
+              )}
 
               {/* Skills & Comments Section - Single Row with 3 Columns */}
               <div className="grid grid-cols-3 gap-6 mb-8">
@@ -3344,15 +3510,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-gray-900">Must-Have Skills <span className="text-red-500">*</span></h3>
-                    <button
-                      onClick={() => setEditingCategory('mustHave')}
-                      className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add
-                    </button>
+                    {!isRegenerating && (
+                      <button
+                        onClick={() => setEditingCategory('mustHave')}
+                        className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add
+                      </button>
+                    )}
                   </div>
-                  {editingCategory === 'mustHave' && (
+                  {editingCategory === 'mustHave' && !isRegenerating && (
                     <div className="flex gap-2 mb-4">
                       <input
                         type="text"
@@ -3389,6 +3557,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onEditChange={setEditingSkillValue}
                         onSaveEdit={handleSaveEditSkill}
                         onCancelEdit={handleCancelEditSkill}
+                        readOnly={isRegenerating}
                       />
                     ))}
                   </DroppableSkillsContainer>
@@ -3404,15 +3573,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-gray-900">Nice-to-Have Skills</h3>
-                    <button
-                      onClick={() => setEditingCategory('niceToHave')}
-                      className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add
-                    </button>
+                    {!isRegenerating && (
+                      <button
+                        onClick={() => setEditingCategory('niceToHave')}
+                        className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add
+                      </button>
+                    )}
                   </div>
-                  {editingCategory === 'niceToHave' && (
+                  {editingCategory === 'niceToHave' && !isRegenerating && (
                     <div className="flex gap-2 mb-4">
                       <input
                         type="text"
@@ -3449,6 +3620,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onEditChange={setEditingSkillValue}
                         onSaveEdit={handleSaveEditSkill}
                         onCancelEdit={handleCancelEditSkill}
+                        readOnly={isRegenerating}
                       />
                     ))}
                   </DroppableSkillsContainer>
@@ -3460,15 +3632,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   <div>
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-gray-900">Must-Have Comments <span className="text-red-500">*</span></h3>
-                      <button
-                        onClick={() => setEditingCategory('comments')}
-                        className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add
-                      </button>
+                      {!isRegenerating && (
+                        <button
+                          onClick={() => setEditingCategory('comments')}
+                          className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add
+                        </button>
+                      )}
                     </div>
-                    {editingCategory === 'comments' && (
+                    {editingCategory === 'comments' && !isRegenerating && (
                       <div className="flex gap-2 mb-4">
                         <input
                           type="text"
@@ -3505,6 +3679,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           onEditChange={setEditingCommentValue}
                           onSaveEdit={handleSaveEditComment}
                           onCancelEdit={handleCancelEditComment}
+                          readOnly={isRegenerating}
                         />
                       ))}
                     </DroppableCommentsContainer>
@@ -3521,15 +3696,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     {console.log('[DEBUG] Rendering Nice-to-Have Comments, count:', extractedData.niceToHaveComments?.length, 'data:', extractedData.niceToHaveComments)}
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-gray-900">Nice-to-Have Comments ({extractedData.niceToHaveComments?.length || 0})</h3>
-                      <button
-                        onClick={() => setEditingCategory('nice-comments')}
-                        className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add
-                      </button>
+                      {!isRegenerating && (
+                        <button
+                          onClick={() => setEditingCategory('nice-comments')}
+                          className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add
+                        </button>
+                      )}
                     </div>
-                    {editingCategory === 'nice-comments' && (
+                    {editingCategory === 'nice-comments' && !isRegenerating && (
                       <div className="flex gap-2 mb-4">
                         <input
                           type="text"
@@ -3566,6 +3743,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           onEditChange={setEditingNiceCommentValue}
                           onSaveEdit={handleSaveEditNiceComment}
                           onCancelEdit={handleCancelEditNiceComment}
+                          readOnly={isRegenerating}
                         />
                       ))}
                     </DroppableCommentsContainer>
@@ -3589,8 +3767,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     }}
                     className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${
                       validationErrors.experience ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    disabled={masterDataLoading}
+                    } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    disabled={masterDataLoading || isRegenerating}
                   >
                     <option value="">{masterDataLoading ? 'Loading...' : 'Select experience level'}</option>
                     {experienceLevels.map((level) => (
@@ -3603,12 +3781,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {validationErrors.experience}
                     </p>
                   )}
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label className={`flex items-center gap-2 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={Boolean(extractedData.experienceRequired)}
                       onChange={(e) => setExtractedData(prev => ({ ...prev, experienceRequired: e.target.checked }))}
                       className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
+                      disabled={isRegenerating}
                     />
                     <span className="text-sm text-gray-700">Required</span>
                   </label>
@@ -3628,8 +3807,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     }}
                     className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${
                       validationErrors.education ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    disabled={masterDataLoading}
+                    } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    disabled={masterDataLoading || isRegenerating}
                   >
                     <option value="">{masterDataLoading ? 'Loading...' : 'Select education level'}</option>
                     {educationLevels.map((level) => (
@@ -3642,12 +3821,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {validationErrors.education}
                     </p>
                   )}
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label className={`flex items-center gap-2 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={Boolean(extractedData.educationRequired)}
                       onChange={(e) => setExtractedData(prev => ({ ...prev, educationRequired: e.target.checked }))}
                       className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
+                      disabled={isRegenerating}
                     />
                     <span className="text-sm text-gray-700">Required</span>
                   </label>
@@ -3667,8 +3847,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     }}
                     className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${
                       validationErrors.industryType ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    disabled={masterDataLoading}
+                    } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    disabled={masterDataLoading || isRegenerating}
                   >
                     <option value="">{masterDataLoading ? 'Loading...' : 'Select industry type'}</option>
                     {industryTypes.map((type) => (
@@ -3681,12 +3861,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {validationErrors.industryType}
                     </p>
                   )}
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label className={`flex items-center gap-2 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={Boolean(extractedData.industryTypeRequired)}
                       onChange={(e) => setExtractedData(prev => ({ ...prev, industryTypeRequired: e.target.checked }))}
                       className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
+                      disabled={isRegenerating}
                     />
                     <span className="text-sm text-gray-700">Required</span>
                   </label>
@@ -3712,7 +3893,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="From (e.g., 500000, 5L, 5LPA)"
                         className={`w-full pl-7 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm ${
                           validationErrors.salaryRange ? 'border-red-500' : 'border-gray-300'
-                        }`}
+                        } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                        disabled={isRegenerating}
+                        readOnly={isRegenerating}
                       />
                     </div>
                     <span className="text-gray-400">–</span>
@@ -3731,13 +3914,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="To (e.g., 1000000, 10L, 10LPA)"
                         className={`w-full pl-7 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm ${
                           validationErrors.salaryRange ? 'border-red-500' : 'border-gray-300'
-                        }`}
+                        } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                        disabled={isRegenerating}
+                        readOnly={isRegenerating}
                       />
                     </div>
                     <select
                       value={extractedData.compensationType}
                       onChange={(e) => setExtractedData(prev => ({ ...prev, compensationType: e.target.value as 'hourly' | 'daily' | 'monthly' | 'yearly' }))}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+                      className={`px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={isRegenerating}
                     >
                       <option value="hourly">Hourly</option>
                       <option value="daily">Daily</option>
@@ -3758,18 +3944,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <div>
                 <div className="flex items-center gap-3 mb-4">
                   <h3 className="text-gray-900">Locations</h3>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
+                  <label className={`flex items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={extractedData.locationsRequired}
                       onChange={(e) => setExtractedData(prev => ({ ...prev, locationsRequired: e.target.checked }))}
                       className="w-4 h-4 text-gray-600 border-gray-300 rounded focus:ring-gray-500"
+                      disabled={isRegenerating}
                     />
                     <span className="text-gray-500 text-xs">(Required)</span>
                   </label>
                 </div>
 
-                {/* Inline Add Location - State, City, Radius in one line */}
+                {/* Inline Add Location - State, City, Radius in one line - Hidden when read-only */}
+                {!isRegenerating && (
                 <div className="flex items-end gap-3 mb-4">
                   {/* State Filter Dropdown */}
                   <div className="flex-1">
@@ -3932,6 +4120,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     Add
                   </button>
                 </div>
+                )}
 
                 {/* Added Locations Grid */}
                 <div className="grid grid-cols-3 gap-4">
@@ -3942,12 +4131,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           <div className="text-sm text-gray-900">{location.city}</div>
                           <div className="text-xs text-gray-600">{location.radius} km radius</div>
                         </div>
-                        <button
-                          onClick={() => handleRemoveLocation(index)}
-                          className="text-red-600 hover:text-red-700 ml-2"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        {!isRegenerating && (
+                          <button
+                            onClick={() => handleRemoveLocation(index)}
+                            className="text-red-600 hover:text-red-700 ml-2"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -3965,7 +4156,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       ...prev,
                       employmentType: e.target.value as ExtractedData['employmentType']
                     }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm bg-white"
+                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    disabled={isRegenerating}
                   >
                     <option value="full_time">Full Time</option>
                     <option value="part_time">Part Time</option>
@@ -3984,7 +4176,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       ...prev,
                       workModel: e.target.value as ExtractedData['workModel']
                     }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm bg-white"
+                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    disabled={isRegenerating}
                   >
                     <option value="onsite">Onsite</option>
                     <option value="remote">Remote</option>
@@ -4001,12 +4194,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <h3 className="text-gray-900 mb-1">Allow Overqualified Candidates</h3>
                     <p className="text-sm text-gray-600">Accept candidates who exceed the required qualifications</p>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
+                  <label className={`relative inline-flex items-center ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={Boolean(extractedData.allowOverqualified)}
                       onChange={(e) => setExtractedData(prev => ({ ...prev, allowOverqualified: e.target.checked }))}
                       className="sr-only peer"
+                      disabled={isRegenerating}
                     />
                     <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
                   </label>
@@ -4028,8 +4222,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     value={extractedData.assessmentGuidance}
                     onChange={(e) => setExtractedData(prev => ({ ...prev, assessmentGuidance: e.target.value.slice(0, 500) }))}
                     placeholder="e.g., Focus on system design, coding best practices, problem-solving approach..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none"
+                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     rows={4}
+                    disabled={isRegenerating}
+                    readOnly={isRegenerating}
                   />
                   <div className="text-right text-xs text-gray-500 mt-1">{extractedData.assessmentGuidance?.length || 0}/500</div>
                 </div>
@@ -4052,8 +4248,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       internalRecruiterComments: e.target.value.split('\n').filter(c => c.trim())
                     }))}
                     placeholder="Add internal notes for recruiters..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none"
+                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     rows={4}
+                    disabled={isRegenerating}
+                    readOnly={isRegenerating}
                   />
                 </div>
               </div>
@@ -4215,6 +4413,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                   {/* JD Content */}
                   <div className="markdown-content text-gray-700 leading-relaxed">
+                    {console.log('[DEBUG] Review stage showing JD, mode:', mode, 'length:', (mode === 'ai' ? generatedJD : manualJD)?.length)}
                     <ReactMarkdown>
                       {(mode === 'ai' ? generatedJD : manualJD)
                         .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
