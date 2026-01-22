@@ -1775,8 +1775,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // BEFORE going to review, reformat the JD description using AI (Odoo-style)
     // If user has modified extracted data (skills/comments), regenerate JD with those changes
-    // Skip formatting if already formatted and no changes were made
-    if (hasFormattedForReview && !extractedDataModified) {
+    // For published JDs being edited, ALWAYS reformat to ensure latest changes are included
+    // Skip formatting only if already formatted and no changes were made AND not editing a published JD
+    if (hasFormattedForReview && !extractedDataModified && !isEditingPublished) {
       console.log('[DEBUG] Skipping reformat - already formatted and no changes made');
       setStep('review');
       return;
