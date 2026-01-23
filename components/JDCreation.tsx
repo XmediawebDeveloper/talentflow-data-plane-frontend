@@ -2731,15 +2731,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       };
 
       // Update existing JD or create new one
+      // IMPORTANT: When editing a published JD, always create a NEW draft instead of updating
       console.log('[DEBUG] Save draft - editingId:', editingId, 'isEditingDraft:', isEditingDraft, 'isEditingPublished:', isEditingPublished);
       console.log('[DEBUG] jdData being saved:', { title: jdData.title, description: jdData.description?.substring(0, 100), creation_method: jdData.creation_method });
       let savedJd;
-      if (editingId) {
+      if (editingId && !isEditingPublished) {
+        // Only update if editing an existing DRAFT (not published)
         console.log('[DEBUG] Updating existing draft with ID:', editingId);
         savedJd = await jdService.update(editingId, jdData);
         console.log('[DEBUG] JD updated as draft:', savedJd.id);
       } else {
-        console.log('[DEBUG] Creating new draft (editingId is null)');
+        // Create new draft when:
+        // 1. No editingId (new JD)
+        // 2. Editing a published JD (create new draft version)
+        console.log('[DEBUG] Creating new draft (editingId is null or editing published JD)');
         savedJd = await jdService.create(jdData);
         setEditingId(savedJd.id);  // Track the new ID in case we save again
         console.log('[DEBUG] JD created as draft:', savedJd.id);
@@ -2752,10 +2757,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         title: isEditingPublished ? 'New draft created!' : 'Draft saved!',
         description: isEditingPublished
           ? `A new draft version of "${jobTitle}" has been created. The original JD remains unchanged.`
-          : `"${jobTitle}" has been saved. You can continue editing.`,
+          : `"${jobTitle}" has been saved as draft.`,
       });
 
-      // Stay on page - don't navigate away after saving draft
+      // Navigate to job openings page after saving draft
+      router.push('/recruitment/job-openings');
     } catch (error) {
       console.error('[ERROR] Failed to save draft:', error);
       setIsSavingDraft(false);
@@ -2883,7 +2889,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
         // Map experience_min/max to level codes (entry, junior, mid, senior, architect, management)
         const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
-          if (!min) return '';
+          // Check for null/undefined but allow 0 as valid value
+          if (min === null || min === undefined) return '';
 
           // 10+ years
           if (min >= 10) {
@@ -2911,14 +2918,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         };
 
         const experienceValue = mapExpToLevel(editingJD.experience_min, editingJD.experience_max);
-        // Industry type should only come from extraction, not pre-filled from saved data
-        // User must select it manually or it must come from extraction API
-        const industryValue = '';
+        // Restore industry type from saved draft
+        const industryValue = editingJD.industry_type || '';
 
         console.log('[DEBUG] Loading editingJD data:');
         console.log('[DEBUG] - experience_min from API:', editingJD.experience_min);
         console.log('[DEBUG] - experience_max from API:', editingJD.experience_max);
         console.log('[DEBUG] - mapped experienceValue:', experienceValue);
+        console.log('[DEBUG] - industry_type from API:', editingJD.industry_type);
+        console.log('[DEBUG] - mapped industryValue:', industryValue);
         console.log('[DEBUG] - nice_to_have_comments from API:', editingJD.nice_to_have_comments);
         console.log('[DEBUG] - must_have_comments from API:', editingJD.must_have_comments);
 
