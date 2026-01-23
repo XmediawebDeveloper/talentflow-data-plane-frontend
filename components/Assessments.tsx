@@ -42,6 +42,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailsView, setShowDetailsView] = useState(false);
   const [selectedAssessmentForDetails, setSelectedAssessmentForDetails] = useState<any>(null);
+  // Track Invites modal state
+  const [showTrackInvitesModal, setShowTrackInvitesModal] = useState(false);
+  const [selectedAssessmentForTracking, setSelectedAssessmentForTracking] = useState<any>(null);
+  const [trackingInvitations, setTrackingInvitations] = useState<any[]>([]);
+  const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
+  const [invitationStats, setInvitationStats] = useState({
+    total: 0,
+    sent: 0,
+    started: 0,
+    completed: 0,
+    failed: 0,
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
@@ -95,18 +107,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   });
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
-  // Auto-open creation view if requested via query params
+  // FIX-004: Auto-open creation view inline if requested via props
   useEffect(() => {
     if (autoOpenCreate) {
-      // Navigate to create page with query params
-      const params = new URLSearchParams();
-      if (preSelectedJdId) params.set('jd_id', preSelectedJdId);
-      if (preSelectedJdTitle) params.set('jd_title', preSelectedJdTitle);
-      const queryString = params.toString();
-      router.push(`/recruitment/assessments/create${queryString ? `?${queryString}` : ''}`);
-      console.log('[TalentFlow] Auto-navigating to assessment creation for JD:', preSelectedJdId, preSelectedJdTitle);
+      // Open inline creation view instead of navigating
+      setShowCreation(true);
+      console.log('[TalentFlow] Auto-opening assessment creation for JD:', preSelectedJdId, preSelectedJdTitle);
     }
-  }, [autoOpenCreate, preSelectedJdId, preSelectedJdTitle, router]);
+  }, [autoOpenCreate, preSelectedJdId, preSelectedJdTitle]);
 
   // Load all data in parallel on mount (faster than 3 separate useEffects)
   useEffect(() => {
@@ -124,11 +132,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
       // Process assessments
       if (assessmentsResult.status === 'fulfilled' && assessmentsResult.value?.items?.length > 0) {
-        const mapped = assessmentsResult.value.items.map((a: any) => {
+        const mapped = assessmentsResult.value.items.map((a: any, index: number) => {
           // Normalize status to lowercase for consistent comparison
           const rawStatus = (a.status || 'draft').toLowerCase();
+          // Use short_id from backend (persistent) or generate fallback
+          const shortId = a.short_id || `AS-${String(a.sequence_number || index + 1).padStart(3, '0')}`;
           return {
           id: a.id,
+          short_id: shortId,
+          sequence_number: a.sequence_number,
           title: a.title,
           description: a.description,
           type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
@@ -144,6 +156,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
           passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
           created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+          created_at: a.created_at,
+          created_by_name: a.created_by_name || 'System',
           job: { title: a.jd_title || 'General Assessment', department: 'Engineering' },
           // Section configuration for detail view
           hr_enabled: a.hr_enabled,
@@ -357,6 +371,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Use API assessments only (no local state needed - all assessments are saved to DB)
   const assessments = apiAssessments;
 
+  // Handle edit assessment - redirect to config page instead of modal
+  const handleEditAssessment = (assessment: any) => {
+    // Check if candidates have been invited - if so, block editing
+    if (assessment.invitations_count > 0 || assessment.candidates > 0) {
+      alert(`Cannot edit this assessment - ${assessment.invitations_count || assessment.candidates} candidate(s) have already been invited. Please create a new assessment instead.`);
+      return;
+    }
+
+    // Redirect to the assessment creation page with edit mode
+    router.push(`/recruitment/assessments/create?step=configure&jd_id=${assessment.jd_id}&edit=${assessment.id}`);
+  };
+
   // Reload quota from API
   const reloadQuota = async () => {
     try {
@@ -469,22 +495,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  // Check quota before navigating to creation page
+  // FIX-004: Check quota before opening creation view (inline instead of navigation)
   const handleOpenCreation = async () => {
     // If unlimited, allow creation
     if (isUnlimited) {
-      router.push('/recruitment/assessments/create');
+      setShowCreation(true);
       return;
     }
 
     // Check if quota is available
-    if (availableUnits !== null && availableUnits <= 0) {
+    if (totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0) {
       alert('Assessment quota exhausted. Please upgrade your plan or purchase add-on credits to continue.');
       return;
     }
 
-    // Navigate to creation page
-    router.push('/recruitment/assessments/create');
+    // FIX-004: Open inline creation view instead of navigating
+    setShowCreation(true);
   };
 
   const handleCreateAssessment = async (assessment: any) => {
@@ -563,6 +589,71 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
+  // Mark assessment as completed (uses dedicated /close endpoint)
+  const handleCompleteAssessment = async (assessmentId: string) => {
+    if (!confirm('Mark this assessment as completed?')) return;
+
+    try {
+      await assessmentService.close(assessmentId);
+      await reloadAssessments();
+      setOpenMenuId(null);
+    } catch (error: any) {
+      console.error('Failed to complete assessment:', error);
+      const errorMessage = error?.message || 'Unknown error';
+      if (errorMessage.includes('403') || errorMessage.toLowerCase().includes('forbidden')) {
+        alert('Permission denied: You do not have permission to complete this assessment. Please contact your administrator.');
+      } else {
+        alert(`Failed to complete assessment: ${errorMessage}`);
+      }
+      setOpenMenuId(null);
+    }
+  };
+
+  // Track Invites - Load invitations for an assessment
+  const handleTrackInvites = async (assessment: any) => {
+    setSelectedAssessmentForTracking(assessment);
+    setShowTrackInvitesModal(true);
+    setIsLoadingInvitations(true);
+
+    try {
+      const response = await assessmentService.listInvitations(assessment.id, { page_size: 100 });
+      const invitations = response.items || [];
+      setTrackingInvitations(invitations);
+
+      // Calculate stats
+      const stats = {
+        total: invitations.length,
+        sent: invitations.filter((inv: any) => inv.status === 'sent' || inv.status === 'pending').length,
+        started: invitations.filter((inv: any) => inv.status === 'in_progress' || inv.started_at).length,
+        completed: invitations.filter((inv: any) => inv.status === 'completed').length,
+        failed: invitations.filter((inv: any) => inv.status === 'expired' || inv.status === 'failed').length,
+      };
+      setInvitationStats(stats);
+    } catch (error) {
+      console.error('Failed to load invitations:', error);
+      setTrackingInvitations([]);
+    } finally {
+      setIsLoadingInvitations(false);
+    }
+  };
+
+  // Resend invitation
+  const handleResendInvitation = async (invitation: any) => {
+    try {
+      // Re-invite the candidate
+      await assessmentService.invite(selectedAssessmentForTracking.id, {
+        candidate_name: invitation.candidate_name,
+        candidate_email: invitation.candidate_email,
+      });
+      alert('Invitation resent successfully!');
+      // Reload invitations
+      handleTrackInvites(selectedAssessmentForTracking);
+    } catch (error) {
+      console.error('Failed to resend invitation:', error);
+      alert('Failed to resend invitation. Please try again.');
+    }
+  };
+
   if (showCreation) {
     return (
       <AssessmentCreation
@@ -605,8 +696,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           }}
           onEdit={() => {
             // Keep details view open, modal will overlay on top
-            setSelectedAssessmentForEdit(selectedAssessmentForDetails);
-            setShowEditModal(true);
+            handleEditAssessment(selectedAssessmentForDetails);
           }}
           onPreview={() => {
             // Keep details view open, modal will overlay on top
@@ -697,23 +787,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Assessment Quota Badge with color coding */}
-            {availableUnits !== null && (
+            {/* Assessment Quota Badge with color coding - use stats.units_consumed for consistency */}
+            {totalUnits > 0 && (
               <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 shadow-sm ${
                 isUnlimited
                   ? 'bg-green-50 border-green-300'
-                  : availableUnits === 0
+                  : (totalUnits - stats.units_consumed) <= 0
                   ? 'bg-red-50 border-red-300'
-                  : availableUnits <= 2
+                  : (totalUnits - stats.units_consumed) <= 2
                   ? 'bg-orange-50 border-orange-300'
                   : 'bg-gray-50 border-gray-200'
               }`}>
                 <Zap className={`w-4 h-4 ${
                   isUnlimited
                     ? 'text-green-600'
-                    : availableUnits === 0
+                    : (totalUnits - stats.units_consumed) <= 0
                     ? 'text-red-600'
-                    : availableUnits <= 2
+                    : (totalUnits - stats.units_consumed) <= 2
                     ? 'text-orange-600'
                     : 'text-gray-600'
                 }`} />
@@ -724,14 +814,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <span className="text-sm font-bold text-green-700">Unlimited</span>
                     ) : (
                       <>
-                        <span className={`text-sm font-bold ${
-                          availableUnits === 0
-                            ? 'text-red-700'
-                            : availableUnits <= 2
-                            ? 'text-orange-700'
-                            : 'text-gray-900'
-                        }`}>{availableUnits}</span>
-                        <span className="text-xs text-gray-500">/ {totalUnits} available</span>
+                        {/* Use stats.units_consumed to calculate remaining for consistency */}
+                        {(() => {
+                          const calculatedRemaining = Math.max(0, totalUnits - stats.units_consumed);
+                          return (
+                            <>
+                              <span className={`text-sm font-bold ${
+                                calculatedRemaining === 0
+                                  ? 'text-red-700'
+                                  : calculatedRemaining <= 2
+                                  ? 'text-orange-700'
+                                  : 'text-gray-900'
+                              }`}>{calculatedRemaining}</span>
+                              <span className="text-xs text-gray-500">/ {totalUnits} available</span>
+                            </>
+                          );
+                        })()}
                       </>
                     )}
                   </div>
@@ -749,9 +847,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             )}
             <button
               onClick={handleOpenCreation}
-              disabled={!isUnlimited && availableUnits !== null && availableUnits <= 0}
+              disabled={!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg transition-colors shadow-sm ${
-                !isUnlimited && availableUnits !== null && availableUnits <= 0
+                !isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-gray-800 text-white hover:bg-gray-900'
               }`}
@@ -763,7 +861,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         </div>
 
         {/* Low Quota Warning Banner */}
-        {!isUnlimited && availableUnits !== null && availableUnits > 0 && availableUnits <= 3 && (
+        {!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) > 0 && (totalUnits - stats.units_consumed) <= 3 && (
           <div className="mb-6 bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-orange-200 flex items-center justify-center flex-shrink-0">
@@ -772,7 +870,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <div className="flex-1">
                 <h3 className="text-sm font-semibold text-orange-900 mb-1">Low Assessment Quota</h3>
                 <p className="text-sm text-orange-800">
-                  You have only <span className="font-bold">{availableUnits}</span> assessment unit{availableUnits !== 1 ? 's' : ''} remaining out of {totalUnits}.
+                  You have only <span className="font-bold">{Math.max(0, totalUnits - stats.units_consumed)}</span> assessment unit{(totalUnits - stats.units_consumed) !== 1 ? 's' : ''} remaining out of {totalUnits}.
                   {' '}Consider purchasing add-on credits to avoid interruptions.
                 </p>
               </div>
@@ -787,7 +885,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         )}
 
         {/* Quota Exhausted Banner */}
-        {!isUnlimited && availableUnits !== null && availableUnits <= 0 && (
+        {!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 && (
           <div className="mb-6 bg-red-50 border-2 border-red-300 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-200 flex items-center justify-center flex-shrink-0">
@@ -1581,7 +1679,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No assessments yet</h3>
                 <p className="text-gray-600 mb-4">Create your first AI-powered assessment to start evaluating candidates</p>
                 <button
-                  onClick={() => router.push('/recruitment/assessments/create')}
+                  onClick={handleOpenCreation}
                   className="inline-flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-lg hover:bg-gray-900 transition-colors"
                 >
                   <Sparkles className="w-5 h-5" />
@@ -1594,7 +1692,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {filteredAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
-                    onClick={() => router.push(`/recruitment/assessments/${assessment.id}`)}
+                    onClick={() => {
+                      if (assessment.status === 'Draft') {
+                        // For drafts, open edit modal to continue editing
+                        handleEditAssessment(assessment);
+                      } else {
+                        router.push(`/recruitment/assessments/${assessment.id}`);
+                      }
+                    }}
                     className="p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
                   >
                     {/* Grid Card Header */}
@@ -1702,8 +1807,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <div className="absolute right-4 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-20">
                           <button
                             onClick={() => {
-                              setSelectedAssessmentForEdit(assessment);
-                              setShowEditModal(true);
+                              handleEditAssessment(assessment);
                               setOpenMenuId(null);
                             }}
                             className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
@@ -1769,6 +1873,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             Copy Link
                           </button>
                           <div className="border-t border-gray-100 my-1"></div>
+                          {assessment.status !== 'Completed' && (
+                            <button
+                              onClick={() => handleCompleteAssessment(assessment.id)}
+                              className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                            >
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                              Completed
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleArchiveAssessment(assessment.id)}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                          >
+                            <Archive className="w-4 h-4 text-gray-600" />
+                            Archive
+                          </button>
                           <button
                             onClick={() => handleDeleteAssessment(assessment.id)}
                             className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2.5"
@@ -1788,7 +1908,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {filteredAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
-                    onClick={() => router.push(`/recruitment/assessments/${assessment.id}`)}
+                    onClick={() => {
+                      if (assessment.status === 'Draft') {
+                        // For drafts, open edit modal to continue editing
+                        handleEditAssessment(assessment);
+                      } else {
+                        router.push(`/recruitment/assessments/${assessment.id}`);
+                      }
+                    }}
                     className="p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
                   >
                     <div className="flex items-center justify-between">
@@ -1798,7 +1925,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <FileText className="w-5 h-5 text-gray-700" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-0.5">
                             <h3 className="text-sm font-medium text-gray-900 truncate">{assessment.title}</h3>
                             {assessment.sections && (
                               <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs flex items-center gap-1 flex-shrink-0">
@@ -1807,9 +1934,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </span>
                             )}
                           </div>
+                          {/* Assessment ID */}
+                          <div className="text-xs text-gray-400 mb-1.5">
+                            Assessment ID: <span className="font-medium text-gray-500">{assessment.short_id || `AS-${String(assessment.id).slice(0, 3).toUpperCase()}`}</span>
+                          </div>
                           {assessment.job && (
-                            <div className="text-xs text-gray-500 mb-2">
+                            <div className="text-xs text-gray-500 mb-1.5">
                               Based on: {assessment.job.title} • {assessment.job.department}
+                              {assessment.created_by_name && (
+                                <span className="ml-2">• Created by: {assessment.created_by_name}</span>
+                              )}
+                              {assessment.created && (
+                                <span className="ml-2">• {new Date(assessment.created_at || assessment.created).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                              )}
                             </div>
                           )}
                           <div className="flex items-center gap-4 text-xs text-gray-500">
@@ -1841,13 +1978,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs ${
                             assessment.status === 'Draft'
                               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                              : 'bg-gray-800 text-white hover:bg-gray-900'
+                              : 'bg-green-600 text-white hover:bg-green-700'
                           }`}
                           title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
                         >
                           <Mail className="w-3.5 h-3.5" />
                           Share via Email
                         </button>
+
+                        {/* Track Invites Button */}
+                        {assessment.candidates > 0 && (
+                          <button
+                            onClick={() => handleTrackInvites(assessment)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs bg-purple-600 text-white hover:bg-purple-700"
+                            title="Track invitation status"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            Track Invites ({assessment.candidates})
+                          </button>
+                        )}
 
                         {/* View Results Button */}
                         <button
@@ -1872,6 +2021,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               ? 'bg-purple-100 text-purple-700'
                               : assessment.status === 'Completed'
                               ? 'bg-blue-100 text-blue-700'
+                              : assessment.status === 'Paused'
+                              ? 'bg-orange-100 text-orange-700'
                               : 'bg-gray-100 text-gray-700'
                           }`}
                         >
@@ -1900,8 +2051,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-20">
                                 <button
                                   onClick={() => {
-                                    setSelectedAssessmentForEdit(assessment);
-                                    setShowEditModal(true);
+                                    handleEditAssessment(assessment);
                                     setOpenMenuId(null);
                                   }}
                                   className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
@@ -1986,21 +2136,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Duplicate
                                 </button>
                                 <div className="border-t border-gray-100 my-1"></div>
-                                {assessment.status === 'Active' ? (
-                                  <button
-                                    onClick={() => handlePauseAssessment(assessment.id)}
-                                    className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
-                                  >
-                                    <PauseCircle className="w-4 h-4 text-yellow-600" />
-                                    Pause
-                                  </button>
-                                ) : (
+                                {assessment.status !== 'Active' && (
                                   <button
                                     onClick={() => handleActivateAssessment(assessment.id)}
                                     className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
                                   >
                                     <Play className="w-4 h-4 text-green-600" />
                                     Activate
+                                  </button>
+                                )}
+                                {assessment.status === 'Active' && (
+                                  <button
+                                    onClick={() => handleCompleteAssessment(assessment.id)}
+                                    className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                  >
+                                    <CheckCircle className="w-4 h-4 text-green-600" />
+                                    Completed
                                   </button>
                                 )}
                                 <button
@@ -2072,6 +2223,275 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             console.log('Assessment updated:', updatedAssessment);
           }}
         />
+      )}
+
+      {/* Track Invites Modal */}
+      {showTrackInvitesModal && selectedAssessmentForTracking && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-purple-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">Invite Status Tracking</h2>
+                </div>
+                <p className="text-sm text-gray-500 mt-0.5">{selectedAssessmentForTracking.title}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowTrackInvitesModal(false);
+                  setSelectedAssessmentForTracking(null);
+                  setTrackingInvitations([]);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+              <div className="grid grid-cols-6 gap-4">
+                <div className="bg-white rounded-lg p-3 border border-gray-200">
+                  <div className="flex items-center gap-2 text-gray-500 text-xs mb-1">
+                    <Users className="w-3.5 h-3.5" />
+                    Total Invited
+                  </div>
+                  <p className="text-2xl font-bold text-gray-900">{invitationStats.total}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-gray-200">
+                  <div className="flex items-center gap-2 text-blue-600 text-xs mb-1">
+                    <Mail className="w-3.5 h-3.5" />
+                    Sent
+                  </div>
+                  <p className="text-2xl font-bold text-blue-600">{invitationStats.sent}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-gray-200">
+                  <div className="flex items-center gap-2 text-red-600 text-xs mb-1">
+                    <X className="w-3.5 h-3.5" />
+                    Failed
+                  </div>
+                  <p className="text-2xl font-bold text-red-600">{invitationStats.failed}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-gray-200">
+                  <div className="flex items-center gap-2 text-yellow-600 text-xs mb-1">
+                    <Play className="w-3.5 h-3.5" />
+                    In Progress
+                  </div>
+                  <p className="text-2xl font-bold text-yellow-600">{invitationStats.started}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-gray-200">
+                  <div className="flex items-center gap-2 text-green-600 text-xs mb-1">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    Completed
+                  </div>
+                  <p className="text-2xl font-bold text-green-600">{invitationStats.completed}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-gray-200">
+                  <div className="flex items-center gap-2 text-purple-600 text-xs mb-1">
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    Completion
+                  </div>
+                  <p className="text-2xl font-bold text-purple-600">
+                    {invitationStats.total > 0 ? Math.round((invitationStats.completed / invitationStats.total) * 100) : 0}%
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Invitations Table */}
+            <div className="px-6 py-4 overflow-auto max-h-[50vh]">
+              {isLoadingInvitations ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full"></div>
+                </div>
+              ) : trackingInvitations.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p>No invitations found for this assessment.</p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Timeline</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Progress</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {trackingInvitations.map((invitation: any) => {
+                      const getStatusBadge = (inv: any) => {
+                        if (inv.status === 'completed') {
+                          return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Completed</span>;
+                        }
+                        if (inv.started_at && inv.status !== 'completed') {
+                          return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> In Progress</span>;
+                        }
+                        if (inv.status === 'expired') {
+                          return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Expired</span>;
+                        }
+                        return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Invite Sent</span>;
+                      };
+
+                      const formatDate = (dateStr: string | null) => {
+                        if (!dateStr) return null;
+                        return new Date(dateStr).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+                      };
+
+                      const initials = invitation.candidate_name
+                        ?.split(' ')
+                        .map((n: string) => n[0])
+                        .join('')
+                        .toUpperCase()
+                        .slice(0, 2) || '??';
+
+                      return (
+                        <tr key={invitation.id} className="hover:bg-gray-50">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-medium text-sm">
+                                {initials}
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900 text-sm">{invitation.candidate_name}</p>
+                                <p className="text-xs text-gray-500">{invitation.candidate_email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            {getStatusBadge(invitation)}
+                          </td>
+                          <td className="py-3 px-4 text-xs text-gray-500">
+                            <div className="space-y-1">
+                              {invitation.sent_at && (
+                                <div className="flex items-center gap-2">
+                                  <Mail className="w-3 h-3 text-blue-500" />
+                                  <span>Sent: {formatDate(invitation.sent_at)}</span>
+                                </div>
+                              )}
+                              {invitation.started_at && (
+                                <div className="flex items-center gap-2">
+                                  <Play className="w-3 h-3 text-yellow-500" />
+                                  <span>Started: {formatDate(invitation.started_at)}</span>
+                                </div>
+                              )}
+                              {invitation.completed_at && (
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle className="w-3 h-3 text-green-500" />
+                                  <span>Completed: {formatDate(invitation.completed_at)}</span>
+                                </div>
+                              )}
+                              {!invitation.sent_at && !invitation.started_at && (
+                                <div className="flex items-center gap-2">
+                                  <Clock className="w-3 h-3 text-gray-400" />
+                                  <span>Created: {formatDate(invitation.created_at)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            {invitation.status === 'completed' ? (
+                              <div>
+                                <div className="flex items-center gap-2 text-sm">
+                                  <span className="text-gray-600">Score</span>
+                                  <span className={`font-medium ${invitation.passed ? 'text-green-600' : 'text-red-600'}`}>
+                                    {invitation.overall_score != null ? `${invitation.overall_score.toFixed(1)}%` : '100%'}
+                                  </span>
+                                  {invitation.passed !== null && (
+                                    <span className={`text-xs px-1.5 py-0.5 rounded ${invitation.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                      {invitation.passed ? 'Passed' : 'Failed'}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="w-24 h-1.5 bg-gray-200 rounded-full mt-1">
+                                  <div className="h-full bg-green-500 rounded-full" style={{ width: '100%' }} />
+                                </div>
+                                {invitation.time_spent_minutes != null && (
+                                  <p className="text-xs text-gray-400 mt-1">
+                                    Time: {invitation.time_spent_minutes} min
+                                  </p>
+                                )}
+                              </div>
+                            ) : invitation.started_at ? (
+                              <div>
+                                <div className="flex items-center gap-2 text-sm">
+                                  <span className="text-gray-600">Progress</span>
+                                  <span className="font-medium text-yellow-600">
+                                    {invitation.progress_percent != null ? `${invitation.progress_percent}%` : 'In Progress'}
+                                  </span>
+                                </div>
+                                <div className="w-24 h-1.5 bg-gray-200 rounded-full mt-1">
+                                  <div
+                                    className="h-full bg-yellow-500 rounded-full"
+                                    style={{ width: `${invitation.progress_percent ?? 50}%` }}
+                                  />
+                                </div>
+                                {invitation.current_question != null && invitation.total_questions != null && (
+                                  <p className="text-xs text-gray-400 mt-1">
+                                    Q{invitation.current_question}/{invitation.total_questions}
+                                    {invitation.time_spent_minutes != null && ` • ${invitation.time_spent_minutes} min`}
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {invitation.status === 'completed' ? (
+                              <button
+                                onClick={() => router.push(`/recruitment/assessments/${selectedAssessmentForTracking.id}/results`)}
+                                className="flex items-center gap-1 px-3 py-1.5 text-xs text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                View Results
+                              </button>
+                            ) : !invitation.started_at ? (
+                              <button
+                                onClick={() => handleResendInvitation(invitation)}
+                                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+                              >
+                                <Mail className="w-3.5 h-3.5" />
+                                Resend
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
+              <p className="text-sm text-gray-500">
+                Showing <strong>{trackingInvitations.length}</strong> of <strong>{invitationStats.total}</strong> invites
+              </p>
+              <button
+                onClick={() => {
+                  setShowTrackInvitesModal(false);
+                  setSelectedAssessmentForTracking(null);
+                  setTrackingInvitations([]);
+                }}
+                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

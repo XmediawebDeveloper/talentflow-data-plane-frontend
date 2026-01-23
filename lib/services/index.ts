@@ -67,6 +67,11 @@ export type {
   ExportFormat,
   AuditLogResponse,
   AuditTrailListResponse,
+  // Combined Audit Trail types
+  AuditActivityCategory,
+  AuditActivityType,
+  CombinedAuditActivity,
+  CombinedAuditTrailResponse,
   RefundRequestCreate,
   RefundRequestResponse,
   RefundAction,

@@ -70,6 +70,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange }: Tech
             value={textResponse}
             onChange={handleTextChange}
             placeholder="Type your answer here..."
+            maxLength={3000}
             className="w-full h-48 p-4 border-2 border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:border-gray-800 focus:outline-none resize-none transition-colors"
           />
           <div className="flex justify-between items-center text-sm text-gray-500">
@@ -80,15 +81,8 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange }: Tech
                 <span className="text-gray-400">No answer yet</span>
               )}
             </span>
-            <span>{textResponse.length} characters</span>
+            <span>{3000 - textResponse.length} characters remaining</span>
           </div>
-        </div>
-
-        {/* Tips */}
-        <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-          <p className="text-sm text-blue-800">
-            <strong>Tip:</strong> Be specific and provide examples where relevant. A well-structured answer with clear points will score better.
-          </p>
         </div>
       </div>
     );

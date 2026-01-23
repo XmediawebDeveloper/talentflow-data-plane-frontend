@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const ADMIN_API_URL = process.env.SUBSCRIPTION_API_URL || 'http://localhost:8001/api/v1';
+const ADMIN_API_URL = process.env.SUBSCRIPTION_API_URL || 'http://localhost:8000/api/v1';
 
 export async function POST(request: NextRequest) {
   try {

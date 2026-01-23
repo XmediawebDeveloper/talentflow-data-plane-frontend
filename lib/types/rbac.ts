@@ -70,17 +70,17 @@ export interface UserRolesResponse {
   effective_permissions: string[];
 }
 
-// Audit log types
+// Audit log types - uses main audit_logs table with RBAC action filters
 export interface AuditLogEntry {
-  id: number;
+  id: string | number;  // Can be UUID string from main audit_logs
   action: string;
-  entity_type: string;
-  entity_id: string;
+  entity_type?: string;
+  entity_id?: string;
   entity_name?: string;
   changes?: Record<string, unknown>;
-  performed_by: string;
+  performed_by?: string;
   performed_by_name?: string;
-  performed_at: string;
+  performed_at?: string;
   ip_address?: string;
 }
 

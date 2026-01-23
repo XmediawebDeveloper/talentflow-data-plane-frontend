@@ -2,7 +2,7 @@
  * Resume Service
  */
 
-import api, { handleApiError } from './api';
+import api, { handleApiError, dispatchUnitsConsumed } from './api';
 
 export interface Resume {
   id: string;
@@ -28,6 +28,7 @@ export interface Resume {
   location?: string;
   notice_period?: string;
   professional_summary?: string;
+  extracted_text?: string;  // Full extracted content from resume
   file_name: string;
   file_size_kb?: number;
   file_type?: string;
@@ -127,6 +128,7 @@ export const resumeService = {
 
   /**
    * Upload single resume
+   * Consumes 1 Resume Upload Unit
    */
   async upload(file: File, folderId?: string): Promise<Resume> {
     const formData = new FormData();
@@ -139,11 +141,14 @@ export const resumeService = {
     const response = await api.post<Resume>('/resumes/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    // Dispatch event to refresh header quota display
+    dispatchUnitsConsumed();
     return response.data;
   },
 
   /**
    * Upload multiple resumes
+   * Consumes 1 Resume Upload Unit per file
    */
   async uploadBulk(files: File[], folderId?: string): Promise<UploadBatchResponse> {
     try {
@@ -159,6 +164,8 @@ export const resumeService = {
       const response = await api.post<UploadBatchResponse>('/resumes/upload/bulk', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      // Dispatch event to refresh header quota display
+      dispatchUnitsConsumed();
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

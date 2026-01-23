@@ -19,20 +19,8 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     monacoLanguage: 'python',
     extension: '.py',
     compilerName: 'python3',
-    template: `# Write your code here
+    template: `# Write your solution here
 
-def solve():
-    # Read input
-    n = int(input())
-
-    # Your logic here
-    result = n
-
-    # Print output
-    print(result)
-
-if __name__ == "__main__":
-    solve()
 `,
   },
 
@@ -42,24 +30,8 @@ if __name__ == "__main__":
     monacoLanguage: 'javascript',
     extension: '.js',
     compilerName: 'js',
-    template: `// Write your code here
+    template: `// Write your solution here
 
-function solve(input) {
-    const lines = input.trim().split('\\n');
-    const n = parseInt(lines[0]);
-
-    // Your logic here
-    const result = n;
-
-    console.log(result);
-}
-
-// Read input from stdin
-process.stdin.resume();
-process.stdin.setEncoding('utf8');
-let inputData = '';
-process.stdin.on('data', chunk => inputData += chunk);
-process.stdin.on('end', () => solve(inputData));
 `,
   },
 
@@ -69,24 +41,8 @@ process.stdin.on('end', () => solve(inputData));
     monacoLanguage: 'typescript',
     extension: '.ts',
     compilerName: 'typescript',
-    template: `// Write your code here
+    template: `// Write your solution here
 
-function solve(input: string): void {
-    const lines = input.trim().split('\\n');
-    const n: number = parseInt(lines[0]);
-
-    // Your logic here
-    const result: number = n;
-
-    console.log(result);
-}
-
-// Read input from stdin
-process.stdin.resume();
-process.stdin.setEncoding('utf8');
-let inputData = '';
-process.stdin.on('data', (chunk: string) => inputData += chunk);
-process.stdin.on('end', () => solve(inputData));
 `,
   },
 
@@ -100,18 +56,8 @@ process.stdin.on('end', () => solve(inputData));
 
 public class Main {
     public static void main(String[] args) {
-        Scanner scanner = new Scanner(System.in);
+        // Write your solution here
 
-        // Read input
-        int n = scanner.nextInt();
-
-        // Your logic here
-        int result = n;
-
-        // Print output
-        System.out.println(result);
-
-        scanner.close();
     }
 }
 `,
@@ -124,24 +70,10 @@ public class Main {
     extension: '.cpp',
     compilerName: 'cpp',
     template: `#include <iostream>
-#include <vector>
-#include <string>
-#include <algorithm>
 using namespace std;
 
 int main() {
-    ios_base::sync_with_stdio(false);
-    cin.tie(NULL);
-
-    // Read input
-    int n;
-    cin >> n;
-
-    // Your logic here
-    int result = n;
-
-    // Print output
-    cout << result << endl;
+    // Write your solution here
 
     return 0;
 }
@@ -155,19 +87,9 @@ int main() {
     extension: '.c',
     compilerName: 'c',
     template: `#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 int main() {
-    // Read input
-    int n;
-    scanf("%d", &n);
-
-    // Your logic here
-    int result = n;
-
-    // Print output
-    printf("%d\\n", result);
+    // Write your solution here
 
     return 0;
 }
@@ -181,19 +103,11 @@ int main() {
     extension: '.cs',
     compilerName: 'cs',
     template: `using System;
-using System.Linq;
-using System.Collections.Generic;
 
 class Program {
     static void Main() {
-        // Read input
-        int n = int.Parse(Console.ReadLine());
+        // Write your solution here
 
-        // Your logic here
-        int result = n;
-
-        // Print output
-        Console.WriteLine(result);
     }
 }
 `,
@@ -207,24 +121,9 @@ class Program {
     compilerName: 'go',
     template: `package main
 
-import (
-    "bufio"
-    "fmt"
-    "os"
-)
-
 func main() {
-    reader := bufio.NewReader(os.Stdin)
+    // Write your solution here
 
-    // Read input
-    var n int
-    fmt.Fscan(reader, &n)
-
-    // Your logic here
-    result := n
-
-    // Print output
-    fmt.Println(result)
 }
 `,
   },
@@ -235,20 +134,9 @@ func main() {
     monacoLanguage: 'rust',
     extension: '.rs',
     compilerName: 'rust',
-    template: `use std::io::{self, BufRead};
+    template: `fn main() {
+    // Write your solution here
 
-fn main() {
-    let stdin = io::stdin();
-    let mut lines = stdin.lock().lines();
-
-    // Read input
-    let n: i32 = lines.next().unwrap().unwrap().trim().parse().unwrap();
-
-    // Your logic here
-    let result = n;
-
-    // Print output
-    println!("{}", result);
 }
 `,
   },
@@ -259,16 +147,8 @@ fn main() {
     monacoLanguage: 'ruby',
     extension: '.rb',
     compilerName: 'ruby',
-    template: `# Write your code here
+    template: `# Write your solution here
 
-# Read input
-n = gets.chomp.to_i
-
-# Your logic here
-result = n
-
-# Print output
-puts result
 `,
   },
 
@@ -279,16 +159,8 @@ puts result
     extension: '.php',
     compilerName: 'php',
     template: `<?php
-// Write your code here
+// Write your solution here
 
-// Read input
-$n = intval(trim(fgets(STDIN)));
-
-// Your logic here
-$result = $n;
-
-// Print output
-echo $result . PHP_EOL;
 ?>
 `,
   },
@@ -299,19 +171,9 @@ echo $result . PHP_EOL;
     monacoLanguage: 'kotlin',
     extension: '.kt',
     compilerName: 'kotlin',
-    template: `import java.util.*
+    template: `fun main() {
+    // Write your solution here
 
-fun main() {
-    val scanner = Scanner(System.in)
-
-    // Read input
-    val n = scanner.nextInt()
-
-    // Your logic here
-    val result = n
-
-    // Print output
-    println(result)
 }
 `,
   },
@@ -322,16 +184,8 @@ fun main() {
     monacoLanguage: 'swift',
     extension: '.swift',
     compilerName: 'swift',
-    template: `import Foundation
+    template: `// Write your solution here
 
-// Read input
-let n = Int(readLine()!)!
-
-// Your logic here
-let result = n
-
-// Print output
-print(result)
 `,
   },
 
@@ -343,10 +197,6 @@ print(result)
     compilerName: 'sql',
     template: `-- Write your SQL query here
 
-SELECT *
-FROM table_name
-WHERE condition
-ORDER BY column_name;
 `,
   },
 };

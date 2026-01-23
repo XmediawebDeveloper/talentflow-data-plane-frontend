@@ -6,7 +6,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import Cookies from 'js-cookie';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 // Create axios instance
 const api: AxiosInstance = axios.create({
@@ -106,6 +106,17 @@ const dispatchPaymentPendingEvent = (detail: PaymentPendingDetail) => {
   if (typeof window !== 'undefined') {
     const event = new CustomEvent(PAYMENT_PENDING_EVENT, { detail });
     window.dispatchEvent(event);
+  }
+};
+
+// Custom event for units consumed - triggers header quota refresh
+export const UNITS_CONSUMED_EVENT = 'unitsConsumed';
+
+// Dispatch units consumed event to refresh quota display in header
+export const dispatchUnitsConsumed = () => {
+  if (typeof window !== 'undefined') {
+    console.log('[API] Dispatching unitsConsumed event');
+    window.dispatchEvent(new CustomEvent(UNITS_CONSUMED_EVENT));
   }
 };
 

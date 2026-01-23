@@ -3,7 +3,8 @@
 import { AlertTriangle, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, MessageSquare, RefreshCw, Shield } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
-const EXTERNAL_API_URL = 'https://talentflowapi.mo.vc/api/v1/external/invoices';
+// Use backend proxy instead of direct Admin API calls
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 interface LineItem {
   description: string;
@@ -70,32 +71,18 @@ export default function DisputeHistoryPage() {
     setError(null);
 
     try {
-      // Get tenant_id from localStorage - check all possible keys
-      let tenantId = localStorage.getItem('tenantApiKey') || localStorage.getItem('apiKey') || localStorage.getItem('tenantId') || localStorage.getItem('tenant_id');
-
-      // Also check the user object stored in talentflow_user
-      if (!tenantId) {
-        try {
-          const userStr = localStorage.getItem('talentflow_user');
-          if (userStr) {
-            const user = JSON.parse(userStr);
-            tenantId = user.tenantId || user.tenant_id;
-          }
-        } catch (e) {
-          console.error('[DisputeHistory] Error parsing user:', e);
-        }
-      }
-
-      if (!tenantId) {
-        setError('Tenant ID not found. Please login again.');
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setError('Not authenticated. Please login again.');
         setLoading(false);
         return;
       }
 
-      // Fetch dispute invoices from external API with tenant_id
-      const disputeResponse = await fetch(`${EXTERNAL_API_URL}/dispute?tenant_id=${tenantId}&skip=0&limit=100`, {
+      // Fetch dispute invoices from backend proxy (which calls Admin API)
+      const disputeResponse = await fetch(`${API_URL}/billing/invoices/disputes?skip=0&limit=100`, {
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
       });
 

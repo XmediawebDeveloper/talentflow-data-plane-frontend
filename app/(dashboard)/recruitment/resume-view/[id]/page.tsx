@@ -1,13 +1,197 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Download, Mail, Phone, MapPin, Briefcase, Calendar, Award,
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ExternalLink, Linkedin, Globe, FileText, Clock, History,
-  User, File, HardDrive, Loader2, Share2
+  User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
+  AlignLeft, Hash
 } from 'lucide-react';
+
+// Full Resume Content Component with better UI
+function FullResumeContent({ text }: { text: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<'formatted' | 'raw'>('formatted');
+
+  // Parse text into sections
+  const sections = useMemo(() => {
+    const lines = text.split('\n');
+    const result: { title: string; content: string[] }[] = [];
+    let currentSection: { title: string; content: string[] } = { title: 'Overview', content: [] };
+
+    // Common section headers in resumes
+    const sectionHeaders = [
+      'experience', 'work experience', 'employment', 'professional experience',
+      'education', 'academic', 'qualifications',
+      'skills', 'technical skills', 'core competencies', 'expertise',
+      'summary', 'professional summary', 'objective', 'profile',
+      'certifications', 'certificates', 'licenses',
+      'projects', 'key projects',
+      'achievements', 'accomplishments', 'awards',
+      'languages', 'contact', 'personal', 'references'
+    ];
+
+    lines.forEach((line) => {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) {
+        if (currentSection.content.length > 0) {
+          currentSection.content.push('');
+        }
+        return;
+      }
+
+      // Check if this line is a section header
+      const lowerLine = trimmedLine.toLowerCase().replace(/[:\-_]/g, ' ').trim();
+      const isHeader = sectionHeaders.some(header =>
+        lowerLine === header ||
+        lowerLine.startsWith(header + ' ') ||
+        lowerLine.endsWith(' ' + header)
+      );
+
+      if (isHeader && trimmedLine.length < 50) {
+        // Save previous section if it has content
+        if (currentSection.content.length > 0 || currentSection.title !== 'Overview') {
+          result.push(currentSection);
+        }
+        currentSection = { title: trimmedLine, content: [] };
+      } else {
+        currentSection.content.push(trimmedLine);
+      }
+    });
+
+    // Add last section
+    if (currentSection.content.length > 0) {
+      result.push(currentSection);
+    }
+
+    return result.filter(s => s.content.some(c => c.trim()));
+  }, [text]);
+
+  // Stats
+  const wordCount = text.split(/\s+/).filter(w => w).length;
+  const charCount = text.length;
+  const lineCount = text.split('\n').filter(l => l.trim()).length;
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const maxHeight = isExpanded ? 'max-h-[2000px]' : 'max-h-96';
+
+  return (
+    <div className="bg-gray-50 border border-gray-300 rounded-lg overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-100">
+        <div className="flex items-center gap-3">
+          <FileText className="w-5 h-5 text-gray-500" />
+          <h3 className="text-lg font-semibold text-gray-800">Full Resume Content</h3>
+          <div className="flex items-center gap-3 text-xs text-gray-500 ml-2">
+            <span className="flex items-center gap-1">
+              <Hash className="w-3 h-3" />
+              {wordCount.toLocaleString()} words
+            </span>
+            <span>•</span>
+            <span>{charCount.toLocaleString()} chars</span>
+            <span>•</span>
+            <span>{lineCount} lines</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Tab Toggle */}
+          <div className="flex bg-gray-200 rounded-lg p-0.5">
+            <button
+              onClick={() => setActiveTab('formatted')}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                activeTab === 'formatted'
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <AlignLeft className="w-3 h-3 inline mr-1" />
+              Sections
+            </button>
+            <button
+              onClick={() => setActiveTab('raw')}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                activeTab === 'raw'
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <FileText className="w-3 h-3 inline mr-1" />
+              Raw
+            </button>
+          </div>
+          {/* Copy Button */}
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+          >
+            {copied ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className={`${maxHeight} overflow-y-auto transition-all duration-300`}>
+        {activeTab === 'formatted' ? (
+          <div className="p-4 space-y-4">
+            {sections.map((section, idx) => (
+              <div key={idx} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+                  <h4 className="font-medium text-gray-800 text-sm">{section.title}</h4>
+                </div>
+                <div className="p-4">
+                  {section.content.map((line, lineIdx) => (
+                    line ? (
+                      <p key={lineIdx} className="text-sm text-gray-700 mb-2 last:mb-0 leading-relaxed">
+                        {line}
+                      </p>
+                    ) : (
+                      <div key={lineIdx} className="h-2" />
+                    )
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-4">
+            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono leading-relaxed bg-white border border-gray-200 rounded-lg p-4">
+              {text}
+            </pre>
+          </div>
+        )}
+      </div>
+
+      {/* Expand/Collapse Button */}
+      <div className="border-t border-gray-200 bg-gray-100 p-2">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="w-full flex items-center justify-center gap-2 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-colors"
+        >
+          {isExpanded ? (
+            <>
+              <ChevronUp className="w-4 h-4" />
+              Show Less
+            </>
+          ) : (
+            <>
+              <ChevronDown className="w-4 h-4" />
+              Show More
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
 import { Resume, Job } from '@/lib/types/types';
 import { resumeService, Resume as ApiResume } from '@/lib/services/resumeService';
 import { jdService } from '@/lib/services/jdService';
@@ -81,6 +265,7 @@ export default function ResumeViewPage() {
     softSkills: r.soft_skills,
     educationDetails: r.education?.map((edu: any) => ({
       degree: edu.degree || '',
+      field: edu.field || '',
       school: edu.school || edu.institution || '',
       location: edu.location || '',
       year: edu.year || edu.graduation_year || '',
@@ -115,6 +300,19 @@ export default function ResumeViewPage() {
       uploadedBy: v.uploaded_by_name || 'Unknown',
     })),
     versionCount: r.version_count || versionsData.length || 1,
+    extractedText: r.extracted_text,
+    // NEW FIELDS - Projects, Awards, etc.
+    projects: r.projects || [],
+    awards: r.awards || [],
+    hobbies: r.hobbies || [],
+    achievements: r.achievements || [],
+    volunteerExperience: r.volunteer_experience || [],
+    references: r.references || [],
+    linkedinUrl: r.linkedin_url,
+    githubUrl: r.github_url,
+    portfolioUrl: r.portfolio_url,
+    objective: r.objective,
+    additionalInfo: r.additional_info,
   });
 
   const handleDownload = async () => {
@@ -247,7 +445,7 @@ export default function ResumeViewPage() {
     education: resume.educationDetails && resume.educationDetails.length > 0
       ? resume.educationDetails
       : resume.education
-        ? [{ degree: resume.education, school: '', location: resume.location || '', year: '', gpa: '', honors: '' }]
+        ? [{ degree: resume.education, field: '', school: '', location: resume.location || '', year: '', gpa: '', honors: '' }]
         : [],
     skills: {
       technical: (resume.technicalSkills || resume.skills || []),
@@ -463,8 +661,12 @@ export default function ResumeViewPage() {
               <div className="space-y-4">
                 {detailedResume.education.map((edu, index) => (
                   <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
-                    <h4 className="font-semibold text-gray-800 mb-2">{edu.degree}</h4>
+                    <h4 className="font-semibold text-gray-800 mb-1">
+                      {edu.degree}
+                      {edu.field && ` in ${edu.field}`}
+                    </h4>
                     {edu.school && <div className="text-gray-700 mb-1">{edu.school}</div>}
+                    {edu.institution && !edu.school && <div className="text-gray-700 mb-1">{edu.institution}</div>}
                     <div className="flex items-center gap-4 text-sm text-gray-600">
                       {edu.location && (
                         <span className="flex items-center gap-1">
@@ -472,10 +674,10 @@ export default function ResumeViewPage() {
                           {edu.location}
                         </span>
                       )}
-                      {edu.year && (
+                      {(edu.year || edu.graduation_year) && (
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {edu.year}
+                          {edu.year || edu.graduation_year}
                         </span>
                       )}
                       {edu.gpa && (
@@ -581,6 +783,199 @@ export default function ResumeViewPage() {
             </div>
           )}
 
+          {/* Projects */}
+          {resume.projects && resume.projects.length > 0 && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Code className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Projects</h3>
+              </div>
+              <div className="space-y-4">
+                {resume.projects.map((project: any, index: number) => (
+                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="font-semibold text-gray-800">{project.name}</h4>
+                      {project.url && (
+                        <a href={project.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
+                    {project.description && (
+                      <p className="text-gray-700 text-sm mb-2">{project.description}</p>
+                    )}
+                    <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                      {project.duration && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {project.duration}
+                        </span>
+                      )}
+                      {project.technologies && (
+                        <span className="px-2 py-0.5 bg-gray-200 rounded">{project.technologies}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Awards */}
+          {resume.awards && resume.awards.length > 0 && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Award className="w-5 h-5 text-yellow-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Awards & Honors</h3>
+              </div>
+              <div className="space-y-4">
+                {resume.awards.map((award: any, index: number) => (
+                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-semibold text-gray-800 mb-1">{award.name}</h4>
+                        {award.issuer && <div className="text-sm text-gray-700">{award.issuer}</div>}
+                        {award.date && (
+                          <div className="text-xs text-gray-600 flex items-center gap-1 mt-1">
+                            <Calendar className="w-3 h-3" />
+                            {award.date}
+                          </div>
+                        )}
+                        {award.description && (
+                          <p className="text-sm text-gray-600 mt-2">{award.description}</p>
+                        )}
+                      </div>
+                      <Award className="w-6 h-6 text-yellow-500" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Achievements */}
+          {resume.achievements && resume.achievements.length > 0 && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Star className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Achievements</h3>
+              </div>
+              <div className="space-y-2">
+                {resume.achievements.map((achievement: string, index: number) => (
+                  <div key={index} className="flex items-start gap-2 text-gray-700">
+                    <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                    <span>{typeof achievement === 'string' ? achievement : achievement.description || achievement.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Volunteer Experience */}
+          {resume.volunteerExperience && resume.volunteerExperience.length > 0 && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <User className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Volunteer Experience</h3>
+              </div>
+              <div className="space-y-4">
+                {resume.volunteerExperience.map((vol: any, index: number) => (
+                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                    <h4 className="font-semibold text-gray-800 mb-1">{vol.role || vol.title}</h4>
+                    {vol.organization && <div className="text-sm text-gray-700 mb-1">{vol.organization}</div>}
+                    {vol.duration && (
+                      <div className="text-xs text-gray-600 flex items-center gap-1 mb-2">
+                        <Calendar className="w-3 h-3" />
+                        {vol.duration}
+                      </div>
+                    )}
+                    {vol.description && <p className="text-sm text-gray-600">{vol.description}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Hobbies & Interests */}
+          {resume.hobbies && resume.hobbies.length > 0 && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Star className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Hobbies & Interests</h3>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {resume.hobbies.map((hobby: string, index: number) => (
+                  <span key={index} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-300">
+                    {typeof hobby === 'string' ? hobby : hobby.name || hobby}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Social Links */}
+          {(resume.linkedinUrl || resume.githubUrl || resume.portfolioUrl) && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Globe className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Social & Portfolio Links</h3>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {resume.linkedinUrl && (
+                  <a href={resume.linkedinUrl} target="_blank" rel="noopener noreferrer"
+                     className="flex items-center gap-2 p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
+                    <Linkedin className="w-5 h-5 text-blue-600" />
+                    <span className="text-blue-700 text-sm font-medium">LinkedIn</span>
+                    <ExternalLink className="w-3 h-3 text-blue-500 ml-auto" />
+                  </a>
+                )}
+                {resume.githubUrl && (
+                  <a href={resume.githubUrl} target="_blank" rel="noopener noreferrer"
+                     className="flex items-center gap-2 p-4 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors">
+                    <Code className="w-5 h-5 text-gray-700" />
+                    <span className="text-gray-700 text-sm font-medium">GitHub</span>
+                    <ExternalLink className="w-3 h-3 text-gray-500 ml-auto" />
+                  </a>
+                )}
+                {resume.portfolioUrl && (
+                  <a href={resume.portfolioUrl} target="_blank" rel="noopener noreferrer"
+                     className="flex items-center gap-2 p-4 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors">
+                    <Globe className="w-5 h-5 text-purple-600" />
+                    <span className="text-purple-700 text-sm font-medium">Portfolio</span>
+                    <ExternalLink className="w-3 h-3 text-purple-500 ml-auto" />
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Objective (if different from summary) */}
+          {resume.objective && resume.objective !== resume.professionalSummary && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Career Objective</h3>
+              </div>
+              <p className="text-gray-700 leading-relaxed">{resume.objective}</p>
+            </div>
+          )}
+
+          {/* Additional Information */}
+          {resume.additionalInfo && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Additional Information</h3>
+              </div>
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{resume.additionalInfo}</p>
+            </div>
+          )}
+
+          {/* Full Resume Content - Hidden as per requirement, showing AI-extracted sections above instead */}
+          {/* {resume.extractedText && (
+            <FullResumeContent text={resume.extractedText} />
+          )} */}
+
           {/* Version History */}
           {resume.versions && resume.versions.length > 0 && (
             <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
@@ -644,7 +1039,7 @@ export default function ResumeViewPage() {
                             const url = window.URL.createObjectURL(blob);
                             const link = document.createElement('a');
                             link.href = url;
-                            link.download = version.fileName || `resume-v${version.version}.pdf`;
+                            link.download = version.name || `resume-v${index + 1}.pdf`;
                             document.body.appendChild(link);
                             link.click();
                             document.body.removeChild(link);

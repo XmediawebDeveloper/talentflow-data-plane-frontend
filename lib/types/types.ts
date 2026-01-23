@@ -36,6 +36,9 @@ export interface Resume {
   awards?: string[];
   publications?: string[];
   references?: string[];
+
+  // Full extracted content from resume
+  extractedText?: string;
 }
 
 export interface EducationDetail {

@@ -11,6 +11,9 @@ export interface DashboardStats {
   active_users: number;
   total_scorings: number;
   total_assessments: number;
+  // Assessment stats from actual data
+  assessment_completed_count: number;
+  assessment_average_score: number | null;  // Overall average score
 }
 
 export interface RecentActivity {
