@@ -356,6 +356,71 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     return codingKeywords.some(keyword => jobText.includes(keyword));
   };
 
+  // Dynamic programming language detection from skills
+  // This is used as a fallback when AI extraction didn't properly set coding_required/supported_languages
+  const detectProgrammingLanguagesFromSkills = (skills: string[]): string[] => {
+    const languagePatterns: { pattern: RegExp; language: string }[] = [
+      // Java variants
+      { pattern: /\b(core\s*java|java\s*8|java\s*11|java\s*17|j2ee|jee|spring\s*(boot|mvc|framework)?|hibernate)\b/i, language: 'Java' },
+      { pattern: /\bjava\b/i, language: 'Java' },
+      // Python variants
+      { pattern: /\b(python|django|flask|fastapi|pandas|numpy|pytorch|tensorflow)\b/i, language: 'Python' },
+      // JavaScript/TypeScript variants
+      { pattern: /\b(javascript|js|node\.?js|react\.?js|angular\.?js|vue\.?js|express\.?js|next\.?js)\b/i, language: 'JavaScript' },
+      { pattern: /\b(typescript|ts)\b/i, language: 'TypeScript' },
+      // C# / .NET
+      { pattern: /\b(c#|csharp|\.net|dotnet|asp\.net)\b/i, language: 'C#' },
+      // C/C++
+      { pattern: /\b(c\+\+|cpp)\b/i, language: 'C++' },
+      { pattern: /\bc\b(?!\+|\#|sharp)/i, language: 'C' },
+      // Go
+      { pattern: /\b(golang|go\s*lang)\b/i, language: 'Go' },
+      { pattern: /\bgo\b/i, language: 'Go' },
+      // Ruby
+      { pattern: /\b(ruby|rails|ruby\s*on\s*rails)\b/i, language: 'Ruby' },
+      // PHP
+      { pattern: /\b(php|laravel|symfony)\b/i, language: 'PHP' },
+      // Mobile
+      { pattern: /\bkotlin\b/i, language: 'Kotlin' },
+      { pattern: /\bswift\b/i, language: 'Swift' },
+      // Others
+      { pattern: /\brust\b/i, language: 'Rust' },
+      { pattern: /\bscala\b/i, language: 'Scala' },
+      { pattern: /\br\b(?!\s*&\s*d)/i, language: 'R' },
+      // Automation testing with programming
+      { pattern: /\b(selenium|cypress|playwright|appium|webdriver)\b/i, language: 'Java' }, // Default to Java for automation
+    ];
+
+    const detectedLanguages = new Set<string>();
+    const skillsText = skills.join(' ');
+
+    for (const { pattern, language } of languagePatterns) {
+      if (pattern.test(skillsText)) {
+        detectedLanguages.add(language);
+      }
+    }
+
+    return Array.from(detectedLanguages);
+  };
+
+  // Check if job title/description indicates a coding role
+  const isCodingRole = (job: Job): boolean => {
+    const codingRolePatterns = [
+      /developer/i,
+      /engineer/i,
+      /programmer/i,
+      /sdet/i,
+      /automation\s*(test|engineer|tester)/i,
+      /full\s*stack/i,
+      /front\s*end/i,
+      /back\s*end/i,
+      /software/i,
+      /devops/i,
+    ];
+    const titleAndDesc = `${job.title} ${job.description || ''}`;
+    return codingRolePatterns.some(pattern => pattern.test(titleAndDesc));
+  };
+
   const handleJobSelect = (job: Job) => {
     setSelectedJob(job);
 
@@ -363,18 +428,34 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     const jdRequiresCoding = job.coding_required === true;
     const hasLanguages = job.supported_languages && job.supported_languages.length > 0;
 
-    // Auto-configure sections based on JD's coding_required field
-    if (jdRequiresCoding && hasLanguages) {
-      // JD explicitly requires coding AND has languages configured - enable coding
+    // DYNAMIC DETECTION: If JD doesn't have coding_required set but has programming skills,
+    // automatically detect languages from must_have_skills
+    let shouldEnableCoding = jdRequiresCoding && hasLanguages;
+    let codingLanguages: string[] = hasLanguages ? job.supported_languages! : [];
+
+    // Fallback: Dynamic detection from skills if AI extraction didn't set coding properly
+    if (!shouldEnableCoding && job.skills && job.skills.length > 0) {
+      const detectedLanguages = detectProgrammingLanguagesFromSkills(job.skills);
+
+      // If we detected programming languages AND it's a coding-related role, enable coding
+      if (detectedLanguages.length > 0 && (isCodingRole(job) || detectedLanguages.length >= 1)) {
+        shouldEnableCoding = true;
+        codingLanguages = detectedLanguages;
+        console.log('[TalentFlow] Dynamic language detection enabled coding for JD:', job.title, 'Languages:', detectedLanguages);
+      }
+    }
+
+    // Auto-configure sections based on coding requirement
+    if (shouldEnableCoding && codingLanguages.length > 0) {
+      // Coding is required - enable coding section
       setSections([
         { name: 'HR', percentage: 20, topics: [], enabled: true },
         { name: 'Technical', percentage: 70, topics: [], enabled: true },
         { name: 'Coding', percentage: 10, topics: [], enabled: true },
       ]);
-      setSelectedCodingLanguages(job.supported_languages!);
+      setSelectedCodingLanguages(codingLanguages);
     } else {
-      // JD does NOT require coding (coding_required is false or undefined)
-      // Coding section is disabled and LOCKED - user cannot enable it
+      // JD does NOT require coding - coding section is disabled
       setSections([
         { name: 'HR', percentage: 30, topics: [], enabled: true },
         { name: 'Technical', percentage: 70, topics: [], enabled: true },
@@ -983,9 +1064,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   {(() => {
                     // Determine if coding is disabled and why
                     const isCodingDisabledBySettings = topicSettings?.coding_enabled === false;
-                    const isCodingDisabledByJD = selectedJob?.coding_required === false;
+
+                    // Check if coding was enabled via dynamic detection (languages were auto-detected from skills)
+                    const hasDynamicallyDetectedLanguages = selectedCodingLanguages.length > 0;
+
+                    // Only lock coding if:
+                    // 1. Settings disabled it globally, OR
+                    // 2. JD doesn't require coding AND no languages were dynamically detected
+                    const isCodingDisabledByJD = selectedJob?.coding_required !== true && !hasDynamicallyDetectedLanguages;
                     const isCodingLocked = isCodingDisabledBySettings || isCodingDisabledByJD;
                     const codingEnabled = sections.find(s => s.name === 'Coding')?.enabled;
+
+                    // Check if this was auto-enabled via dynamic detection
+                    const wasAutoDetected = !selectedJob?.coding_required && hasDynamicallyDetectedLanguages;
 
                     return (
                       <div className={`p-4 border rounded-lg transition-all ${isCodingLocked ? 'border-gray-200 bg-gray-100 opacity-60' : codingEnabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
@@ -1004,6 +1095,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                                 ) : (
                                   <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
                                 )}
+                                {!isCodingLocked && wasAutoDetected && (
+                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-xs">Auto-Detected from Skills</span>
+                                )}
                                 {!isCodingLocked && selectedJob?.coding_required && (
                                   <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Auto-Enabled</span>
                                 )}
@@ -1011,7 +1105,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               <p className="text-sm text-gray-500">
                                 {isCodingDisabledByJD
                                   ? 'This job description does not require coding assessment'
-                                  : 'Programming challenges, algorithm design, and code implementation'
+                                  : wasAutoDetected
+                                    ? `Programming languages detected from skills: ${selectedCodingLanguages.join(', ')}`
+                                    : 'Programming challenges, algorithm design, and code implementation'
                                 }
                               </p>
                             </div>
@@ -1030,11 +1126,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
 
                 {/* Smart Configuration Info */}
-                <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-gray-600">
-                      <strong>Smart Configuration:</strong> Coding round availability is determined by the Job Description. If the JD has <code className="bg-gray-200 px-1 rounded">coding_required: false</code>, the coding round will be locked and cannot be enabled. For technical JDs with coding enabled, you can configure languages. Disabled rounds will be hidden from the section distribution below.
+                    <Sparkles className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-blue-700">
+                      <strong>Smart Auto-Detection:</strong> Coding round is automatically enabled when programming languages (Java, Python, JavaScript, etc.) are detected in the job skills. Languages like "Core Java", "Spring Boot", "React", "Selenium" are automatically recognized. Disabled rounds will be hidden from the section distribution below.
                     </p>
                   </div>
                 </div>
