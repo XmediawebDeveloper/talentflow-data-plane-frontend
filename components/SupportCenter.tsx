@@ -10,7 +10,7 @@ import {
 import { toast } from 'sonner';
 
 // Main API - Local backend handles everything including support tickets
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 interface SupportTicket {
   id: string;
@@ -129,7 +129,7 @@ export default function SupportCenter() {
 
   // Build support tickets API URL - uses local backend
   const getSupportApiUrl = (endpoint: string = '') => {
-    // URL format: http://localhost:8001/api/v1/support-tickets{endpoint}
+    // URL format: http://localhost:8000/api/v1/support-tickets{endpoint}
     return `${API_BASE_URL}/support-tickets${endpoint}`;
   };
 

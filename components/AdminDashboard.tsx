@@ -170,7 +170,15 @@ export default function AdminDashboard({
             <div>
               <p className="text-sm text-gray-600">Assessments</p>
               <p className="text-3xl font-semibold text-gray-900 mt-1">{stats?.total_assessments || 0}</p>
-              <p className="text-xs text-gray-500 mt-1">{stats?.total_scorings || 0} scorings</p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className="text-xs text-green-600">{stats?.assessment_completed_count || 0} completed</span>
+                {stats?.assessment_average_score !== null && stats?.assessment_average_score !== undefined && (
+                  <>
+                    <span className="text-xs text-gray-400">|</span>
+                    <span className="text-xs text-blue-600">Avg: {stats.assessment_average_score}%</span>
+                  </>
+                )}
+              </div>
             </div>
             <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
               <Award className="w-6 h-6 text-orange-600" />

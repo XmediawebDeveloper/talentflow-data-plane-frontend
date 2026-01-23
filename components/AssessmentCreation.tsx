@@ -1,5 +1,5 @@
-import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import { assessmentService, jdService } from '@/lib/services';
@@ -38,10 +38,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // Read initial step from URL, default to 'select-jd'
   const urlStep = searchParams.get('step') as 'select-jd' | 'configure' | 'preview' | null;
   const urlJdId = searchParams.get('jd_id');
+  const editAssessmentId = searchParams.get('edit'); // Edit mode: assessment ID to edit
 
   const [step, setStepState] = useState<'select-jd' | 'configure' | 'preview'>(urlStep || 'select-jd');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [duration, setDuration] = useState(30);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingAssessment, setEditingAssessment] = useState<any>(null);
 
   // Helper function to update step and URL
   const setStep = (newStep: 'select-jd' | 'configure' | 'preview', jobId?: string) => {
@@ -84,6 +87,60 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
   }, [preSelectedJobId, urlJdId, jobs, selectedJob, urlStep]);
 
+  // Load assessment data when in edit mode
+  useEffect(() => {
+    const loadAssessmentForEdit = async () => {
+      if (!editAssessmentId) return;
+
+      try {
+        setIsEditMode(true);
+        console.log('[TalentFlow] Loading assessment for edit:', editAssessmentId);
+
+        const assessment = await assessmentService.get(editAssessmentId);
+        setEditingAssessment(assessment);
+
+        // Pre-populate form fields with existing assessment data
+        setDuration(assessment.duration_minutes || 30);
+        setProctoringEnabled(assessment.proctoring_enabled ?? true);
+
+        // Update sections with existing data
+        setSections([
+          {
+            name: 'HR',
+            percentage: assessment.hr_percentage || 0,
+            topics: assessment.hr_topics || [],
+            enabled: assessment.hr_enabled ?? true
+          },
+          {
+            name: 'Technical',
+            percentage: assessment.technical_percentage || 0,
+            topics: assessment.technical_topics || [],
+            enabled: assessment.technical_enabled ?? true
+          },
+          {
+            name: 'Coding',
+            percentage: assessment.coding_percentage || 0,
+            topics: assessment.coding_topics || [],
+            enabled: assessment.coding_enabled ?? false
+          }
+        ]);
+
+        // Set coding languages if present
+        if (assessment.coding_languages?.length > 0) {
+          setSelectedCodingLanguages(assessment.coding_languages);
+        }
+
+        console.log('[TalentFlow] Assessment loaded for editing:', assessment.title);
+      } catch (error) {
+        console.error('Failed to load assessment for edit:', error);
+        alert('Failed to load assessment for editing. Please try again.');
+        router.push('/recruitment/assessments');
+      }
+    };
+
+    loadAssessmentForEdit();
+  }, [editAssessmentId]);
+
   // Initialize sections based on global topic settings
   const getInitialSections = (): SectionConfig[] => {
     const hrEnabled = topicSettings?.hr_enabled ?? true;
@@ -122,6 +179,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [localJobs, setLocalJobs] = useState<Job[]>(jobs);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
 
+  // Auto-save draft state
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [draftSavedId, setDraftSavedId] = useState<string | null>(null);
+
   // Full-screen JD Creation modal state
   const [showJDCreation, setShowJDCreation] = useState(false);
 
@@ -129,6 +190,33 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [showCodingConfirm, setShowCodingConfirm] = useState(false);
   const [codingPopupMode, setCodingPopupMode] = useState<'enable' | 'disable'>('enable');
   const [selectedCodingLanguages, setSelectedCodingLanguages] = useState<string[]>([]);
+
+  // Refs for tracking state in effects and unmount
+  const shouldSaveOnUnmountRef = useRef(false);
+  const currentStateRef = useRef({
+    step,
+    selectedJob,
+    sections,
+    duration,
+    selectedCodingLanguages: [] as string[],
+    proctoringEnabled,
+    draftSavedId: null as string | null,
+  });
+
+  // Update ref whenever state changes
+  useEffect(() => {
+    currentStateRef.current = {
+      step,
+      selectedJob,
+      sections,
+      duration,
+      selectedCodingLanguages,
+      proctoringEnabled,
+      draftSavedId,
+    };
+    // Mark that we should save on unmount if in configure step with a selected job
+    shouldSaveOnUnmountRef.current = step === 'configure' && selectedJob !== null && !draftSavedId;
+  }, [step, selectedJob, sections, duration, selectedCodingLanguages, proctoringEnabled, draftSavedId]);
 
   // Available programming languages for selection
   const programmingLanguages = [
@@ -221,6 +309,44 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     };
 
     fetchPublishedJDs();
+  }, []);
+
+  // Save draft on component unmount (e.g., sidebar navigation)
+  useEffect(() => {
+    return () => {
+      const state = currentStateRef.current;
+      if (shouldSaveOnUnmountRef.current && state.selectedJob && !state.draftSavedId) {
+        // Use synchronous API call for unmount
+        const hrSection = state.sections.find(s => s.name === 'HR');
+        const technicalSection = state.sections.find(s => s.name === 'Technical');
+        const codingSection = state.sections.find(s => s.name === 'Coding');
+
+        const createData = {
+          jd_id: state.selectedJob?.id || '',
+          title: `${state.selectedJob?.title} - Assessment - Version 1`,
+          description: `Assessment for ${state.selectedJob?.title} position`,
+          duration_minutes: state.duration,
+          hr_enabled: hrSection?.enabled || false,
+          hr_percentage: hrSection?.enabled ? hrSection.percentage : 0,
+          hr_topics: hrSection?.topics || [],
+          technical_enabled: technicalSection?.enabled || false,
+          technical_percentage: technicalSection?.enabled ? technicalSection.percentage : 0,
+          technical_topics: technicalSection?.topics || [],
+          coding_enabled: codingSection?.enabled || false,
+          coding_percentage: codingSection?.enabled ? codingSection.percentage : 0,
+          coding_topics: codingSection?.topics || [],
+          coding_languages: state.selectedCodingLanguages,
+          proctoring_enabled: state.proctoringEnabled,
+        };
+
+        // Fire and forget - save draft on unmount
+        assessmentService.create(createData).then(response => {
+          console.log('[TalentFlow] Assessment auto-saved as draft on unmount:', response.id);
+        }).catch(error => {
+          console.error('Failed to auto-save draft on unmount:', error);
+        });
+      }
+    };
   }, []);
 
   // Check if JD requires coding based on skills/technologies
@@ -345,15 +471,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     setIsGenerating(true);
 
     try {
-      // Call the real API to create assessment
+      // Call the real API to create/update assessment
       const hrSection = sections.find(s => s.name === 'HR');
       const technicalSection = sections.find(s => s.name === 'Technical');
       const codingSection = sections.find(s => s.name === 'Coding');
 
-      const createData = {
+      const assessmentData = {
         jd_id: selectedJob?.id || '',
-        title: `${selectedJob?.title} Assessment`,
-        description: `AI-generated assessment for ${selectedJob?.title}`,
+        title: isEditMode && editingAssessment
+          ? editingAssessment.title  // Keep existing title - backend will update version
+          : `${selectedJob?.title} - Assessment - Version 1`,
+        description: `Assessment for ${selectedJob?.title} position`,
         duration_minutes: duration,  // Include the configured duration
         hr_enabled: hrSection?.enabled || false,
         hr_percentage: hrSection?.enabled ? hrSection.percentage : 0,
@@ -368,40 +496,53 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         proctoring_enabled: proctoringEnabled,
       };
 
-      // Create the assessment via API
-      const createdAssessment = await assessmentService.create(createData);
+      let resultAssessment;
 
-      // If not saving as draft, publish immediately
-      if (!saveAsDraft) {
-        await assessmentService.publish(createdAssessment.id);
+      if (isEditMode && editingAssessment) {
+        // Update existing assessment
+        console.log('[TalentFlow] Updating assessment:', editingAssessment.id);
+        resultAssessment = await assessmentService.update(editingAssessment.id, assessmentData);
+
+        // If not saving as draft, publish the updated assessment
+        if (!saveAsDraft) {
+          await assessmentService.publish(editingAssessment.id);
+        }
+      } else {
+        // Create new assessment
+        resultAssessment = await assessmentService.create(assessmentData);
+
+        // If not saving as draft, publish immediately
+        if (!saveAsDraft) {
+          await assessmentService.publish(resultAssessment.id);
+        }
       }
 
       // Map API response to local format
       const assessmentDefinition = {
-        id: createdAssessment.id,
-        title: createdAssessment.title,
+        id: resultAssessment.id,
+        title: resultAssessment.title,
         job: selectedJob,
-        duration: createdAssessment.duration_minutes,
+        duration: resultAssessment.duration_minutes,
         sections: sections.filter(s => s.enabled).map(section => ({
           name: section.name,
           percentage: section.percentage,
           topics: section.topics,
-          questions: Math.ceil((createdAssessment.duration_minutes * section.percentage) / 100 / 2),
+          questions: Math.ceil((resultAssessment.duration_minutes * section.percentage) / 100 / 2),
           difficulty: selectedJob?.experience === 'Senior' || selectedJob?.experience === 'Lead' ? 'Advanced' :
                      selectedJob?.experience === 'Mid-Level' ? 'Intermediate' : 'Basic',
-          estimatedTime: Math.ceil((createdAssessment.duration_minutes * section.percentage) / 100),
+          estimatedTime: Math.ceil((resultAssessment.duration_minutes * section.percentage) / 100),
         })),
         status: saveAsDraft ? 'Draft' : 'Active',
-        createdAt: createdAssessment.created_at,
+        createdAt: resultAssessment.created_at,
       };
 
       setGeneratedAssessment(assessmentDefinition);
       setIsGenerating(false);
       setStep('preview');
     } catch (error) {
-      console.error('Failed to create assessment:', error);
+      console.error('Failed to create/update assessment:', error);
       setIsGenerating(false);
-      alert(`Failed to create assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert(`Failed to ${isEditMode ? 'update' : 'create'} assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -409,6 +550,101 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     onCreateAssessment({ ...generatedAssessment, status: 'Active' });
     onBack();
   };
+
+  // Auto-save as draft when navigating away from configure step
+  const handleAutoSaveDraft = async (navigateCallback: () => void) => {
+    // Only auto-save if we're in configure step and have a selected job
+    if (step !== 'configure' || !selectedJob) {
+      navigateCallback();
+      return;
+    }
+
+    // If already saved as draft, just navigate
+    if (draftSavedId) {
+      navigateCallback();
+      return;
+    }
+
+    setIsAutoSaving(true);
+
+    try {
+      const hrSection = sections.find(s => s.name === 'HR');
+      const technicalSection = sections.find(s => s.name === 'Technical');
+      const codingSection = sections.find(s => s.name === 'Coding');
+
+      const createData = {
+        jd_id: selectedJob?.id || '',
+        title: `${selectedJob?.title} - Assessment - Version 1`,
+        description: `Assessment for ${selectedJob?.title} position`,
+        duration_minutes: duration,
+        hr_enabled: hrSection?.enabled || false,
+        hr_percentage: hrSection?.enabled ? hrSection.percentage : 0,
+        hr_topics: hrSection?.topics || [],
+        technical_enabled: technicalSection?.enabled || false,
+        technical_percentage: technicalSection?.enabled ? technicalSection.percentage : 0,
+        technical_topics: technicalSection?.topics || [],
+        coding_enabled: codingSection?.enabled || false,
+        coding_percentage: codingSection?.enabled ? codingSection.percentage : 0,
+        coding_topics: codingSection?.topics || [],
+        coding_languages: selectedCodingLanguages,
+        proctoring_enabled: proctoringEnabled,
+      };
+
+      // Create the assessment as draft (don't publish)
+      const createdAssessment = await assessmentService.create(createData);
+      setDraftSavedId(createdAssessment.id);
+
+      console.log('[TalentFlow] Assessment auto-saved as draft:', createdAssessment.id);
+
+      setIsAutoSaving(false);
+      navigateCallback();
+    } catch (error) {
+      console.error('Failed to auto-save draft:', error);
+      setIsAutoSaving(false);
+      // Still navigate even if save fails
+      navigateCallback();
+    }
+  };
+
+  // Handle browser close/refresh - save draft
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (step === 'configure' && selectedJob && !draftSavedId) {
+        // Trigger auto-save synchronously (best effort)
+        const hrSection = sections.find(s => s.name === 'HR');
+        const technicalSection = sections.find(s => s.name === 'Technical');
+        const codingSection = sections.find(s => s.name === 'Coding');
+
+        const createData = {
+          jd_id: selectedJob?.id || '',
+          title: `${selectedJob?.title} - Assessment - Version 1`,
+          description: `Assessment for ${selectedJob?.title} position`,
+          duration_minutes: duration,
+          hr_enabled: hrSection?.enabled || false,
+          hr_percentage: hrSection?.enabled ? hrSection.percentage : 0,
+          hr_topics: hrSection?.topics || [],
+          technical_enabled: technicalSection?.enabled || false,
+          technical_percentage: technicalSection?.enabled ? technicalSection.percentage : 0,
+          technical_topics: technicalSection?.topics || [],
+          coding_enabled: codingSection?.enabled || false,
+          coding_percentage: codingSection?.enabled ? codingSection.percentage : 0,
+          coding_topics: codingSection?.topics || [],
+          coding_languages: selectedCodingLanguages,
+          proctoring_enabled: proctoringEnabled,
+        };
+
+        // Use sendBeacon for reliable save on page unload
+        const blob = new Blob([JSON.stringify(createData)], { type: 'application/json' });
+        navigator.sendBeacon?.('/api/assessments/draft', blob);
+
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [step, selectedJob, draftSavedId, sections, duration, selectedCodingLanguages, proctoringEnabled]);
 
   const totalPercentage = getTotalPercentage();
   const isPercentageValid = totalPercentage === 100;
@@ -430,9 +666,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           </button>
 
           <div className="mb-8">
-            <h1 className="text-gray-900 mb-2">Create New Assessment</h1>
+            <h1 className="text-gray-900 mb-2">{isEditMode ? 'Edit Assessment' : 'Create New Assessment'}</h1>
             <p className="text-gray-600">
-              Select a Job Description to create an AI-powered assessment
+              {isEditMode
+                ? 'Update the assessment configuration. Changes will create a new version.'
+                : 'Select a Job Description to create an AI-powered assessment'}
             </p>
           </div>
 
@@ -640,11 +878,22 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     const enabledSectionsCount = sections.filter(s => s.enabled).length;
 
     return (
-      <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
+      <div className="flex-1 p-8 overflow-y-auto bg-gray-50 relative">
+        {/* Auto-saving overlay */}
+        {isAutoSaving && (
+          <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-6 flex items-center gap-3">
+              <Loader2 className="w-5 h-5 animate-spin text-gray-700" />
+              <span className="text-gray-700 font-medium">Auto-saving draft...</span>
+            </div>
+          </div>
+        )}
+
         <div className="w-full">
           <button
-            onClick={() => setStep('select-jd')}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
+            onClick={() => handleAutoSaveDraft(() => setStep('select-jd'))}
+            disabled={isAutoSaving}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors disabled:opacity-50"
           >
             <ArrowLeft className="w-5 h-5" />
             Back to Job Selection

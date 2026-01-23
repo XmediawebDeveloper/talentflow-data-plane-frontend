@@ -58,7 +58,7 @@ export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScr
           {/* Message */}
           <div className="text-sm text-gray-500 space-y-2">
             <p>
-              Our AI is now evaluating your responses. The hiring team will review your results and contact you with next steps.
+              The hiring team will review your results and contact you with next steps.
             </p>
             <p className="font-medium text-gray-700">
               You can safely close this window.

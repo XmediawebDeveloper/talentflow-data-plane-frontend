@@ -1,17 +1,23 @@
 'use client';
 
 import { useState, useEffect, useRef, RefObject } from 'react';
+import Image from 'next/image';
 import {
   Clock,
   ChevronRight,
-  ChevronLeft,
   Send,
   AlertCircle,
   CheckCircle,
   Video,
   FileText,
   Code,
-  Users
+  Users,
+  Camera,
+  Mic,
+  ShieldAlert,
+  X,
+  Check,
+  HelpCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -57,6 +63,8 @@ interface AssessmentInterfaceProps {
   onNavigate: (questionNumber: number) => void;
   videoRef: RefObject<HTMLVideoElement | null>;
   stream: MediaStream | null;
+  isCameraActive?: boolean;
+  isMicrophoneActive?: boolean;
 }
 
 export function AssessmentInterface({
@@ -71,7 +79,9 @@ export function AssessmentInterface({
   onComplete,
   onNavigate,
   videoRef,
-  stream
+  stream,
+  isCameraActive = true,
+  isMicrophoneActive = true
 }: AssessmentInterfaceProps) {
   const [answer, setAnswer] = useState<{
     text_response?: string;
@@ -215,16 +225,15 @@ export function AssessmentInterface({
     try {
       const response = await onAnswerSubmit(currentQuestion.question_id, answer);
 
-      // Auto-advance to next question only if not in review mode
-      // User stays on current question if they're reviewing/editing
-      if (!response.is_last_question && !allQuestionsAnswered) {
-        // Auto-navigate to next question only during initial answering
-        onNavigate(currentQuestion.question_number + 1);
-      } else if (autoSubmit) {
-        // Time expired - auto-show completion modal
+      // Navigation is handled by parent component via response.next_question
+      // The parent's handleAnswerSubmit already sets currentQuestion from the response
+      // So we don't need to call onNavigate here - it would cause duplicate navigation
+
+      if (autoSubmit && response.is_last_question) {
+        // Time expired on last question - auto-show completion modal
         setShowCompleteConfirm(true);
       }
-      // Otherwise, stay on current question (review mode) - user can navigate manually
+      // Parent component handles navigation via setCurrentQuestion(response.next_question)
     } catch (error) {
       console.error('Failed to submit answer:', error);
     } finally {
@@ -235,6 +244,52 @@ export function AssessmentInterface({
   const handleCompleteAssessment = () => {
     setShowCompleteConfirm(false);
     onComplete();
+  };
+
+  // Check if the current answer is valid based on question type
+  const isAnswerValid = (): boolean => {
+    const { round_type, question_type, starter_code } = currentQuestion;
+
+    // For coding questions
+    if (round_type === 'coding') {
+      const code = answer.code_submission?.trim() || '';
+      const language = answer.language || 'python';
+      const template = starter_code?.[language]?.trim() || '';
+
+      // Code must be non-empty and different from the template
+      if (!code) return false;
+      if (code === template) return false;
+
+      return true;
+    }
+
+    // For MCQ questions (can be in any round) - includes single_choice and multiple_choice
+    if (question_type === 'mcq' || question_type === 'multiple_choice' || question_type === 'single_choice') {
+      return (answer.selected_options?.length || 0) > 0;
+    }
+
+    // Check if question has options (another indicator of MCQ regardless of question_type)
+    if (currentQuestion.options && currentQuestion.options.length > 0) {
+      return (answer.selected_options?.length || 0) > 0;
+    }
+
+    // For text/video questions (HR, Technical rounds) - only if no options
+    if (question_type === 'text' || question_type === 'video' || question_type === 'short_answer') {
+      const textAnswer = answer.text_response?.trim() || '';
+      return textAnswer.length > 0;
+    }
+
+    // For HR/Technical rounds without explicit question type, check both answer types
+    if (round_type === 'hr' || round_type === 'technical') {
+      // If there are selected options, consider it valid
+      if ((answer.selected_options?.length || 0) > 0) return true;
+      // Otherwise require text response
+      const textAnswer = answer.text_response?.trim() || '';
+      return textAnswer.length > 0;
+    }
+
+    // Default: allow submission (for any unknown question types)
+    return true;
   };
 
   const formatTime = (seconds: number) => {
@@ -271,26 +326,201 @@ export function AssessmentInterface({
 
   const isLastQuestion = currentQuestion.question_number === currentQuestion.total_questions;
 
+  // Determine if proctoring devices are disabled
+  const isDeviceDisabled = !isCameraActive || !isMicrophoneActive;
+
+  // Progress steps
+  const progressSteps = [
+    { label: 'Terms & Consent', active: false, completed: true },
+    { label: 'Assessment Details', active: false, completed: true },
+    { label: 'System Check', active: false, completed: true },
+    { label: 'Assessment', active: true, completed: false }
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
-      {/* Top Bar */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo & Title */}
-          <div className="flex items-center gap-4">
-            <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">TF</span>
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* Proctoring Device Disabled Blocker Overlay */}
+      {isDeviceDisabled && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100]">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-8 text-center">
+            {/* Alert Icon */}
+            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <ShieldAlert className="w-10 h-10 text-red-600" />
             </div>
-            <div>
-              <h1 className="font-semibold text-gray-800">{assessmentInfo.assessment_title}</h1>
-              <p className="text-sm text-gray-500">{assessmentInfo.candidate_name}</p>
+
+            {/* Title */}
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">
+              Proctoring Device Disabled
+            </h2>
+
+            {/* Description */}
+            <p className="text-gray-600 mb-6">
+              Your assessment has been paused because a required proctoring device has been disabled.
+              Please re-enable the following to continue:
+            </p>
+
+            {/* Disabled Devices List */}
+            <div className="space-y-3 mb-6">
+              {!isCameraActive && (
+                <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+                  <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Camera className="w-5 h-5 text-red-600" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-semibold text-red-800">Camera Disabled</p>
+                    <p className="text-sm text-red-600">Your camera has been turned off or blocked.</p>
+                  </div>
+                </div>
+              )}
+
+              {!isMicrophoneActive && (
+                <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+                  <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Mic className="w-5 h-5 text-red-600" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-semibold text-red-800">Microphone Disabled</p>
+                    <p className="text-sm text-red-600">Your microphone has been turned off or blocked.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Instructions */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="text-left text-sm">
+                  <p className="font-medium text-amber-800 mb-1">How to re-enable:</p>
+                  <ol className="list-decimal list-inside text-amber-700 space-y-1">
+                    <li>Click the camera/microphone icon in your browser's address bar</li>
+                    <li>Select "Allow" for the disabled device(s)</li>
+                    <li>If blocked via system settings, re-enable from your device settings</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            {/* Warning Footer */}
+            <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+              <Video className="w-4 h-4" />
+              <span>This violation has been recorded for review</span>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Progress */}
-          <div className="flex items-center gap-6">
-            {/* Round Progress */}
-            <div className="hidden md:flex items-center gap-2">
+      {/* Sticky Header Container */}
+      <div className="sticky top-0 z-50">
+        {/* Main Header */}
+        <header className="bg-white border-b border-gray-200 px-4 py-3">
+          <div className="w-full px-2 lg:px-6 flex items-center justify-between">
+            {/* Logo & Title */}
+            <div className="flex items-center gap-4">
+              <Image
+                src="/talent_flow_logo.png"
+                alt="TalentFlow"
+                width={120}
+                height={30}
+                className="h-8 w-auto"
+                priority
+                unoptimized
+              />
+              <div className="hidden sm:block">
+                <h1 className="font-semibold text-gray-800">{assessmentInfo.assessment_title}</h1>
+                <p className="text-sm text-gray-500">{assessmentInfo.candidate_name}</p>
+              </div>
+            </div>
+
+            {/* Right Side - Timer, Progress, Camera */}
+            <div className="flex items-center gap-4">
+              {/* Global Assessment Timer */}
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
+                globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+              }`}>
+                <Clock className="w-4 h-4" />
+                <div className="flex flex-col items-center">
+                  <span className="font-mono font-bold text-lg">{formatTime(globalTimeRemaining)}</span>
+                  <span className="text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
+                </div>
+              </div>
+
+              {/* Question Timer */}
+              {timeRemaining !== null && (
+                <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+                  timeRemaining < 30 ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-700'
+                }`}>
+                  <span className="text-xs text-gray-500">Q:</span>
+                  <span className="font-mono font-medium text-sm">{formatTime(timeRemaining)}</span>
+                </div>
+              )}
+
+              {/* Overall Progress */}
+              <div className="hidden sm:flex items-center gap-2">
+                <span className="text-sm text-gray-500">
+                  {currentQuestion.question_number} / {currentQuestion.total_questions}
+                </span>
+                <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gray-800 transition-all duration-300"
+                    style={{ width: `${(currentQuestion.question_number / currentQuestion.total_questions) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Camera Preview */}
+              <div className="w-20 h-14 bg-gray-900 rounded-lg overflow-hidden relative">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Progress Stepper */}
+        <div className="w-full bg-white border-b border-gray-200">
+          <div className="w-full px-4 lg:px-8 py-3">
+            <div className="flex items-center justify-center gap-2">
+              {progressSteps.map((step, index) => (
+                <div key={index} className="flex items-center">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
+                      step.completed
+                        ? 'bg-green-500 text-white'
+                        : step.active
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-300 text-gray-600'
+                    }`}>
+                      {step.completed ? <Check className="w-3 h-3" /> : index + 1}
+                    </div>
+                    <span className={`text-xs font-medium hidden md:block ${
+                      step.active ? 'text-gray-900' : step.completed ? 'text-green-600' : 'text-gray-500'
+                    }`}>
+                      {step.label}
+                    </span>
+                  </div>
+                  {index < progressSteps.length - 1 && (
+                    <div className={`w-6 sm:w-12 h-0.5 mx-2 ${
+                      step.completed ? 'bg-green-500' : 'bg-gray-300'
+                    }`} />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Round Progress Bar */}
+        <div className="w-full bg-gray-50 border-b border-gray-200">
+          <div className="w-full px-4 lg:px-8 py-2">
+            <div className="flex items-center justify-center gap-3">
               {rounds.map((round, idx) => {
                 const Icon = getRoundIcon(round.round_type);
                 const isActive = round.round_type === currentQuestion.round_type;
@@ -298,7 +528,7 @@ export function AssessmentInterface({
                   <div
                     key={`${round.round_type}-${idx}`}
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
-                      isActive ? 'bg-gray-100' : ''
+                      isActive ? 'bg-white shadow-sm border border-gray-200' : ''
                     }`}
                   >
                     <div className={`w-6 h-6 rounded ${getRoundColor(round.round_type)} flex items-center justify-center`}>
@@ -311,63 +541,16 @@ export function AssessmentInterface({
                 );
               })}
             </div>
-
-            {/* Global Assessment Timer */}
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-              globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
-              globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
-            }`}>
-              <Clock className="w-4 h-4" />
-              <div className="flex flex-col items-center">
-                <span className="font-mono font-bold text-lg">{formatTime(globalTimeRemaining)}</span>
-                <span className="text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
-              </div>
-            </div>
-
-            {/* Question Timer */}
-            {timeRemaining !== null && (
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
-                timeRemaining < 30 ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-700'
-              }`}>
-                <span className="text-xs text-gray-500">Q:</span>
-                <span className="font-mono font-medium text-sm">{formatTime(timeRemaining)}</span>
-              </div>
-            )}
-
-            {/* Overall Progress */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">
-                {currentQuestion.question_number} / {currentQuestion.total_questions}
-              </span>
-              <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gray-800 transition-all duration-300"
-                  style={{ width: `${(currentQuestion.question_number / currentQuestion.total_questions) * 100}%` }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Camera Preview */}
-          <div className="w-24 h-16 bg-gray-900 rounded-lg overflow-hidden relative">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute bottom-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <div className="max-w-5xl mx-auto px-4 py-6">
+        <div className="max-w-7xl mx-auto px-8 py-6">
           {/* Review Mode Banner */}
           {allQuestionsAnswered && (
-            <div className="mb-4 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+            <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
                   <CheckCircle className="w-5 h-5 text-green-600" />
@@ -388,9 +571,9 @@ export function AssessmentInterface({
           )}
 
           {/* Question Card */}
-          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
             {/* Question Header */}
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg ${getRoundColor(currentQuestion.round_type)} flex items-center justify-center`}>
@@ -401,10 +584,7 @@ export function AssessmentInterface({
                   </div>
                   <div>
                     <p className="font-medium text-gray-800">
-                      {currentQuestion.round_name} - Question {currentQuestion.round_progress.current}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {currentQuestion.points} points | {currentQuestion.difficulty}
+                      {currentQuestion.round_name}
                     </p>
                   </div>
                 </div>
@@ -450,23 +630,7 @@ export function AssessmentInterface({
             </div>
 
             {/* Actions */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-              {/* Previous Button */}
-              <div>
-                {currentQuestion.question_number > 1 ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => onNavigate(currentQuestion.question_number - 1)}
-                    disabled={isSubmitting}
-                  >
-                    <ChevronLeft className="w-4 h-4 mr-1" />
-                    Previous
-                  </Button>
-                ) : (
-                  <div /> /* Empty div to maintain spacing */
-                )}
-              </div>
-
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end">
               {/* Next / Submit Button */}
               <div className="flex items-center gap-3">
                 {/* Save & Next button - saves and moves to next question */}
@@ -475,7 +639,8 @@ export function AssessmentInterface({
                     variant="primary"
                     onClick={() => handleSubmit()}
                     loading={isSubmitting}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !isAnswerValid()}
+                    title={!isAnswerValid() ? 'Please provide an answer before proceeding' : ''}
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
                     Save & Next
@@ -490,7 +655,8 @@ export function AssessmentInterface({
                       setShowCompleteConfirm(true);
                     }}
                     loading={isSubmitting}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !isAnswerValid()}
+                    title={!isAnswerValid() ? 'Please provide an answer before submitting' : ''}
                   >
                     <Send className="w-4 h-4 mr-2" />
                     Save & Submit Assessment
@@ -500,9 +666,9 @@ export function AssessmentInterface({
             </div>
           </div>
 
-          {/* Progress Indicator - Clickable Navigation */}
-          <div className="mt-6 bg-white rounded-xl shadow p-4">
-            <p className="text-sm font-medium text-gray-700 mb-3">Progress (Click to navigate)</p>
+          {/* Progress Indicator - Display Only (No Navigation) */}
+          <div className="mt-4 bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+            <p className="text-sm font-medium text-gray-700 mb-3">Progress</p>
             <div className="flex flex-wrap gap-2">
               {Array.from({ length: currentQuestion.total_questions }, (_, i) => {
                 const num = i + 1;
@@ -510,25 +676,22 @@ export function AssessmentInterface({
                 const isAnswered = num < currentQuestion.question_number;
 
                 return (
-                  <button
+                  <div
                     key={num}
-                    onClick={() => onNavigate(num)}
-                    disabled={isSubmitting}
-                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center transition-all ${
+                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center ${
                       isCurrent
                         ? 'bg-gray-800 text-white ring-2 ring-gray-800 ring-offset-2'
                         : isAnswered
-                        ? 'bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer'
-                        : 'bg-gray-100 text-gray-400 hover:bg-gray-200 cursor-pointer'
-                    } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    title={`Go to question ${num}`}
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}
                   >
                     {isAnswered ? (
                       <CheckCircle className="w-5 h-5" />
                     ) : (
                       num
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -542,7 +705,16 @@ export function AssessmentInterface({
       {/* Complete Confirmation Modal */}
       {showCompleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowCompleteConfirm(false)}
+              className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100 transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+
             <div className="flex items-center gap-4 mb-4">
               <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
                 <CheckCircle className="w-6 h-6 text-green-600" />
