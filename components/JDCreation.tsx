@@ -1470,37 +1470,60 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[TalentFlow] Mapped education:', { degree: params.education_requirements?.degree, code: educationValue });
       }
 
-      // Map industry to valid frontend codes
-      // Valid codes: technology, finance, healthcare, manufacturing, retail, education, consulting, others
-      const validIndustryCodes = ['technology', 'finance', 'healthcare', 'manufacturing', 'retail', 'education', 'consulting', 'others'];
+      // Map industry to valid Odoo codes (matching backend extraction and database)
+      const validIndustryCodes = [
+        'agriculture', 'forestry', 'fishing', 'mining', 'oil_gas',
+        'manufacturing', 'construction', 'textiles', 'food_processing',
+        'chemical', 'steel', 'energy', 'retail_wholesale', 'transportation',
+        'tourism_and_hospitality', 'healthcare_and_medical', 'financial',
+        'education', 'media', 'real_estate_and_property_manage', 'legal',
+        'telecom', 'consulting', 'information_technology', 'research',
+        'biotech', 'environment', 'aerospace_and_defense', 'defense',
+        'ecommerce', 'government_and_public_administrator',
+        'nonprofit_charitable_organization', 'artificial_inteligence',
+        'blockchain_and_cryptocurrency', 'electric_vehicles', 'space',
+        'cybersecurity', 'green_technology', 'others'
+      ];
+      // Map common variations to valid Odoo codes
       const industryMapping: Record<string, string> = {
-        'information_technology': 'technology',
-        'it': 'technology',
-        'tech': 'technology',
-        'software': 'technology',
-        'financial': 'finance',
-        'banking': 'finance',
-        'fintech': 'finance',
-        'healthcare_and_medical': 'healthcare',
-        'medical': 'healthcare',
-        'pharma': 'healthcare',
-        'biotech': 'healthcare',
-        'retail_wholesale': 'retail',
-        'ecommerce': 'retail',
-        'e-commerce': 'retail',
+        'technology': 'information_technology',
+        'it': 'information_technology',
+        'tech': 'information_technology',
+        'software': 'information_technology',
+        'finance': 'financial',
+        'banking': 'financial',
+        'fintech': 'financial',
+        'healthcare': 'healthcare_and_medical',
+        'medical': 'healthcare_and_medical',
+        'pharma': 'healthcare_and_medical',
+        'retail': 'retail_wholesale',
+        'e_commerce': 'ecommerce',
         'professional_services': 'consulting',
         'advisory': 'consulting',
+        'ai': 'artificial_inteligence',
+        'artificial_intelligence': 'artificial_inteligence',
+        'blockchain': 'blockchain_and_cryptocurrency',
+        'crypto': 'blockchain_and_cryptocurrency',
+        'government': 'government_and_public_administrator',
+        'nonprofit': 'nonprofit_charitable_organization',
+        'hospitality': 'tourism_and_hospitality',
+        'tourism': 'tourism_and_hospitality',
+        'real_estate': 'real_estate_and_property_manage',
+        'aerospace': 'aerospace_and_defense',
+        'telecommunications': 'telecom',
+        'logistics': 'transportation',
+        'entertainment': 'media',
       };
 
       let rawIndustry = params.industry_type?.toLowerCase().replace(/[^a-z_]/g, '_') || '';
       let industryValue = '';
 
       if (rawIndustry) {
-        // First check if it's already a valid code
+        // First check if it's already a valid Odoo code
         if (validIndustryCodes.includes(rawIndustry)) {
           industryValue = rawIndustry;
         } else if (industryMapping[rawIndustry]) {
-          // Map known variations to valid codes
+          // Map known variations to valid Odoo codes
           industryValue = industryMapping[rawIndustry];
         } else {
           // Default to 'others' for unknown industries
