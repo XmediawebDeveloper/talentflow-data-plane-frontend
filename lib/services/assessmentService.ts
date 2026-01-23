@@ -265,6 +265,56 @@ export interface AuditTrailListResponse {
   refunds_approved: number;
 }
 
+// 4b. Combined Audit Trail (Lifecycle + Candidate Activities)
+export type AuditActivityCategory = 'assessment_lifecycle' | 'candidate_activity';
+export type AuditActivityType =
+  | 'assessment_created'
+  | 'assessment_updated'
+  | 'assessment_deleted'
+  | 'assessment_published'
+  | 'assessment_archived'
+  | 'candidate_invited'
+  | 'candidate_started'
+  | 'candidate_completed'
+  | 'candidate_failed'
+  | 'candidate_expired';
+
+export interface CombinedAuditActivity {
+  id: string;
+  category: AuditActivityCategory;
+  activity_type: AuditActivityType;
+  title: string;
+  description: string;
+  assessment_id?: string;
+  assessment_title?: string;
+  jd_title?: string;
+  actor_id?: string;
+  actor_name?: string;
+  actor_email?: string;
+  candidate_name?: string;
+  candidate_email?: string;
+  score?: number;
+  passed?: boolean;
+  timestamp: string;
+  details?: Record<string, unknown>;
+}
+
+export interface CombinedAuditTrailResponse {
+  items: CombinedAuditActivity[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_lifecycle_events: number;
+  total_candidate_events: number;
+  assessments_created: number;
+  assessments_deleted: number;
+  assessments_archived: number;
+  candidates_invited: number;
+  candidates_completed: number;
+  candidates_in_progress: number;
+  candidates_not_started: number;
+}
+
 // 5. Refund Request
 export interface RefundRequestCreate {
   reason: string;
@@ -541,7 +591,7 @@ export const assessmentService = {
   },
 
   /**
-   * 4. Get audit trail
+   * 4. Get audit trail (legacy - invitation-based)
    */
   async getAuditTrail(params?: {
     assessment_id?: string;
@@ -555,6 +605,26 @@ export const assessmentService = {
   }): Promise<AuditTrailListResponse> {
     try {
       const response = await api.get<AuditTrailListResponse>('/assessments/audit-trail', { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * 4b. Get combined audit trail (lifecycle + candidate activities)
+   */
+  async getCombinedAuditTrail(params?: {
+    category?: 'assessment_lifecycle' | 'candidate_activity';
+    assessment_id?: string;
+    date_from?: string;
+    date_to?: string;
+    search?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<CombinedAuditTrailResponse> {
+    try {
+      const response = await api.get<CombinedAuditTrailResponse>('/assessments/audit-trail/combined', { params });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

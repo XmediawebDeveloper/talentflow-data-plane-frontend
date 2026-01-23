@@ -71,38 +71,30 @@ function WarningCard({
   onDismiss: () => void;
   autoDismissDelay: number;
 }) {
-  const [progress, setProgress] = useState(100);
   const colors = SEVERITY_COLORS[warning.severity];
 
+  // Use a single timeout for auto-dismiss instead of requestAnimationFrame
+  // This prevents 60 re-renders per second
   useEffect(() => {
-    const startTime = Date.now();
-    const duration = autoDismissDelay;
+    const timer = setTimeout(() => {
+      onDismiss();
+    }, autoDismissDelay);
 
-    const updateProgress = () => {
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, 100 - (elapsed / duration) * 100);
-      setProgress(remaining);
-
-      if (remaining > 0) {
-        requestAnimationFrame(updateProgress);
-      } else {
-        onDismiss();
-      }
-    };
-
-    const animationFrame = requestAnimationFrame(updateProgress);
-
-    return () => cancelAnimationFrame(animationFrame);
+    return () => clearTimeout(timer);
   }, [autoDismissDelay, onDismiss]);
 
   return (
     <div
       className={`relative overflow-hidden rounded-lg border-l-4 ${colors.bg} ${colors.border} p-4 shadow-lg animate-slide-in`}
     >
-      {/* Progress bar */}
+      {/* Progress bar - using CSS animation instead of JS state updates */}
       <div
-        className="absolute bottom-0 left-0 h-1 bg-current opacity-30 transition-all"
-        style={{ width: `${progress}%` }}
+        className="absolute bottom-0 left-0 h-1 bg-current opacity-30 animate-progress-shrink"
+        style={{
+          animationDuration: `${autoDismissDelay}ms`,
+          animationTimingFunction: 'linear',
+          animationFillMode: 'forwards'
+        }}
       />
 
       <div className="flex items-start gap-3">
@@ -190,6 +182,17 @@ export function ProctoringWarningModal({
         }
         .animate-slide-in {
           animation: slide-in 0.3s ease-out;
+        }
+        @keyframes progress-shrink {
+          from {
+            width: 100%;
+          }
+          to {
+            width: 0%;
+          }
+        }
+        .animate-progress-shrink {
+          animation-name: progress-shrink;
         }
       `}</style>
     </div>

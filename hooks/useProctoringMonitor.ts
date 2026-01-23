@@ -122,6 +122,10 @@ export function useProctoringMonitor({
   const voiceIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const cameraIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Throttle flags to prevent message flooding to worker
+  const isVoiceProcessingRef = useRef(false);
+  const isCameraProcessingRef = useRef(false);
+
   // Use refs for all props to prevent infinite re-renders
   const onWarningRef = useRef(onWarning);
   const tokenRef = useRef(token);
@@ -359,6 +363,8 @@ export function useProctoringMonitor({
             break;
 
           case 'VOICE_RESULT':
+            // Reset throttle flag - ready for next analysis
+            isVoiceProcessingRef.current = false;
             if (data.detected) {
               logEventRef.current('voice_detected', {
                 averageVolume: data.averageVolume,
@@ -368,8 +374,16 @@ export function useProctoringMonitor({
             break;
 
           case 'CAMERA_RESULT':
+            // Reset throttle flag - ready for next analysis
+            isCameraProcessingRef.current = false;
             if (data.obstructed) {
-              setState(prev => ({ ...prev, isCameraObstructed: true }));
+              // Only update state if it actually changed
+              setState(prev => {
+                if (!prev.isCameraObstructed) {
+                  return { ...prev, isCameraObstructed: true };
+                }
+                return prev;
+              });
               logEventRef.current('camera_obstructed', {
                 avgBrightness: data.avgBrightness,
                 brightnessRange: data.brightnessRange,
@@ -421,9 +435,13 @@ export function useProctoringMonitor({
       const sampleRate = audioContextRef.current.sampleRate;
 
       // Use setInterval instead of requestAnimationFrame for more controlled frequency
-      // 50ms interval = 20 checks per second (sufficient for voice detection)
+      // 100ms interval = 10 checks per second (sufficient for voice detection, reduced from 50ms)
       voiceIntervalRef.current = setInterval(() => {
         if (!isMonitoringRef.current || !analyserRef.current || !workerRef.current) return;
+
+        // Skip if previous analysis is still processing (prevents message flooding)
+        if (isVoiceProcessingRef.current) return;
+        isVoiceProcessingRef.current = true;
 
         analyserRef.current.getByteFrequencyData(dataArray);
 
@@ -440,9 +458,9 @@ export function useProctoringMonitor({
             sampleRate
           }
         }, [dataToSend.buffer]);
-      }, 50);
+      }, 100);
 
-      console.log('[PROCTORING] Voice detection started (Web Worker, 50ms interval)');
+      console.log('[PROCTORING] Voice detection started (Web Worker, 100ms interval, throttled)');
     } catch (error) {
       console.error('[PROCTORING] Failed to setup voice detection:', error);
     }
@@ -470,10 +488,14 @@ export function useProctoringMonitor({
     if (!ctx) return;
 
     // Use setInterval instead of setTimeout for better control
-    // 100ms interval = 10 checks per second
+    // 200ms interval = 5 checks per second (reduced from 100ms for better performance)
     const startCameraCheck = () => {
       cameraIntervalRef.current = setInterval(() => {
         if (!isMonitoringRef.current || !videoRef.current || !canvasRef.current || !workerRef.current) return;
+
+        // Skip if previous analysis is still processing (prevents message flooding)
+        if (isCameraProcessingRef.current) return;
+        isCameraProcessingRef.current = true;
 
         ctx.drawImage(videoRef.current, 0, 0, 160, 120);
         const imageData = ctx.getImageData(0, 0, 160, 120);
@@ -489,9 +511,9 @@ export function useProctoringMonitor({
             obstructionThreshold: obstructionThresholdRef.current
           }
         }, [dataToSend.buffer]);
-      }, 100);
+      }, 200);
 
-      console.log('[PROCTORING] Camera obstruction detection started (Web Worker, 100ms interval)');
+      console.log('[PROCTORING] Camera obstruction detection started (Web Worker, 200ms interval, throttled)');
     };
 
     videoRef.current.onloadedmetadata = () => {
@@ -677,6 +699,10 @@ export function useProctoringMonitor({
     return () => {
       isMonitoringRef.current = false;
       setState(prev => ({ ...prev, isMonitoring: false }));
+
+      // Reset throttle flags
+      isVoiceProcessingRef.current = false;
+      isCameraProcessingRef.current = false;
 
       // Cleanup voice detection interval
       if (voiceIntervalRef.current) {

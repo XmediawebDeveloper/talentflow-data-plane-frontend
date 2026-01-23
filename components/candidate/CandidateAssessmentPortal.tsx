@@ -52,6 +52,12 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   // Proctoring warnings state
   const { warnings, addWarning, dismissWarning } = useProctoringWarnings();
 
+  // Stable callback for proctoring warnings (prevents re-renders)
+  const handleProctoringWarning = useCallback((warning: ProctoringWarning) => {
+    console.log('[PROCTORING] Warning:', warning.type, warning.message);
+    addWarning(warning);
+  }, [addWarning]);
+
   // Refs for proctoring
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -107,10 +113,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     token,
     stream: cameraStream,
     enabled: isProctoringActive,
-    onWarning: (warning: ProctoringWarning) => {
-      console.log('[PROCTORING] Warning:', warning.type, warning.message);
-      addWarning(warning);
-    },
+    onWarning: handleProctoringWarning,
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
   });
