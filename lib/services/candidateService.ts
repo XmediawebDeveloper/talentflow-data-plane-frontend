@@ -5,7 +5,78 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
+// ===================== Session Token Management =====================
+// Manages single-session enforcement token with improved persistence
+
+let currentSessionToken: string | null = null;
+let currentAssessmentToken: string | null = null;
+
+export const sessionTokenManager = {
+  setToken(token: string, assessmentToken?: string) {
+    currentSessionToken = token;
+    if (assessmentToken) {
+      currentAssessmentToken = assessmentToken;
+    }
+    // Store in both sessionStorage (tab-specific) and localStorage (persistent)
+    if (typeof window !== 'undefined') {
+      const storageKey = currentAssessmentToken
+        ? `assessment_session_${currentAssessmentToken}`
+        : 'assessment_session_token';
+      sessionStorage.setItem(storageKey, token);
+      sessionStorage.setItem('assessment_session_token', token); // Fallback key
+      // Also store in localStorage for refresh resilience
+      localStorage.setItem(storageKey, token);
+      localStorage.setItem('assessment_session_token', token);
+      console.log('[SESSION] Token stored with key:', storageKey);
+    }
+  },
+  getToken(assessmentToken?: string): string | null {
+    // First check memory
+    if (currentSessionToken) return currentSessionToken;
+
+    if (typeof window !== 'undefined') {
+      const token = assessmentToken || currentAssessmentToken;
+      const storageKey = token ? `assessment_session_${token}` : 'assessment_session_token';
+
+      // Try sessionStorage first (same tab)
+      let stored = sessionStorage.getItem(storageKey);
+      if (!stored) {
+        stored = sessionStorage.getItem('assessment_session_token');
+      }
+
+      // Fall back to localStorage (survives refresh/browser close)
+      if (!stored) {
+        stored = localStorage.getItem(storageKey);
+      }
+      if (!stored) {
+        stored = localStorage.getItem('assessment_session_token');
+      }
+
+      if (stored) {
+        currentSessionToken = stored;
+        console.log('[SESSION] Token recovered from storage');
+        return stored;
+      }
+    }
+    return null;
+  },
+  setAssessmentToken(token: string) {
+    currentAssessmentToken = token;
+  },
+  clearToken(assessmentToken?: string) {
+    currentSessionToken = null;
+    if (typeof window !== 'undefined') {
+      const token = assessmentToken || currentAssessmentToken;
+      const storageKey = token ? `assessment_session_${token}` : 'assessment_session_token';
+      sessionStorage.removeItem(storageKey);
+      sessionStorage.removeItem('assessment_session_token');
+      localStorage.removeItem(storageKey);
+      localStorage.removeItem('assessment_session_token');
+    }
+  }
+};
 
 // Create a separate axios instance for candidate (no auth interceptors)
 const candidateApi = axios.create({
@@ -13,6 +84,31 @@ const candidateApi = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Add request interceptor to include session token
+candidateApi.interceptors.request.use((config) => {
+  // Try to get session token - the manager will check memory first, then storage
+  let sessionToken = sessionTokenManager.getToken();
+
+  // If no token found and URL contains assessment token, try to extract and recover
+  if (!sessionToken && config.url) {
+    const match = config.url.match(/\/assessment\/([a-zA-Z0-9_-]+)/);
+    if (match) {
+      const assessmentToken = match[1];
+      // Set the assessment context and try again
+      sessionTokenManager.setAssessmentToken(assessmentToken);
+      sessionToken = sessionTokenManager.getToken(assessmentToken);
+      if (sessionToken) {
+        console.log('[SESSION] Recovered token from URL-based lookup:', assessmentToken.substring(0, 10) + '...');
+      }
+    }
+  }
+
+  if (sessionToken) {
+    config.headers['X-Session-Token'] = sessionToken;
+  }
+  return config;
 });
 
 // ===================== Types =====================
@@ -37,17 +133,21 @@ export interface AssessmentInfo {
   expires_at: string | null;
   attempt_id: string | null;
   attempt_status: string | null;
+  attempt_started_at: string | null;  // When attempt started - for timer resume on page refresh
   can_start: boolean;
   can_resume: boolean;
   message: string;
+  session_token?: string;  // Session token for page refresh support
 }
 
 export interface ConsentResponse {
   success: boolean;
-  consent_accepted: boolean;
-  consent_accepted_at: string;
-  consent_ip: string;
+  consent_accepted?: boolean;
+  consent_accepted_at?: string;
+  consent_ip?: string;
   message: string;
+  session_token?: string;  // Session token for single-session enforcement
+  consent_log_id?: string;
 }
 
 export interface SystemCheckResult {
@@ -114,6 +214,7 @@ export interface StartAssessmentResponse {
   }>;
   first_question: CurrentQuestion;
   message: string;
+  session_token?: string;  // Unique session token for single-session enforcement
 }
 
 export interface AnswerSubmission {
@@ -223,8 +324,23 @@ export interface HeartbeatResponse {
 }
 
 export interface ProctorEvent {
-  event_type: 'tab_switch' | 'copy_attempt' | 'paste_attempt' | 'fullscreen_exit' | 'window_blur' | 'camera_disabled' | 'screen_share_stopped';
+  event_type:
+    | 'tab_switch'
+    | 'copy_attempt'
+    | 'paste_attempt'
+    | 'fullscreen_exit'
+    | 'window_blur'
+    | 'camera_disabled'
+    | 'screen_share_stopped'
+    | 'voice_detected'
+    | 'multiple_voices'
+    | 'microphone_disabled'
+    | 'camera_obstructed'
+    | 'screenshot_attempt'
+    | 'screen_recording_attempt';
   event_data?: Record<string, unknown>;
+  timestamp?: string;
+  details?: Record<string, unknown>;
 }
 
 export interface ProctorEventResponse {
@@ -264,10 +380,22 @@ export const candidateService = {
   async getAssessmentInfo(token: string): Promise<AssessmentInfo> {
     try {
       const response = await candidateApi.get<AssessmentInfo>(`/candidate/assessment/${token}`);
+
+      // Store session token if returned (for page refresh support)
+      if (response.data.session_token) {
+        sessionTokenManager.setToken(response.data.session_token, token);
+        console.log('[SESSION] Stored session token from assessment info');
+      }
+
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        throw new Error(error.response?.data?.detail || 'Failed to get assessment info');
+        // Check for session conflict (duplicate tab/browser)
+        const errorDetail = error.response?.data?.detail;
+        if (error.response?.status === 409 || (typeof errorDetail === 'object' && errorDetail?.code === 'DUPLICATE_SESSION')) {
+          throw new Error('DUPLICATE_SESSION');
+        }
+        throw new Error(typeof errorDetail === 'string' ? errorDetail : (errorDetail?.message || 'Failed to get assessment info'));
       }
       throw error;
     }
@@ -282,10 +410,22 @@ export const candidateService = {
         terms_accepted: termsAccepted,
         proctoring_consent: proctoringConsent,
       });
+
+      // Store session token if returned (for single-session enforcement)
+      if (response.data.session_token) {
+        sessionTokenManager.setToken(response.data.session_token, token);  // Pass assessment token for better storage key
+        console.log('[CONSENT] Session token stored for single-session enforcement');
+      }
+
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        throw new Error(error.response?.data?.detail || 'Failed to accept consent');
+        // Check for session already active error
+        const errorDetail = error.response?.data?.detail;
+        if (typeof errorDetail === 'object' && errorDetail?.error === 'SESSION_ALREADY_ACTIVE') {
+          throw new Error('SESSION_ALREADY_ACTIVE');
+        }
+        throw new Error(typeof errorDetail === 'string' ? errorDetail : 'Failed to accept consent');
       }
       throw error;
     }
@@ -358,10 +498,19 @@ export const candidateService = {
       const response = await candidateApi.post<StartAssessmentResponse>(
         `/candidate/assessment/${token}/start`
       );
+      // Store session token for single-session enforcement
+      if (response.data.session_token) {
+        sessionTokenManager.setToken(response.data.session_token, token);  // Pass assessment token for better storage key
+      }
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        throw new Error(error.response?.data?.detail || 'Failed to start assessment');
+        // Check for session already active error
+        const errorDetail = error.response?.data?.detail;
+        if (typeof errorDetail === 'object' && errorDetail?.error === 'SESSION_ALREADY_ACTIVE') {
+          throw new Error('SESSION_ALREADY_ACTIVE');
+        }
+        throw new Error(typeof errorDetail === 'string' ? errorDetail : 'Failed to start assessment');
       }
       throw error;
     }
@@ -488,8 +637,8 @@ export const candidateService = {
         `/candidate/assessment/${token}/proctor-event`,
         {
           event_type: event.event_type,
-          timestamp: new Date().toISOString(),
-          details: event.event_data,
+          timestamp: event.timestamp || new Date().toISOString(),
+          details: event.details || event.event_data || {},
         }
       );
       return response.data;

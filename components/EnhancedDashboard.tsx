@@ -270,7 +270,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           return;
         }
 
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
         const quotaStatusResponse = await fetch(`${API_BASE}/usage/quota-status`, {
           method: 'GET',

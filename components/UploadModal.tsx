@@ -63,6 +63,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const [isValidating, setIsValidating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isCheckingQuota, setIsCheckingQuota] = useState(false);
+  const [showNoFilesError, setShowNoFilesError] = useState(false);
   const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -329,7 +330,12 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   };
 
   const handleValidateAndUpload = async () => {
-    if (selectedFiles.length === 0) return;
+    // Show error if no files selected
+    if (selectedFiles.length === 0) {
+      setShowNoFilesError(true);
+      setTimeout(() => setShowNoFilesError(false), 3000);
+      return;
+    }
 
     // Final validation before upload
     const errors: FileValidationError[] = [];
@@ -821,6 +827,25 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           )}
         </div>
 
+        {/* No Files Error Alert */}
+        {showNoFilesError && (
+          <div className="mx-6 mb-0 p-4 bg-red-50 border border-red-300 rounded-lg animate-pulse">
+            <div className="flex items-center gap-3">
+              <XCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-900">No files selected!</p>
+                <p className="text-xs text-red-700">Please select at least one resume file to upload.</p>
+              </div>
+              <button
+                onClick={() => setShowNoFilesError(false)}
+                className="p-1 hover:bg-red-100 rounded"
+              >
+                <X className="w-4 h-4 text-red-600" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Hide footer when showing success state */}
         {!uploadSuccess && (
         <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
@@ -832,8 +857,12 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           </button>
           <button
             onClick={handleValidateAndUpload}
-            disabled={selectedFiles.length === 0 || isUploading || isCheckingQuota || (quotaInfo?.status === 'EXHAUSTED') || validationErrors.length > 0}
-            className="px-8 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            disabled={isUploading || isCheckingQuota || (quotaInfo?.status === 'EXHAUSTED') || validationErrors.length > 0}
+            className={`px-8 py-2.5 rounded-md transition-colors flex items-center gap-2 ${
+              selectedFiles.length === 0 && !isUploading && !isCheckingQuota
+                ? 'bg-gray-400 text-white hover:bg-gray-500 cursor-pointer'
+                : 'bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed'
+            }`}
           >
             {isCheckingQuota ? (
               <>
@@ -856,7 +885,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
             ) : validationErrors.length > 0 ? (
               'Fix Errors to Upload'
             ) : selectedFiles.length === 0
-              ? 'Upload'
+              ? 'Select Files to Upload'
               : `Upload ${selectedFiles.length} Resume${selectedFiles.length !== 1 ? 's' : ''}`
             }
           </button>

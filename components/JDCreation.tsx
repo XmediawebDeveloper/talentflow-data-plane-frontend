@@ -468,14 +468,45 @@ const FALLBACK_EDUCATION_LEVELS: EducationLevel[] = [
 ];
 
 const FALLBACK_INDUSTRY_TYPES: IndustryType[] = [
-  { id: 1, code: 'technology', label: 'Information Technology', sort_order: 1, is_active: true },
-  { id: 2, code: 'finance', label: 'Finance & Banking', sort_order: 2, is_active: true },
-  { id: 3, code: 'healthcare', label: 'Healthcare & Medical', sort_order: 3, is_active: true },
-  { id: 4, code: 'manufacturing', label: 'Manufacturing', sort_order: 4, is_active: true },
-  { id: 5, code: 'retail', label: 'Retail & E-commerce', sort_order: 5, is_active: true },
-  { id: 6, code: 'education', label: 'Education', sort_order: 6, is_active: true },
-  { id: 7, code: 'consulting', label: 'Consulting', sort_order: 7, is_active: true },
-  { id: 8, code: 'others', label: 'Other', sort_order: 99, is_active: true },
+  { id: 1, code: 'agriculture', label: 'Agriculture', description: null, sort_order: 1, is_active: true, created_at: '', updated_at: '' },
+  { id: 2, code: 'forestry', label: 'Forestry', description: null, sort_order: 2, is_active: true, created_at: '', updated_at: '' },
+  { id: 3, code: 'fishing', label: 'Fishing', description: null, sort_order: 3, is_active: true, created_at: '', updated_at: '' },
+  { id: 4, code: 'mining', label: 'Mining', description: null, sort_order: 4, is_active: true, created_at: '', updated_at: '' },
+  { id: 5, code: 'oil_gas', label: 'Oil and Gas Extraction', description: null, sort_order: 5, is_active: true, created_at: '', updated_at: '' },
+  { id: 6, code: 'manufacturing', label: 'Manufacturing', description: null, sort_order: 6, is_active: true, created_at: '', updated_at: '' },
+  { id: 7, code: 'construction', label: 'Construction', description: null, sort_order: 7, is_active: true, created_at: '', updated_at: '' },
+  { id: 8, code: 'textiles', label: 'Textiles and Apparel', description: null, sort_order: 8, is_active: true, created_at: '', updated_at: '' },
+  { id: 9, code: 'food_processing', label: 'Food and Beverage Processing', description: null, sort_order: 9, is_active: true, created_at: '', updated_at: '' },
+  { id: 10, code: 'chemical', label: 'Chemical Production', description: null, sort_order: 10, is_active: true, created_at: '', updated_at: '' },
+  { id: 11, code: 'steel', label: 'Steel and Metalworking', description: null, sort_order: 11, is_active: true, created_at: '', updated_at: '' },
+  { id: 12, code: 'energy', label: 'Energy Production', description: null, sort_order: 12, is_active: true, created_at: '', updated_at: '' },
+  { id: 13, code: 'retail_wholesale', label: 'Retail and Wholesale Trade', description: null, sort_order: 13, is_active: true, created_at: '', updated_at: '' },
+  { id: 14, code: 'transportation', label: 'Transportation and Logistics', description: null, sort_order: 14, is_active: true, created_at: '', updated_at: '' },
+  { id: 15, code: 'tourism_and_hospitality', label: 'Tourism and Hospitality', description: null, sort_order: 15, is_active: true, created_at: '', updated_at: '' },
+  { id: 16, code: 'healthcare_and_medical', label: 'Healthcare and Medical Services', description: null, sort_order: 16, is_active: true, created_at: '', updated_at: '' },
+  { id: 17, code: 'financial', label: 'Financial Services', description: null, sort_order: 17, is_active: true, created_at: '', updated_at: '' },
+  { id: 18, code: 'education', label: 'Education and Training', description: null, sort_order: 18, is_active: true, created_at: '', updated_at: '' },
+  { id: 19, code: 'media', label: 'Entertainment and Media', description: null, sort_order: 19, is_active: true, created_at: '', updated_at: '' },
+  { id: 20, code: 'real_estate_and_property_manage', label: 'Real Estate and Property Management', description: null, sort_order: 20, is_active: true, created_at: '', updated_at: '' },
+  { id: 21, code: 'legal', label: 'Legal Services', description: null, sort_order: 21, is_active: true, created_at: '', updated_at: '' },
+  { id: 22, code: 'telecom', label: 'Telecommunications', description: null, sort_order: 22, is_active: true, created_at: '', updated_at: '' },
+  { id: 23, code: 'consulting', label: 'Professional Services', description: null, sort_order: 23, is_active: true, created_at: '', updated_at: '' },
+  { id: 24, code: 'information_technology', label: 'Information Technology', description: null, sort_order: 24, is_active: true, created_at: '', updated_at: '' },
+  { id: 25, code: 'research', label: 'Research and Development', description: null, sort_order: 25, is_active: true, created_at: '', updated_at: '' },
+  { id: 26, code: 'biotech', label: 'Biotechnology', description: null, sort_order: 26, is_active: true, created_at: '', updated_at: '' },
+  { id: 27, code: 'environment', label: 'Environmental Services', description: null, sort_order: 27, is_active: true, created_at: '', updated_at: '' },
+  { id: 28, code: 'aerospace_and_defense', label: 'Aerospace and Defense', description: null, sort_order: 28, is_active: true, created_at: '', updated_at: '' },
+  { id: 29, code: 'defense', label: 'Defense', description: null, sort_order: 29, is_active: true, created_at: '', updated_at: '' },
+  { id: 30, code: 'ecommerce', label: 'E-commerce', description: null, sort_order: 30, is_active: true, created_at: '', updated_at: '' },
+  { id: 31, code: 'government_and_public_administrator', label: 'Government and Public Administration', description: null, sort_order: 31, is_active: true, created_at: '', updated_at: '' },
+  { id: 32, code: 'nonprofit_charitable_organization', label: 'Non-Profit and Charitable Organizations', description: null, sort_order: 32, is_active: true, created_at: '', updated_at: '' },
+  { id: 33, code: 'artificial_inteligence', label: 'Artificial Intelligence', description: null, sort_order: 33, is_active: true, created_at: '', updated_at: '' },
+  { id: 34, code: 'blockchain_and_cryptocurrency', label: 'Blockchain and Cryptocurrency', description: null, sort_order: 34, is_active: true, created_at: '', updated_at: '' },
+  { id: 35, code: 'electric_vehicles', label: 'Electric Vehicles', description: null, sort_order: 35, is_active: true, created_at: '', updated_at: '' },
+  { id: 36, code: 'space', label: 'Space Exploration', description: null, sort_order: 36, is_active: true, created_at: '', updated_at: '' },
+  { id: 37, code: 'cybersecurity', label: 'Cybersecurity', description: null, sort_order: 37, is_active: true, created_at: '', updated_at: '' },
+  { id: 38, code: 'green_technology', label: 'Green Technology and Sustainability', description: null, sort_order: 38, is_active: true, created_at: '', updated_at: '' },
+  { id: 39, code: 'others', label: 'Others', description: null, sort_order: 99, is_active: true, created_at: '', updated_at: '' },
 ];
 
 export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, editingJDId, onClose, onSuccess, isEmbedded }: JDCreationProps = {}) {
@@ -1439,12 +1470,45 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[TalentFlow] Mapped education:', { degree: params.education_requirements?.degree, code: educationValue });
       }
 
-      // Map industry to lowercase - no default fallback
-      let industryValue = params.industry_type?.toLowerCase().replace(/[^a-z_]/g, '_') || '';
-      if (!industryValue) {
-        console.log('[TalentFlow] No industry extracted, leaving empty');
+      // Map industry to valid frontend codes
+      // Valid codes: technology, finance, healthcare, manufacturing, retail, education, consulting, others
+      const validIndustryCodes = ['technology', 'finance', 'healthcare', 'manufacturing', 'retail', 'education', 'consulting', 'others'];
+      const industryMapping: Record<string, string> = {
+        'information_technology': 'technology',
+        'it': 'technology',
+        'tech': 'technology',
+        'software': 'technology',
+        'financial': 'finance',
+        'banking': 'finance',
+        'fintech': 'finance',
+        'healthcare_and_medical': 'healthcare',
+        'medical': 'healthcare',
+        'pharma': 'healthcare',
+        'biotech': 'healthcare',
+        'retail_wholesale': 'retail',
+        'ecommerce': 'retail',
+        'e-commerce': 'retail',
+        'professional_services': 'consulting',
+        'advisory': 'consulting',
+      };
+
+      let rawIndustry = params.industry_type?.toLowerCase().replace(/[^a-z_]/g, '_') || '';
+      let industryValue = '';
+
+      if (rawIndustry) {
+        // First check if it's already a valid code
+        if (validIndustryCodes.includes(rawIndustry)) {
+          industryValue = rawIndustry;
+        } else if (industryMapping[rawIndustry]) {
+          // Map known variations to valid codes
+          industryValue = industryMapping[rawIndustry];
+        } else {
+          // Default to 'others' for unknown industries
+          industryValue = 'others';
+        }
+        console.log('[TalentFlow] Mapped industry:', { raw: params.industry_type, normalized: rawIndustry, code: industryValue });
       } else {
-        console.log('[TalentFlow] Mapped industry:', { industry: params.industry_type, code: industryValue });
+        console.log('[TalentFlow] No industry extracted, leaving empty');
       }
 
       // When in edit mode, preserve existing values if extraction returns empty arrays
@@ -1462,7 +1526,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience: experienceValue || (isEditMode ? extractedData.experience : ''),
         // Use API's mandatory flag for experience
         experienceRequired: params.experience_mandatory || false,
-        industryType: industryValue || (isEditMode ? extractedData.industryType : ''),
+        industryType: industryValue, // Only from extraction, no fallback - user must select if not extracted
         // Use API's mandatory flag for industry
         industryTypeRequired: params.industry_mandatory || false,
         allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
@@ -1880,6 +1944,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       industryType: extractedData.industryType,
       industryTypeTrimmed: extractedData.industryType?.trim() || '',
     });
+
+    // DEFENSIVE CHECK: Early return if critical fields are empty
+    // This prevents any edge case where button might be clickable
+    const earlyCheckFailed = [];
+    if (!extractedData.education?.trim()) earlyCheckFailed.push('Education');
+    if (!extractedData.experience?.trim()) earlyCheckFailed.push('Experience');
+    if (!extractedData.industryType?.trim()) earlyCheckFailed.push('Industry Type');
+
+    if (earlyCheckFailed.length > 0) {
+      console.log('[TalentFlow] BLOCKED: Missing required fields:', earlyCheckFailed);
+      toast.error({
+        title: 'Missing Required Fields',
+        description: `Please select: ${earlyCheckFailed.join(', ')}`,
+      });
+      return;
+    }
 
     // Validate mandatory fields
     const missingFields: string[] = [];
@@ -2808,7 +2888,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         };
 
         const experienceValue = mapExpToLevel(editingJD.experience_min, editingJD.experience_max);
-        const industryValue = editingJD.industry_type || '';
+        // Industry type should only come from extraction, not pre-filled from saved data
+        // User must select it manually or it must come from extraction API
+        const industryValue = '';
 
         console.log('[DEBUG] Loading editingJD data:');
         console.log('[DEBUG] - experience_min from API:', editingJD.experience_min);
