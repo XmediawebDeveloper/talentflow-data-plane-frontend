@@ -1470,37 +1470,60 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[TalentFlow] Mapped education:', { degree: params.education_requirements?.degree, code: educationValue });
       }
 
-      // Map industry to valid frontend codes
-      // Valid codes: technology, finance, healthcare, manufacturing, retail, education, consulting, others
-      const validIndustryCodes = ['technology', 'finance', 'healthcare', 'manufacturing', 'retail', 'education', 'consulting', 'others'];
+      // Map industry to valid Odoo codes (matching backend extraction and database)
+      const validIndustryCodes = [
+        'agriculture', 'forestry', 'fishing', 'mining', 'oil_gas',
+        'manufacturing', 'construction', 'textiles', 'food_processing',
+        'chemical', 'steel', 'energy', 'retail_wholesale', 'transportation',
+        'tourism_and_hospitality', 'healthcare_and_medical', 'financial',
+        'education', 'media', 'real_estate_and_property_manage', 'legal',
+        'telecom', 'consulting', 'information_technology', 'research',
+        'biotech', 'environment', 'aerospace_and_defense', 'defense',
+        'ecommerce', 'government_and_public_administrator',
+        'nonprofit_charitable_organization', 'artificial_inteligence',
+        'blockchain_and_cryptocurrency', 'electric_vehicles', 'space',
+        'cybersecurity', 'green_technology', 'others'
+      ];
+      // Map common variations to valid Odoo codes
       const industryMapping: Record<string, string> = {
-        'information_technology': 'technology',
-        'it': 'technology',
-        'tech': 'technology',
-        'software': 'technology',
-        'financial': 'finance',
-        'banking': 'finance',
-        'fintech': 'finance',
-        'healthcare_and_medical': 'healthcare',
-        'medical': 'healthcare',
-        'pharma': 'healthcare',
-        'biotech': 'healthcare',
-        'retail_wholesale': 'retail',
-        'ecommerce': 'retail',
-        'e-commerce': 'retail',
+        'technology': 'information_technology',
+        'it': 'information_technology',
+        'tech': 'information_technology',
+        'software': 'information_technology',
+        'finance': 'financial',
+        'banking': 'financial',
+        'fintech': 'financial',
+        'healthcare': 'healthcare_and_medical',
+        'medical': 'healthcare_and_medical',
+        'pharma': 'healthcare_and_medical',
+        'retail': 'retail_wholesale',
+        'e_commerce': 'ecommerce',
         'professional_services': 'consulting',
         'advisory': 'consulting',
+        'ai': 'artificial_inteligence',
+        'artificial_intelligence': 'artificial_inteligence',
+        'blockchain': 'blockchain_and_cryptocurrency',
+        'crypto': 'blockchain_and_cryptocurrency',
+        'government': 'government_and_public_administrator',
+        'nonprofit': 'nonprofit_charitable_organization',
+        'hospitality': 'tourism_and_hospitality',
+        'tourism': 'tourism_and_hospitality',
+        'real_estate': 'real_estate_and_property_manage',
+        'aerospace': 'aerospace_and_defense',
+        'telecommunications': 'telecom',
+        'logistics': 'transportation',
+        'entertainment': 'media',
       };
 
       let rawIndustry = params.industry_type?.toLowerCase().replace(/[^a-z_]/g, '_') || '';
       let industryValue = '';
 
       if (rawIndustry) {
-        // First check if it's already a valid code
+        // First check if it's already a valid Odoo code
         if (validIndustryCodes.includes(rawIndustry)) {
           industryValue = rawIndustry;
         } else if (industryMapping[rawIndustry]) {
-          // Map known variations to valid codes
+          // Map known variations to valid Odoo codes
           industryValue = industryMapping[rawIndustry];
         } else {
           // Default to 'others' for unknown industries
@@ -2708,15 +2731,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       };
 
       // Update existing JD or create new one
+      // IMPORTANT: When editing a published JD, always create a NEW draft instead of updating
       console.log('[DEBUG] Save draft - editingId:', editingId, 'isEditingDraft:', isEditingDraft, 'isEditingPublished:', isEditingPublished);
       console.log('[DEBUG] jdData being saved:', { title: jdData.title, description: jdData.description?.substring(0, 100), creation_method: jdData.creation_method });
       let savedJd;
-      if (editingId) {
+      if (editingId && !isEditingPublished) {
+        // Only update if editing an existing DRAFT (not published)
         console.log('[DEBUG] Updating existing draft with ID:', editingId);
         savedJd = await jdService.update(editingId, jdData);
         console.log('[DEBUG] JD updated as draft:', savedJd.id);
       } else {
-        console.log('[DEBUG] Creating new draft (editingId is null)');
+        // Create new draft when:
+        // 1. No editingId (new JD)
+        // 2. Editing a published JD (create new draft version)
+        console.log('[DEBUG] Creating new draft (editingId is null or editing published JD)');
         savedJd = await jdService.create(jdData);
         setEditingId(savedJd.id);  // Track the new ID in case we save again
         console.log('[DEBUG] JD created as draft:', savedJd.id);
@@ -2729,10 +2757,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         title: isEditingPublished ? 'New draft created!' : 'Draft saved!',
         description: isEditingPublished
           ? `A new draft version of "${jobTitle}" has been created. The original JD remains unchanged.`
-          : `"${jobTitle}" has been saved. You can continue editing.`,
+          : `"${jobTitle}" has been saved as draft.`,
       });
 
-      // Stay on page - don't navigate away after saving draft
+      // Navigate to job openings page after saving draft
+      router.push('/recruitment/job-openings');
     } catch (error) {
       console.error('[ERROR] Failed to save draft:', error);
       setIsSavingDraft(false);
@@ -2860,7 +2889,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
         // Map experience_min/max to level codes (entry, junior, mid, senior, architect, management)
         const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
-          if (!min) return '';
+          // Check for null/undefined but allow 0 as valid value
+          if (min === null || min === undefined) return '';
 
           // 10+ years
           if (min >= 10) {
@@ -2888,14 +2918,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         };
 
         const experienceValue = mapExpToLevel(editingJD.experience_min, editingJD.experience_max);
-        // Industry type should only come from extraction, not pre-filled from saved data
-        // User must select it manually or it must come from extraction API
-        const industryValue = '';
+        // Restore industry type from saved draft
+        const industryValue = editingJD.industry_type || '';
 
         console.log('[DEBUG] Loading editingJD data:');
         console.log('[DEBUG] - experience_min from API:', editingJD.experience_min);
         console.log('[DEBUG] - experience_max from API:', editingJD.experience_max);
         console.log('[DEBUG] - mapped experienceValue:', experienceValue);
+        console.log('[DEBUG] - industry_type from API:', editingJD.industry_type);
+        console.log('[DEBUG] - mapped industryValue:', industryValue);
         console.log('[DEBUG] - nice_to_have_comments from API:', editingJD.nice_to_have_comments);
         console.log('[DEBUG] - must_have_comments from API:', editingJD.must_have_comments);
 

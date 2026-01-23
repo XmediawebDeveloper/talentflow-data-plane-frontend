@@ -101,6 +101,13 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         console.error('Error saving remember me preference:', error);
       }
 
+      // Check if tenant has pending payment - redirect to payment page first
+      if (response.pending_payment && response.pending_payment_redirect) {
+        console.log('[LOGIN] Tenant has pending payment, redirecting to:', response.pending_payment_redirect);
+        router.push(response.pending_payment_redirect);
+        return;
+      }
+
       // Redirect to current-plan page with selected plan if coming from pricing
       if (encodedPlanFromUrl) {
         router.push(`/subscription/current-plan?plan=${encodedPlanFromUrl}`);
