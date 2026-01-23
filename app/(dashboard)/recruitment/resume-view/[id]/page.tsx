@@ -265,6 +265,7 @@ export default function ResumeViewPage() {
     softSkills: r.soft_skills,
     educationDetails: r.education?.map((edu: any) => ({
       degree: edu.degree || '',
+      field: edu.field || '',
       school: edu.school || edu.institution || '',
       location: edu.location || '',
       year: edu.year || edu.graduation_year || '',
@@ -300,6 +301,18 @@ export default function ResumeViewPage() {
     })),
     versionCount: r.version_count || versionsData.length || 1,
     extractedText: r.extracted_text,
+    // NEW FIELDS - Projects, Awards, etc.
+    projects: r.projects || [],
+    awards: r.awards || [],
+    hobbies: r.hobbies || [],
+    achievements: r.achievements || [],
+    volunteerExperience: r.volunteer_experience || [],
+    references: r.references || [],
+    linkedinUrl: r.linkedin_url,
+    githubUrl: r.github_url,
+    portfolioUrl: r.portfolio_url,
+    objective: r.objective,
+    additionalInfo: r.additional_info,
   });
 
   const handleDownload = async () => {
@@ -432,7 +445,7 @@ export default function ResumeViewPage() {
     education: resume.educationDetails && resume.educationDetails.length > 0
       ? resume.educationDetails
       : resume.education
-        ? [{ degree: resume.education, school: '', location: resume.location || '', year: '', gpa: '', honors: '' }]
+        ? [{ degree: resume.education, field: '', school: '', location: resume.location || '', year: '', gpa: '', honors: '' }]
         : [],
     skills: {
       technical: (resume.technicalSkills || resume.skills || []),
@@ -648,8 +661,12 @@ export default function ResumeViewPage() {
               <div className="space-y-4">
                 {detailedResume.education.map((edu, index) => (
                   <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
-                    <h4 className="font-semibold text-gray-800 mb-2">{edu.degree}</h4>
+                    <h4 className="font-semibold text-gray-800 mb-1">
+                      {edu.degree}
+                      {edu.field && ` in ${edu.field}`}
+                    </h4>
                     {edu.school && <div className="text-gray-700 mb-1">{edu.school}</div>}
+                    {edu.institution && !edu.school && <div className="text-gray-700 mb-1">{edu.institution}</div>}
                     <div className="flex items-center gap-4 text-sm text-gray-600">
                       {edu.location && (
                         <span className="flex items-center gap-1">
@@ -657,10 +674,10 @@ export default function ResumeViewPage() {
                           {edu.location}
                         </span>
                       )}
-                      {edu.year && (
+                      {(edu.year || edu.graduation_year) && (
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {edu.year}
+                          {edu.year || edu.graduation_year}
                         </span>
                       )}
                       {edu.gpa && (
@@ -763,6 +780,194 @@ export default function ResumeViewPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Projects */}
+          {resume.projects && resume.projects.length > 0 && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Code className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Projects</h3>
+              </div>
+              <div className="space-y-4">
+                {resume.projects.map((project: any, index: number) => (
+                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="font-semibold text-gray-800">{project.name}</h4>
+                      {project.url && (
+                        <a href={project.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
+                    {project.description && (
+                      <p className="text-gray-700 text-sm mb-2">{project.description}</p>
+                    )}
+                    <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                      {project.duration && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {project.duration}
+                        </span>
+                      )}
+                      {project.technologies && (
+                        <span className="px-2 py-0.5 bg-gray-200 rounded">{project.technologies}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Awards */}
+          {resume.awards && resume.awards.length > 0 && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Award className="w-5 h-5 text-yellow-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Awards & Honors</h3>
+              </div>
+              <div className="space-y-4">
+                {resume.awards.map((award: any, index: number) => (
+                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-semibold text-gray-800 mb-1">{award.name}</h4>
+                        {award.issuer && <div className="text-sm text-gray-700">{award.issuer}</div>}
+                        {award.date && (
+                          <div className="text-xs text-gray-600 flex items-center gap-1 mt-1">
+                            <Calendar className="w-3 h-3" />
+                            {award.date}
+                          </div>
+                        )}
+                        {award.description && (
+                          <p className="text-sm text-gray-600 mt-2">{award.description}</p>
+                        )}
+                      </div>
+                      <Award className="w-6 h-6 text-yellow-500" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Achievements */}
+          {resume.achievements && resume.achievements.length > 0 && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Star className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Achievements</h3>
+              </div>
+              <div className="space-y-2">
+                {resume.achievements.map((achievement: string, index: number) => (
+                  <div key={index} className="flex items-start gap-2 text-gray-700">
+                    <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                    <span>{typeof achievement === 'string' ? achievement : achievement.description || achievement.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Volunteer Experience */}
+          {resume.volunteerExperience && resume.volunteerExperience.length > 0 && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <User className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Volunteer Experience</h3>
+              </div>
+              <div className="space-y-4">
+                {resume.volunteerExperience.map((vol: any, index: number) => (
+                  <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                    <h4 className="font-semibold text-gray-800 mb-1">{vol.role || vol.title}</h4>
+                    {vol.organization && <div className="text-sm text-gray-700 mb-1">{vol.organization}</div>}
+                    {vol.duration && (
+                      <div className="text-xs text-gray-600 flex items-center gap-1 mb-2">
+                        <Calendar className="w-3 h-3" />
+                        {vol.duration}
+                      </div>
+                    )}
+                    {vol.description && <p className="text-sm text-gray-600">{vol.description}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Hobbies & Interests */}
+          {resume.hobbies && resume.hobbies.length > 0 && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Star className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Hobbies & Interests</h3>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {resume.hobbies.map((hobby: string, index: number) => (
+                  <span key={index} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-300">
+                    {typeof hobby === 'string' ? hobby : hobby.name || hobby}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Social Links */}
+          {(resume.linkedinUrl || resume.githubUrl || resume.portfolioUrl) && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Globe className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Social & Portfolio Links</h3>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {resume.linkedinUrl && (
+                  <a href={resume.linkedinUrl} target="_blank" rel="noopener noreferrer"
+                     className="flex items-center gap-2 p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
+                    <Linkedin className="w-5 h-5 text-blue-600" />
+                    <span className="text-blue-700 text-sm font-medium">LinkedIn</span>
+                    <ExternalLink className="w-3 h-3 text-blue-500 ml-auto" />
+                  </a>
+                )}
+                {resume.githubUrl && (
+                  <a href={resume.githubUrl} target="_blank" rel="noopener noreferrer"
+                     className="flex items-center gap-2 p-4 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors">
+                    <Code className="w-5 h-5 text-gray-700" />
+                    <span className="text-gray-700 text-sm font-medium">GitHub</span>
+                    <ExternalLink className="w-3 h-3 text-gray-500 ml-auto" />
+                  </a>
+                )}
+                {resume.portfolioUrl && (
+                  <a href={resume.portfolioUrl} target="_blank" rel="noopener noreferrer"
+                     className="flex items-center gap-2 p-4 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors">
+                    <Globe className="w-5 h-5 text-purple-600" />
+                    <span className="text-purple-700 text-sm font-medium">Portfolio</span>
+                    <ExternalLink className="w-3 h-3 text-purple-500 ml-auto" />
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Objective (if different from summary) */}
+          {resume.objective && resume.objective !== resume.professionalSummary && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Career Objective</h3>
+              </div>
+              <p className="text-gray-700 leading-relaxed">{resume.objective}</p>
+            </div>
+          )}
+
+          {/* Additional Information */}
+          {resume.additionalInfo && (
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-semibold text-gray-800">Additional Information</h3>
+              </div>
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{resume.additionalInfo}</p>
             </div>
           )}
 

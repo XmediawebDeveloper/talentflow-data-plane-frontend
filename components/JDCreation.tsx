@@ -1439,12 +1439,45 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[TalentFlow] Mapped education:', { degree: params.education_requirements?.degree, code: educationValue });
       }
 
-      // Map industry to lowercase - no default fallback
-      let industryValue = params.industry_type?.toLowerCase().replace(/[^a-z_]/g, '_') || '';
-      if (!industryValue) {
-        console.log('[TalentFlow] No industry extracted, leaving empty');
+      // Map industry to valid frontend codes
+      // Valid codes: technology, finance, healthcare, manufacturing, retail, education, consulting, others
+      const validIndustryCodes = ['technology', 'finance', 'healthcare', 'manufacturing', 'retail', 'education', 'consulting', 'others'];
+      const industryMapping: Record<string, string> = {
+        'information_technology': 'technology',
+        'it': 'technology',
+        'tech': 'technology',
+        'software': 'technology',
+        'financial': 'finance',
+        'banking': 'finance',
+        'fintech': 'finance',
+        'healthcare_and_medical': 'healthcare',
+        'medical': 'healthcare',
+        'pharma': 'healthcare',
+        'biotech': 'healthcare',
+        'retail_wholesale': 'retail',
+        'ecommerce': 'retail',
+        'e-commerce': 'retail',
+        'professional_services': 'consulting',
+        'advisory': 'consulting',
+      };
+
+      let rawIndustry = params.industry_type?.toLowerCase().replace(/[^a-z_]/g, '_') || '';
+      let industryValue = '';
+
+      if (rawIndustry) {
+        // First check if it's already a valid code
+        if (validIndustryCodes.includes(rawIndustry)) {
+          industryValue = rawIndustry;
+        } else if (industryMapping[rawIndustry]) {
+          // Map known variations to valid codes
+          industryValue = industryMapping[rawIndustry];
+        } else {
+          // Default to 'others' for unknown industries
+          industryValue = 'others';
+        }
+        console.log('[TalentFlow] Mapped industry:', { raw: params.industry_type, normalized: rawIndustry, code: industryValue });
       } else {
-        console.log('[TalentFlow] Mapped industry:', { industry: params.industry_type, code: industryValue });
+        console.log('[TalentFlow] No industry extracted, leaving empty');
       }
 
       // When in edit mode, preserve existing values if extraction returns empty arrays

@@ -257,10 +257,17 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
     setDuplicatesToResolve([]);
   };
 
+  const [showNoFilesError, setShowNoFilesError] = useState(false);
+
   const handleSubmit = () => {
-    if (validFiles.length > 0) {
-      onSubmit(validFiles);
+    // Show error if no valid files selected
+    if (validFiles.length === 0) {
+      setShowNoFilesError(true);
+      // Auto-hide after 3 seconds
+      setTimeout(() => setShowNoFilesError(false), 3000);
+      return;
     }
+    onSubmit(validFiles);
   };
 
   const formatFileSize = (bytes: number) => {
@@ -548,6 +555,25 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
             </div>
           </div>
 
+          {/* No Files Error Alert */}
+          {showNoFilesError && (
+            <div className="mx-6 mb-0 p-4 bg-red-50 border border-red-300 rounded-lg animate-pulse">
+              <div className="flex items-center gap-3">
+                <XCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-red-900">No files selected!</p>
+                  <p className="text-xs text-red-700">Please select at least one resume file to upload.</p>
+                </div>
+                <button
+                  onClick={() => setShowNoFilesError(false)}
+                  className="p-1 hover:bg-red-100 rounded"
+                >
+                  <X className="w-4 h-4 text-red-600" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Footer */}
           <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
             <div className="text-sm text-gray-600">
@@ -579,7 +605,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
                   </span>
                 )
               ) : (
-                <span>No files selected</span>
+                <span className="text-gray-500">No files selected</span>
               )}
             </div>
             <div className="flex gap-3">
@@ -591,10 +617,24 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={validFiles.length === 0 || !hasQuota || filesExceedQuota || isCheckingQuota || isCheckingDuplicates || needsResolution}
-                className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                disabled={!hasQuota || filesExceedQuota || isCheckingQuota || isCheckingDuplicates || needsResolution || errorFiles.length > 0}
+                className={`px-6 py-2.5 rounded-lg transition-colors ${
+                  validFiles.length === 0 && !isCheckingQuota && !isCheckingDuplicates
+                    ? 'bg-gray-400 text-white hover:bg-gray-500 cursor-pointer'
+                    : 'bg-gray-800 text-white hover:bg-gray-900 disabled:bg-gray-300 disabled:cursor-not-allowed'
+                }`}
               >
-                {isCheckingQuota || isCheckingDuplicates ? 'Checking...' : !hasQuota || filesExceedQuota ? 'Quota Exceeded' : needsResolution ? 'Resolve Duplicates First' : 'Upload & Score Resumes'}
+                {isCheckingQuota || isCheckingDuplicates
+                  ? 'Checking...'
+                  : !hasQuota || filesExceedQuota
+                    ? 'Quota Exceeded'
+                    : needsResolution
+                      ? 'Resolve Duplicates First'
+                      : errorFiles.length > 0
+                        ? 'Remove Duplicates First'
+                        : validFiles.length === 0
+                          ? 'Select Files to Upload'
+                          : 'Upload & Score Resumes'}
               </button>
             </div>
           </div>
