@@ -366,36 +366,36 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
       {/* Content */}
       <div className="px-8 pb-8">
-        <div className="bg-white rounded-b-xl border-x-2 border-b-2 border-gray-200 p-6 min-h-[500px]">
+        <div className="bg-white rounded-b-xl border-x-2 border-b-2 border-gray-200 p-8">
           {activeTab === 'overview' && (
-            <div className="space-y-6">
+            <div className="space-y-8">
               {/* AI Analysis */}
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-2 border-gray-200 rounded-xl p-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Zap className="w-6 h-6 text-white" />
+              <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-2 border-gray-200 rounded-xl p-8">
+                <div className="flex items-start gap-5">
+                  <div className="w-16 h-16 bg-gray-800 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Zap className="w-8 h-8 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">AI Match Analysis</h3>
-                    <p className="text-gray-700 leading-relaxed">{aiReasoning}</p>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">AI Match Analysis</h3>
+                    <p className="text-base text-gray-700 leading-relaxed">{aiReasoning}</p>
                   </div>
                 </div>
               </div>
 
               {/* Skills Match */}
               {matchedSkills.length > 0 && (
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
+                <div className="bg-white border-2 border-gray-200 rounded-xl p-8">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
                     Matched Skills ({matchedSkills.length})
                   </h3>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-3">
                     {matchedSkills.map((skill, idx) => (
                       <span
                         key={idx}
-                        className="px-4 py-2 bg-green-100 text-green-700 border border-green-300 rounded-lg text-sm font-medium flex items-center gap-1.5"
+                        className="px-5 py-2.5 bg-green-100 text-green-700 border border-green-300 rounded-lg text-base font-medium flex items-center gap-2"
                       >
-                        <CheckCircle className="w-4 h-4" />
+                        <CheckCircle className="w-5 h-5" />
                         {skill}
                       </span>
                     ))}
@@ -405,18 +405,18 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
               {/* Missing Skills */}
               {missingSkills.length > 0 && (
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 text-red-600" />
+                <div className="bg-white border-2 border-gray-200 rounded-xl p-8">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
+                    <AlertCircle className="w-6 h-6 text-red-600" />
                     Skills Gap ({missingSkills.length})
                   </h3>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-3">
                     {missingSkills.map((skill, idx) => (
                       <span
                         key={idx}
-                        className="px-4 py-2 bg-red-100 text-red-700 border border-red-300 rounded-lg text-sm font-medium flex items-center gap-1.5"
+                        className="px-5 py-2.5 bg-red-100 text-red-700 border border-red-300 rounded-lg text-base font-medium flex items-center gap-2"
                       >
-                        <XCircle className="w-4 h-4" />
+                        <XCircle className="w-5 h-5" />
                         {skill}
                       </span>
                     ))}
@@ -425,15 +425,15 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               )}
 
               {/* Key Strengths */}
-              <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <Star className="w-5 h-5 text-yellow-600" />
+              <div className="bg-white border-2 border-gray-200 rounded-xl p-8">
+                <h3 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
+                  <Star className="w-6 h-6 text-yellow-600" />
                   Key Strengths
                 </h3>
-                <ul className="space-y-3">
+                <ul className="space-y-4">
                   {keyStrengths.map((strength, idx) => (
-                    <li key={idx} className="flex items-start gap-3 text-gray-700">
-                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <li key={idx} className="flex items-start gap-4 text-base text-gray-700">
+                      <CheckCircle className="w-6 h-6 text-green-600 mt-0.5 flex-shrink-0" />
                       <span>{strength}</span>
                     </li>
                   ))}
@@ -442,15 +442,15 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
               {/* Improvement Areas */}
               {improvementAreas.length > 0 && (
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-orange-600" />
+                <div className="bg-white border-2 border-gray-200 rounded-xl p-8">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
+                    <TrendingUp className="w-6 h-6 text-orange-600" />
                     Areas for Development
                   </h3>
-                  <ul className="space-y-3">
+                  <ul className="space-y-4">
                     {improvementAreas.map((area, idx) => (
-                      <li key={idx} className="flex items-start gap-3 text-gray-700">
-                        <AlertCircle className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                      <li key={idx} className="flex items-start gap-4 text-base text-gray-700">
+                        <AlertCircle className="w-6 h-6 text-orange-600 mt-0.5 flex-shrink-0" />
                         <span>{area}</span>
                       </li>
                     ))}
@@ -460,12 +460,12 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
               {/* AI Summary - if available */}
               {resume.aiSummary && (
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Award className="w-5 h-5 text-gray-800" />
+                <div className="bg-white border-2 border-gray-200 rounded-xl p-8">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
+                    <Award className="w-6 h-6 text-gray-800" />
                     AI Summary
                   </h3>
-                  <p className="text-gray-700 leading-relaxed">{resume.aiSummary}</p>
+                  <p className="text-base text-gray-700 leading-relaxed">{resume.aiSummary}</p>
                 </div>
               )}
             </div>
