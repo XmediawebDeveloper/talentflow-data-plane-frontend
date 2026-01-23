@@ -5,6 +5,8 @@ import { Job } from '@/lib/types/types';
 import { assessmentService, jdService } from '@/lib/services';
 import JDCreation from '@/components/JDCreation';
 
+// 1:1 JD-Assessment relationship: JDs that already have assessments cannot be selected
+
 interface TopicSettings {
   hr_enabled: boolean;
   hr_scoring_type: 'informational' | 'scored';
@@ -179,6 +181,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [localJobs, setLocalJobs] = useState<Job[]>(jobs);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
 
+  // 1:1 JD-Assessment: Track which JDs already have assessments
+  const [jdsWithAssessments, setJdsWithAssessments] = useState<Set<string>>(new Set());
+
   // Auto-save draft state
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [draftSavedId, setDraftSavedId] = useState<string | null>(null);
@@ -190,6 +195,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [showCodingConfirm, setShowCodingConfirm] = useState(false);
   const [codingPopupMode, setCodingPopupMode] = useState<'enable' | 'disable'>('enable');
   const [selectedCodingLanguages, setSelectedCodingLanguages] = useState<string[]>([]);
+
+  // Store previous percentages when coding is disabled (to restore when re-enabled)
+  const [savedPercentagesBeforeCodingDisable, setSavedPercentagesBeforeCodingDisable] = useState<{
+    hr: number;
+    technical: number;
+    coding: number;
+  } | null>(null);
+
+  // Minimum round validation popup state
+  const [showMinRoundPopup, setShowMinRoundPopup] = useState(false);
 
   // Refs for tracking state in effects and unmount
   const shouldSaveOnUnmountRef = useRef(false);
@@ -267,14 +282,23 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
   };
 
-  // Fetch published JDs directly from API on mount
+  // Fetch published JDs and JDs that already have assessments on mount
   useEffect(() => {
-    const fetchPublishedJDs = async () => {
+    const fetchData = async () => {
       setIsLoadingJobs(true);
       try {
-        const response = await jdService.list({ status: 'published', page_size: 100 });
-        if (response?.items?.length > 0) {
-          const mappedJobs: Job[] = response.items.map((jd: any) => ({
+        // Fetch both JDs and JDs with assessments in parallel
+        const [jdResponse, jdsWithAssessmentsResponse] = await Promise.all([
+          jdService.list({ status: 'published', page_size: 100 }),
+          assessmentService.getJDsWithAssessments(),
+        ]);
+
+        // Set JDs that already have assessments (for 1:1 filtering)
+        setJdsWithAssessments(new Set(jdsWithAssessmentsResponse));
+        console.log('[TalentFlow] JDs with existing assessments:', jdsWithAssessmentsResponse.length);
+
+        if (jdResponse?.items?.length > 0) {
+          const mappedJobs: Job[] = jdResponse.items.map((jd: any) => ({
             id: jd.id,
             job_id: jd.job_id || '',
             title: jd.title,
@@ -308,7 +332,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       }
     };
 
-    fetchPublishedJDs();
+    fetchData();
   }, []);
 
   // Save draft on component unmount (e.g., sidebar navigation)
@@ -316,12 +340,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     return () => {
       const state = currentStateRef.current;
       if (shouldSaveOnUnmountRef.current && state.selectedJob && !state.draftSavedId) {
+        // Check if percentages are valid before auto-saving
+        const totalPct = state.sections.filter(s => s.enabled).reduce((sum, s) => sum + s.percentage, 0);
+        if (totalPct !== 100) {
+          console.log('[TalentFlow] Skipping unmount auto-save: percentages do not sum to 100%');
+          return;
+        }
+
         // Use synchronous API call for unmount
         const hrSection = state.sections.find(s => s.name === 'HR');
         const technicalSection = state.sections.find(s => s.name === 'Technical');
         const codingSection = state.sections.find(s => s.name === 'Coding');
 
-        const createData = {
+        const assessmentData = {
           jd_id: state.selectedJob?.id || '',
           title: `${state.selectedJob?.title} - Assessment - Version 1`,
           description: `Assessment for ${state.selectedJob?.title} position`,
@@ -339,11 +370,26 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           proctoring_enabled: state.proctoringEnabled,
         };
 
-        // Fire and forget - save draft on unmount
-        assessmentService.create(createData).then(response => {
+        // Fire and forget - check if assessment exists first, then create or update
+        assessmentService.list({ jd_id: state.selectedJob.id }).then(existingAssessments => {
+          if (existingAssessments?.items && existingAssessments.items.length > 0) {
+            // Assessment already exists for this JD - update it
+            const existingId = existingAssessments.items[0].id;
+            console.log('[TalentFlow] Assessment already exists on unmount, updating:', existingId);
+            return assessmentService.update(existingId, assessmentData);
+          } else {
+            // No existing assessment - create new one
+            return assessmentService.create(assessmentData);
+          }
+        }).then(response => {
           console.log('[TalentFlow] Assessment auto-saved as draft on unmount:', response.id);
         }).catch(error => {
-          console.error('Failed to auto-save draft on unmount:', error);
+          // Silently ignore "already exists" errors - the goal is to have a saved draft
+          if (error.message?.includes('already exists')) {
+            console.log('[TalentFlow] Assessment already exists for JD, skipping unmount save');
+          } else {
+            console.error('Failed to auto-save draft on unmount:', error);
+          }
         });
       }
     };
@@ -356,6 +402,155 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     return codingKeywords.some(keyword => jobText.includes(keyword));
   };
 
+  // Dynamic programming language detection from skills
+  // This is used as a fallback when AI extraction didn't properly set coding_required/supported_languages
+  const detectProgrammingLanguagesFromSkills = (skills: string[]): string[] => {
+    const skillsText = skills.join(' ').toLowerCase();
+    const detectedLanguages = new Set<string>();
+
+    // ============ JAVA ============
+    // Core Java, J2EE, Spring ecosystem, Hibernate, Maven, Gradle
+    if (/\b(core\s*java|java\s*\d+|j2ee|jee|java\s*ee|spring\s*(boot|mvc|framework|cloud|security)?|hibernate|struts|maven|gradle|jpa|jdbc|jvm|servlet|jsp|tomcat|wildfly|jboss)\b/i.test(skillsText) ||
+        /\bjava\b/i.test(skillsText)) {
+      detectedLanguages.add('Java');
+    }
+
+    // ============ PYTHON ============
+    // Django, Flask, FastAPI, Data Science libs, ML frameworks
+    if (/\b(python|django|flask|fastapi|pandas|numpy|scipy|matplotlib|seaborn|scikit[\s-]?learn|pytorch|tensorflow|keras|jupyter|pip|conda|pyspark|celery|asyncio)\b/i.test(skillsText)) {
+      detectedLanguages.add('Python');
+    }
+
+    // ============ JAVASCRIPT ============
+    // Node.js, React, Angular, Vue, Express, Next.js, etc.
+    if (/\b(javascript|node\.?js|react\.?js?|angular\.?js?|vue\.?js?|express\.?js?|next\.?js?|nuxt\.?js?|gatsby|svelte|jquery|webpack|babel|npm|yarn|es6|ecmascript|redux|mobx|graphql\s*js|nest\.?js?|deno)\b/i.test(skillsText) ||
+        /\bjs\b/i.test(skillsText)) {
+      detectedLanguages.add('JavaScript');
+    }
+
+    // ============ TYPESCRIPT ============
+    if (/\b(typescript|ts)\b/i.test(skillsText)) {
+      detectedLanguages.add('TypeScript');
+    }
+
+    // ============ C# / .NET ============
+    // ASP.NET, .NET Core, Entity Framework, Blazor, LINQ
+    if (/\b(c#|csharp|c\s*sharp|\.net|dotnet|asp\.?net|entity\s*framework|blazor|linq|xamarin|maui|unity3d|wcf|wpf|winforms)\b/i.test(skillsText)) {
+      detectedLanguages.add('C#');
+    }
+
+    // ============ C++ ============
+    // STL, Qt, Boost, embedded systems
+    if (/\b(c\+\+|cpp|stl|boost|qt\s*(framework)?|cmake|embedded\s*c\+\+|opencv)\b/i.test(skillsText)) {
+      detectedLanguages.add('C++');
+    }
+
+    // ============ C ============
+    // Embedded C, Linux kernel, system programming (careful to avoid false positives)
+    if (/\b(embedded\s*c|c\s*programming|ansi\s*c|c\s*language|linux\s*kernel|posix|glibc)\b/i.test(skillsText)) {
+      detectedLanguages.add('C');
+    }
+
+    // ============ GO / GOLANG ============
+    // Gin, Echo, Kubernetes (Go-based)
+    if (/\b(golang|go\s*lang|go\s*programming|gin\s*(framework)?|echo\s*(framework)?|goroutine|gomod)\b/i.test(skillsText) ||
+        /\bgo\b/i.test(skillsText) && /\b(backend|microservice|api|docker|kubernetes|cloud)\b/i.test(skillsText)) {
+      detectedLanguages.add('Go');
+    }
+
+    // ============ RUBY ============
+    // Rails, Sinatra, RSpec
+    if (/\b(ruby|rails|ruby\s*on\s*rails|sinatra|rspec|capybara|sidekiq|rake)\b/i.test(skillsText)) {
+      detectedLanguages.add('Ruby');
+    }
+
+    // ============ PHP ============
+    // Laravel, Symfony, WordPress (dev), CodeIgniter
+    if (/\b(php|laravel|symfony|codeigniter|wordpress\s*(dev|development|plugin)|drupal|magento|composer|yii)\b/i.test(skillsText)) {
+      detectedLanguages.add('PHP');
+    }
+
+    // ============ KOTLIN ============
+    // Android development, Ktor
+    if (/\b(kotlin|android\s*(development|dev|kotlin)|ktor|jetpack\s*compose)\b/i.test(skillsText)) {
+      detectedLanguages.add('Kotlin');
+    }
+
+    // ============ SWIFT ============
+    // iOS development, SwiftUI
+    if (/\b(swift|ios\s*(development|dev)|swiftui|uikit|cocoa|xcode)\b/i.test(skillsText)) {
+      detectedLanguages.add('Swift');
+    }
+
+    // ============ RUST ============
+    // Systems programming, cargo
+    if (/\b(rust|rustlang|cargo|tokio|actix)\b/i.test(skillsText)) {
+      detectedLanguages.add('Rust');
+    }
+
+    // ============ SCALA ============
+    // Spark, Akka, Play Framework
+    if (/\b(scala|akka|play\s*framework|spark\s*scala|sbt)\b/i.test(skillsText)) {
+      detectedLanguages.add('Scala');
+    }
+
+    // ============ R ============
+    // Data science, statistics (careful with single letter)
+    if (/\b(r\s*programming|r\s*language|rstudio|tidyverse|ggplot|shiny\s*r|cran)\b/i.test(skillsText) ||
+        (/\br\b/i.test(skillsText) && /\b(statistics|data\s*science|machine\s*learning|analytics)\b/i.test(skillsText))) {
+      detectedLanguages.add('R');
+    }
+
+    // ============ SQL ============
+    // Database programming (not just querying)
+    if (/\b(pl\/?sql|t-sql|stored\s*procedure|sql\s*server|oracle\s*(db|database|developer)|mysql|postgresql|database\s*(development|programming|developer))\b/i.test(skillsText)) {
+      detectedLanguages.add('SQL');
+    }
+
+    // ============ DART ============
+    // Flutter
+    if (/\b(dart|flutter)\b/i.test(skillsText)) {
+      detectedLanguages.add('Dart');
+    }
+
+    // ============ PERL ============
+    if (/\b(perl|perl\s*scripting)\b/i.test(skillsText)) {
+      detectedLanguages.add('Perl');
+    }
+
+    // ============ SHELL/BASH ============
+    // Shell scripting (if significant)
+    if (/\b(bash\s*scripting|shell\s*scripting|linux\s*scripting|powershell\s*(scripting|development))\b/i.test(skillsText)) {
+      detectedLanguages.add('Bash');
+    }
+
+    // ============ AUTOMATION TESTING FRAMEWORKS ============
+    // NOTE: Automation frameworks (Selenium, Cypress, Playwright, Appium) alone do NOT trigger coding rounds
+    // They are assessed in the Technical round instead. Only actual programming languages trigger coding.
+    // However, if automation is mentioned WITH a specific language (e.g., "Selenium with Java"),
+    // the language itself will be detected by the patterns above.
+
+    return Array.from(detectedLanguages);
+  };
+
+  // Check if job title/description indicates a coding role
+  const isCodingRole = (job: Job): boolean => {
+    const codingRolePatterns = [
+      /developer/i,
+      /engineer/i,
+      /programmer/i,
+      /sdet/i,
+      /automation\s*(test|engineer|tester)/i,
+      /full\s*stack/i,
+      /front\s*end/i,
+      /back\s*end/i,
+      /software/i,
+      /devops/i,
+    ];
+    const titleAndDesc = `${job.title} ${job.description || ''}`;
+    return codingRolePatterns.some(pattern => pattern.test(titleAndDesc));
+  };
+
   const handleJobSelect = (job: Job) => {
     setSelectedJob(job);
 
@@ -363,18 +558,34 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     const jdRequiresCoding = job.coding_required === true;
     const hasLanguages = job.supported_languages && job.supported_languages.length > 0;
 
-    // Auto-configure sections based on JD's coding_required field
-    if (jdRequiresCoding && hasLanguages) {
-      // JD explicitly requires coding AND has languages configured - enable coding
+    // DYNAMIC DETECTION: If JD doesn't have coding_required set but has programming skills,
+    // automatically detect languages from must_have_skills
+    let shouldEnableCoding = jdRequiresCoding && hasLanguages;
+    let codingLanguages: string[] = hasLanguages ? job.supported_languages! : [];
+
+    // Fallback: Dynamic detection from skills if AI extraction didn't set coding properly
+    if (!shouldEnableCoding && job.skills && job.skills.length > 0) {
+      const detectedLanguages = detectProgrammingLanguagesFromSkills(job.skills);
+
+      // If we detected programming languages AND it's a coding-related role, enable coding
+      if (detectedLanguages.length > 0 && (isCodingRole(job) || detectedLanguages.length >= 1)) {
+        shouldEnableCoding = true;
+        codingLanguages = detectedLanguages;
+        console.log('[TalentFlow] Dynamic language detection enabled coding for JD:', job.title, 'Languages:', detectedLanguages);
+      }
+    }
+
+    // Auto-configure sections based on coding requirement
+    if (shouldEnableCoding && codingLanguages.length > 0) {
+      // Coding is required - enable coding section
       setSections([
         { name: 'HR', percentage: 20, topics: [], enabled: true },
         { name: 'Technical', percentage: 70, topics: [], enabled: true },
         { name: 'Coding', percentage: 10, topics: [], enabled: true },
       ]);
-      setSelectedCodingLanguages(job.supported_languages!);
+      setSelectedCodingLanguages(codingLanguages);
     } else {
-      // JD does NOT require coding (coding_required is false or undefined)
-      // Coding section is disabled and LOCKED - user cannot enable it
+      // JD does NOT require coding - coding section is disabled
       setSections([
         { name: 'HR', percentage: 30, topics: [], enabled: true },
         { name: 'Technical', percentage: 70, topics: [], enabled: true },
@@ -424,15 +635,58 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       setCodingPopupMode('enable');
       setShowCodingConfirm(true);
     } else {
-      // User wants to DISABLE coding
+      // User wants to DISABLE coding - check if at least one other round is enabled
+      const otherEnabledCount = sections.filter(s => s.name !== 'Coding' && s.enabled).length;
+      if (otherEnabledCount === 0) {
+        setShowMinRoundPopup(true);
+        return;
+      }
+
       const hasLanguages = selectedCodingLanguages.length > 0;
       if (hasLanguages) {
         // Has languages configured - show confirmation popup before disabling
         setCodingPopupMode('disable');
         setShowCodingConfirm(true);
       } else {
-        // No languages - just disable directly
-        setSections(sections.map(s => s.name === 'Coding' ? { ...s, enabled: false, percentage: 0 } : s));
+        // No languages - disable directly with percentage redistribution
+        const hrSection = sections.find(s => s.name === 'HR');
+        const technicalSection = sections.find(s => s.name === 'Technical');
+        const codingSection = sections.find(s => s.name === 'Coding');
+
+        // Save current percentages
+        setSavedPercentagesBeforeCodingDisable({
+          hr: hrSection?.percentage || 0,
+          technical: technicalSection?.percentage || 0,
+          coding: codingSection?.percentage || 0,
+        });
+
+        // Redistribute coding percentage
+        const codingPct = codingSection?.percentage || 0;
+        let newHrPct = hrSection?.percentage || 0;
+        let newTechPct = technicalSection?.percentage || 0;
+
+        if (hrSection?.enabled && technicalSection?.enabled && codingPct > 0) {
+          const totalOther = newHrPct + newTechPct;
+          if (totalOther > 0) {
+            const hrRatio = newHrPct / totalOther;
+            newHrPct = Math.round(newHrPct + codingPct * hrRatio);
+            newTechPct = 100 - newHrPct;
+          } else {
+            newHrPct = 50;
+            newTechPct = 50;
+          }
+        } else if (hrSection?.enabled) {
+          newHrPct = 100;
+        } else if (technicalSection?.enabled) {
+          newTechPct = 100;
+        }
+
+        setSections(sections.map(s => {
+          if (s.name === 'HR') return { ...s, percentage: newHrPct };
+          if (s.name === 'Technical') return { ...s, percentage: newTechPct };
+          if (s.name === 'Coding') return { ...s, enabled: false, percentage: 0 };
+          return s;
+        }));
       }
     }
   };
@@ -445,11 +699,74 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         alert('Please select at least one programming language');
         return;
       }
-      setSections(sections.map(s => s.name === 'Coding' ? { ...s, enabled: true, percentage: 10 } : s));
+
+      // Restore previous percentages if available, otherwise use defaults
+      if (savedPercentagesBeforeCodingDisable) {
+        setSections(sections.map(s => {
+          if (s.name === 'HR') return { ...s, percentage: savedPercentagesBeforeCodingDisable.hr };
+          if (s.name === 'Technical') return { ...s, percentage: savedPercentagesBeforeCodingDisable.technical };
+          if (s.name === 'Coding') return { ...s, enabled: true, percentage: savedPercentagesBeforeCodingDisable.coding };
+          return s;
+        }));
+        setSavedPercentagesBeforeCodingDisable(null); // Clear saved state
+      } else {
+        // Default: HR 20%, Technical 70%, Coding 10%
+        setSections(sections.map(s => {
+          if (s.name === 'HR') return { ...s, percentage: 20 };
+          if (s.name === 'Technical') return { ...s, percentage: 70 };
+          if (s.name === 'Coding') return { ...s, enabled: true, percentage: 10 };
+          return s;
+        }));
+      }
     } else {
-      // Disabling coding - clear languages and disable
+      // Disabling coding - save current percentages, redistribute, clear languages
+      const hrSection = sections.find(s => s.name === 'HR');
+      const technicalSection = sections.find(s => s.name === 'Technical');
+      const codingSection = sections.find(s => s.name === 'Coding');
+
+      // Save current percentages before disabling
+      setSavedPercentagesBeforeCodingDisable({
+        hr: hrSection?.percentage || 0,
+        technical: technicalSection?.percentage || 0,
+        coding: codingSection?.percentage || 0,
+      });
+
+      // Redistribute coding percentage to other enabled rounds
+      const codingPct = codingSection?.percentage || 0;
+      const hrEnabled = hrSection?.enabled || false;
+      const techEnabled = technicalSection?.enabled || false;
+
+      let newHrPct = hrSection?.percentage || 0;
+      let newTechPct = technicalSection?.percentage || 0;
+
+      if (hrEnabled && techEnabled && codingPct > 0) {
+        // Both HR and Technical enabled - split coding % proportionally
+        const totalOther = newHrPct + newTechPct;
+        if (totalOther > 0) {
+          const hrRatio = newHrPct / totalOther;
+          const techRatio = newTechPct / totalOther;
+          newHrPct = Math.round(newHrPct + codingPct * hrRatio);
+          newTechPct = 100 - newHrPct; // Ensure total is exactly 100%
+        } else {
+          // Both are 0, split evenly
+          newHrPct = 50;
+          newTechPct = 50;
+        }
+      } else if (hrEnabled && codingPct > 0) {
+        // Only HR enabled - give all coding % to HR
+        newHrPct = 100;
+      } else if (techEnabled && codingPct > 0) {
+        // Only Technical enabled - give all coding % to Technical
+        newTechPct = 100;
+      }
+
       setSelectedCodingLanguages([]);
-      setSections(sections.map(s => s.name === 'Coding' ? { ...s, enabled: false, percentage: 0 } : s));
+      setSections(sections.map(s => {
+        if (s.name === 'HR') return { ...s, percentage: newHrPct };
+        if (s.name === 'Technical') return { ...s, percentage: newTechPct };
+        if (s.name === 'Coding') return { ...s, enabled: false, percentage: 0 };
+        return s;
+      }));
     }
     setShowCodingConfirm(false);
   };
@@ -458,6 +775,146 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const handleCancelCodingAction = () => {
     // Just close the popup without making changes
     setShowCodingConfirm(false);
+  };
+
+  // Handle HR round toggle with validation
+  const handleHRToggle = () => {
+    const hrSection = sections.find(s => s.name === 'HR');
+    const isCurrentlyEnabled = hrSection?.enabled || false;
+
+    if (isCurrentlyEnabled) {
+      // Trying to disable HR - check if at least one other round is enabled
+      const otherEnabledCount = sections.filter(s => s.name !== 'HR' && s.enabled).length;
+      if (otherEnabledCount === 0) {
+        setShowMinRoundPopup(true);
+        return;
+      }
+
+      // Redistribute HR percentage to other enabled rounds
+      const hrPct = hrSection?.percentage || 0;
+      const techSection = sections.find(s => s.name === 'Technical');
+      const codingSection = sections.find(s => s.name === 'Coding');
+
+      let newTechPct = techSection?.percentage || 0;
+      let newCodingPct = codingSection?.percentage || 0;
+
+      if (techSection?.enabled && codingSection?.enabled && hrPct > 0) {
+        const totalOther = newTechPct + newCodingPct;
+        if (totalOther > 0) {
+          const techRatio = newTechPct / totalOther;
+          newTechPct = Math.round(newTechPct + hrPct * techRatio);
+          newCodingPct = 100 - newTechPct;
+        } else {
+          newTechPct = 50;
+          newCodingPct = 50;
+        }
+      } else if (techSection?.enabled) {
+        newTechPct = 100;
+      } else if (codingSection?.enabled) {
+        newCodingPct = 100;
+      }
+
+      setSections(sections.map(s => {
+        if (s.name === 'HR') return { ...s, enabled: false, percentage: 0 };
+        if (s.name === 'Technical') return { ...s, percentage: newTechPct };
+        if (s.name === 'Coding') return { ...s, percentage: newCodingPct };
+        return s;
+      }));
+    } else {
+      // Enabling HR - give it a default percentage and adjust others
+      const techSection = sections.find(s => s.name === 'Technical');
+      const codingSection = sections.find(s => s.name === 'Coding');
+      const totalCurrent = (techSection?.enabled ? techSection.percentage : 0) + (codingSection?.enabled ? codingSection.percentage : 0);
+
+      // Give HR 30% by default, reduce others proportionally
+      const hrNewPct = 30;
+      const remaining = 100 - hrNewPct;
+
+      let newTechPct = techSection?.percentage || 0;
+      let newCodingPct = codingSection?.percentage || 0;
+
+      if (totalCurrent > 0) {
+        if (techSection?.enabled) newTechPct = Math.round((techSection.percentage / totalCurrent) * remaining);
+        if (codingSection?.enabled) newCodingPct = remaining - (techSection?.enabled ? newTechPct : 0);
+      }
+
+      setSections(sections.map(s => {
+        if (s.name === 'HR') return { ...s, enabled: true, percentage: hrNewPct };
+        if (s.name === 'Technical') return { ...s, percentage: newTechPct };
+        if (s.name === 'Coding') return { ...s, percentage: newCodingPct };
+        return s;
+      }));
+    }
+  };
+
+  // Handle Technical round toggle with validation
+  const handleTechnicalToggle = () => {
+    const techSection = sections.find(s => s.name === 'Technical');
+    const isCurrentlyEnabled = techSection?.enabled || false;
+
+    if (isCurrentlyEnabled) {
+      // Trying to disable Technical - check if at least one other round is enabled
+      const otherEnabledCount = sections.filter(s => s.name !== 'Technical' && s.enabled).length;
+      if (otherEnabledCount === 0) {
+        setShowMinRoundPopup(true);
+        return;
+      }
+
+      // Redistribute Technical percentage to other enabled rounds
+      const techPct = techSection?.percentage || 0;
+      const hrSection = sections.find(s => s.name === 'HR');
+      const codingSection = sections.find(s => s.name === 'Coding');
+
+      let newHrPct = hrSection?.percentage || 0;
+      let newCodingPct = codingSection?.percentage || 0;
+
+      if (hrSection?.enabled && codingSection?.enabled && techPct > 0) {
+        const totalOther = newHrPct + newCodingPct;
+        if (totalOther > 0) {
+          const hrRatio = newHrPct / totalOther;
+          newHrPct = Math.round(newHrPct + techPct * hrRatio);
+          newCodingPct = 100 - newHrPct;
+        } else {
+          newHrPct = 50;
+          newCodingPct = 50;
+        }
+      } else if (hrSection?.enabled) {
+        newHrPct = 100;
+      } else if (codingSection?.enabled) {
+        newCodingPct = 100;
+      }
+
+      setSections(sections.map(s => {
+        if (s.name === 'HR') return { ...s, percentage: newHrPct };
+        if (s.name === 'Technical') return { ...s, enabled: false, percentage: 0 };
+        if (s.name === 'Coding') return { ...s, percentage: newCodingPct };
+        return s;
+      }));
+    } else {
+      // Enabling Technical - give it a default percentage and adjust others
+      const hrSection = sections.find(s => s.name === 'HR');
+      const codingSection = sections.find(s => s.name === 'Coding');
+      const totalCurrent = (hrSection?.enabled ? hrSection.percentage : 0) + (codingSection?.enabled ? codingSection.percentage : 0);
+
+      // Give Technical 70% by default, reduce others proportionally
+      const techNewPct = 70;
+      const remaining = 100 - techNewPct;
+
+      let newHrPct = hrSection?.percentage || 0;
+      let newCodingPct = codingSection?.percentage || 0;
+
+      if (totalCurrent > 0) {
+        if (hrSection?.enabled) newHrPct = Math.round((hrSection.percentage / totalCurrent) * remaining);
+        if (codingSection?.enabled) newCodingPct = remaining - (hrSection?.enabled ? newHrPct : 0);
+      }
+
+      setSections(sections.map(s => {
+        if (s.name === 'HR') return { ...s, percentage: newHrPct };
+        if (s.name === 'Technical') return { ...s, enabled: true, percentage: techNewPct };
+        if (s.name === 'Coding') return { ...s, percentage: newCodingPct };
+        return s;
+      }));
+    }
   };
 
   // Toggle a language in the selection
@@ -565,6 +1022,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       return;
     }
 
+    // Check if percentages are valid before auto-saving
+    const totalPercentage = sections.filter(s => s.enabled).reduce((sum, s) => sum + s.percentage, 0);
+    if (totalPercentage !== 100) {
+      console.log('[TalentFlow] Skipping auto-save: percentages do not sum to 100% (current:', totalPercentage, '%)');
+      navigateCallback();
+      return;
+    }
+
     setIsAutoSaving(true);
 
     try {
@@ -572,7 +1037,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       const technicalSection = sections.find(s => s.name === 'Technical');
       const codingSection = sections.find(s => s.name === 'Coding');
 
-      const createData = {
+      const assessmentData = {
         jd_id: selectedJob?.id || '',
         title: `${selectedJob?.title} - Assessment - Version 1`,
         description: `Assessment for ${selectedJob?.title} position`,
@@ -590,11 +1055,23 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         proctoring_enabled: proctoringEnabled,
       };
 
-      // Create the assessment as draft (don't publish)
-      const createdAssessment = await assessmentService.create(createData);
-      setDraftSavedId(createdAssessment.id);
+      // Check if an assessment already exists for this JD
+      const existingAssessments = await assessmentService.list({ jd_id: selectedJob.id });
 
-      console.log('[TalentFlow] Assessment auto-saved as draft:', createdAssessment.id);
+      if (existingAssessments?.items && existingAssessments.items.length > 0) {
+        // Assessment already exists for this JD - update it instead of creating
+        const existingAssessment = existingAssessments.items[0];
+        console.log('[TalentFlow] Assessment already exists for JD, updating:', existingAssessment.id);
+
+        await assessmentService.update(existingAssessment.id, assessmentData);
+        setDraftSavedId(existingAssessment.id);
+        console.log('[TalentFlow] Assessment updated as draft:', existingAssessment.id);
+      } else {
+        // No existing assessment - create new one
+        const createdAssessment = await assessmentService.create(assessmentData);
+        setDraftSavedId(createdAssessment.id);
+        console.log('[TalentFlow] Assessment auto-saved as draft:', createdAssessment.id);
+      }
 
       setIsAutoSaving(false);
       navigateCallback();
@@ -610,6 +1087,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (step === 'configure' && selectedJob && !draftSavedId) {
+        // Check if percentages are valid before auto-saving
+        const totalPct = sections.filter(s => s.enabled).reduce((sum, s) => sum + s.percentage, 0);
+        if (totalPct !== 100) {
+          console.log('[TalentFlow] Skipping beforeunload auto-save: percentages do not sum to 100%');
+          return;
+        }
+
         // Trigger auto-save synchronously (best effort)
         const hrSection = sections.find(s => s.name === 'HR');
         const technicalSection = sections.find(s => s.name === 'Technical');
@@ -647,7 +1131,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   }, [step, selectedJob, draftSavedId, sections, duration, selectedCodingLanguages, proctoringEnabled]);
 
   const totalPercentage = getTotalPercentage();
-  const isPercentageValid = totalPercentage === 100;
+  const enabledSections = sections.filter(s => s.enabled);
+  const hasAtLeastOneEnabled = enabledSections.length > 0;
+  const hasZeroPercentageEnabled = enabledSections.some(s => s.percentage === 0);
+  const isPercentageValid = totalPercentage === 100 && hasAtLeastOneEnabled && !hasZeroPercentageEnabled;
 
   // Use localJobs which includes newly created JDs
   const availableJobs = localJobs.length > 0 ? localJobs : jobs;
@@ -712,6 +1199,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               ) : (
               <div className="space-y-3">
                 {availableJobs.filter(j => j.status === 'Published').map(job => {
+                  // Check if this JD already has an assessment (1:1 relationship)
+                  const hasExistingAssessment = jdsWithAssessments.has(job.id);
+
                   // Format experience range
                   const expRange = job.experience_min && job.experience_max
                     ? `${job.experience_min}-${job.experience_max} years`
@@ -727,8 +1217,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   return (
                     <div
                       key={job.id}
-                      onClick={() => handleJobSelect(job)}
-                      className="w-full text-left p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all cursor-pointer bg-white"
+                      onClick={() => !hasExistingAssessment && handleJobSelect(job)}
+                      className={`w-full text-left p-5 border rounded-lg transition-all ${
+                        hasExistingAssessment
+                          ? 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
+                          : 'border-gray-200 hover:border-gray-300 hover:shadow-md cursor-pointer bg-white'
+                      }`}
                     >
                       <div className="flex items-start gap-4">
                         {/* Icon */}
@@ -806,9 +1300,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               No Coding
                             </span>
                           )}
-                          <button className="px-3 py-1.5 bg-gray-800 text-white rounded-lg text-xs hover:bg-gray-900 transition-colors">
-                            Select
-                          </button>
+                          {hasExistingAssessment ? (
+                            <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Assessment Created
+                            </span>
+                          ) : (
+                            <button className="px-3 py-1.5 bg-gray-800 text-white rounded-lg text-xs hover:bg-gray-900 transition-colors">
+                              Select
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -941,7 +1442,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                         </div>
                       </div>
                       <button
-                        onClick={() => topicSettings?.hr_enabled !== false && setSections(sections.map(s => s.name === 'HR' ? { ...s, enabled: !s.enabled } : s))}
+                        onClick={() => topicSettings?.hr_enabled !== false && handleHRToggle()}
                         disabled={topicSettings?.hr_enabled === false}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${topicSettings?.hr_enabled === false ? 'bg-gray-200 cursor-not-allowed' : sections.find(s => s.name === 'HR')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
                       >
@@ -970,7 +1471,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                         </div>
                       </div>
                       <button
-                        onClick={() => topicSettings?.technical_enabled !== false && setSections(sections.map(s => s.name === 'Technical' ? { ...s, enabled: !s.enabled } : s))}
+                        onClick={() => topicSettings?.technical_enabled !== false && handleTechnicalToggle()}
                         disabled={topicSettings?.technical_enabled === false}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${topicSettings?.technical_enabled === false ? 'bg-gray-200 cursor-not-allowed' : sections.find(s => s.name === 'Technical')?.enabled ? 'bg-gray-800' : 'bg-gray-300'}`}
                       >
@@ -983,9 +1484,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   {(() => {
                     // Determine if coding is disabled and why
                     const isCodingDisabledBySettings = topicSettings?.coding_enabled === false;
-                    const isCodingDisabledByJD = selectedJob?.coding_required === false;
+
+                    // Check if coding was enabled via dynamic detection (languages were auto-detected from skills)
+                    const hasDynamicallyDetectedLanguages = selectedCodingLanguages.length > 0;
+
+                    // Only lock coding if:
+                    // 1. Settings disabled it globally, OR
+                    // 2. JD doesn't require coding AND no languages were dynamically detected
+                    const isCodingDisabledByJD = selectedJob?.coding_required !== true && !hasDynamicallyDetectedLanguages;
                     const isCodingLocked = isCodingDisabledBySettings || isCodingDisabledByJD;
                     const codingEnabled = sections.find(s => s.name === 'Coding')?.enabled;
+
+                    // Check if this was auto-enabled via dynamic detection
+                    const wasAutoDetected = !selectedJob?.coding_required && hasDynamicallyDetectedLanguages;
 
                     return (
                       <div className={`p-4 border rounded-lg transition-all ${isCodingLocked ? 'border-gray-200 bg-gray-100 opacity-60' : codingEnabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
@@ -1004,6 +1515,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                                 ) : (
                                   <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
                                 )}
+                                {!isCodingLocked && wasAutoDetected && (
+                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-xs">Auto-Detected from Skills</span>
+                                )}
                                 {!isCodingLocked && selectedJob?.coding_required && (
                                   <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Auto-Enabled</span>
                                 )}
@@ -1011,7 +1525,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               <p className="text-sm text-gray-500">
                                 {isCodingDisabledByJD
                                   ? 'This job description does not require coding assessment'
-                                  : 'Programming challenges, algorithm design, and code implementation'
+                                  : wasAutoDetected
+                                    ? `Programming languages detected from skills: ${selectedCodingLanguages.join(', ')}`
+                                    : 'Programming challenges, algorithm design, and code implementation'
                                 }
                               </p>
                             </div>
@@ -1030,11 +1546,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
 
                 {/* Smart Configuration Info */}
-                <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-gray-600">
-                      <strong>Smart Configuration:</strong> Coding round availability is determined by the Job Description. If the JD has <code className="bg-gray-200 px-1 rounded">coding_required: false</code>, the coding round will be locked and cannot be enabled. For technical JDs with coding enabled, you can configure languages. Disabled rounds will be hidden from the section distribution below.
+                    <Sparkles className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-blue-700">
+                      <strong>Smart Auto-Detection:</strong> Coding round is automatically enabled when programming languages (Java, Python, JavaScript, etc.) are detected in the job skills. Languages like "Core Java", "Spring Boot", "React", "Selenium" are automatically recognized. Disabled rounds will be hidden from the section distribution below.
                     </p>
                   </div>
                 </div>
@@ -1147,7 +1663,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 {!isPercentageValid && (
                   <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-yellow-800">Section percentages must total exactly 100%</p>
+                    <div className="text-sm text-yellow-800">
+                      {!hasAtLeastOneEnabled && (
+                        <p>At least one assessment round must be enabled.</p>
+                      )}
+                      {hasAtLeastOneEnabled && hasZeroPercentageEnabled && (
+                        <p>Enabled rounds cannot have 0% allocation. Disable the round or assign a percentage.</p>
+                      )}
+                      {hasAtLeastOneEnabled && !hasZeroPercentageEnabled && totalPercentage !== 100 && (
+                        <p>Section percentages must total exactly 100% (currently {totalPercentage}%).</p>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1474,6 +2000,43 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   }`}
                 >
                   {codingPopupMode === 'disable' ? 'Yes, Disable' : 'Enable Coding'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Minimum Round Required Popup */}
+        {showMinRoundPopup && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full">
+              {/* Header */}
+              <div className="bg-amber-50 border-b border-amber-200 px-6 py-4 rounded-t-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                    <AlertCircle className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">Cannot Disable Round</h3>
+                    <p className="text-sm text-amber-700">Minimum requirement not met</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                <p className="text-gray-600">
+                  At least one assessment round must be enabled. Please enable another round before disabling this one.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="bg-gray-50 px-6 py-4 rounded-b-xl">
+                <button
+                  onClick={() => setShowMinRoundPopup(false)}
+                  className="w-full px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+                >
+                  Got it
                 </button>
               </div>
             </div>

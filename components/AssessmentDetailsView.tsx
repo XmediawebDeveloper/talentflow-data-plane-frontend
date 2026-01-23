@@ -160,7 +160,7 @@ export default function AssessmentDetailsView({
                 <FileText className="w-8 h-8 text-white" />
               </div>
               <div>
-                <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-3 mb-1">
                   <h1 className="text-2xl text-white">{assessment.title}</h1>
                   {sections.length > 0 && (
                     <span className="px-2 py-1 bg-gray-700/30 backdrop-blur-sm text-white rounded text-xs flex items-center gap-1 border border-white/20">
@@ -178,12 +178,20 @@ export default function AssessmentDetailsView({
                     {assessment.status}
                   </span>
                 </div>
-                
+
+                {/* Assessment ID & JD ID */}
+                <div className="text-xs text-gray-300 mb-2">
+                  Assessment ID: <span className="font-medium text-white">{assessment.short_id || `AS-${String(assessment.id).slice(0, 8).toUpperCase()}`}</span>
+                  {assessment.jd_short_id && (
+                    <span className="ml-3">| JD ID: <span className="font-medium text-white">{assessment.jd_short_id}</span></span>
+                  )}
+                </div>
+
                 {assessment.job && (
                   <div className="flex items-center gap-2 mb-3">
                     <Briefcase className="w-4 h-4 text-gray-200" />
                     <span className="text-gray-100 text-sm">
-                      Linked to: {assessment.job.title} • {assessment.job.department}
+                      Linked to: {assessment.job.title}
                     </span>
                   </div>
                 )}
@@ -203,28 +211,22 @@ export default function AssessmentDetailsView({
                   </span>
                   <span className="flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
-                    Created {assessment.created}
+                    Created {assessment.created_at
+                      ? `${new Date(assessment.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${new Date(assessment.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`
+                      : assessment.created}
                   </span>
+                  {assessment.created_by_name && (
+                    <span className="flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      By {assessment.created_by_name}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Action Buttons */}
             <div className="flex items-center gap-3">
-              <button
-                onClick={onEdit}
-                className="px-4 py-2 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg transition-colors flex items-center gap-2 border border-white/30"
-              >
-                <Edit2 className="w-4 h-4" />
-                Edit
-              </button>
-              <button
-                onClick={onPreview}
-                className="px-4 py-2 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg transition-colors flex items-center gap-2 border border-white/30"
-              >
-                <Eye className="w-4 h-4" />
-                Preview
-              </button>
               <button
                 onClick={onShare}
                 className="px-4 py-2 bg-white text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2 font-medium"
