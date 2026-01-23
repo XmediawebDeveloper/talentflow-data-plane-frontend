@@ -685,7 +685,7 @@ export default function PricingPage() {
                             <span className="font-semibold text-gray-900 dark:text-white">
                               {displayQuotas.max_seats.toLocaleString()}
                             </span>
-                            <span className="text-gray-600 dark:text-gray-400">Team Members</span>
+                            <span className="text-gray-600 dark:text-gray-400">No of Users</span>
                           </div>
                         )}
                         {displayQuotas.max_jobs !== undefined && displayQuotas.max_jobs >= 1 && (

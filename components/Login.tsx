@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, Globe, ArrowLeft } from 'lucide-react';
 import { User, Tenant } from '@/lib/types/tenant';
 import { authService } from '../services/authService';
@@ -10,6 +11,7 @@ interface LoginProps {
 }
 
 export default function Login({ onLogin, onSwitchToSignUp, onBackToPublic }: LoginProps) {
+  const router = useRouter();
   const [subdomain, setSubdomain] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,6 +64,13 @@ export default function Login({ onLogin, onSwitchToSignUp, onBackToPublic }: Log
         lastLogin: response.user.last_login,
         createdAt: response.user.created_at,
       };
+
+      // Check if tenant has pending payment - redirect to payment page first
+      if (response.pending_payment && response.pending_payment_redirect) {
+        console.log('[LOGIN] Tenant has pending payment, redirecting to:', response.pending_payment_redirect);
+        router.push(response.pending_payment_redirect);
+        return;
+      }
 
       onLogin(user);
     } catch (err: any) {

@@ -1818,7 +1818,7 @@ function CurrentPlanContent() {
                             {displayQuotas.max_seats !== undefined && displayQuotas.max_seats >= 1 && (
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-900">{displayQuotas.max_seats.toLocaleString()}</span>
-                                <span className="text-gray-600">Team Members</span>
+                                <span className="text-gray-600">No of Users</span>
                               </div>
                             )}
                             {displayQuotas.max_jobs !== undefined && displayQuotas.max_jobs >= 1 && (
