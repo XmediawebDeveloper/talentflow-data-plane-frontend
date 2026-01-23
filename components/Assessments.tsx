@@ -158,6 +158,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
           created_at: a.created_at,
           created_by_name: a.created_by_name || 'System',
+          jd_id: a.jd_id,
+          jd_short_id: a.jd_short_id,
           job: { title: a.jd_title || 'General Assessment', department: 'Engineering' },
           // Section configuration for detail view
           hr_enabled: a.hr_enabled,
@@ -1934,18 +1936,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </span>
                             )}
                           </div>
-                          {/* Assessment ID */}
+                          {/* Assessment ID & JD ID */}
                           <div className="text-xs text-gray-400 mb-1.5">
-                            Assessment ID: <span className="font-medium text-gray-500">{assessment.short_id || `AS-${String(assessment.id).slice(0, 3).toUpperCase()}`}</span>
+                            Assessment ID: <span className="font-medium text-gray-500">{assessment.short_id}</span>
+                            {assessment.jd_short_id && (
+                              <span className="ml-2">| JD ID: <span className="font-medium text-gray-500">{assessment.jd_short_id}</span></span>
+                            )}
                           </div>
                           {assessment.job && (
                             <div className="text-xs text-gray-500 mb-1.5">
-                              Based on: {assessment.job.title} • {assessment.job.department}
+                              Based on: {assessment.job.title}
                               {assessment.created_by_name && (
                                 <span className="ml-2">• Created by: {assessment.created_by_name}</span>
                               )}
-                              {assessment.created && (
-                                <span className="ml-2">• {new Date(assessment.created_at || assessment.created).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                              {assessment.created_at && (
+                                <span className="ml-2">• {new Date(assessment.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(assessment.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
                               )}
                             </div>
                           )}

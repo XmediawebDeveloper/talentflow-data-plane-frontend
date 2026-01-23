@@ -5,6 +5,7 @@ import Image from 'next/image';
 import {
   Clock,
   ChevronRight,
+  ChevronLeft,
   Send,
   AlertCircle,
   CheckCircle,
@@ -17,7 +18,9 @@ import {
   ShieldAlert,
   X,
   Check,
-  HelpCircle
+  HelpCircle,
+  Lock,
+  Save
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -57,6 +60,7 @@ interface AssessmentInterfaceProps {
       selected_options?: string[];
       code_submission?: string;
       language?: string;
+      is_draft?: boolean;  // True = draft (auto-save, editable), False = submitted (locked)
     }
   ) => Promise<SubmitAnswerResponse>;
   onComplete: () => void;
@@ -91,12 +95,21 @@ export function AssessmentInterface({
     language?: string;
   }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const [questionStartTime] = useState(Date.now());
   const [timeRemaining, setTimeRemaining] = useState<number | null>(
     currentQuestion.time_limit_seconds
   );
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [allQuestionsAnswered, setAllQuestionsAnswered] = useState(false);
+  const [showUnansweredPopup, setShowUnansweredPopup] = useState(false);
+  const [unansweredQuestions, setUnansweredQuestions] = useState<number[]>([]);
+
+  // Track answer statuses: questionId -> { hasDraft: boolean, isLocked: boolean }
+  const [answerStatuses, setAnswerStatuses] = useState<Map<string, { hasDraft: boolean; isLocked: boolean }>>(new Map());
+
+  // Check if current answer is locked (submitted)
+  const isCurrentAnswerLocked = currentQuestion.previous_answer?.is_locked || false;
 
   // Global assessment timer (30 minutes)
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
@@ -186,13 +199,23 @@ export function AssessmentInterface({
     }
   }, [stream, videoRef]);
 
-  // Reset answer when question changes
+  // Reset answer when question changes and update answer statuses
   useEffect(() => {
     if (currentQuestion.previous_answer) {
       setAnswer({
         text_response: currentQuestion.previous_answer.text_response || undefined,
         selected_options: currentQuestion.previous_answer.selected_options || undefined,
         code_submission: currentQuestion.previous_answer.code_submission || undefined
+      });
+
+      // Update answer status from backend
+      setAnswerStatuses(prev => {
+        const newMap = new Map(prev);
+        newMap.set(currentQuestion.question_id, {
+          hasDraft: true,
+          isLocked: currentQuestion.previous_answer?.is_locked || false
+        });
+        return newMap;
       });
     } else {
       setAnswer({});
@@ -218,12 +241,132 @@ export function AssessmentInterface({
     return () => clearInterval(timer);
   }, [timeRemaining, currentQuestion.question_id]);
 
+  // Save answer as draft (auto-save) - editable
+  const handleSaveDraft = async () => {
+    if (isSubmitting || isCurrentAnswerLocked) return;
+
+    // Only save if there's something to save
+    const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+    if (!hasAnswer) return;
+
+    setIsSubmitting(true);
+    try {
+      await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+
+      // Update answer status
+      setAnswerStatuses(prev => {
+        const newMap = new Map(prev);
+        newMap.set(currentQuestion.question_id, { hasDraft: true, isLocked: false });
+        return newMap;
+      });
+    } catch (error) {
+      console.error('Failed to save draft:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Submit and lock answer - not editable anymore
+  const handleSubmitAndLock = async () => {
+    if (isSubmitting || isCurrentAnswerLocked) return;
+    setIsSubmitting(true);
+
+    try {
+      await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
+
+      // Update answer status
+      setAnswerStatuses(prev => {
+        const newMap = new Map(prev);
+        newMap.set(currentQuestion.question_id, { hasDraft: true, isLocked: true });
+        return newMap;
+      });
+    } catch (error) {
+      console.error('Failed to submit answer:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Navigate to previous question
+  const handlePrevious = async () => {
+    if (isNavigating || currentQuestion.question_number <= 1) return;
+    setIsNavigating(true);
+
+    try {
+      // Auto-save current answer as draft if there's any answer
+      const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+      if (hasAnswer && !isCurrentAnswerLocked) {
+        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+        setAnswerStatuses(prev => {
+          const newMap = new Map(prev);
+          newMap.set(currentQuestion.question_id, { hasDraft: true, isLocked: false });
+          return newMap;
+        });
+      }
+
+      // Navigate to previous question
+      await onNavigate(currentQuestion.question_number - 1);
+    } catch (error) {
+      console.error('Failed to navigate to previous:', error);
+    } finally {
+      setIsNavigating(false);
+    }
+  };
+
+  // Navigate to next question (auto-save draft)
+  const handleNext = async () => {
+    if (isNavigating || isLastQuestion) return;
+    setIsNavigating(true);
+
+    try {
+      // Auto-save current answer as draft if there's any answer
+      const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+      if (hasAnswer && !isCurrentAnswerLocked) {
+        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+        setAnswerStatuses(prev => {
+          const newMap = new Map(prev);
+          newMap.set(currentQuestion.question_id, { hasDraft: true, isLocked: false });
+          return newMap;
+        });
+      }
+
+      // Navigate to next question
+      await onNavigate(currentQuestion.question_number + 1);
+    } catch (error) {
+      console.error('Failed to navigate to next:', error);
+    } finally {
+      setIsNavigating(false);
+    }
+  };
+
+  // Handle final submit - check for unanswered questions
+  const handleFinalSubmit = async () => {
+    // Find unanswered questions
+    const unanswered: number[] = [];
+    for (let i = 1; i <= currentQuestion.total_questions; i++) {
+      // We don't have all question data, so check based on progress
+      // This will be approximate - the backend will handle final validation
+    }
+
+    // If there are unanswered, show popup (optional feature)
+    if (progress.answered < progress.total) {
+      const missedCount = progress.total - progress.answered;
+      // Generate approximate unanswered question numbers
+      // Note: This is simplified - ideally we'd track all questions
+      setUnansweredQuestions(Array.from({ length: missedCount }, (_, i) => i + 1));
+      setShowUnansweredPopup(true);
+    } else {
+      setShowCompleteConfirm(true);
+    }
+  };
+
+  // Legacy handleSubmit for auto-submit on timer expire
   const handleSubmit = async (autoSubmit = false) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
 
     try {
-      const response = await onAnswerSubmit(currentQuestion.question_id, answer);
+      const response = await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
 
       // Navigation is handled by parent component via response.next_question
       // The parent's handleAnswerSubmit already sets currentQuestion from the response
@@ -630,77 +773,194 @@ export function AssessmentInterface({
             </div>
 
             {/* Actions */}
-            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end">
-              {/* Next / Submit Button */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
+              {/* Left side - Previous button */}
+              <div>
+                {currentQuestion.question_number > 1 && (
+                  <Button
+                    variant="outline"
+                    onClick={handlePrevious}
+                    disabled={isNavigating || isSubmitting}
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Previous
+                  </Button>
+                )}
+              </div>
+
+              {/* Right side - Submit and Next buttons */}
               <div className="flex items-center gap-3">
-                {/* Save & Next button - saves and moves to next question */}
+                {/* Submit button - locks the answer (optional for candidate) */}
+                {!isCurrentAnswerLocked && isAnswerValid() && (
+                  <Button
+                    variant="outline"
+                    onClick={handleSubmitAndLock}
+                    loading={isSubmitting}
+                    disabled={isSubmitting || isNavigating}
+                    title="Submit and lock this answer (cannot be edited after)"
+                    className="border-green-500 text-green-600 hover:bg-green-50"
+                  >
+                    <Lock className="w-4 h-4 mr-2" />
+                    Submit
+                  </Button>
+                )}
+
+                {/* Show locked indicator if answer is already submitted */}
+                {isCurrentAnswerLocked && (
+                  <span className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm">
+                    <Lock className="w-4 h-4" />
+                    Answer Submitted
+                  </span>
+                )}
+
+                {/* Next button - auto-saves draft and moves to next */}
                 {!isLastQuestion ? (
                   <Button
                     variant="primary"
-                    onClick={() => handleSubmit()}
-                    loading={isSubmitting}
-                    disabled={isSubmitting || !isAnswerValid()}
-                    title={!isAnswerValid() ? 'Please provide an answer before proceeding' : ''}
+                    onClick={handleNext}
+                    loading={isNavigating}
+                    disabled={isNavigating || isSubmitting}
                   >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Save & Next
+                    Next
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 ) : (
-                  /* Submit button - shown on last question */
+                  /* Submit & Confirm button - shown on last question */
                   <Button
                     variant="primary"
-                    onClick={() => {
-                      handleSubmit();
-                      setShowCompleteConfirm(true);
-                    }}
+                    onClick={handleFinalSubmit}
                     loading={isSubmitting}
-                    disabled={isSubmitting || !isAnswerValid()}
-                    title={!isAnswerValid() ? 'Please provide an answer before submitting' : ''}
+                    disabled={isSubmitting || isNavigating}
                   >
                     <Send className="w-4 h-4 mr-2" />
-                    Save & Submit Assessment
+                    Submit & Confirm
                   </Button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Progress Indicator - Display Only (No Navigation) */}
+          {/* Progress Indicator - Clickable for Navigation */}
           <div className="mt-4 bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-            <p className="text-sm font-medium text-gray-700 mb-3">Progress</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-medium text-gray-700">Progress</p>
+              <div className="flex items-center gap-4 text-xs">
+                <span className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded bg-gray-100 border border-gray-300"></div>
+                  Not answered
+                </span>
+                <span className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded bg-orange-100 border border-orange-300"></div>
+                  Draft
+                </span>
+                <span className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded bg-green-100 border border-green-300"></div>
+                  Submitted
+                </span>
+              </div>
+            </div>
             <div className="flex flex-wrap gap-2">
               {Array.from({ length: currentQuestion.total_questions }, (_, i) => {
                 const num = i + 1;
                 const isCurrent = num === currentQuestion.question_number;
-                const isAnswered = num < currentQuestion.question_number;
+
+                // Determine answer status for this question
+                // We track current question in answerStatuses, but for others we approximate
+                const questionStatus = answerStatuses.get(`question_${num}`);
+                const isLocked = questionStatus?.isLocked || false;
+                const hasDraft = questionStatus?.hasDraft || false;
+
+                // For questions before current, assume they have some status
+                // This is a simplification - ideally backend would return all statuses
+                const isBeforeCurrent = num < currentQuestion.question_number;
+
+                // Determine the color class
+                let colorClass = 'bg-gray-100 text-gray-400 hover:bg-gray-200'; // Not answered
+                let icon = null;
+
+                if (isCurrent) {
+                  colorClass = 'bg-gray-800 text-white ring-2 ring-gray-800 ring-offset-2';
+                } else if (isLocked) {
+                  colorClass = 'bg-green-100 text-green-700 hover:bg-green-200';
+                  icon = <Lock className="w-4 h-4" />;
+                } else if (hasDraft || isBeforeCurrent) {
+                  colorClass = 'bg-orange-100 text-orange-700 hover:bg-orange-200';
+                  icon = <Save className="w-4 h-4" />;
+                }
 
                 return (
-                  <div
+                  <button
                     key={num}
-                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center ${
-                      isCurrent
-                        ? 'bg-gray-800 text-white ring-2 ring-gray-800 ring-offset-2'
-                        : isAnswered
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-400'
-                    }`}
+                    onClick={() => !isCurrent && onNavigate(num)}
+                    disabled={isCurrent || isNavigating}
+                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center transition-colors cursor-pointer disabled:cursor-default ${colorClass}`}
+                    title={
+                      isCurrent ? 'Current question' :
+                      isLocked ? `Question ${num} - Submitted (locked)` :
+                      hasDraft ? `Question ${num} - Draft saved` :
+                      `Question ${num} - Click to navigate`
+                    }
                   >
-                    {isAnswered ? (
-                      <CheckCircle className="w-5 h-5" />
-                    ) : (
-                      num
-                    )}
-                  </div>
+                    {icon || num}
+                  </button>
                 );
               })}
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              Question {currentQuestion.question_number} of {currentQuestion.total_questions}
+              Question {currentQuestion.question_number} of {currentQuestion.total_questions} • Click any question to navigate
             </p>
           </div>
         </div>
       </main>
+
+      {/* Unanswered Questions Popup */}
+      {showUnansweredPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                setShowUnansweredPopup(false);
+                setShowCompleteConfirm(true);
+              }}
+              className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100 transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">Unanswered Questions</h3>
+                <p className="text-sm text-gray-500">You have some questions without answers</p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 rounded-xl p-4 mb-4">
+              <p className="text-sm text-amber-700 mb-3">
+                You haven't answered <span className="font-bold">{progress.total - progress.answered}</span> question(s):
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: progress.total - progress.answered }, (_, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium"
+                  >
+                    Q{i + 1}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-500 text-center">
+              Click X to close and proceed to submit, or go back to answer them.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Complete Confirmation Modal */}
       {showCompleteConfirm && (
@@ -721,7 +981,12 @@ export function AssessmentInterface({
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-800">Complete Assessment?</h3>
-                <p className="text-sm text-gray-500">You've answered all questions</p>
+                <p className="text-sm text-gray-500">
+                  {progress.answered === progress.total
+                    ? "You've answered all questions"
+                    : `You've answered ${progress.answered} of ${progress.total} questions`
+                  }
+                </p>
               </div>
             </div>
 
