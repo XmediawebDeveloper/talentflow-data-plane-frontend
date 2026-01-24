@@ -197,6 +197,18 @@ export const resumeService = {
   },
 
   /**
+   * Delete all completed upload batches (where pending = 0)
+   */
+  async deleteCompletedBatches(): Promise<any> {
+    try {
+      const response = await api.delete('/resumes/upload/batches/completed');
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Resolve duplicate (for batch uploads)
    */
   async resolveDuplicate(batchItemId: string, action: 'discard' | 'overwrite' | 'version') {

@@ -153,6 +153,29 @@ export default function MyResumesPage() {
     }
   };
 
+  const handleCloseUploadHistory = async () => {
+    // Filter only my-resumes batches
+    const myResumesHistory = uploadHistory.filter(r => r.source === 'my-resumes');
+
+    // Check if there are any pending items
+    const hasPendingItems = myResumesHistory.some(batch => batch.pending > 0);
+
+    if (!hasPendingItems && myResumesHistory.length > 0) {
+      // All batches are completed, delete them from the backend
+      try {
+        await resumeService.deleteCompletedBatches();
+        // Clear local state
+        setUploadHistory([]);
+      } catch (error) {
+        console.error('Failed to delete completed batches:', error);
+      }
+    }
+
+    // Close the modal
+    setIsUploadHistoryModalOpen(false);
+    setIsUploadHistoryMinimized(false);
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -1592,10 +1615,7 @@ export default function MyResumesPage() {
                       −
                     </button>
                     <button
-                      onClick={() => {
-                        setIsUploadHistoryModalOpen(false);
-                        setIsUploadHistoryMinimized(false);
-                      }}
+                      onClick={handleCloseUploadHistory}
                       className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                       title="Close"
                     >
@@ -1919,10 +1939,7 @@ export default function MyResumesPage() {
               {/* Footer */}
               <div className="border-t border-gray-200 px-6 py-4 bg-white rounded-b-2xl">
                 <button
-                  onClick={() => {
-                    setIsUploadHistoryModalOpen(false);
-                    setIsUploadHistoryMinimized(false);
-                  }}
+                  onClick={handleCloseUploadHistory}
                   className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
                 >
                   Close
