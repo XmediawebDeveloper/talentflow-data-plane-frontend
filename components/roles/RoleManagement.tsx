@@ -461,7 +461,13 @@ export default function RoleManagement() {
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => router.push(`/organization/role-management/edit/${role.id}`)}
+                            onClick={() => {
+                              if (!role.id || role.id <= 0) {
+                                toast.error('Invalid role ID');
+                                return;
+                              }
+                              router.push(`/organization/role-management/edit/${role.id}`);
+                            }}
                             className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
                           >
                             <Pencil className="w-4 h-4" />

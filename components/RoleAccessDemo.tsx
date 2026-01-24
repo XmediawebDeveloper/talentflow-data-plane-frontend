@@ -7,7 +7,7 @@ interface RoleAccessDemoProps {
 
 export default function RoleAccessDemo({ user }: RoleAccessDemoProps) {
   const roleLabels = {
-    tenant_admin: 'Tenant Admin',
+    tenant_admin: 'Owner',
     recruiter: 'Recruiter',
     viewer: 'Viewer',
   };
