@@ -57,7 +57,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
 
   // RBAC01-07: Extended role labels
   const roleLabels: Record<UserRole, string> = {
-    tenant_admin: 'Admin',
+    tenant_admin: 'Owner',
     recruiter: 'Recruiter',
     viewer: 'Viewer',
     billing_manager: 'Billing',
@@ -66,7 +66,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
 
   // RBAC01-07: Extended role badge colors
   const roleBadgeColors: Record<UserRole, string> = {
-    tenant_admin: 'bg-gray-100 text-gray-900 border-gray-200',
+    tenant_admin: 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white border-purple-600',
     recruiter: 'bg-blue-100 text-blue-800 border-blue-200',
     viewer: 'bg-gray-100 text-gray-600 border-gray-200',
     billing_manager: 'bg-green-100 text-green-800 border-green-200',
@@ -202,7 +202,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
   // Filter nav items based on RBAC01-07 roles, permissions, and features
   const filterNavItems = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
-      // Tenant Admin has access to everything
+      // Owner has access to everything
       if (isTenantAdmin) return true;
 
       // RBAC03: Billing Manager access check

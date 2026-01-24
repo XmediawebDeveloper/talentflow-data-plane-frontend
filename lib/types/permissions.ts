@@ -683,7 +683,7 @@ export interface RolePreset {
 export const ROLE_PRESETS: RolePreset[] = [
   {
     role: 'tenant_admin',
-    name: 'Tenant Admin',
+    name: 'Owner',
     description: 'Full access to all features and administrative controls',
     permissions: {
       // Dashboard

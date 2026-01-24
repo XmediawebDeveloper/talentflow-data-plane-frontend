@@ -23,13 +23,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [showHelpMenu, setShowHelpMenu] = useState(false);
 
   const roleLabels = {
-    tenant_admin: 'Tenant Admin',
+    tenant_admin: 'Owner',
     recruiter: 'Recruiter',
     viewer: 'Viewer',
   };
 
   const roleBadgeColors = {
-    tenant_admin: 'bg-gray-200 text-gray-700 border-gray-300',
+    tenant_admin: 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white border-purple-600',
     recruiter: 'bg-gray-100 text-gray-600 border-gray-200',
     viewer: 'bg-gray-50 text-gray-500 border-gray-200',
   };
