@@ -256,16 +256,49 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       } else if (info.can_resume) {
         // Can resume existing attempt
         console.log('[DEBUG] Can resume - fetching current question');
-        const question = await candidateService.getCurrentQuestion(token);
-        if (!isMountedRef.current) return;
+        try {
+          const question = await candidateService.getCurrentQuestion(token);
+          if (!isMountedRef.current) return;
 
-        setCurrentQuestion(question);
-        setProgress({
-          answered: question.question_number - 1,
-          total: question.total_questions,
-          percent: Math.round(((question.question_number - 1) / question.total_questions) * 100)
-        });
-        setStepSafe('assessment');
+          setCurrentQuestion(question);
+          setProgress({
+            answered: question.question_number - 1,
+            total: question.total_questions,
+            percent: Math.round(((question.question_number - 1) / question.total_questions) * 100)
+          });
+          setStepSafe('assessment');
+        } catch (resumeError: any) {
+          console.log('[DEBUG] Error resuming assessment:', resumeError);
+          const errorMsg = resumeError?.response?.data?.detail || resumeError?.message || '';
+
+          // Handle time expired - auto-complete the assessment
+          if (errorMsg.toLowerCase().includes('time expired')) {
+            console.log('[DEBUG] Assessment time expired - completing assessment');
+            try {
+              // Try to complete the assessment and get results
+              const result = await candidateService.completeAssessment(token);
+              if (!isMountedRef.current) return;
+              setAssessmentResult(result);
+              setStepSafe('completed');
+            } catch (completeError) {
+              console.log('[DEBUG] Could not complete - trying to get results directly');
+              try {
+                const result = await candidateService.getResults(token);
+                if (!isMountedRef.current) return;
+                setAssessmentResult(result);
+                setStepSafe('completed');
+              } catch {
+                // Show time expired message
+                setError('Your assessment time has expired. Your answers have been saved and are being evaluated.');
+                setStepSafe('error');
+              }
+            }
+            return;
+          }
+
+          // Re-throw other errors to be handled by outer catch
+          throw resumeError;
+        }
       } else if (!info.consent_accepted) {
         // Need to accept consent FIRST
         setStepSafe('consent');
@@ -361,11 +394,9 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         setAssessmentData(response);
 
         if (!response.first_question || response.total_questions === 0) {
-          console.log('[DEBUG] No first question or 0 total questions - showing error');
-          setError('Failed to load assessment questions. Please try again.');
-          setStepSafe('error');
-          isStartingRef.current = false;
-          isFlowActiveRef.current = false;
+          console.log('[DEBUG] No first question or 0 total questions - auto-refreshing page');
+          // Auto-refresh page instead of showing error for better UX
+          window.location.reload();
           return;
         }
 
@@ -404,10 +435,9 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
               setAssessmentData(response);
 
               if (!response.first_question || response.total_questions === 0) {
-                setError('Failed to load assessment questions. Please try again.');
-                setStepSafe('error');
-                isStartingRef.current = false;
-                isFlowActiveRef.current = false;
+                console.log('[PORTAL] No questions found after polling - auto-refreshing page');
+                // Auto-refresh page instead of showing error for better UX
+                window.location.reload();
                 return;
               }
 
@@ -434,11 +464,9 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
                   console.error('[PORTAL] Auto-retry failed:', retryErr);
                 }
               }
-              // Show error only after retry also failed
-              setError('Question generation failed. Please try again.');
-              setStepSafe('error');
-              isStartingRef.current = false;
-              isFlowActiveRef.current = false;
+              // Auto-refresh page instead of showing error
+              console.log('[PORTAL] Generation failed after retry - auto-refreshing page');
+              window.location.reload();
               return;
             }
           }
@@ -456,22 +484,24 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
               setProgress({ answered: 0, total: response.total_questions, percent: 0 });
               setStepSafe('assessment');
             } else {
-              setError('Question generation timed out. Please try again.');
-              setStepSafe('error');
-              isStartingRef.current = false;
-              isFlowActiveRef.current = false;
+              // Auto-refresh page instead of showing error
+              console.log('[PORTAL] Timeout with no questions - auto-refreshing page');
+              window.location.reload();
             }
           } catch (err) {
             if (isMountedRef.current) {
-              const errorMessage = err instanceof Error ? err.message : 'Question generation timed out. Please try again.';
+              const errorMessage = err instanceof Error ? err.message : '';
+              // Keep SESSION_ALREADY_ACTIVE error visible (security issue)
               if (errorMessage === 'SESSION_ALREADY_ACTIVE') {
                 setError('This assessment is already open in another browser or device. Please close the other session and try again. Only one active session is allowed per assessment.');
+                setStepSafe('error');
+                isStartingRef.current = false;
+                isFlowActiveRef.current = false;
               } else {
-                setError(errorMessage);
+                // Auto-refresh for other errors
+                console.log('[PORTAL] Timeout error - auto-refreshing page');
+                window.location.reload();
               }
-              setStepSafe('error');
-              isStartingRef.current = false;
-              isFlowActiveRef.current = false;
             }
           }
         };
@@ -489,10 +519,9 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         setAssessmentData(response);
 
         if (!response.first_question || response.total_questions === 0) {
-          setError('Failed to generate assessment questions. Please try again.');
-          setStepSafe('error');
-          isStartingRef.current = false;
-          isFlowActiveRef.current = false;
+          // Auto-refresh page instead of showing error
+          console.log('[PORTAL] Fallback flow - no questions - auto-refreshing page');
+          window.location.reload();
           return;
         }
 
@@ -705,7 +734,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       return (
         <LoadingScreen
           message="Preparing your assessment..."
-          subMessage="Our AI is generating personalized questions based on the job requirements. This may take a moment."
+          subMessage="Please wait while we prepare your personalized assessment. This may take a moment."
         />
       );
 

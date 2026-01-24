@@ -15,6 +15,7 @@ import {
   Loader2,
   Settings,
   RotateCcw,
+  Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CurrentQuestion, candidateService } from '@/lib/services/candidateService';
@@ -46,6 +47,7 @@ interface MultiLanguageCodeEditorProps {
     language?: string;
   }) => void;
   allowLanguageChange?: boolean; // If false, language is locked to what's assigned
+  isLocked?: boolean; // True if answer is submitted and cannot be edited
 }
 
 interface TestResult {
@@ -68,6 +70,7 @@ export function MultiLanguageCodeEditor({
   answer,
   onAnswerChange,
   allowLanguageChange = true,
+  isLocked = false,
 }: MultiLanguageCodeEditorProps) {
   // Determine initial language from question or answer
   const getInitialLanguage = (): string => {
@@ -156,11 +159,12 @@ export function MultiLanguageCodeEditor({
   };
 
   const handleCodeChange: OnChange = (value) => {
+    if (isLocked) return; // Cannot change if locked
     setCode(value || '');
   };
 
   const handleLanguageChange = (langId: string) => {
-    if (!allowLanguageChange) return;
+    if (!allowLanguageChange || isLocked) return;
 
     // Confirm if user has written code
     if (code.trim() && code !== getLanguageTemplate(selectedLanguage)) {
@@ -270,7 +274,16 @@ export function MultiLanguageCodeEditor({
   const currentLangConfig = getLanguageConfig(selectedLanguage);
 
   return (
-    <div className="flex gap-4 h-[650px]">
+    <div className="space-y-4">
+      {/* Locked Banner */}
+      {isLocked && (
+        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+          <Lock className="w-4 h-4" />
+          <span>This answer has been submitted and cannot be edited.</span>
+        </div>
+      )}
+
+      <div className="flex gap-4 h-[650px]">
       {/* Left Panel - Problem Description & Output */}
       <div className="w-[45%] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
         {/* Header */}
@@ -613,6 +626,7 @@ export function MultiLanguageCodeEditor({
                 showKeywords: true,
                 showSnippets: true,
               },
+              readOnly: isLocked, // Disable editing if answer is locked (submitted)
             }}
           />
         </div>
@@ -655,6 +669,7 @@ export function MultiLanguageCodeEditor({
             shown here are just for validation.
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -159,6 +159,7 @@ export type {
   SystemCheckResponse,
   CurrentQuestion,
   QuestionOption,
+  QuestionStatusInfo,
   StartAssessmentResponse,
   AnswerSubmission,
   SubmitAnswerResponse,

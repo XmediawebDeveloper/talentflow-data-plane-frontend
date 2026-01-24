@@ -1102,11 +1102,21 @@ function CurrentPlanContent() {
         // Notify Header component to refresh quota/plan display
         window.dispatchEvent(new CustomEvent('planChanged'));
       } else {
-        setError(data.detail || data.message || 'Failed to upgrade plan');
+        const errorMessage = data.detail || data.message || 'Failed to upgrade plan';
+        setError(errorMessage);
+        toast.error('Plan Selection Failed', {
+          description: errorMessage,
+          duration: 6000,
+        });
       }
     } catch (err) {
       console.error('Error selecting plan:', err);
-      setError(err instanceof Error ? err.message : 'Failed to select plan');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to select plan';
+      setError(errorMessage);
+      toast.error('Plan Selection Failed', {
+        description: errorMessage,
+        duration: 6000,
+      });
     } finally {
       setIsSelectingPlan(false);
     }
@@ -2099,6 +2109,17 @@ function CurrentPlanContent() {
                     </p>
                   </div>
                 </label>
+
+                {/* Error Display in Modal */}
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-red-700 text-sm font-medium">Plan Selection Failed</p>
+                      <p className="text-red-600 text-sm mt-1">{error}</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Pay Button */}
                 <button
