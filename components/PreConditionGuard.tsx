@@ -40,7 +40,7 @@ export default function PreConditionGuard({
   // Check 2: User has required permission
   if (!user.permissions[requiredPermission]) {
     const roleNames = {
-      tenant_admin: 'Tenant Admin',
+      tenant_admin: 'Owner',
       recruiter: 'Recruiter',
       viewer: 'Viewer',
     };
@@ -48,7 +48,7 @@ export default function PreConditionGuard({
     errors.push({
       type: 'permission',
       title: 'Permission Required',
-      message: `Your role (${roleNames[user.role]}) does not have permission to access this feature. Please contact your Tenant Admin to request the necessary permissions.`,
+      message: `Your role (${roleNames[user.role]}) does not have permission to access this feature. Please contact your Owner to request the necessary permissions.`,
       action: 'Contact Admin',
     });
   }
@@ -209,7 +209,7 @@ export default function PreConditionGuard({
             <button
               onClick={() => {
                 // In real app, this would open a contact modal or redirect
-                alert('Please contact your Tenant Admin to request permissions.');
+                alert('Please contact your Owner to request permissions.');
               }}
               className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
             >
@@ -227,7 +227,7 @@ export default function PreConditionGuard({
                 <strong>Need help?</strong>
               </p>
               <p>
-                Contact your Tenant Admin ({tenant.email}) or our support team for assistance with access requirements.
+                Contact your Owner ({tenant.email}) or our support team for assistance with access requirements.
               </p>
             </div>
           </div>
