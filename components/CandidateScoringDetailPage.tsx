@@ -143,8 +143,9 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
         : ['Shows potential for growth'];
 
   // Use gaps directly from API without template prefixes
+  // Filter out items that are already shown in missingSkills to avoid duplication
   const improvementAreas = fullResumeData.gaps && fullResumeData.gaps.length > 0
-    ? fullResumeData.gaps
+    ? fullResumeData.gaps.filter((gap: string) => !missingSkills.includes(gap))
     : [];
 
   const aiReasoning = fullResumeData.aiSummary || fullResumeData.matchReason || (
@@ -458,16 +459,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                 </div>
               )}
 
-              {/* AI Summary - if available */}
-              {resume.aiSummary && (
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-8">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
-                    <Award className="w-6 h-6 text-gray-800" />
-                    AI Summary
-                  </h3>
-                  <p className="text-base text-gray-700 leading-relaxed">{resume.aiSummary}</p>
-                </div>
-              )}
             </div>
           )}
 

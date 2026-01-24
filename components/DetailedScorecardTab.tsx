@@ -235,11 +235,13 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
       };
     }).filter((item): item is NonNullable<typeof item> => item !== null);
 
-    // Calculate percentages for summary
-    const requiredMax = 20; // 2 criteria × 10
-    const preferredMax = 80; // 8 criteria × 10
-    const requiredPct = Math.round((requiredTotal / requiredMax) * 100);
-    const preferredPct = Math.round((preferredTotal / preferredMax) * 100);
+    // Calculate percentages for summary - use dynamic counts based on actual is_essential flags
+    const requiredItems = criteriaScores.filter(item => item.criteriaType === 'Required');
+    const preferredItems = criteriaScores.filter(item => item.criteriaType === 'Preferred');
+    const requiredMax = requiredItems.length * 10 || 20;  // Dynamic based on actual required criteria count
+    const preferredMax = preferredItems.length * 10 || 80; // Dynamic based on actual preferred criteria count
+    const requiredPct = requiredMax > 0 ? Math.round((requiredTotal / requiredMax) * 100) : 0;
+    const preferredPct = preferredMax > 0 ? Math.round((preferredTotal / preferredMax) * 100) : 0;
     const finalPct = Math.round((requiredPct + preferredPct) / 2);
 
     summaryData = {

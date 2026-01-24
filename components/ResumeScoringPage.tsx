@@ -365,7 +365,14 @@ export default function ResumeScoringPage({
     const { jobId, jobTitle, resumeIds, resumeNames } = pendingScoringData;
     console.log('[ResumeScoringPage] Starting pending scoring for job:', jobTitle, 'with', resumeIds.length, 'resumes');
 
-    // Initialize progress modal immediately
+    // Create initial items array with candidate names - all start as queued
+    const initialItems = resumeIds.map((resumeId, index) => ({
+      resumeId,
+      candidateName: resumeNames[index] || `Resume ${index + 1}`,
+      status: 'queued' as const,
+    }));
+
+    // Initialize progress modal immediately with items
     const initialProgress: JobScoringProgress = {
       jobId,
       jobTitle,
@@ -374,6 +381,7 @@ export default function ResumeScoringPage({
       inProgress: 0,
       completed: 0,
       failed: 0,
+      items: initialItems,
     };
     setJobProgressData([initialProgress]);
     setShowJobProgressModal(true);
@@ -389,6 +397,14 @@ export default function ResumeScoringPage({
     }));
     startScoringJob(jobId, jobTitle, progressItems);
 
+    // Track item statuses for the modal
+    const itemStatuses: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed'; score?: number; errorMessage?: string }[] =
+      resumeIds.map((resumeId, index) => ({
+        resumeId,
+        candidateName: resumeNames[index] || `Resume ${index + 1}`,
+        status: 'queued' as const,
+      }));
+
     // Start scoring resumes
     const scoreResumes = async () => {
       let completed = 0;
@@ -397,6 +413,9 @@ export default function ResumeScoringPage({
       for (let i = 0; i < resumeIds.length; i++) {
         const resumeId = resumeIds[i];
         const itemId = `${jobId}-${resumeId}`;
+
+        // Update item status to processing
+        itemStatuses[i].status = 'processing';
 
         // Update progress - move from queued to in progress
         setJobProgressData([{
@@ -407,6 +426,7 @@ export default function ResumeScoringPage({
           inProgress: 1,
           completed,
           failed,
+          items: [...itemStatuses],
         }]);
 
         // Update persistent context
@@ -417,6 +437,10 @@ export default function ResumeScoringPage({
           completed++;
           console.log(`[ResumeScoringPage] Scored resume ${i + 1}/${resumeIds.length}`);
 
+          // Update item status to completed with score
+          itemStatuses[i].status = 'completed';
+          itemStatuses[i].score = result?.overall_score || result?.score || 0;
+
           // Update persistent context with success
           updateItemStatus(jobId, itemId, 'Scored successfully', {
             score: result?.overall_score || result?.score || 0,
@@ -426,6 +450,10 @@ export default function ResumeScoringPage({
         } catch (err) {
           console.error(`[ResumeScoringPage] Failed to score resume ${resumeId}:`, err);
           failed++;
+
+          // Update item status to failed
+          itemStatuses[i].status = 'failed';
+          itemStatuses[i].errorMessage = err instanceof Error ? err.message : 'Scoring failed';
 
           // Update persistent context with failure
           updateItemStatus(jobId, itemId, 'Failed', {
@@ -442,6 +470,7 @@ export default function ResumeScoringPage({
           inProgress: 0,
           completed,
           failed,
+          items: [...itemStatuses],
         }]);
       }
 
@@ -454,6 +483,7 @@ export default function ResumeScoringPage({
         inProgress: 0,
         completed,
         failed,
+        items: [...itemStatuses],
       }]);
 
       console.log(`[ResumeScoringPage] Scoring complete: ${completed} succeeded, ${failed} failed`);
@@ -2053,17 +2083,19 @@ export default function ResumeScoringPage({
             // No existing scores, proceed with scoring
             const selectedResumesData = resumes.filter(r => selectedIds.includes(r.id));
 
-            // Pass all available resume data to the scoring panel
-            setResumesToScore(selectedResumesData.map(r => ({
-              id: r.id,
-              name: r.name,
-              // Include candidate info if available from resume list
-              candidateName: r.candidateName || r.candidate_name,
-              candidateEmail: r.candidateEmail || r.candidate_email || r.email,
-              phone: r.phone,
-            })));
-            setScoringSource(source);
-            setShowScoringPanel(true);
+            // Start scoring in background and redirect to resume-scoring page with progress view
+            // Store pending scoring data in sessionStorage so it can be picked up after redirect
+            const pendingData = {
+              jobId: selectedJob,
+              jobTitle: selectedJobData.title,
+              resumeIds: selectedIds,
+              resumeNames: selectedResumesData.map(r => r.name || r.candidateName || r.candidate_name || 'Unknown'),
+            };
+            sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
+
+            // Redirect to resume-scoring page with start_scoring=true to trigger scoring and show_progress=true to auto-open progress view
+            // Use window.location.href for full page reload so useEffect runs and reads sessionStorage
+            window.location.href = `/recruitment/resume-scoring?jd_id=${selectedJob}&start_scoring=true&show_progress=true`;
           }}
         />
       )}
@@ -2092,16 +2124,17 @@ export default function ResumeScoringPage({
             const selectedResumesData = resumes.filter(r =>
               existingScoreData.pendingResumeIds.includes(r.id)
             );
-            setResumesToScore(selectedResumesData.map(r => ({
-              id: r.id,
-              name: r.name,
-              candidateName: r.candidateName || r.candidate_name,
-              candidateEmail: r.candidateEmail || r.candidate_email || r.email,
-              phone: r.phone,
-            })));
-            setScoringSource(existingScoreData.pendingSource);
+            // Store pending scoring data and redirect to resume-scoring page with progress view
+            const pendingData = {
+              jobId: selectedJob,
+              jobTitle: selectedJobData?.title || '',
+              resumeIds: existingScoreData.pendingResumeIds,
+              resumeNames: selectedResumesData.map(r => r.name || r.candidateName || r.candidate_name || 'Unknown'),
+            };
+            sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
             setExistingScoreData(null);
-            setShowScoringPanel(true);
+            // Use window.location.href for full page reload so useEffect runs and reads sessionStorage
+            window.location.href = `/recruitment/resume-scoring?jd_id=${selectedJob}&start_scoring=true&show_progress=true`;
           }}
           onProceedWithNewOnly={existingScoreData.newCount > 0 ? () => {
             setShowExistingScoreAlert(false);
@@ -2109,22 +2142,23 @@ export default function ResumeScoringPage({
             const existingResumeIds = new Set(existingScoreData.existingScores.map(s => s.resume_id));
             const newResumeIds = existingScoreData.pendingResumeIds.filter(id => !existingResumeIds.has(id));
             const selectedResumesData = resumes.filter(r => newResumeIds.includes(r.id));
-            setResumesToScore(selectedResumesData.map(r => ({
-              id: r.id,
-              name: r.name,
-              candidateName: r.candidateName || r.candidate_name,
-              candidateEmail: r.candidateEmail || r.candidate_email || r.email,
-              phone: r.phone,
-            })));
-            setScoringSource(existingScoreData.pendingSource);
+            // Store pending scoring data and redirect to resume-scoring page with progress view
+            const pendingData = {
+              jobId: selectedJob,
+              jobTitle: selectedJobData?.title || '',
+              resumeIds: newResumeIds,
+              resumeNames: selectedResumesData.map(r => r.name || r.candidateName || r.candidate_name || 'Unknown'),
+            };
+            sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
             setExistingScoreData(null);
-            setShowScoringPanel(true);
+            // Use window.location.href for full page reload so useEffect runs and reads sessionStorage
+            window.location.href = `/recruitment/resume-scoring?jd_id=${selectedJob}&start_scoring=true&show_progress=true`;
           } : undefined}
         />
       )}
 
-      {/* Real-Time Scoring Status Panel - Always mounted when showScoringPanel is true to preserve state */}
-      {showScoringPanel && selectedJobData && (
+      {/* Real-Time Scoring Status Panel - COMMENTED OUT: Now redirects to resume-scoring page with progress view instead */}
+      {/* {showScoringPanel && selectedJobData && (
         <div className={isScoringMinimized ? 'hidden' : ''}>
           <ResumeScoringStatusPanel
             resumes={resumesToScore}
@@ -2154,7 +2188,7 @@ export default function ResumeScoringPage({
             onMinimize={() => setIsScoringMinimized(true)}
           />
         </div>
-      )}
+      )} */}
 
       {/* Bulk Scoring Progress Modal */}
       {showProgressModal && (
