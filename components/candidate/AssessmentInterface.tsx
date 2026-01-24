@@ -207,21 +207,36 @@ export function AssessmentInterface({
         selected_options: currentQuestion.previous_answer.selected_options || undefined,
         code_submission: currentQuestion.previous_answer.code_submission || undefined
       });
+    } else {
+      setAnswer({});
+    }
 
-      // Update answer status from backend
+    // Update ALL question statuses from backend (if available)
+    if (currentQuestion.all_question_statuses && currentQuestion.all_question_statuses.length > 0) {
       setAnswerStatuses(prev => {
         const newMap = new Map(prev);
-        newMap.set(currentQuestion.question_id, {
+        for (const status of currentQuestion.all_question_statuses!) {
+          newMap.set(`question_${status.question_number}`, {
+            hasDraft: status.has_answer,
+            isLocked: status.is_locked
+          });
+        }
+        return newMap;
+      });
+    } else if (currentQuestion.previous_answer) {
+      // Fallback: just update current question status
+      setAnswerStatuses(prev => {
+        const newMap = new Map(prev);
+        newMap.set(`question_${currentQuestion.question_number}`, {
           hasDraft: true,
           isLocked: currentQuestion.previous_answer?.is_locked || false
         });
         return newMap;
       });
-    } else {
-      setAnswer({});
     }
+
     setTimeRemaining(currentQuestion.time_limit_seconds);
-  }, [currentQuestion.question_id]);
+  }, [currentQuestion.question_id, currentQuestion.question_number]);
 
   // Timer for timed questions
   useEffect(() => {
@@ -253,10 +268,10 @@ export function AssessmentInterface({
     try {
       await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
 
-      // Update answer status
+      // Update answer status - use question NUMBER as key
       setAnswerStatuses(prev => {
         const newMap = new Map(prev);
-        newMap.set(currentQuestion.question_id, { hasDraft: true, isLocked: false });
+        newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: false });
         return newMap;
       });
     } catch (error) {
@@ -274,10 +289,10 @@ export function AssessmentInterface({
     try {
       await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
 
-      // Update answer status
+      // Update answer status - use question NUMBER as key, mark as LOCKED (submitted)
       setAnswerStatuses(prev => {
         const newMap = new Map(prev);
-        newMap.set(currentQuestion.question_id, { hasDraft: true, isLocked: true });
+        newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: true });
         return newMap;
       });
     } catch (error) {
@@ -299,7 +314,7 @@ export function AssessmentInterface({
         await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
         setAnswerStatuses(prev => {
           const newMap = new Map(prev);
-          newMap.set(currentQuestion.question_id, { hasDraft: true, isLocked: false });
+          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: false });
           return newMap;
         });
       }
@@ -325,7 +340,7 @@ export function AssessmentInterface({
         await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
         setAnswerStatuses(prev => {
           const newMap = new Map(prev);
-          newMap.set(currentQuestion.question_id, { hasDraft: true, isLocked: false });
+          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: false });
           return newMap;
         });
       }
@@ -341,19 +356,19 @@ export function AssessmentInterface({
 
   // Handle final submit - check for unanswered questions
   const handleFinalSubmit = async () => {
-    // Find unanswered questions
+    // Find unanswered questions by checking which ones are NOT in answerStatuses
     const unanswered: number[] = [];
     for (let i = 1; i <= currentQuestion.total_questions; i++) {
-      // We don't have all question data, so check based on progress
-      // This will be approximate - the backend will handle final validation
+      const status = answerStatuses.get(`question_${i}`);
+      // If not tracked in answerStatuses, it means no answer was saved (draft or submitted)
+      if (!status || !status.hasDraft) {
+        unanswered.push(i);
+      }
     }
 
-    // If there are unanswered, show popup (optional feature)
-    if (progress.answered < progress.total) {
-      const missedCount = progress.total - progress.answered;
-      // Generate approximate unanswered question numbers
-      // Note: This is simplified - ideally we'd track all questions
-      setUnansweredQuestions(Array.from({ length: missedCount }, (_, i) => i + 1));
+    // If there are unanswered, show popup
+    if (unanswered.length > 0) {
+      setUnansweredQuestions(unanswered);
       setShowUnansweredPopup(true);
     } else {
       setShowCompleteConfirm(true);
@@ -751,6 +766,7 @@ export function AssessmentInterface({
                   question={currentQuestion}
                   answer={answer}
                   onAnswerChange={setAnswer}
+                  isLocked={isCurrentAnswerLocked}
                 />
               )}
 
@@ -759,6 +775,7 @@ export function AssessmentInterface({
                   question={currentQuestion}
                   answer={answer}
                   onAnswerChange={setAnswer}
+                  isLocked={isCurrentAnswerLocked}
                 />
               )}
 
@@ -768,6 +785,7 @@ export function AssessmentInterface({
                   answer={answer}
                   onAnswerChange={setAnswer}
                   allowLanguageChange={false}
+                  isLocked={isCurrentAnswerLocked}
                 />
               )}
             </div>
@@ -840,7 +858,7 @@ export function AssessmentInterface({
             </div>
           </div>
 
-          {/* Progress Indicator - Clickable for Navigation */}
+          {/* Progress Indicator - Display Only (No Navigation) */}
           <div className="mt-4 bg-white rounded-lg border border-gray-200 shadow-sm p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-medium text-gray-700">Progress</p>
@@ -864,50 +882,47 @@ export function AssessmentInterface({
                 const num = i + 1;
                 const isCurrent = num === currentQuestion.question_number;
 
-                // Determine answer status for this question
-                // We track current question in answerStatuses, but for others we approximate
+                // Determine answer status for this question from our tracking Map
+                // Use question_id format that we set when navigating
                 const questionStatus = answerStatuses.get(`question_${num}`);
                 const isLocked = questionStatus?.isLocked || false;
                 const hasDraft = questionStatus?.hasDraft || false;
 
-                // For questions before current, assume they have some status
-                // This is a simplification - ideally backend would return all statuses
-                const isBeforeCurrent = num < currentQuestion.question_number;
-
-                // Determine the color class
-                let colorClass = 'bg-gray-100 text-gray-400 hover:bg-gray-200'; // Not answered
+                // Determine the color class - only show status if we've actually tracked it
+                let colorClass = 'bg-gray-100 text-gray-400'; // Not answered (default)
                 let icon = null;
 
                 if (isCurrent) {
                   colorClass = 'bg-gray-800 text-white ring-2 ring-gray-800 ring-offset-2';
                 } else if (isLocked) {
-                  colorClass = 'bg-green-100 text-green-700 hover:bg-green-200';
+                  // Submitted (locked) - GREEN
+                  colorClass = 'bg-green-100 text-green-700';
                   icon = <Lock className="w-4 h-4" />;
-                } else if (hasDraft || isBeforeCurrent) {
-                  colorClass = 'bg-orange-100 text-orange-700 hover:bg-orange-200';
+                } else if (hasDraft) {
+                  // Draft saved - ORANGE
+                  colorClass = 'bg-orange-100 text-orange-700';
                   icon = <Save className="w-4 h-4" />;
                 }
+                // If not tracked, stays gray (not answered)
 
                 return (
-                  <button
+                  <div
                     key={num}
-                    onClick={() => !isCurrent && onNavigate(num)}
-                    disabled={isCurrent || isNavigating}
-                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center transition-colors cursor-pointer disabled:cursor-default ${colorClass}`}
+                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center ${colorClass}`}
                     title={
                       isCurrent ? 'Current question' :
-                      isLocked ? `Question ${num} - Submitted (locked)` :
+                      isLocked ? `Question ${num} - Submitted` :
                       hasDraft ? `Question ${num} - Draft saved` :
-                      `Question ${num} - Click to navigate`
+                      `Question ${num} - Not answered`
                     }
                   >
                     {icon || num}
-                  </button>
+                  </div>
                 );
               })}
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              Question {currentQuestion.question_number} of {currentQuestion.total_questions} • Click any question to navigate
+              Question {currentQuestion.question_number} of {currentQuestion.total_questions}
             </p>
           </div>
         </div>
@@ -941,15 +956,15 @@ export function AssessmentInterface({
 
             <div className="bg-amber-50 rounded-xl p-4 mb-4">
               <p className="text-sm text-amber-700 mb-3">
-                You haven't answered <span className="font-bold">{progress.total - progress.answered}</span> question(s):
+                You haven't answered <span className="font-bold">{unansweredQuestions.length}</span> question(s):
               </p>
               <div className="flex flex-wrap gap-2">
-                {Array.from({ length: progress.total - progress.answered }, (_, i) => (
+                {unansweredQuestions.map((qNum) => (
                   <span
-                    key={i}
+                    key={qNum}
                     className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium"
                   >
-                    Q{i + 1}
+                    Q{qNum}
                   </span>
                 ))}
               </div>

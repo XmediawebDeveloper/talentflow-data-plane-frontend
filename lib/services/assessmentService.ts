@@ -172,6 +172,7 @@ export interface ProctoringStats {
   video_violation_count: number;
   voice_violation_count: number;
   fullscreen_exit_count: number;
+  other_violation_count?: number; // Uncategorized events
   total_violations: number;
   integrity_status: 'clean' | 'flagged' | 'suspicious';
   proctoring_score?: number;

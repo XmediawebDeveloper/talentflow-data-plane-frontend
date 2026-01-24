@@ -47,11 +47,11 @@ const BACKEND_COOLDOWNS: Record<ProctoringEventType, number> = {
   tab_switch: 2000,
   copy_attempt: 1000,
   paste_attempt: 1000,
-  voice_detected: 5000,
-  multiple_voices: 10000,
+  voice_detected: 10000, // Increased: only log voice every 10 seconds
+  multiple_voices: 15000,
   camera_disabled: 2000,
   microphone_disabled: 2000,
-  camera_obstructed: 3000,
+  camera_obstructed: 5000,
   screenshot_attempt: 1000,
   screen_recording_attempt: 5000,
   window_blur: 2000,
@@ -59,6 +59,11 @@ const BACKEND_COOLDOWNS: Record<ProctoringEventType, number> = {
 
 // Frontend warning cooldown - 60 seconds to prevent re-render spam
 const FRONTEND_WARNING_COOLDOWN = 60000; // 60 seconds for all warning pop-ups
+
+// Voice detection specific settings (Throttle + Batch optimization)
+const VOICE_CHECK_INTERVAL = 2000; // Check every 2 seconds instead of 100ms
+const VOICE_BATCH_INTERVAL = 10000; // Batch and send events every 10 seconds
+const VOICE_LOG_ONLY = true; // Log-only mode: don't trigger UI warnings for voice
 
 // Warning messages for each event type
 const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
@@ -126,6 +131,10 @@ export function useProctoringMonitor({
   const isVoiceProcessingRef = useRef(false);
   const isCameraProcessingRef = useRef(false);
 
+  // Voice batching: collect events and send periodically
+  const voiceBatchRef = useRef<Array<{ timestamp: string; details: Record<string, any> }>>([]);
+  const voiceBatchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   // Use refs for all props to prevent infinite re-renders
   const onWarningRef = useRef(onWarning);
   const tokenRef = useRef(token);
@@ -183,6 +192,7 @@ export function useProctoringMonitor({
   // Log event with frontend warning (two-cooldown system)
   // - Backend: logs continuously with short cooldowns per event type
   // - Frontend: shows warning pop-up only once per 60 seconds (all events combined)
+  // - Voice detection: uses log-only mode (no UI warnings) when VOICE_LOG_ONLY is true
   const logEvent = useCallback(async (
     eventType: ProctoringEventType,
     details?: Record<string, any>
@@ -196,8 +206,12 @@ export function useProctoringMonitor({
     lastBackendEventTimeRef.current[eventType] = Date.now();
     violationCountRef.current += 1;
 
+    // Skip UI warning for voice detection in log-only mode
+    const isVoiceLogOnly = VOICE_LOG_ONLY && (eventType === 'voice_detected' || eventType === 'multiple_voices');
+
     // Show frontend warning only if 60 seconds have passed since last warning
-    const shouldShowWarning = !isFrontendWarningInCooldown();
+    // AND it's not a voice event in log-only mode
+    const shouldShowWarning = !isFrontendWarningInCooldown() && !isVoiceLogOnly;
     if (shouldShowWarning) {
       lastFrontendWarningTimeRef.current = Date.now();
 
@@ -212,6 +226,8 @@ export function useProctoringMonitor({
       // Notify via callback (use ref to avoid re-renders)
       onWarningRef.current?.(warning);
       console.log(`[PROCTORING] Frontend warning shown: ${eventType}`);
+    } else if (isVoiceLogOnly) {
+      console.log(`[PROCTORING] Voice warning skipped (log-only mode): ${eventType}`);
     } else {
       console.log(`[PROCTORING] Frontend warning skipped (cooldown): ${eventType}`);
     }
@@ -234,6 +250,33 @@ export function useProctoringMonitor({
   useEffect(() => {
     logEventRef.current = logEvent;
   }, [logEvent]);
+
+  // Flush voice batch to backend - sends aggregated voice events
+  const flushVoiceBatch = useCallback(async () => {
+    if (voiceBatchRef.current.length === 0) return;
+
+    const batch = [...voiceBatchRef.current];
+    voiceBatchRef.current = []; // Clear batch
+
+    console.log(`[PROCTORING] Flushing voice batch: ${batch.length} events`);
+
+    // Log as a single aggregated event to backend
+    try {
+      await candidateService.reportProctorEvent(tokenRef.current, {
+        event_type: 'voice_detected',
+        timestamp: new Date().toISOString(),
+        details: {
+          batch_count: batch.length,
+          batch_start: batch[0]?.timestamp,
+          batch_end: batch[batch.length - 1]?.timestamp,
+          events: batch
+        },
+      });
+      console.log(`[PROCTORING] Voice batch logged to backend: ${batch.length} events`);
+    } catch (error) {
+      console.error('[PROCTORING] Failed to log voice batch:', error);
+    }
+  }, []);
 
   // ==================== WEB WORKER SETUP ====================
   // Inline worker code for reliable loading (avoids Next.js file serving issues)
@@ -366,10 +409,15 @@ export function useProctoringMonitor({
             // Reset throttle flag - ready for next analysis
             isVoiceProcessingRef.current = false;
             if (data.detected) {
-              logEventRef.current('voice_detected', {
-                averageVolume: data.averageVolume,
-                threshold: data.threshold
+              // Add to batch instead of logging immediately
+              voiceBatchRef.current.push({
+                timestamp: new Date().toISOString(),
+                details: {
+                  averageVolume: data.averageVolume,
+                  threshold: data.threshold
+                }
               });
+              console.log(`[PROCTORING] Voice detected - batched (${voiceBatchRef.current.length} events pending)`);
             }
             break;
 
@@ -434,8 +482,8 @@ export function useProctoringMonitor({
       const dataArray = new Uint8Array(bufferLength);
       const sampleRate = audioContextRef.current.sampleRate;
 
-      // Use setInterval instead of requestAnimationFrame for more controlled frequency
-      // 100ms interval = 10 checks per second (sufficient for voice detection, reduced from 50ms)
+      // Use setInterval with VOICE_CHECK_INTERVAL (2 seconds) for throttled voice detection
+      // This dramatically reduces CPU usage while still detecting sustained voice activity
       voiceIntervalRef.current = setInterval(() => {
         if (!isMonitoringRef.current || !analyserRef.current || !workerRef.current) return;
 
@@ -458,13 +506,20 @@ export function useProctoringMonitor({
             sampleRate
           }
         }, [dataToSend.buffer]);
-      }, 100);
+      }, VOICE_CHECK_INTERVAL);
 
-      console.log('[PROCTORING] Voice detection started (Web Worker, 100ms interval, throttled)');
+      // Start batch flush interval - send batched voice events every VOICE_BATCH_INTERVAL
+      voiceBatchIntervalRef.current = setInterval(() => {
+        if (voiceBatchRef.current.length > 0) {
+          flushVoiceBatch();
+        }
+      }, VOICE_BATCH_INTERVAL);
+
+      console.log(`[PROCTORING] Voice detection started (Web Worker, check: ${VOICE_CHECK_INTERVAL}ms, batch: ${VOICE_BATCH_INTERVAL}ms, log-only: ${VOICE_LOG_ONLY})`);
     } catch (error) {
       console.error('[PROCTORING] Failed to setup voice detection:', error);
     }
-  }, []); // No dependencies - uses refs internally
+  }, [flushVoiceBatch]); // flushVoiceBatch is stable (useCallback with no deps)
 
   // ==================== CAMERA OBSTRUCTION DETECTION (Web Worker) ====================
   const setupCameraObstructionDetection = useCallback(() => {
@@ -708,6 +763,27 @@ export function useProctoringMonitor({
       if (voiceIntervalRef.current) {
         clearInterval(voiceIntervalRef.current);
         voiceIntervalRef.current = null;
+      }
+
+      // Cleanup voice batch interval and flush remaining events
+      if (voiceBatchIntervalRef.current) {
+        clearInterval(voiceBatchIntervalRef.current);
+        voiceBatchIntervalRef.current = null;
+      }
+      // Flush any remaining batched voice events
+      if (voiceBatchRef.current.length > 0) {
+        console.log(`[PROCTORING] Flushing remaining ${voiceBatchRef.current.length} voice events on cleanup`);
+        // Fire and forget - don't await since we're cleaning up
+        candidateService.reportProctorEvent(tokenRef.current, {
+          event_type: 'voice_detected',
+          timestamp: new Date().toISOString(),
+          details: {
+            batch_count: voiceBatchRef.current.length,
+            cleanup_flush: true,
+            events: voiceBatchRef.current
+          },
+        }).catch(err => console.error('[PROCTORING] Failed to flush voice batch on cleanup:', err));
+        voiceBatchRef.current = [];
       }
 
       // Cleanup camera detection interval
