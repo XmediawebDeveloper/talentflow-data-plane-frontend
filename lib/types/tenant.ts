@@ -154,7 +154,7 @@ export interface Tenant {
 export const getPermissionsForRole = (role: UserRole): Permission => {
   switch (role) {
     case 'tenant_admin':
-      // RBAC02: Tenant Admin has ALL permissions
+      // RBAC02: Owner has ALL permissions
       return {
         canCreateJD: true,
         canManageJD: true,
@@ -258,7 +258,7 @@ export const getPermissionsForRole = (role: UserRole): Permission => {
 // RBAC: Role metadata for UI
 export const ROLE_METADATA: Record<UserRole, { name: string; description: string; isAdmin: boolean; isReadOnly?: boolean; permissionExpansionBlocked?: boolean }> = {
   tenant_admin: {
-    name: 'Tenant Admin',
+    name: 'Owner',
     description: 'Full access to all tenant features and settings',
     isAdmin: true,
   },

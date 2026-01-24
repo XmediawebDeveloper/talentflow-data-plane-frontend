@@ -6,6 +6,7 @@ import {
   CreditCard, AlertCircle, Loader2, CheckCircle, ShieldCheck, ArrowLeft, Check
 } from 'lucide-react';
 import { toast } from 'sonner';
+import Cookies from 'js-cookie';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -15,9 +16,21 @@ interface PlanDetails {
   plan_tier: string;
   description: string;
   base_price: number;
+  monthly_price: number;
   currency: string;
   billing_period: string;
+  included_seats: number;
+  discount_percentage?: number;
   features?: { feature_name: string; is_enabled: boolean }[];
+  quotas?: {
+    max_seats?: number;
+    max_jobs?: number;
+    RS?: number;
+    RU?: number;
+    AS?: number;
+    AIU?: number;
+    api_rate_limit?: number;
+  };
 }
 
 function CompletePaymentContent() {
@@ -65,9 +78,13 @@ function CompletePaymentContent() {
                   plan_tier: groupedPlan.plan_tier,
                   description: groupedPlan.description,
                   base_price: planVariant.base_price,
+                  monthly_price: planVariant.monthly_price,
                   currency: planVariant.currency,
                   billing_period: planVariant.billing_period,
+                  included_seats: planVariant.included_seats,
+                  discount_percentage: (groupedPlan as any).discount_percentage ?? planVariant.discount_percentage,
                   features: planVariant.features,
+                  quotas: planVariant.quotas,
                 });
               }
               break;
@@ -130,12 +147,6 @@ function CompletePaymentContent() {
     } finally {
       setPaymentProcessing(false);
     }
-  };
-
-  // Skip payment and use free trial
-  const handleSkipPayment = () => {
-    toast.info('Starting with free trial', { description: 'You can upgrade anytime from your dashboard.' });
-    router.push('/login');
   };
 
   // Format currency
@@ -235,13 +246,34 @@ function CompletePaymentContent() {
     );
   }
 
+  // Helper to get quota label
+  const getQuotaLabel = (key: string): string => {
+    const labels: Record<string, string> = {
+      max_seats: 'No of Users',
+      max_jobs: 'Job Postings',
+      RS: 'Resume Scores',
+      RU: 'Resume Uploads',
+      AS: 'Assessments',
+      AIU: 'AI Interviews',
+      api_rate_limit: 'API Rate Limit',
+    };
+    return labels[key] || key;
+  };
+
+  // Helper to format quota value
+  const formatQuotaValue = (key: string, value: number | undefined): string => {
+    if (value === undefined || value === null) return 'Unlimited';
+    if (value === -1) return 'Unlimited';
+    return value.toLocaleString();
+  };
+
   return (
     <div style={containerStyle}>
       {/* Background Blobs */}
       <div style={{ position: 'absolute', top: 80, left: 40, width: 288, height: 288, backgroundColor: '#93C5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
       <div style={{ position: 'absolute', top: 160, right: 40, width: 288, height: 288, backgroundColor: '#C4B5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
 
-      <div style={formCardStyle}>
+      <div style={{ ...formCardStyle, maxWidth: 600, maxHeight: '90vh', overflowY: 'auto' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
           <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #2563EB, #4338CA)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -274,44 +306,86 @@ function CompletePaymentContent() {
             </div>
           </div>
 
-          {/* Billing Period */}
-          <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid #E5E7EB' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 14, color: '#374151' }}>Billing Period:</span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>
+          {/* Price Display */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
+            <div>
+              <span style={{ fontSize: 14, color: '#6B7280' }}>Billing:</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginLeft: 8 }}>
                 {billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}
               </span>
             </div>
-          </div>
-
-          {/* Price Display */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: '1px solid #E5E7EB' }}>
-            <span style={{ fontSize: 16, color: '#374151' }}>Total Amount</span>
             <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>
+              <span style={{ fontSize: 32, fontWeight: 700, color: '#111827' }}>
                 {formatCurrency(planDetails.base_price, planDetails.currency)}
               </span>
               <span style={{ fontSize: 14, color: '#6B7280', marginLeft: 4 }}>
                 /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
               </span>
+              {/* Strikethrough price and Save badge for annual plans */}
+              {billingInterval === 'ANNUAL' && planDetails.monthly_price && (planDetails.monthly_price * 12) > planDetails.base_price && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
+                  <span style={{ fontSize: 14, color: '#9CA3AF', textDecoration: 'line-through' }}>
+                    {formatCurrency(planDetails.monthly_price * 12, planDetails.currency)}
+                  </span>
+                  {planDetails.discount_percentage && planDetails.discount_percentage > 0 && (
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '2px 8px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      backgroundColor: '#DCFCE7',
+                      color: '#15803D',
+                      borderRadius: 12
+                    }}>
+                      Save {Math.round(planDetails.discount_percentage)}%
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Included Seats */}
+          {planDetails.included_seats && (
+            <div style={{ marginTop: 12, padding: 12, backgroundColor: '#EEF2FF', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 14, color: '#4338CA', fontWeight: 500 }}>Included Team Seats</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#4338CA' }}>{planDetails.included_seats}</span>
+            </div>
+          )}
         </div>
+
+        {/* Plan Quotas */}
+        {planDetails.quotas && Object.keys(planDetails.quotas).length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <h4 style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>Plan Quotas:</h4>
+            <div style={{ backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, border: '1px solid #E5E7EB' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {Object.entries(planDetails.quotas).map(([key, value]) => (
+                  <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid #E5E7EB' }}>
+                    <span style={{ fontSize: 13, color: '#6B7280' }}>{getQuotaLabel(key)}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{formatQuotaValue(key, value)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Features List */}
         {planDetails.features && planDetails.features.length > 0 && (
           <div style={{ marginBottom: 24 }}>
             <h4 style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>Included Features:</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {planDetails.features
-                .filter(f => f.is_enabled)
-                .slice(0, 6)
-                .map((feature, index) => (
-                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Check style={{ width: 16, height: 16, color: '#10B981' }} />
-                    <span style={{ fontSize: 13, color: '#4B5563' }}>{feature.feature_name}</span>
-                  </div>
-                ))}
+            <div style={{ backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, border: '1px solid #E5E7EB' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {planDetails.features
+                  .filter(f => f.is_enabled)
+                  .map((feature, index) => (
+                    <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
+                      <Check style={{ width: 16, height: 16, color: '#10B981', flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: '#4B5563' }}>{feature.feature_name}</span>
+                    </div>
+                  ))}
+              </div>
             </div>
           </div>
         )}
@@ -345,28 +419,29 @@ function CompletePaymentContent() {
           <span>Secure payment processing</span>
         </div>
 
-        {/* Skip Payment Option */}
+        {/* Logout and Back to Login */}
         <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #E5E7EB', textAlign: 'center' }}>
-          <button
-            type="button"
-            onClick={handleSkipPayment}
-            disabled={paymentProcessing}
-            style={{ color: '#6B7280', fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-          >
-            Skip and start with Free Trial instead
-          </button>
-        </div>
-
-        {/* Back to Login */}
-        <div style={{ marginTop: 16, textAlign: 'center' }}>
-          <button
-            type="button"
-            onClick={() => router.push('/login')}
-            style={{ color: '#2563EB', fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          <a
+            href="/login"
+            onClick={(e) => {
+              // Clear all auth tokens from localStorage
+              localStorage.removeItem('accessToken');
+              localStorage.removeItem('refreshToken');
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              localStorage.removeItem('tenant');
+              // Clear all cookies
+              Cookies.remove('accessToken');
+              Cookies.remove('refreshToken');
+              Cookies.remove('token');
+              // Clear session storage
+              sessionStorage.clear();
+            }}
+            style={{ color: '#2563EB', fontSize: 14, textDecoration: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
           >
             <ArrowLeft style={{ width: 16, height: 16 }} />
-            Back to Login
-          </button>
+            Logout & Back to Login
+          </a>
         </div>
       </div>
 

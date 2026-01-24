@@ -20,6 +20,7 @@ interface CodingQuestionViewProps {
     language?: string;
   }) => void;
   allowLanguageChange?: boolean;
+  isLocked?: boolean; // True if answer is submitted and cannot be edited
 }
 
 /**
@@ -39,6 +40,7 @@ export function CodingQuestionView({
   answer,
   onAnswerChange,
   allowLanguageChange = true,
+  isLocked = false,
 }: CodingQuestionViewProps) {
   return (
     <MultiLanguageCodeEditor
@@ -46,6 +48,7 @@ export function CodingQuestionView({
       answer={answer}
       onAnswerChange={onAnswerChange}
       allowLanguageChange={allowLanguageChange}
+      isLocked={isLocked}
     />
   );
 }

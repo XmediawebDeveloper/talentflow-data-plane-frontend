@@ -192,8 +192,8 @@ function JobDetailsContent() {
       setJobToDisable(null);
       fetchJobDetails();
     } catch (error: any) {
-      if (error.message?.includes('403') || error.message?.includes('Tenant Admin')) {
-        toast.error('Only Tenant Admins can disable job descriptions');
+      if (error.message?.includes('403') || error.message?.includes('Owner')) {
+        toast.error('Only Owners can disable job descriptions');
       } else {
         toast.error('Failed to disable job');
       }
@@ -207,8 +207,8 @@ function JobDetailsContent() {
       toast.success(`"${enableJob.title}" has been re-enabled`);
       fetchJobDetails();
     } catch (error: any) {
-      if (error.message?.includes('403') || error.message?.includes('Tenant Admin')) {
-        toast.error('Only Tenant Admins can enable job descriptions');
+      if (error.message?.includes('403') || error.message?.includes('Owner')) {
+        toast.error('Only Owners can enable job descriptions');
       } else {
         toast.error('Failed to enable job');
       }

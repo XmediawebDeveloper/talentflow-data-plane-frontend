@@ -17,6 +17,9 @@ interface ScoreBreakdownItem {
   match_status?: string;
   requirement?: string;
   eligible?: boolean;
+  is_summary?: boolean;
+  percentage?: number;
+  key?: string;
 }
 
 interface ScoredResumeDetail {
@@ -118,9 +121,78 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
     aiReasoning: string;
   }> = [];
 
+  // Extract summary rows (Required Total, Preferred Total, Final Score)
+  let summaryData: {
+    requiredPercentage: number;
+    preferredPercentage: number;
+    finalPercentage: number;
+    requiredTotal: number;
+    requiredMax: number;
+    preferredTotal: number;
+    preferredMax: number;
+  } | null = null;
+
   // Try to use scoreBreakdown from API first
   if (resume.scoreBreakdown && resume.scoreBreakdown.length > 0) {
-    criteriaScores = resume.scoreBreakdown.map((item: ScoreBreakdownItem) => ({
+    // Filter out summary rows and extract summary data
+    const regularItems: ScoreBreakdownItem[] = [];
+    let requiredSummary: ScoreBreakdownItem | undefined;
+    let preferredSummary: ScoreBreakdownItem | undefined;
+    let finalSummary: ScoreBreakdownItem | undefined;
+
+    resume.scoreBreakdown.forEach((item: ScoreBreakdownItem) => {
+      if (item.is_summary) {
+        if (item.key === 'required_total') requiredSummary = item;
+        else if (item.key === 'preferred_total') preferredSummary = item;
+        else if (item.key === 'final_score') finalSummary = item;
+      } else {
+        regularItems.push(item);
+      }
+    });
+
+    // Extract summary data if available
+    if (requiredSummary || preferredSummary || finalSummary) {
+      summaryData = {
+        requiredPercentage: requiredSummary?.percentage || 0,
+        preferredPercentage: preferredSummary?.percentage || 0,
+        finalPercentage: finalSummary?.percentage || resume.scorePercentage,
+        requiredTotal: requiredSummary?.rating || 0,
+        requiredMax: requiredSummary?.max_rating || 20,
+        preferredTotal: preferredSummary?.rating || 0,
+        preferredMax: preferredSummary?.max_rating || 80,
+      };
+    } else {
+      // Fallback: Calculate summary from regular items if summary rows not found
+      const requiredItems = regularItems.filter(item =>
+        item.requirement === 'Required' ||
+        item.category?.toLowerCase().includes('must have')
+      );
+      const preferredItems = regularItems.filter(item =>
+        item.requirement === 'Preferred' ||
+        (!item.category?.toLowerCase().includes('must have'))
+      );
+
+      const requiredTotal = requiredItems.reduce((sum, item) => sum + (item.rating || 0), 0);
+      const preferredTotal = preferredItems.reduce((sum, item) => sum + (item.rating || 0), 0);
+      const requiredMax = requiredItems.length * 10 || 20;
+      const preferredMax = preferredItems.length * 10 || 80;
+
+      const requiredPct = requiredMax > 0 ? Math.round((requiredTotal / requiredMax) * 100) : 0;
+      const preferredPct = preferredMax > 0 ? Math.round((preferredTotal / preferredMax) * 100) : 0;
+      const finalPct = Math.round((requiredPct + preferredPct) / 2);
+
+      summaryData = {
+        requiredPercentage: requiredPct,
+        preferredPercentage: preferredPct,
+        finalPercentage: finalPct || resume.scorePercentage,
+        requiredTotal: requiredTotal,
+        requiredMax: requiredMax,
+        preferredTotal: preferredTotal,
+        preferredMax: preferredMax,
+      };
+    }
+
+    criteriaScores = regularItems.map((item: ScoreBreakdownItem) => ({
       name: item.category,
       rating: item.rating || convertToRating(item.score),
       icon: iconMap[item.category] || Target,
@@ -130,6 +202,13 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
   }
   // Try to use criteriaScores object from API
   else if (resume.criteriaScores && Object.keys(resume.criteriaScores).length > 0) {
+    // Required criteria keys
+    const requiredKeys = ['must_have_skills', 'must_have_comments'];
+
+    // Calculate summary from criteriaScores
+    let requiredTotal = 0;
+    let preferredTotal = 0;
+
     criteriaScores = Object.entries(resume.criteriaScores).map(([key, value]: [string, any]) => {
       // Skip if value is null/undefined
       if (!value || typeof value !== 'object') return null;
@@ -138,7 +217,15 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
       const rating = rawScore <= 10 ? Math.round(rawScore) : convertToRating(rawScore);
       const displayName = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
       // Use is_essential flag from backend API
-      const isEssential = value.is_essential === true;
+      const isEssential = value.is_essential === true || requiredKeys.includes(key);
+
+      // Accumulate totals
+      if (isEssential) {
+        requiredTotal += rating;
+      } else {
+        preferredTotal += rating;
+      }
+
       return {
         name: displayName,
         rating: rating,
@@ -147,6 +234,25 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
         aiReasoning: value.reasoning || generateReasoning(key, rawScore <= 10 ? rawScore * 10 : rawScore)
       };
     }).filter((item): item is NonNullable<typeof item> => item !== null);
+
+    // Calculate percentages for summary - use dynamic counts based on actual is_essential flags
+    const requiredItems = criteriaScores.filter(item => item.criteriaType === 'Required');
+    const preferredItems = criteriaScores.filter(item => item.criteriaType === 'Preferred');
+    const requiredMax = requiredItems.length * 10 || 20;  // Dynamic based on actual required criteria count
+    const preferredMax = preferredItems.length * 10 || 80; // Dynamic based on actual preferred criteria count
+    const requiredPct = requiredMax > 0 ? Math.round((requiredTotal / requiredMax) * 100) : 0;
+    const preferredPct = preferredMax > 0 ? Math.round((preferredTotal / preferredMax) * 100) : 0;
+    const finalPct = Math.round((requiredPct + preferredPct) / 2);
+
+    summaryData = {
+      requiredPercentage: requiredPct,
+      preferredPercentage: preferredPct,
+      finalPercentage: finalPct || resume.scorePercentage,
+      requiredTotal: requiredTotal,
+      requiredMax: requiredMax,
+      preferredTotal: preferredTotal,
+      preferredMax: preferredMax,
+    };
   }
   // Fallback to detailedScores - REMOVED static data, only show if real API data exists
   else {
@@ -235,10 +341,15 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
               <div className="text-xs text-gray-600">Time</div>
               <div className="text-sm font-medium text-gray-900">
                 {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
-                  ? new Date(resume.scoredDate).toLocaleTimeString('en-US', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })
+                  ? (() => {
+                      // Add 5 hours 30 minutes (IST offset) to server time
+                      const serverDate = new Date(resume.scoredDate);
+                      const istDate = new Date(serverDate.getTime() + (5 * 60 + 30) * 60 * 1000);
+                      return istDate.toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
+                    })()
                   : 'N/A'}
               </div>
             </div>
@@ -252,6 +363,21 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
           </div>
         </div>
       </div>
+
+      {/* Score Summary - Large Display */}
+      {summaryData && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg px-6 py-4 flex items-center justify-center gap-8">
+          <div className="flex items-center gap-3">
+            <span className="text-base text-gray-600">Required:</span>
+            <span className="text-2xl font-bold text-red-600">{summaryData.requiredPercentage.toFixed(0)}%</span>
+          </div>
+          <span className="text-gray-300 text-2xl">|</span>
+          <div className="flex items-center gap-3">
+            <span className="text-base text-gray-600">Preferred:</span>
+            <span className="text-2xl font-bold text-blue-600">{summaryData.preferredPercentage.toFixed(0)}%</span>
+          </div>
+        </div>
+      )}
 
       {/* Detailed Scoring Table - Only show if real API data exists */}
       {criteriaScores.length > 0 && (

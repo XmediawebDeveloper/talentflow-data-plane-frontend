@@ -15,6 +15,16 @@ const formatEmploymentType = (type: string | undefined): string => {
     .join(' ');
 };
 
+// Utility function to format industry type for display
+// Converts "information_technology" -> "Information Technology", "oil_gas" -> "Oil Gas", etc.
+const formatIndustryType = (type: string | undefined): string => {
+  if (!type) return '-';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
 // Utility function to format last updated time
 // Within 24 hours: show "X hours ago"
 // More than 24 hours: show actual date
@@ -122,6 +132,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
       job.job_id?.toLowerCase().includes(searchLower) ||
       job.location?.toLowerCase().includes(searchLower) ||
       job.industry_type?.toLowerCase().includes(searchLower) ||
+      formatIndustryType(job.industry_type).toLowerCase().includes(searchLower) ||  // Also search formatted version (e.g., "Information Technology")
       job.department?.toLowerCase().includes(searchLower) ||
       job.employmentType?.toLowerCase().includes(searchLower) ||
       formatEmploymentType(job.employmentType).toLowerCase().includes(searchLower) ||  // Also search formatted version (e.g., "Full Time")
@@ -770,7 +781,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                       >
                         <option value="all">All Industries</option>
                         {uniqueIndustries.map(industry => (
-                          <option key={industry} value={industry}>{industry}</option>
+                          <option key={industry} value={industry}>{formatIndustryType(industry)}</option>
                         ))}
                       </select>
                     </div>
@@ -997,7 +1008,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         )}
                         <div className="flex items-center gap-3 text-base text-gray-600">
                           <Building2 className="w-5 h-5 text-gray-400" />
-                          <span>{job.industry_type || '-'}</span>
+                          <span>{formatIndustryType(job.industry_type)}</span>
                         </div>
                         <div className="flex items-center gap-3 text-base text-gray-600">
                           <MapPin className="w-5 h-5 text-gray-400" />
@@ -1222,7 +1233,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           )}
                           <span className="flex items-center gap-2">
                             <Building2 className="w-5 h-5 text-gray-400" />
-                            {job.industry_type || '-'}
+                            {formatIndustryType(job.industry_type)}
                           </span>
                           <span className="flex items-center gap-2">
                             <MapPin className="w-5 h-5 text-gray-400" />

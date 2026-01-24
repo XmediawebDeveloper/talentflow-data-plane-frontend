@@ -53,10 +53,10 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
             achievements: exp.achievements || exp.responsibilities || [],
           })),
           certifications: data.certifications?.map((cert: any) => ({
-            name: cert.name || cert.title || '',
-            issuer: cert.issuer || cert.issuing_organization || cert.organization || '',
-            date: cert.date || cert.date_obtained || cert.issued_date || '',
-            credentialId: cert.credential_id || cert.credentialId || '',
+            name: typeof cert === 'string' ? cert : (cert.name || cert.title || 'Certification'),
+            issuer: typeof cert === 'string' ? '' : (cert.issuer || cert.issuing_organization || cert.organization || ''),
+            date: typeof cert === 'string' ? '' : (cert.date || cert.date_obtained || cert.issued_date || ''),
+            credentialId: typeof cert === 'string' ? '' : (cert.credential_id || cert.credentialId || ''),
           })),
           languages: data.languages?.map((lang: any) => ({
             name: typeof lang === 'string' ? lang : (lang.name || lang.language || ''),

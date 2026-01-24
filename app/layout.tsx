@@ -4,8 +4,10 @@ import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ModalProvider } from "@/components/providers/ModalProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { ScoringProgressProvider } from "@/contexts/ScoringProgressContext";
 import { Toaster } from "sonner";
 import SubscriptionInactiveModal from "@/components/SubscriptionInactiveModal";
+import GlobalScoringProgressIndicator from "@/components/GlobalScoringProgressIndicator";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -40,10 +42,14 @@ export default function RootLayout({
         >
           <AuthProvider>
             <ModalProvider>
-              {children}
-              <Toaster position="top-right" richColors closeButton />
-              {/* Global subscription inactive modal - catches events from API interceptor */}
-              <SubscriptionInactiveModal />
+              <ScoringProgressProvider>
+                {children}
+                <Toaster position="top-right" richColors closeButton />
+                {/* Global subscription inactive modal - catches events from API interceptor */}
+                <SubscriptionInactiveModal />
+                {/* Global scoring progress indicator - COMMENTED OUT: Now using redirect flow instead of popup */}
+                {/* <GlobalScoringProgressIndicator /> */}
+              </ScoringProgressProvider>
             </ModalProvider>
           </AuthProvider>
         </ThemeProvider>

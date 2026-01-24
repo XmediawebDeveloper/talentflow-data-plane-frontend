@@ -7,7 +7,7 @@ interface RoleAccessDemoProps {
 
 export default function RoleAccessDemo({ user }: RoleAccessDemoProps) {
   const roleLabels = {
-    tenant_admin: 'Tenant Admin',
+    tenant_admin: 'Owner',
     recruiter: 'Recruiter',
     viewer: 'Viewer',
   };
@@ -58,7 +58,7 @@ export default function RoleAccessDemo({ user }: RoleAccessDemoProps) {
           <div className="mt-3 flex items-start gap-2 text-xs text-gray-900">
             <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
             <span>
-              Try logging in with different demo accounts to see how permissions change. Contact your Tenant Admin to request additional permissions.
+              Try logging in with different demo accounts to see how permissions change. Contact your Owner to request additional permissions.
             </span>
           </div>
         </div>

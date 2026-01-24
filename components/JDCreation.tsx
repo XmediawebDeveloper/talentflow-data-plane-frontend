@@ -1255,7 +1255,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       console.log('[TalentFlow] Mandatory flags from API:', {
         experience_mandatory: params.experience_mandatory,
         education_mandatory: params.education_mandatory,
-        industry_mandatory: params.industry_mandatory
+        industry_mandatory: params.industry_mandatory,
+        location_mandatory: params.location_mandatory
       });
       console.log('[TalentFlow] Comments from API:', {
         must_have_comments: params.must_have_comments,
@@ -1266,7 +1267,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       console.log('[TalentFlow] Will set UI checkboxes:', {
         experienceRequired: params.experience_mandatory || false,
         educationRequired: params.education_mandatory || false,
-        industryTypeRequired: params.industry_mandatory || false
+        industryTypeRequired: params.industry_mandatory || false,
+        locationsRequired: params.location_mandatory || false
       });
       console.log('[TalentFlow] Work settings:', {
         work_mode: params.work_mode,
@@ -1562,7 +1564,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           city: loc.city || '',
           radius: '50'  // Default radius
         })) : (isEditMode ? extractedData.locations : []),
-        locationsRequired: isEditMode ? extractedData.locationsRequired : false,
+        locationsRequired: params.location_mandatory || (isEditMode ? extractedData.locationsRequired : false),
         assessmentGuidance: isEditMode ? extractedData.assessmentGuidance : '',
         internalRecruiterComments: isEditMode ? extractedData.internalRecruiterComments : [],
         // JD09: Extract certifications and domain keywords
@@ -1643,6 +1645,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           radius_km: parseInt(loc.radius) || 50,
           is_required: extraction.locationsRequired,
         })),
+        // Mandatory flags - determines if criteria is Required vs Preferred in scoring
+        experience_mandatory: extraction.experienceRequired || false,
+        education_mandatory: extraction.educationRequired || false,
+        industry_mandatory: extraction.industryTypeRequired || false,
+        location_mandatory: extraction.locationsRequired || false,
       };
 
       console.log('[TalentFlow] Saving JD with coding fields:', {
@@ -2001,11 +2008,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       errors.mustHaveSkills = 'At least one Must-Have Skill is required';
     }
 
-    // Must have at least one must-have comment
-    if (extractedData.mustHaveComments.length === 0) {
-      missingFields.push('At least one Must-Have Comment');
-      errors.mustHaveComments = 'At least one Must-Have Comment is required';
-    }
+    // Must-Have Comments are optional - no validation required
 
     // Education is required - check for empty string, null, undefined, or whitespace only
     if (!extractedData.education || extractedData.education.trim() === '') {
@@ -2233,11 +2236,27 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           radius_km: parseInt(loc.radius) || 50,
           is_required: extractedData.locationsRequired,
         })),
+        // Mandatory flags - determines if criteria is Required vs Preferred in scoring
+        experience_mandatory: extractedData.experienceRequired || false,
+        education_mandatory: extractedData.educationRequired || false,
+        industry_mandatory: extractedData.industryTypeRequired || false,
+        location_mandatory: extractedData.locationsRequired || false,
       };
 
       console.log('[TalentFlow] Saving JD at review stage with coding fields:', {
         coding_required: jdData.coding_required,
         supported_languages: jdData.supported_languages
+      });
+
+      console.log('[DEBUG] PUBLISH - Mandatory flags being sent:', {
+        experience_mandatory: jdData.experience_mandatory,
+        education_mandatory: jdData.education_mandatory,
+        industry_mandatory: jdData.industry_mandatory,
+        location_mandatory: jdData.location_mandatory,
+        'extractedData.experienceRequired': extractedData.experienceRequired,
+        'extractedData.educationRequired': extractedData.educationRequired,
+        'extractedData.industryTypeRequired': extractedData.industryTypeRequired,
+        'extractedData.locationsRequired': extractedData.locationsRequired,
       });
 
       let savedJd;
@@ -2296,10 +2315,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       missingFields.push('At least one Must-Have Skill');
     }
 
-    // Must have at least one must-have comment
-    if (extractedData.mustHaveComments.length === 0) {
-      missingFields.push('At least one Must-Have Comment');
-    }
+    // Must-Have Comments are optional - no validation required
 
     // Education is required - check for empty string, null, undefined, or whitespace only
     const educationValue = extractedData.education?.trim() || '';
@@ -2418,7 +2434,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         department: extractedData.department || '',
         location: extractedData.locations.length > 0
           ? extractedData.locations[0].city
-          : 'Remote',
+          : '',
         employment_type: extractedData.employmentType,
         remote_type: extractedData.workModel,
         must_have_skills: extractedData.mustHaveSkills,
@@ -2450,6 +2466,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         }),
         creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
         ai_prompt: mode === 'ai' ? aiPrompt : undefined,  // Save AI prompt
+        // Mandatory flags - determines if criteria is Required vs Preferred in scoring
+        experience_mandatory: extractedData.experienceRequired || false,
+        education_mandatory: extractedData.educationRequired || false,
+        industry_mandatory: extractedData.industryTypeRequired || false,
+        location_mandatory: extractedData.locationsRequired || false,
       };
 
       console.log('[DEBUG] handleConfirmPublish - editingId:', editingId, 'isEditingDraft:', isEditingDraft);
@@ -2488,7 +2509,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           department: extractedData.department || '',
           location: extractedData.locations.length > 0
             ? extractedData.locations[0].city
-            : 'Remote',
+            : '',
           type: 'Full-time',
           postedDate: new Date().toISOString(),
           applicants: 0,
@@ -2695,7 +2716,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         department: extractedData.department || '',
         location: extractedData.locations.length > 0
           ? extractedData.locations[0].city
-          : 'Remote',
+          : '',
         employment_type: extractedData.employmentType,
         remote_type: extractedData.workModel,
         must_have_skills: extractedData.mustHaveSkills,
@@ -2728,18 +2749,39 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         }),
         creation_method: mode === 'ai' ? 'ai_generated' : 'manual' as const,
         ai_prompt: mode === 'ai' ? aiPrompt : undefined,  // Save AI prompt
+        // Mandatory flags - determines if criteria is Required vs Preferred in scoring
+        experience_mandatory: extractedData.experienceRequired || false,
+        education_mandatory: extractedData.educationRequired || false,
+        industry_mandatory: extractedData.industryTypeRequired || false,
+        location_mandatory: extractedData.locationsRequired || false,
       };
 
+      console.log('[DEBUG] SAVING JD - Mandatory flags being sent:', {
+        experience_mandatory: jdData.experience_mandatory,
+        education_mandatory: jdData.education_mandatory,
+        industry_mandatory: jdData.industry_mandatory,
+        location_mandatory: jdData.location_mandatory,
+        experienceRequired: extractedData.experienceRequired,
+        educationRequired: extractedData.educationRequired,
+        industryTypeRequired: extractedData.industryTypeRequired,
+        locationsRequired: extractedData.locationsRequired,
+      });
+
       // Update existing JD or create new one
+      // IMPORTANT: When editing a published JD, always create a NEW draft instead of updating
       console.log('[DEBUG] Save draft - editingId:', editingId, 'isEditingDraft:', isEditingDraft, 'isEditingPublished:', isEditingPublished);
       console.log('[DEBUG] jdData being saved:', { title: jdData.title, description: jdData.description?.substring(0, 100), creation_method: jdData.creation_method });
       let savedJd;
-      if (editingId) {
+      if (editingId && !isEditingPublished) {
+        // Only update if editing an existing DRAFT (not published)
         console.log('[DEBUG] Updating existing draft with ID:', editingId);
         savedJd = await jdService.update(editingId, jdData);
         console.log('[DEBUG] JD updated as draft:', savedJd.id);
       } else {
-        console.log('[DEBUG] Creating new draft (editingId is null)');
+        // Create new draft when:
+        // 1. No editingId (new JD)
+        // 2. Editing a published JD (create new draft version)
+        console.log('[DEBUG] Creating new draft (editingId is null or editing published JD)');
         savedJd = await jdService.create(jdData);
         setEditingId(savedJd.id);  // Track the new ID in case we save again
         console.log('[DEBUG] JD created as draft:', savedJd.id);
@@ -2752,10 +2794,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         title: isEditingPublished ? 'New draft created!' : 'Draft saved!',
         description: isEditingPublished
           ? `A new draft version of "${jobTitle}" has been created. The original JD remains unchanged.`
-          : `"${jobTitle}" has been saved. You can continue editing.`,
+          : `"${jobTitle}" has been saved as draft.`,
       });
 
-      // Stay on page - don't navigate away after saving draft
+      // Navigate to job openings page after saving draft
+      router.push('/recruitment/job-openings');
     } catch (error) {
       console.error('[ERROR] Failed to save draft:', error);
       setIsSavingDraft(false);
@@ -2883,7 +2926,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
         // Map experience_min/max to level codes (entry, junior, mid, senior, architect, management)
         const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
-          if (!min) return '';
+          // Check for null/undefined but allow 0 as valid value
+          if (min === null || min === undefined) return '';
 
           // 10+ years
           if (min >= 10) {
@@ -2911,14 +2955,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         };
 
         const experienceValue = mapExpToLevel(editingJD.experience_min, editingJD.experience_max);
-        // Industry type should only come from extraction, not pre-filled from saved data
-        // User must select it manually or it must come from extraction API
-        const industryValue = '';
+        // Restore industry type from saved draft
+        const industryValue = editingJD.industry_type || '';
 
         console.log('[DEBUG] Loading editingJD data:');
         console.log('[DEBUG] - experience_min from API:', editingJD.experience_min);
         console.log('[DEBUG] - experience_max from API:', editingJD.experience_max);
         console.log('[DEBUG] - mapped experienceValue:', experienceValue);
+        console.log('[DEBUG] - industry_type from API:', editingJD.industry_type);
+        console.log('[DEBUG] - mapped industryValue:', industryValue);
         console.log('[DEBUG] - nice_to_have_comments from API:', editingJD.nice_to_have_comments);
         console.log('[DEBUG] - must_have_comments from API:', editingJD.must_have_comments);
 
@@ -3736,7 +3781,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {/* Must-Have Comments */}
                   <div>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-gray-900">Must-Have Comments <span className="text-red-500">*</span></h3>
+                      <h3 className="text-gray-900">Must-Have Comments</h3>
                       {!isRegenerating && (
                         <button
                           onClick={() => setEditingCategory('comments')}
@@ -3995,7 +4040,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           const error = validateSalaryRange(newValue, extractedData.salaryTo || '');
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
                         }}
-                        placeholder="From (e.g., 500000, 5L, 5LPA)"
+                        placeholder="From (e.g., 50000)"
                         className={`w-full pl-7 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm ${
                           validationErrors.salaryRange ? 'border-red-500' : 'border-gray-300'
                         } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
@@ -4016,7 +4061,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           const error = validateSalaryRange(extractedData.salaryFrom || '', newValue);
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
                         }}
-                        placeholder="To (e.g., 1000000, 10L, 10LPA)"
+                        placeholder="To (e.g., 100000)"
                         className={`w-full pl-7 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm ${
                           validationErrors.salaryRange ? 'border-red-500' : 'border-gray-300'
                         } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}

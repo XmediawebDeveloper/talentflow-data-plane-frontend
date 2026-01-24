@@ -107,7 +107,7 @@ interface ApiUser {
 
 // Default role labels for known roles - RBAC01-07
 const defaultRoleLabels: Record<string, string> = {
-  tenant_admin: 'Tenant Admin',
+  tenant_admin: 'Owner',
   admin: 'Admin',
   recruiter: 'Recruiter',
   viewer: 'Viewer',
@@ -117,7 +117,7 @@ const defaultRoleLabels: Record<string, string> = {
 
 // Default badge colors for known roles - RBAC01-07
 const defaultRoleBadgeColors: Record<string, string> = {
-  tenant_admin: 'bg-gray-200 text-gray-800',
+  tenant_admin: 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white',
   admin: 'bg-gray-200 text-gray-800',
   recruiter: 'bg-blue-100 text-blue-700',
   viewer: 'bg-gray-50 text-gray-600',

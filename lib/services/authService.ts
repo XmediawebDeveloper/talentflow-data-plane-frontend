@@ -7,6 +7,7 @@ import api, { setTokens, clearTokens, handleApiError } from './api';
 export interface LoginRequest {
   email: string;
   password: string;
+  subdomain?: string;  // Optional subdomain for multi-tenant login
 }
 
 // RBAC01-07: Extended role types
@@ -80,6 +81,9 @@ export interface LoginResponse {
     token_type: string;
     expires_in: number;
   };
+  // Pending payment info - if set, frontend should redirect to payment page
+  pending_payment?: boolean;
+  pending_payment_redirect?: string;
 }
 
 export const authService = {

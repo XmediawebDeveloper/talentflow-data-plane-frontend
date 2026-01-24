@@ -255,7 +255,9 @@ export default function ScoredResumesTable({
             ? (resume.education[0]?.degree || resume.education[0]?.institution || '')
             : '';
       case 'certifications':
-        return resume.certifications?.join(', ') || '';
+        return resume.certifications?.map(cert =>
+          typeof cert === 'string' ? cert : (cert?.name || '')
+        ).join(', ') || '';
       case 'scoredDate':
         return new Date(resume.scoredDate).toLocaleDateString('en-US', {
           month: 'short',
@@ -778,7 +780,9 @@ export default function ScoredResumesTable({
                       <td key={col.id} className="py-3 px-4">
                         <div className="text-sm text-gray-600">
                           {resume.certifications && resume.certifications.length > 0
-                            ? resume.certifications.join(', ')
+                            ? resume.certifications.map(cert =>
+                                typeof cert === 'string' ? cert : (cert?.name || '')
+                              ).join(', ')
                             : 'N/A'}
                         </div>
                       </td>

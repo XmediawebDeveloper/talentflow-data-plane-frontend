@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { scoringService } from '@/lib/services';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
+import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 
 interface AttemptHistory {
   attemptNumber: number;
@@ -67,6 +68,7 @@ interface ResumeScoringStatusPanelProps {
   jobTitle: string;
   jobId: string;
   onMinimize?: () => void;
+  isMinimized?: boolean;  // Track if panel is minimized
 }
 
 // Storage key for scoring batch persistence
@@ -85,9 +87,14 @@ export default function ResumeScoringStatusPanel({
   onComplete,
   jobTitle,
   jobId,
-  onMinimize
+  onMinimize,
+  isMinimized = false
 }: ResumeScoringStatusPanelProps) {
   const router = useRouter();
+
+  // Use global scoring progress context for persistence across pages
+  const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
+
   const [scoringResumes, setScoringResumes] = useState<ScoringResume[]>(
     resumes.map(r => ({
       ...r,
@@ -147,6 +154,27 @@ export default function ResumeScoringStatusPanel({
     return () => clearInterval(interval);
   }, [startTime]);
 
+  // Track main panel open state - hide floating indicator when this panel is visible (not minimized)
+  useEffect(() => {
+    setMainPanelOpen(!isMinimized);
+    return () => {
+      setMainPanelOpen(false);
+    };
+  }, [setMainPanelOpen, isMinimized]);
+
+  // Initialize global scoring progress context on mount
+  useEffect(() => {
+    const progressItems = resumes.map(r => ({
+      id: `${jobId}-${r.id}`,
+      resumeId: r.id,
+      candidateName: r.candidateName || r.name,
+      jobTitle,
+      jobId,
+      source: 'Internal DB' as const,
+    }));
+    startScoringJob(jobId, jobTitle, progressItems);
+  }, [jobId, jobTitle, resumes, startScoringJob]);
+
   // Process resumes with real API calls
   useEffect(() => {
     if (processingRef.current) return;
@@ -159,10 +187,15 @@ export default function ResumeScoringStatusPanel({
       const pendingResumes = scoringResumes.filter(r => r.status === 'pending');
 
       for (const resume of pendingResumes) {
+        const itemId = `${jobId}-${resume.id}`;
+
         // Update to scoring status
         setScoringResumes(prev => prev.map((r) =>
           r.id === resume.id ? { ...r, status: 'scoring' as const } : r
         ));
+
+        // Update global context
+        updateItemStatus(jobId, itemId, 'Scoring in progress');
 
         try {
           // Call the actual API
@@ -218,6 +251,14 @@ export default function ResumeScoringStatusPanel({
               attemptHistory: [...(r.attemptHistory || []), newAttempt],
             } : r
           ));
+
+          // Update global context with success
+          updateItemStatus(jobId, itemId, 'Scored successfully', {
+            score: result.overall_score,
+            matchResult: result.overall_score >= 85 ? 'Exact Match' :
+                         result.overall_score >= 70 ? 'Partial Match' : 'No Match',
+            scoredDateTime: new Date().toISOString(),
+          });
         } catch (error: any) {
           console.error(`[Scoring] Error scoring ${resume.name}:`, error);
 
@@ -262,6 +303,9 @@ export default function ResumeScoringStatusPanel({
               attemptHistory: [...(r.attemptHistory || []), newAttempt],
             } : r
           ));
+
+          // Update global context with failure
+          updateItemStatus(jobId, itemId, 'Failed', { errorReason });
         }
 
         // Small delay between API calls to avoid rate limiting
@@ -273,7 +317,7 @@ export default function ResumeScoringStatusPanel({
     };
 
     processResumes();
-  }, [jobId, scoringResumes]);
+  }, [jobId, scoringResumes, updateItemStatus]);
 
   // Check if all processing is complete
   useEffect(() => {

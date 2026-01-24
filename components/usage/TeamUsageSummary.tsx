@@ -4,7 +4,7 @@
  * Team-Level Usage Visibility Component
  *
  * Displays team usage summaries with role-based access:
- * - Tenant Admin: View all teams' usage
+ * - Owner: View all teams' usage
  * - Standard User/Viewer: View only their team's usage
  * - Billing Manager: No access (shows message)
  */
@@ -62,7 +62,7 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
         const data = await teamService.getTeamUsage(teamId, selectedDays);
         setSingleTeamUsage(data);
       } else if (isTenantAdmin) {
-        // Tenant Admin: Fetch all teams
+        // Owner: Fetch all teams
         const data = await teamService.getAllTeamsUsage(selectedDays);
         setAllTeamsUsage(data);
       } else if (!isBillingManager) {
@@ -145,7 +145,7 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
     );
   }
 
-  // Render all teams (Tenant Admin) or my teams
+  // Render all teams (Owner) or my teams
   const teamsData = allTeamsUsage?.teams || myTeamsUsage?.teams || [];
   const reportingScope = allTeamsUsage?.reporting_scope || myTeamsUsage?.reporting_scope || '';
 

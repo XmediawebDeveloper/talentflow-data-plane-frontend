@@ -10,13 +10,13 @@ interface UsersManagementProps {
 }
 
 const roleLabels: Record<UserRole, string> = {
-  tenant_admin: 'Admin',
+  tenant_admin: 'Owner',
   recruiter: 'Recruiter',
   viewer: 'Viewer',
 };
 
 const roleBadgeColors: Record<UserRole, string> = {
-  tenant_admin: 'bg-gray-100 text-gray-900',
+  tenant_admin: 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white',
   recruiter: 'bg-gray-100 text-gray-900',
   viewer: 'bg-gray-100 text-gray-700',
 };
