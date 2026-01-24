@@ -45,6 +45,13 @@ export default function EditRoleForm({ roleId }: EditRoleFormProps) {
 
   // Load data
   useEffect(() => {
+    // Validate roleId before making API calls
+    if (!roleId || isNaN(roleId) || roleId <= 0) {
+      console.error('Invalid role ID:', roleId);
+      toast.error('Invalid role ID');
+      router.push('/organization/role-management');
+      return;
+    }
     loadData();
   }, [roleId]);
 
@@ -59,9 +66,16 @@ export default function EditRoleForm({ roleId }: EditRoleFormProps) {
       setRole(roleData);
       setRoles(rolesData.roles);
       setPermissions(permissionsData.permissions);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load data:', error);
-      toast.error('Failed to load role data');
+      // Provide more specific error message
+      if (error?.response?.status === 404) {
+        toast.error('Role not found');
+      } else if (error?.response?.status === 422) {
+        toast.error('Invalid role ID format');
+      } else {
+        toast.error('Failed to load role data');
+      }
       router.push('/organization/role-management');
     } finally {
       setIsLoading(false);

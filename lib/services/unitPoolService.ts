@@ -415,7 +415,7 @@ export const unitPoolService = {
   },
 
   // =========================================================================
-  // ADMIN ENDPOINTS (Tenant Admin / Super Admin)
+  // ADMIN ENDPOINTS (Owner / Super Admin)
   // =========================================================================
 
   /**

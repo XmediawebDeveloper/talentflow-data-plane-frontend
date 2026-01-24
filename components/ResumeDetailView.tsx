@@ -367,24 +367,33 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                   <h2 className="text-gray-900">Certifications</h2>
                 </div>
                 <div className="space-y-4">
-                  {detailedResume.certifications.map((cert, index) => (
+                  {detailedResume.certifications.map((cert: any, index) => {
+                    // Handle both string and object formats, and both camelCase and snake_case
+                    const certName = typeof cert === 'string' ? cert : (cert.name || cert.title || 'Certification');
+                    const certIssuer = typeof cert === 'object' ? (cert.issuer || cert.organization) : null;
+                    const certDate = typeof cert === 'object' ? cert.date : null;
+                    const certId = typeof cert === 'object' ? (cert.credentialId || cert.credential_id) : null;
+                    return (
                     <div key={index} className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <div className="flex items-start justify-between">
                         <div>
-                          <h3 className="text-gray-900 mb-1">{cert.name}</h3>
-                          <div className="text-sm text-gray-700 mb-1">{cert.issuer}</div>
+                          <h3 className="text-gray-900 mb-1">{certName}</h3>
+                          {certIssuer && <div className="text-sm text-gray-700 mb-1">{certIssuer}</div>}
                           <div className="flex items-center gap-4 text-xs text-gray-600">
+                            {certDate && (
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
-                              Issued {cert.date}
+                              Issued {certDate}
                             </span>
-                            <span>ID: {cert.credentialId}</span>
+                            )}
+                            {certId && <span>ID: {certId}</span>}
                           </div>
                         </div>
                         <Award className="w-6 h-6 text-yellow-600" />
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -171,7 +171,7 @@ function mapStatus(status: string, isActive: boolean): 'Active' | 'Inactive' | '
 function mapRole(roleName: string): string {
   const roleMap: Record<string, string> = {
     'tenant_admin': 'Admin',
-    'Tenant Admin': 'Admin',
+    'Owner': 'Admin',
     'hr_manager': 'Admin',
     'HR Manager': 'Admin',
     'recruiter': 'User',

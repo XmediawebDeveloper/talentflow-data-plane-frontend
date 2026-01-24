@@ -274,9 +274,9 @@ ${job.certifications?.join(', ') || 'N/A'}
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-8 py-6">
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-12 gap-6">
           {/* Main Content */}
-          <div className="col-span-2 space-y-6">
+          <div className="col-span-9 space-y-6">
             {activeTab === 'overview' && (
               <>
                 {/* Job Description */}
@@ -471,7 +471,7 @@ ${job.certifications?.join(', ') || 'N/A'}
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
+          <div className="col-span-3 space-y-6">
             {/* Quick Actions */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Quick Actions</h3>
