@@ -149,8 +149,11 @@ export default function ResumeScoringRoute() {
       }
     }
 
-    fetchData();
-    loadScoredHistory();
+    // Fetch essential data first (fast), then load history in background
+    fetchData().then(() => {
+      // Load scored history after page is rendered (non-blocking)
+      loadScoredHistory();
+    });
   }, []);
 
   // Poll for batch status when we have a pending batch
@@ -212,80 +215,78 @@ export default function ResumeScoringRoute() {
   }, [pendingBatchId]);
 
   const loadScoredHistory = async () => {
-    // Load scored history from the API - fetch scored resumes for all JDs (including disabled/archived)
+    // Load scored history from the API - single call to get all scored resumes
     try {
-      // Get list of all JDs (no status filter - include published, disabled, archived)
-      const jdResponse = await jdService.list({ page_size: 100 });
+      // Use the optimized endpoint that gets all scores in one call
+      const allScoresResponse = await scoringService.getAllScoredResumes({ page_size: 100 });
 
-      const historyPromises = jdResponse.items.map(async (jd: JDResponse) => {
-        try {
-          const scoredResponse = await jdService.getScoredResumes(jd.id, { page_size: 100 });
-          if (scoredResponse.items && scoredResponse.items.length > 0) {
-            // Convert API response to ScoredResumeData format - same as JobDetailView
-            const convertedResumes = scoredResponse.items.map((item: any) => {
-              // Map match_status from API to display format - use "Exact Match" for consistency
-              let matchStatus = 'No Match';
-              if (item.match_status === 'exact_match' || item.match_status === 'excellent') {
-                matchStatus = 'Exact Match';
-              } else if (item.match_status === 'partial_match' || item.match_status === 'partial') {
-                matchStatus = 'Partial Match';
-              }
+      // Group scores by JD
+      const scoresByJd = new Map<string, { jdTitle: string; scores: any[] }>();
 
-              // Calculate matchScore from overall_score
-              const matchScore = Math.round(item.overall_score || 0);
+      for (const item of allScoresResponse.items) {
+        const jdId = item.jd_id;
+        if (!scoresByJd.has(jdId)) {
+          scoresByJd.set(jdId, { jdTitle: item.jd_title || 'Unknown Job', scores: [] });
+        }
 
-              return {
-                id: item.id,
-                candidateName: item.candidate_name || 'Unknown',
-                candidateEmail: item.candidate_email || '',
-                email: item.candidate_email || '',
-                phone: item.phone || '',
-                matchScore: matchScore,
-                matchStatus: matchStatus,
-                scorePercentage: matchScore, // Also include scorePercentage for CandidateScoringDetailPage
-                scoredDate: item.created_at || new Date().toISOString(),
-                scoredBy: item.scored_by_name || 'System',
-                experience: item.experience_years ? `${item.experience_years} years` : undefined,
-                education: item.education,
-                certifications: item.certifications || [],
-                aiSummary: item.ai_summary,
-                strengths: item.strengths || [],
-                gaps: item.gaps || [],
-                title: item.current_title,
-                currentCompany: item.current_company,
-                location: item.location,
-                skills: item.skills || [],
-                matchedSkills: item.matched_skills || item.matchedSkills || item.skills || [],
-                missingSkills: item.missing_skills || item.missingSkills || item.gaps || [],
-                scoreBreakdown: item.score_breakdown || [],
-                criteriaScores: item.criteria_scores || {},
-                technicalSkills: item.technical_skills || item.skills || [],
-                softSkills: item.soft_skills || [],
-                experienceDetails: item.experience_details || [],
-                educationDetails: item.education_details || [],
-                languages: item.languages || [],
-                professionalSummary: item.professional_summary || item.ai_summary || '',
-              };
-            });
+        // Convert score to display format
+        let matchStatus = 'No Match';
+        if (item.match_status === 'exact_match' || item.match_status === 'excellent') {
+          matchStatus = 'Exact Match';
+        } else if (item.match_status === 'partial_match' || item.match_status === 'partial') {
+          matchStatus = 'Partial Match';
+        }
+        const matchScore = Math.round(item.overall_score || 0);
 
-            return {
-              id: jd.id,
-              jobId: jd.id,
-              jobTitle: jd.title,
-              scoredAt: new Date(scoredResponse.items[0]?.created_at || new Date()),
-              source: 'database' as const,
-              totalScored: scoredResponse.total || convertedResumes.length,
-              scoredResumes: convertedResumes,
-            };
-          }
-          return null;
-        } catch {
-          return null;
+        scoresByJd.get(jdId)!.scores.push({
+          id: item.id,
+          candidateName: item.candidate_name || 'Unknown',
+          candidateEmail: item.candidate_email || '',
+          email: item.candidate_email || '',
+          phone: item.phone || '',
+          matchScore: matchScore,
+          matchStatus: matchStatus,
+          scorePercentage: matchScore,
+          scoredDate: item.created_at || new Date().toISOString(),
+          scoredBy: item.scored_by_name || item.scored_by || 'System',
+          experience: item.experience_years ? `${item.experience_years} years` : undefined,
+          education: item.education,
+          certifications: item.certifications || [],
+          aiSummary: item.ai_summary,
+          strengths: item.strengths || [],
+          gaps: item.gaps || [],
+          title: item.current_title,
+          currentCompany: item.current_company,
+          location: item.location,
+          skills: item.skills || [],
+          matchedSkills: item.matched_skills || item.matchedSkills || item.skills || [],
+          missingSkills: item.missing_skills || item.missingSkills || item.gaps || [],
+          scoreBreakdown: item.score_breakdown || [],
+          criteriaScores: item.criteria_scores || {},
+          technicalSkills: item.technical_skills || item.skills || [],
+          softSkills: item.soft_skills || [],
+          experienceDetails: item.experience_details || [],
+          educationDetails: item.education_details || [],
+          languages: item.languages || [],
+          professionalSummary: item.professional_summary || item.ai_summary || '',
+        });
+      }
+
+      // Convert to ScoredResumeData array
+      const validHistory: ScoredResumeData[] = [];
+      scoresByJd.forEach((data, jdId) => {
+        if (data.scores.length > 0) {
+          validHistory.push({
+            id: jdId,
+            jobId: jdId,
+            jobTitle: data.jdTitle,
+            scoredAt: new Date(data.scores[0]?.scoredDate || new Date()),
+            source: 'database' as const,
+            totalScored: data.scores.length,
+            scoredResumes: data.scores,
+          });
         }
       });
-
-      const results = await Promise.all(historyPromises);
-      const validHistory = results.filter((item): item is NonNullable<typeof item> => item !== null) as ScoredResumeData[];
 
       // Sort by scored date (most recent first)
       validHistory.sort((a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime());
@@ -317,54 +318,14 @@ export default function ResumeScoringRoute() {
     }
   };
 
-  const saveScoredHistory = (data: ScoredResumeData) => {
-    // Check if there's already an entry for the same JD
-    const existingIndex = scoredHistory.findIndex(item => item.jobId === data.jobId);
-
-    let newHistory: ScoredResumeData[];
-
-    if (existingIndex !== -1) {
-      // Merge with existing entry - combine scored resumes and remove duplicates
-      const existingItem = scoredHistory[existingIndex];
-
-      // Get existing resume IDs to avoid duplicates
-      const existingResumeIds = new Set(existingItem.scoredResumes.map(r => r.id));
-
-      // Filter out duplicates from new resumes
-      const newResumes = data.scoredResumes.filter(r => !existingResumeIds.has(r.id));
-
-      // Create merged entry
-      const mergedEntry: ScoredResumeData = {
-        ...existingItem,
-        scoredAt: new Date(), // Update timestamp to latest
-        totalScored: existingItem.totalScored + newResumes.length,
-        scoredResumes: [...existingItem.scoredResumes, ...newResumes],
-      };
-
-      // Replace existing entry and move to top
-      newHistory = [
-        mergedEntry,
-        ...scoredHistory.filter((_, idx) => idx !== existingIndex)
-      ];
-
-      toast.success(`Added ${newResumes.length} new candidate(s) to existing scoring for "${data.jobTitle}"`);
-    } else {
-      // New JD entry - add to front
-      newHistory = [data, ...scoredHistory];
-      toast.success('Scoring results saved successfully');
-    }
-
-    setScoredHistory(newHistory);
+  const saveScoredHistory = async (data: ScoredResumeData) => {
+    toast.success('Scoring completed! Refreshing data...');
 
     // Update URL to persist the view across refreshes
     router.push(`/recruitment/resume-scoring?jd_id=${data.jobId}`);
 
-    // Save to localStorage
-    try {
-      localStorage.setItem('scoredHistory', JSON.stringify(newHistory));
-    } catch (error) {
-      console.error('Failed to save scored history:', error);
-    }
+    // Refresh data from API to get the latest scores
+    await loadScoredHistory();
   };
 
   const fetchData = async () => {
