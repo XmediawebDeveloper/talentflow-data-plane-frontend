@@ -86,7 +86,7 @@ interface JobDetailViewProps {
   onDelete?: (job: Job) => void; // Delete job
   onViewAssessmentResult?: (assessmentResult: any, jobTitle: string) => void; // Navigate to assessment result detail
   onRepublish?: (job: Job) => void; // JD13: Republish job after editing
-  isTenantAdmin?: boolean; // JD15: Whether user is Tenant Admin (for disable/enable buttons)
+  isTenantAdmin?: boolean; // JD15: Whether user is Owner (for disable/enable buttons)
 }
 
 export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false }: JobDetailViewProps) {
@@ -782,12 +782,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     <span className="font-medium">Archive</span>
                   </button>
                 )}
-                {/* JD15: Disable button - Only visible to Tenant Admins */}
+                {/* JD15: Disable button - Only visible to Owners */}
                 {onDisable && isTenantAdmin && (
                   <button
                     onClick={handleDisable}
                     className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all flex items-center gap-2"
-                    title="Disable this JD (Tenant Admin only)"
+                    title="Disable this JD (Owner only)"
                   >
                     <Ban className="w-4 h-4" />
                     <span className="font-medium">Disable</span>
@@ -808,12 +808,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             {/* JD15: Action Buttons - For Disabled jobs */}
             {job.status === 'Disabled' && (
               <div className="flex items-center gap-2">
-                {/* JD15: Enable button - Only visible to Tenant Admins */}
+                {/* JD15: Enable button - Only visible to Owners */}
                 {onEnable && isTenantAdmin && (
                   <button
                     onClick={() => onEnable(job)}
                     className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all flex items-center gap-2"
-                    title="Re-enable this JD (Tenant Admin only)"
+                    title="Re-enable this JD (Owner only)"
                   >
                     <CheckCircle className="w-4 h-4" />
                     <span className="font-medium">Re-enable JD</span>

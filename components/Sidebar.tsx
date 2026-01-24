@@ -202,7 +202,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
   // Filter nav items based on RBAC01-07 roles, permissions, and features
   const filterNavItems = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
-      // Tenant Admin has access to everything
+      // Owner has access to everything
       if (isTenantAdmin) return true;
 
       // RBAC03: Billing Manager access check
