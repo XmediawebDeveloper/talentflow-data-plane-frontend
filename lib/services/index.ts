@@ -77,6 +77,9 @@ export type {
   RefundAction,
   RefundProcessRequest,
   RefundProcessResponse,
+  // Detailed Result types
+  DetailedResultResponse,
+  ProctoringStats,
 } from './assessmentService';
 
 // User Management

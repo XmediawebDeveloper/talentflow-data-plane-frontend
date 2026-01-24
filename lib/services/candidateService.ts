@@ -198,6 +198,7 @@ export interface CurrentQuestion {
     text_response: string | null;
     selected_options: string[] | null;
     code_submission: string | null;
+    is_locked: boolean;  // True = submitted (not editable), False = draft (editable)
   } | null;
 }
 
@@ -225,6 +226,7 @@ export interface AnswerSubmission {
   code_submission?: string;
   language?: string;
   time_taken_seconds?: number;  // Time spent on question
+  is_draft?: boolean;  // True = draft (auto-save, editable), False = submitted (locked)
 }
 
 export interface SubmitAnswerResponse {

@@ -920,9 +920,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
       {/* Overview Tab Content */}
       {activeTab === 'overview' && (
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-12 gap-4">
         {/* Left Column - Job Details */}
-        <div className="col-span-2 space-y-6">
+        <div className="col-span-10 space-y-6">
           {/* Complete Job Description */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             {/* JD Header */}
@@ -1031,7 +1031,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           </div>
 
         {/* Right Column - Actions & Activity */}
-        <div className="space-y-6">
+        <div className="col-span-2 space-y-6">
           {/* Quick Actions */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h3 className="text-gray-900 mb-4">Quick Actions</h3>

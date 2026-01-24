@@ -530,6 +530,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       selected_options?: string[];
       code_submission?: string;
       language?: string;
+      is_draft?: boolean;  // True = draft (auto-save, editable), False = submitted (locked)
     }
   ): Promise<SubmitAnswerResponse> => {
     const response = await candidateService.submitAnswer(token, questionId, answer);
@@ -540,7 +541,9 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       percent: response.progress.percent
     });
 
-    if (response.next_question) {
+    // Don't auto-navigate when saving draft - let the component handle navigation
+    // Only update currentQuestion if backend returns next_question AND it's not a draft save
+    if (response.next_question && answer.is_draft === false) {
       setCurrentQuestion(response.next_question);
     }
 
