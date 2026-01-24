@@ -1,7 +1,7 @@
 'use client';
 
 import { CurrentQuestion } from '@/lib/services/candidateService';
-import { CheckCircle, Circle, FileText } from 'lucide-react';
+import { CheckCircle, Circle, FileText, Lock } from 'lucide-react';
 
 interface TechnicalQuestionViewProps {
   question: CurrentQuestion;
@@ -19,9 +19,10 @@ interface TechnicalQuestionViewProps {
     code_submission?: string;
     language?: string;
   }) => void;
+  isLocked?: boolean; // True if answer is submitted and cannot be edited
 }
 
-export function TechnicalQuestionView({ question, answer, onAnswerChange }: TechnicalQuestionViewProps) {
+export function TechnicalQuestionView({ question, answer, onAnswerChange, isLocked = false }: TechnicalQuestionViewProps) {
   const isMultipleChoice = question.question_type === 'multiple_choice';
   const isSingleChoice = question.question_type === 'single_choice';
   const isTextQuestion = question.question_type === 'text' || question.question_type === 'short_answer';
@@ -31,6 +32,8 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange }: Tech
   const textResponse = answer.text_response || '';
 
   const handleOptionClick = (optionId: string) => {
+    if (isLocked) return; // Cannot change if locked
+
     if (isMultipleChoice) {
       // Multiple choice - toggle selection
       const newSelection = selectedOptions.includes(optionId)
@@ -44,6 +47,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange }: Tech
   };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (isLocked) return; // Cannot change if locked
     onAnswerChange({ ...answer, text_response: e.target.value });
   };
 
@@ -58,6 +62,14 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange }: Tech
           <h3 className="text-lg font-medium text-gray-800 mb-4">{question.question_text}</h3>
         </div>
 
+        {/* Locked Banner */}
+        {isLocked && (
+          <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+            <Lock className="w-4 h-4" />
+            <span>This answer has been submitted and cannot be edited.</span>
+          </div>
+        )}
+
         {/* Instructions */}
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <FileText className="w-4 h-4" />
@@ -69,19 +81,27 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange }: Tech
           <textarea
             value={textResponse}
             onChange={handleTextChange}
-            placeholder="Type your answer here..."
+            placeholder={isLocked ? '' : "Type your answer here..."}
             maxLength={3000}
-            className="w-full h-48 p-4 border-2 border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:border-gray-800 focus:outline-none resize-none transition-colors"
+            disabled={isLocked}
+            readOnly={isLocked}
+            className={`w-full h-48 p-4 border-2 rounded-xl text-gray-800 placeholder-gray-400 resize-none transition-colors ${
+              isLocked
+                ? 'bg-gray-50 border-gray-200 cursor-not-allowed'
+                : 'border-gray-200 focus:border-gray-800 focus:outline-none'
+            }`}
           />
           <div className="flex justify-between items-center text-sm text-gray-500">
             <span>
-              {textResponse.length > 0 ? (
+              {isLocked ? (
+                <span className="text-green-600">✓ Answer submitted</span>
+              ) : textResponse.length > 0 ? (
                 <span className="text-green-600">✓ Answer provided</span>
               ) : (
                 <span className="text-gray-400">No answer yet</span>
               )}
             </span>
-            <span>{3000 - textResponse.length} characters remaining</span>
+            <span>{isLocked ? 'Locked' : `${3000 - textResponse.length} characters remaining`}</span>
           </div>
         </div>
       </div>
@@ -95,6 +115,14 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange }: Tech
       <div className="prose max-w-none">
         <h3 className="text-lg font-medium text-gray-800 mb-4">{question.question_text}</h3>
       </div>
+
+      {/* Locked Banner */}
+      {isLocked && (
+        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+          <Lock className="w-4 h-4" />
+          <span>This answer has been submitted and cannot be edited.</span>
+        </div>
+      )}
 
       {/* Instructions */}
       <p className="text-sm text-gray-500">
@@ -113,10 +141,15 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange }: Tech
             <button
               key={option.id}
               onClick={() => handleOptionClick(option.id)}
+              disabled={isLocked}
               className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 transition-all text-left ${
-                selected
-                  ? 'border-gray-800 bg-gray-50'
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                isLocked
+                  ? selected
+                    ? 'border-green-500 bg-green-50 cursor-not-allowed'
+                    : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                  : selected
+                    ? 'border-gray-800 bg-gray-50'
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
               }`}
             >
               {/* Selection Indicator */}

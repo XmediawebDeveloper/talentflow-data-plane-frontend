@@ -71,7 +71,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
   ]);
 
   const roleLabels = {
-    tenant_admin: 'Admin',
+    tenant_admin: 'Owner',
     recruiter: 'Recruiter',
     viewer: 'Viewer',
   };

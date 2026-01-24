@@ -525,7 +525,7 @@ export const jdService = {
 
   /**
    * JD15: Disable JD
-   * Only Tenant Admins can disable JDs.
+   * Only Owners can disable JDs.
    * Disabled JDs are excluded from all downstream modules.
    */
   async disable(id: string): Promise<JDResponse> {
@@ -539,7 +539,7 @@ export const jdService = {
 
   /**
    * JD15: Enable JD (re-enable a disabled JD)
-   * Only Tenant Admins can enable JDs.
+   * Only Owners can enable JDs.
    */
   async enable(id: string): Promise<JDResponse> {
     try {

@@ -240,7 +240,7 @@ class TeamService {
   /**
    * Get usage summary for a specific team
    * Role-Based Access:
-   * - Tenant Admin: Can view any team's usage
+   * - Owner: Can view any team's usage
    * - Standard User/Viewer: Can only view their own team's usage
    * - Billing Manager: No access
    */
@@ -257,7 +257,7 @@ class TeamService {
   }
 
   /**
-   * Get usage summary for all teams (Tenant Admin only)
+   * Get usage summary for all teams (Owner only)
    */
   async getAllTeamsUsage(days: number = 30): Promise<AllTeamsUsageSummary> {
     try {

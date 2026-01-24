@@ -164,22 +164,38 @@ export interface RoundScore {
   weightage_percent: number;
 }
 
+export interface ProctoringStats {
+  tab_switch_count: number;
+  copy_count: number;
+  paste_count: number;
+  window_blur_count: number;
+  video_violation_count: number;
+  voice_violation_count: number;
+  fullscreen_exit_count: number;
+  other_violation_count?: number; // Uncategorized events
+  total_violations: number;
+  integrity_status: 'clean' | 'flagged' | 'suspicious';
+  proctoring_score?: number;
+}
+
 export interface DetailedResultResponse {
   id: string;
   assessment_id: string;
   candidate_name: string;
   candidate_email: string;
+  candidate_phone?: string;
   assessment_title: string;
   started_at?: string;
   completed_at?: string;
   time_spent_seconds?: number;
   overall_score?: number;
   passed?: boolean;
-  scoring_status: 'pending' | 'processing' | 'completed';
+  scoring_status: 'pending' | 'processing' | 'completed' | 'error';
   round_scores: RoundScore[];
   question_evaluations: QuestionEvaluation[];
   candidate_insights?: Record<string, any>;
   hiring_recommendation?: string;
+  proctoring_stats?: ProctoringStats;
 }
 
 // ==================== NEW API INTERFACES ====================
@@ -552,6 +568,20 @@ export const assessmentService = {
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * 1b. Get JD IDs that already have assessments (for 1:1 filtering)
+   * Returns list of JD IDs that have non-archived assessments
+   */
+  async getJDsWithAssessments(): Promise<string[]> {
+    try {
+      const response = await api.get<string[]>('/assessments/jds-with-assessments');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch JDs with assessments:', error);
+      return []; // Return empty array on error to not block UX
     }
   },
 

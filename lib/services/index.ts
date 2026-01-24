@@ -77,6 +77,9 @@ export type {
   RefundAction,
   RefundProcessRequest,
   RefundProcessResponse,
+  // Detailed Result types
+  DetailedResultResponse,
+  ProctoringStats,
 } from './assessmentService';
 
 // User Management
@@ -156,6 +159,7 @@ export type {
   SystemCheckResponse,
   CurrentQuestion,
   QuestionOption,
+  QuestionStatusInfo,
   StartAssessmentResponse,
   AnswerSubmission,
   SubmitAnswerResponse,
