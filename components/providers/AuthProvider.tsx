@@ -84,6 +84,10 @@ function mapApiFeatureFlagsToFeatureFlags(apiFlags?: ApiFeatureFlags): FeatureFl
 }
 
 // Map API user response (snake_case) to frontend User type (camelCase)
+// IMPORTANT: Permissions come DIRECTLY from backend API
+// - tenant_admin: Backend should return ALL permissions as true (bypass)
+// - All other roles: Backend returns ONLY explicitly assigned permissions
+// Frontend does NOT add role defaults - it uses EXACTLY what backend sends
 function mapApiUserToUser(apiUser: ApiUser): User {
   return {
     id: apiUser.id,
@@ -91,14 +95,32 @@ function mapApiUserToUser(apiUser: ApiUser): User {
     name: apiUser.name,
     role: apiUser.role as UserRole,
     tenantId: apiUser.tenant_id,
+    // These permissions come DIRECTLY from the backend API response
+    // No role-based defaults are applied here
     permissions: {
+      // Job Descriptions - Granular CRUD
+      canReadJD: apiUser.permissions.can_read_jd,
       canCreateJD: apiUser.permissions.can_create_jd,
+      canUpdateJD: apiUser.permissions.can_update_jd,
+      canDeleteJD: apiUser.permissions.can_delete_jd,
       canManageJD: apiUser.permissions.can_manage_jd,
-      canUploadResumes: apiUser.permissions.can_upload_resumes,
+      // Resumes - Granular CRUD
       canViewResumes: apiUser.permissions.can_view_resumes,
+      canUploadResumes: apiUser.permissions.can_upload_resumes,
+      canUpdateResumes: apiUser.permissions.can_update_resumes,
+      canDeleteResumes: apiUser.permissions.can_delete_resumes,
+      // Resume Database - Granular CRUD
       canAccessInternalDB: apiUser.permissions.can_access_internal_db,
+      canUpdateInternalDB: apiUser.permissions.can_update_internal_db,
+      canDeleteInternalDB: apiUser.permissions.can_delete_internal_db,
+      // Assessments - Granular CRUD
+      canViewAssessments: apiUser.permissions.can_view_assessments,
       canCreateAssessments: apiUser.permissions.can_create_assessments,
+      canUpdateAssessments: apiUser.permissions.can_update_assessments,
+      canDeleteAssessments: apiUser.permissions.can_delete_assessments,
+      // Analytics & Reports
       canViewAnalytics: apiUser.permissions.can_view_analytics,
+      // Settings & Admin
       canManageSettings: apiUser.permissions.can_manage_settings,
       canManageUsers: apiUser.permissions.can_manage_users,
       // RBAC03: Billing permissions

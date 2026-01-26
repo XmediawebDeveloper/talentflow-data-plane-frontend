@@ -9,20 +9,42 @@ export type UserRole =
   | 'standard_user';    // RBAC04
 
 export interface Permission {
-  // Legacy permissions matching backend API
-  canCreateJD: boolean;         // JD Creation
-  canManageJD: boolean;         // JD Management
-  canUploadResumes: boolean;    // My Resumes, Resume Upload
-  canViewResumes: boolean;      // Resume Scoring, AI Talent Match
-  canAccessInternalDB: boolean; // Internal Resume Database
-  canCreateAssessments: boolean; // Assessments
+  // Job Descriptions - Granular CRUD
+  canReadJD?: boolean;          // View/List Job Descriptions
+  canCreateJD: boolean;         // Create Job Descriptions
+  canUpdateJD?: boolean;        // Edit Job Descriptions
+  canDeleteJD?: boolean;        // Delete Job Descriptions
+  canManageJD: boolean;         // Legacy: JD Management (composite)
+
+  // Resumes - Granular CRUD
+  canViewResumes: boolean;      // View/Read Resumes
+  canUploadResumes: boolean;    // Create/Upload Resumes
+  canUpdateResumes?: boolean;   // Edit Resumes
+  canDeleteResumes?: boolean;   // Delete Resumes
+
+  // Resume Database - Granular CRUD
+  canAccessInternalDB: boolean; // View/Read Internal Database
+  canUpdateInternalDB?: boolean;// Update records in Internal Database
+  canDeleteInternalDB?: boolean;// Delete records from Internal Database
+
+  // Assessments - Granular CRUD
+  canViewAssessments?: boolean; // View/Read Assessments
+  canCreateAssessments: boolean;// Create Assessments
+  canUpdateAssessments?: boolean;// Edit Assessments
+  canDeleteAssessments?: boolean;// Delete Assessments
+
+  // Analytics & Reports
   canViewAnalytics: boolean;    // Reports & Analytics
+
+  // Settings & Admin
   canManageSettings: boolean;   // Settings (Admin only)
   canManageUsers: boolean;      // User Management (Admin only)
+
   // RBAC03: Billing permissions
   canViewBilling?: boolean;
   canViewInvoices?: boolean;
   canViewUsage?: boolean;
+
   // RBAC06: Feature flags
   canRunScoring?: boolean;
   canRunAiInterviews?: boolean;
@@ -154,20 +176,37 @@ export interface Tenant {
 export const getPermissionsForRole = (role: UserRole): Permission => {
   switch (role) {
     case 'tenant_admin':
-      // RBAC02: Owner has ALL permissions
+      // RBAC02: Owner has ALL permissions (full CRUD on everything)
       return {
+        // Job Descriptions - Full CRUD
+        canReadJD: true,
         canCreateJD: true,
+        canUpdateJD: true,
+        canDeleteJD: true,
         canManageJD: true,
-        canUploadResumes: true,
+        // Resumes - Full CRUD
         canViewResumes: true,
+        canUploadResumes: true,
+        canUpdateResumes: true,
+        canDeleteResumes: true,
+        // Resume Database - Full CRUD
         canAccessInternalDB: true,
+        canUpdateInternalDB: true,
+        canDeleteInternalDB: true,
+        // Assessments - Full CRUD
+        canViewAssessments: true,
         canCreateAssessments: true,
+        canUpdateAssessments: true,
+        canDeleteAssessments: true,
+        // Analytics & Admin
         canViewAnalytics: true,
         canManageSettings: true,
         canManageUsers: true,
+        // Billing
         canViewBilling: true,
         canViewInvoices: true,
         canViewUsage: true,
+        // Features
         canRunScoring: true,
         canRunAiInterviews: true,
         canRunAiMatch: true,
@@ -176,18 +215,35 @@ export const getPermissionsForRole = (role: UserRole): Permission => {
         canApiAccess: true,
       };
     case 'recruiter':
-      // Recruiter gets operational permissions
+      // Recruiter gets operational permissions (Full CRUD on recruitment modules)
       return {
+        // Job Descriptions - Full CRUD
+        canReadJD: true,
         canCreateJD: true,
+        canUpdateJD: true,
+        canDeleteJD: true,
         canManageJD: true,
-        canUploadResumes: true,
+        // Resumes - Full CRUD
         canViewResumes: true,
+        canUploadResumes: true,
+        canUpdateResumes: true,
+        canDeleteResumes: true,
+        // Resume Database - Full CRUD
         canAccessInternalDB: true,
+        canUpdateInternalDB: true,
+        canDeleteInternalDB: true,
+        // Assessments - Full CRUD
+        canViewAssessments: true,
         canCreateAssessments: true,
+        canUpdateAssessments: true,
+        canDeleteAssessments: true,
+        // Analytics & Admin
         canViewAnalytics: true,
         canManageSettings: false,
         canManageUsers: false,
+        // Billing
         canViewBilling: false,
+        // Features
         canRunScoring: true,
         canRunAiInterviews: true,
         canRunAiMatch: true,
@@ -197,30 +253,63 @@ export const getPermissionsForRole = (role: UserRole): Permission => {
     case 'viewer':
       // RBAC05: Viewer has read-only access - no permission expansion allowed
       return {
+        // Job Descriptions - Read only
+        canReadJD: true,
         canCreateJD: false,
+        canUpdateJD: false,
+        canDeleteJD: false,
         canManageJD: false,
-        canUploadResumes: false,
+        // Resumes - Read only
         canViewResumes: true,
+        canUploadResumes: false,
+        canUpdateResumes: false,
+        canDeleteResumes: false,
+        // Resume Database - No access
         canAccessInternalDB: false,
+        canUpdateInternalDB: false,
+        canDeleteInternalDB: false,
+        // Assessments - Read only
+        canViewAssessments: true,
         canCreateAssessments: false,
+        canUpdateAssessments: false,
+        canDeleteAssessments: false,
+        // Analytics & Admin
         canViewAnalytics: true,
         canManageSettings: false,
         canManageUsers: false,
+        // Billing
         canViewBilling: false,
-        canExport: false, // Viewers cannot export
+        // Features
+        canExport: false,
       };
     case 'billing_manager':
       // RBAC03: Billing Manager - read-only billing access, no operational capabilities
       return {
+        // No JD access
+        canReadJD: false,
         canCreateJD: false,
+        canUpdateJD: false,
+        canDeleteJD: false,
         canManageJD: false,
-        canUploadResumes: false,
+        // No Resume access
         canViewResumes: false,
+        canUploadResumes: false,
+        canUpdateResumes: false,
+        canDeleteResumes: false,
+        // No Resume Database access
         canAccessInternalDB: false,
+        canUpdateInternalDB: false,
+        canDeleteInternalDB: false,
+        // No Assessment access
+        canViewAssessments: false,
         canCreateAssessments: false,
-        canViewAnalytics: true, // Can view usage analytics
+        canUpdateAssessments: false,
+        canDeleteAssessments: false,
+        // Analytics & Admin
+        canViewAnalytics: true,
         canManageSettings: false,
         canManageUsers: false,
+        // Billing - Full access
         canViewBilling: true,
         canViewInvoices: true,
         canViewUsage: true,
@@ -228,12 +317,22 @@ export const getPermissionsForRole = (role: UserRole): Permission => {
     case 'standard_user':
       // RBAC04: Standard User - ZERO implicit permissions, all must be explicitly granted
       return {
+        canReadJD: false,
         canCreateJD: false,
+        canUpdateJD: false,
+        canDeleteJD: false,
         canManageJD: false,
-        canUploadResumes: false,
         canViewResumes: false,
+        canUploadResumes: false,
+        canUpdateResumes: false,
+        canDeleteResumes: false,
         canAccessInternalDB: false,
+        canUpdateInternalDB: false,
+        canDeleteInternalDB: false,
+        canViewAssessments: false,
         canCreateAssessments: false,
+        canUpdateAssessments: false,
+        canDeleteAssessments: false,
         canViewAnalytics: false,
         canManageSettings: false,
         canManageUsers: false,
@@ -242,12 +341,22 @@ export const getPermissionsForRole = (role: UserRole): Permission => {
     default:
       // Default: no permissions
       return {
+        canReadJD: false,
         canCreateJD: false,
+        canUpdateJD: false,
+        canDeleteJD: false,
         canManageJD: false,
-        canUploadResumes: false,
         canViewResumes: false,
+        canUploadResumes: false,
+        canUpdateResumes: false,
+        canDeleteResumes: false,
         canAccessInternalDB: false,
+        canUpdateInternalDB: false,
+        canDeleteInternalDB: false,
+        canViewAssessments: false,
         canCreateAssessments: false,
+        canUpdateAssessments: false,
+        canDeleteAssessments: false,
         canViewAnalytics: false,
         canManageSettings: false,
         canManageUsers: false,

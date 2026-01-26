@@ -499,6 +499,70 @@ export default function UserManagement() {
     });
   };
 
+  // Select/Deselect all permissions for create modal
+  const handleSelectAllPermissions = () => {
+    const allPermissionIds = allPermissions.map(p => p.id);
+    const allSelected = allPermissionIds.every(id => selectedPermissionIds.has(id));
+
+    if (allSelected) {
+      // Deselect all
+      setSelectedPermissionIds(new Set());
+    } else {
+      // Select all
+      setSelectedPermissionIds(new Set(allPermissionIds));
+    }
+  };
+
+  // Select/Deselect all permissions for edit modal
+  const handleSelectAllEditPermissions = () => {
+    const allPermissionIds = allPermissions.map(p => p.id);
+    const allSelected = allPermissionIds.every(id => editSelectedPermissionIds.has(id));
+
+    if (allSelected) {
+      // Deselect all
+      setEditSelectedPermissionIds(new Set());
+    } else {
+      // Select all
+      setEditSelectedPermissionIds(new Set(allPermissionIds));
+    }
+  };
+
+  // Select/Deselect all permissions in a module for create modal
+  const handleSelectModulePermissions = (modulePermissions: Permission[]) => {
+    const modulePermissionIds = modulePermissions.map(p => p.id);
+    const allSelected = modulePermissionIds.every(id => selectedPermissionIds.has(id));
+
+    setSelectedPermissionIds(prev => {
+      const newSet = new Set(prev);
+      if (allSelected) {
+        // Deselect all in this module
+        modulePermissionIds.forEach(id => newSet.delete(id));
+      } else {
+        // Select all in this module
+        modulePermissionIds.forEach(id => newSet.add(id));
+      }
+      return newSet;
+    });
+  };
+
+  // Select/Deselect all permissions in a module for edit modal
+  const handleSelectEditModulePermissions = (modulePermissions: Permission[]) => {
+    const modulePermissionIds = modulePermissions.map(p => p.id);
+    const allSelected = modulePermissionIds.every(id => editSelectedPermissionIds.has(id));
+
+    setEditSelectedPermissionIds(prev => {
+      const newSet = new Set(prev);
+      if (allSelected) {
+        // Deselect all in this module
+        modulePermissionIds.forEach(id => newSet.delete(id));
+      } else {
+        // Select all in this module
+        modulePermissionIds.forEach(id => newSet.add(id));
+      }
+      return newSet;
+    });
+  };
+
   // Email validation with debounce (500ms)
   const checkEmailAvailability = async (username: string) => {
     // Clear previous timeout
@@ -1427,9 +1491,20 @@ export default function UserManagement() {
               {/* Permissions - Only show after role is selected */}
               {selectedRoleId && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Permissions <span className="text-xs text-gray-500">(Pre-filled based on role, customize as needed)</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Permissions <span className="text-xs text-gray-500">(Pre-filled based on role, customize as needed)</span>
+                    </label>
+                    {allPermissions.length > 0 && !isLoadingPermissions && (
+                      <button
+                        type="button"
+                        onClick={handleSelectAllPermissions}
+                        className="text-xs font-medium text-gray-700 hover:text-gray-900 px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        {allPermissions.every(p => selectedPermissionIds.has(p.id)) ? 'Deselect All' : 'Select All'}
+                      </button>
+                    )}
+                  </div>
                   {isLoadingPermissions ? (
                     <div className="flex items-center justify-center py-4">
                       <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
@@ -1437,29 +1512,55 @@ export default function UserManagement() {
                     </div>
                   ) : allPermissions.length > 0 ? (
                     <div className="space-y-4 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                      {groupPermissionsByModule(allPermissions).map(group => (
-                        <div key={group.module} className="space-y-2">
-                          <div className="text-sm font-medium text-gray-800 border-b border-gray-100 pb-1">
-                            {group.moduleName}
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 pl-2">
-                            {group.permissions.map(perm => (
-                              <label
-                                key={perm.id}
-                                className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer"
+                      {groupPermissionsByModule(allPermissions).map(group => {
+                        const modulePermissionIds = group.permissions.map(p => p.id);
+                        const allModuleSelected = modulePermissionIds.every(id => selectedPermissionIds.has(id));
+                        const someModuleSelected = modulePermissionIds.some(id => selectedPermissionIds.has(id)) && !allModuleSelected;
+
+                        return (
+                          <div key={group.module} className="space-y-2">
+                            <div className="flex items-center gap-2 border-b border-gray-100 pb-1">
+                              <button
+                                type="button"
+                                onClick={() => handleSelectModulePermissions(group.permissions)}
+                                className={`w-4 h-4 rounded flex items-center justify-center border-2 flex-shrink-0 ${
+                                  allModuleSelected
+                                    ? 'bg-gray-800 border-gray-800'
+                                    : someModuleSelected
+                                    ? 'bg-gray-200 border-gray-800'
+                                    : 'border-gray-300'
+                                }`}
                               >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedPermissionIds.has(perm.id)}
-                                  onChange={() => togglePermission(perm.id)}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700">{perm.name}</span>
-                              </label>
-                            ))}
+                                {(allModuleSelected || someModuleSelected) && (
+                                  <Check className="w-3 h-3 text-white" />
+                                )}
+                              </button>
+                              <div className="text-sm font-medium text-gray-800">
+                                {group.moduleName}
+                                <span className="text-xs text-gray-500 ml-1">
+                                  ({modulePermissionIds.filter(id => selectedPermissionIds.has(id)).length}/{modulePermissionIds.length})
+                                </span>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 pl-2">
+                              {group.permissions.map(perm => (
+                                <label
+                                  key={perm.id}
+                                  className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedPermissionIds.has(perm.id)}
+                                    onChange={() => togglePermission(perm.id)}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700">{perm.name}</span>
+                                </label>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-4 border border-gray-200 rounded-lg bg-gray-50">
@@ -1600,9 +1701,20 @@ export default function UserManagement() {
               {/* Permissions - Only show after role is selected */}
               {editSelectedRoleId && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Permissions <span className="text-xs text-gray-500">(Pre-filled based on role, customize as needed)</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Permissions <span className="text-xs text-gray-500">(Pre-filled based on role, customize as needed)</span>
+                    </label>
+                    {allPermissions.length > 0 && !isLoadingPermissions && (
+                      <button
+                        type="button"
+                        onClick={handleSelectAllEditPermissions}
+                        className="text-xs font-medium text-gray-700 hover:text-gray-900 px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        {allPermissions.every(p => editSelectedPermissionIds.has(p.id)) ? 'Deselect All' : 'Select All'}
+                      </button>
+                    )}
+                  </div>
                   {isLoadingPermissions ? (
                     <div className="flex items-center justify-center py-4">
                       <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
@@ -1610,29 +1722,55 @@ export default function UserManagement() {
                     </div>
                   ) : allPermissions.length > 0 ? (
                     <div className="space-y-4 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                      {groupPermissionsByModule(allPermissions).map(group => (
-                        <div key={group.module} className="space-y-2">
-                          <div className="text-sm font-medium text-gray-800 border-b border-gray-100 pb-1">
-                            {group.moduleName}
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 pl-2">
-                            {group.permissions.map(perm => (
-                              <label
-                                key={perm.id}
-                                className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer"
+                      {groupPermissionsByModule(allPermissions).map(group => {
+                        const modulePermissionIds = group.permissions.map(p => p.id);
+                        const allModuleSelected = modulePermissionIds.every(id => editSelectedPermissionIds.has(id));
+                        const someModuleSelected = modulePermissionIds.some(id => editSelectedPermissionIds.has(id)) && !allModuleSelected;
+
+                        return (
+                          <div key={group.module} className="space-y-2">
+                            <div className="flex items-center gap-2 border-b border-gray-100 pb-1">
+                              <button
+                                type="button"
+                                onClick={() => handleSelectEditModulePermissions(group.permissions)}
+                                className={`w-4 h-4 rounded flex items-center justify-center border-2 flex-shrink-0 ${
+                                  allModuleSelected
+                                    ? 'bg-gray-800 border-gray-800'
+                                    : someModuleSelected
+                                    ? 'bg-gray-200 border-gray-800'
+                                    : 'border-gray-300'
+                                }`}
                               >
-                                <input
-                                  type="checkbox"
-                                  checked={editSelectedPermissionIds.has(perm.id)}
-                                  onChange={() => toggleEditPermission(perm.id)}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700">{perm.name}</span>
-                              </label>
-                            ))}
+                                {(allModuleSelected || someModuleSelected) && (
+                                  <Check className="w-3 h-3 text-white" />
+                                )}
+                              </button>
+                              <div className="text-sm font-medium text-gray-800">
+                                {group.moduleName}
+                                <span className="text-xs text-gray-500 ml-1">
+                                  ({modulePermissionIds.filter(id => editSelectedPermissionIds.has(id)).length}/{modulePermissionIds.length})
+                                </span>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 pl-2">
+                              {group.permissions.map(perm => (
+                                <label
+                                  key={perm.id}
+                                  className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={editSelectedPermissionIds.has(perm.id)}
+                                    onChange={() => toggleEditPermission(perm.id)}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700">{perm.name}</span>
+                                </label>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-4 border border-gray-200 rounded-lg bg-gray-50">

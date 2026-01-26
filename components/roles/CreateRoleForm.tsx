@@ -138,6 +138,19 @@ export default function CreateRoleForm() {
     }
   };
 
+  const handleSelectAll = () => {
+    const allPermissionIds = permissions.map(p => p.id);
+    const allSelected = allPermissionIds.every(id => formData.permission_ids.includes(id));
+
+    if (allSelected) {
+      // Deselect all
+      setFormData(prev => ({ ...prev, permission_ids: [] }));
+    } else {
+      // Select all
+      setFormData(prev => ({ ...prev, permission_ids: allPermissionIds }));
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formData.name || !formData.code) {
       toast.error('Please fill in role name and code');
@@ -165,8 +178,39 @@ export default function CreateRoleForm() {
   };
 
   const renderPermissionMatrix = () => {
+    const allPermissionIds = permissions.map(p => p.id);
+    const allSelected = allPermissionIds.every(id => formData.permission_ids.includes(id));
+    const someSelected = formData.permission_ids.length > 0 && !allSelected;
+
     return (
       <div className="space-y-2">
+        {/* Select All Option */}
+        <div className="border border-gray-300 rounded-lg overflow-hidden bg-gray-50">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSelectAll}
+                className={`w-5 h-5 rounded flex items-center justify-center border-2 ${
+                  allSelected
+                    ? 'bg-gray-800 border-gray-800'
+                    : someSelected
+                    ? 'bg-gray-200 border-gray-800'
+                    : 'border-gray-300'
+                }`}
+              >
+                {(allSelected || someSelected) && <Check className="w-3 h-3 text-white" />}
+              </button>
+              <span className="font-semibold text-gray-900">
+                Select All Permissions
+              </span>
+              <span className="text-xs text-gray-500">
+                ({formData.permission_ids.length}/{allPermissionIds.length} selected)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Module-wise Permissions */}
         {Object.entries(permissionsByModule).map(([module, perms]) => {
           const allSelected = perms.every(p => formData.permission_ids.includes(p.id));
           const someSelected = perms.some(p => formData.permission_ids.includes(p.id));

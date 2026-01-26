@@ -44,12 +44,33 @@ export async function getRoles(): Promise<{
   total: number;
 }> {
   const response = await api.get(`${RBAC_BASE_URL}/roles`);
-  return response.data;
+
+  // Ensure core system roles are always marked as system roles
+  const systemRoleCodes = ['tenant_admin', 'admin', 'recruiter', 'viewer'];
+  const roles = response.data.roles.map((role: RoleListItem) => {
+    if (systemRoleCodes.includes(role.code.toLowerCase())) {
+      return { ...role, is_system: true };
+    }
+    return role;
+  });
+
+  return {
+    ...response.data,
+    roles,
+  };
 }
 
 export async function getRoleById(roleId: number): Promise<Role> {
   const response = await api.get(`${RBAC_BASE_URL}/roles/${roleId}`);
-  return response.data;
+
+  // Ensure core system roles are always marked as system roles
+  const systemRoleCodes = ['tenant_admin', 'admin', 'recruiter', 'viewer'];
+  const role = response.data;
+  if (systemRoleCodes.includes(role.code.toLowerCase())) {
+    return { ...role, is_system: true };
+  }
+
+  return role;
 }
 
 export async function createRole(data: RoleCreateRequest): Promise<Role> {
