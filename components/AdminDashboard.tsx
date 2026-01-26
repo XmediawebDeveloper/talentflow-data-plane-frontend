@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Building2, Users, BarChart3, Settings, Activity, FileText, Briefcase, Award, Loader2, Zap, ClipboardCheck, Video } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
 import { dashboardService, DashboardStats, RecentActivity, SubscriptionUnits, JDActivity } from '@/lib/services/dashboardService';
 
@@ -22,6 +23,7 @@ export default function AdminDashboard({
   onNavigateToAnalytics,
   onNavigateToSettings,
 }: AdminDashboardProps) {
+  const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [subscriptionUnits, setSubscriptionUnits] = useState<SubscriptionUnits | null>(null);  // JD02A
@@ -111,7 +113,11 @@ export default function AdminDashboard({
 
       {/* Stats Cards */}
       <div className="grid grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+        {/* Resumes Card - Clickable */}
+        <div
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md hover:border-blue-300 transition-all"
+          onClick={() => router.push('/recruitment/my-resumes')}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Resumes</p>
@@ -124,33 +130,63 @@ export default function AdminDashboard({
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+        {/* Job Descriptions Card - Clickable with status filters */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-purple-300 transition-all">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Job Descriptions</p>
-              <p className="text-3xl font-semibold text-gray-900 mt-1">{stats?.total_jds || 0}</p>
-              {/* JD02A & JD02B: Show published, draft, and my JDs counts */}
+              <p
+                className="text-sm text-gray-600 cursor-pointer hover:text-purple-600 transition-colors"
+                onClick={() => router.push('/recruitment/job-openings')}
+              >
+                Job Descriptions
+              </p>
+              <p
+                className="text-3xl font-semibold text-gray-900 mt-1 cursor-pointer hover:text-purple-600 transition-colors"
+                onClick={() => router.push('/recruitment/job-openings')}
+              >
+                {stats?.total_jds || 0}
+              </p>
+              {/* JD02A & JD02B: Show published, draft, and my JDs counts - All clickable */}
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className="text-xs text-green-600">{stats?.active_jds || 0} published</span>
+                <span
+                  className="text-xs text-green-600 cursor-pointer hover:underline hover:text-green-700 transition-colors"
+                  onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?status=published'); }}
+                >
+                  {stats?.active_jds || 0} published
+                </span>
                 <span className="text-xs text-gray-400">|</span>
-                <span className="text-xs text-yellow-600">{stats?.draft_jds || 0} draft</span>
+                <span
+                  className="text-xs text-yellow-600 cursor-pointer hover:underline hover:text-yellow-700 transition-colors"
+                  onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?status=draft'); }}
+                >
+                  {stats?.draft_jds || 0} draft
+                </span>
                 {/* JD02B: Show "my JDs" for recruiters */}
                 {!canManageUsers && (stats?.my_jds ?? 0) > 0 && (
                   <>
                     <span className="text-xs text-gray-400">|</span>
-                    <span className="text-xs text-blue-600">{stats?.my_jds || 0} mine</span>
+                    <span
+                      className="text-xs text-blue-600 cursor-pointer hover:underline hover:text-blue-700 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?filter=mine'); }}
+                    >
+                      {stats?.my_jds || 0} mine
+                    </span>
                   </>
                 )}
               </div>
             </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+            <div
+              className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center cursor-pointer"
+              onClick={() => router.push('/recruitment/job-openings')}
+            >
               <Briefcase className="w-6 h-6 text-purple-600" />
             </div>
           </div>
         </div>
 
+        {/* Users Card - Clickable for admins */}
         <div
-          className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 ${canManageUsers ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+          className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 ${canManageUsers ? 'cursor-pointer hover:shadow-md hover:border-green-300 transition-all' : 'hover:shadow-md transition-shadow'}`}
           onClick={() => canManageUsers && onNavigateToUsers?.()}
         >
           <div className="flex items-center justify-between">
@@ -165,7 +201,11 @@ export default function AdminDashboard({
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+        {/* Assessments Card - Clickable */}
+        <div
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md hover:border-orange-300 transition-all"
+          onClick={() => router.push('/recruitment/assessments')}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Assessments</p>
