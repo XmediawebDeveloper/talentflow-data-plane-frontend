@@ -127,8 +127,11 @@ export const resumeService = {
   },
 
   /**
-   * Upload single resume
+   * Upload single resume (async processing with Celery)
    * Consumes 1 Resume Upload Unit
+   *
+   * Returns immediately with batch ID, then polls for completion.
+   * This eliminates the 2-minute wait time for large files.
    */
   async upload(file: File, folderId?: string): Promise<Resume> {
     const formData = new FormData();
@@ -138,12 +141,73 @@ export const resumeService = {
       formData.append('folder_id', folderId);
     }
 
-    const response = await api.post<Resume>('/resumes/upload', formData, {
+    // Call async endpoint which returns batch response
+    const response = await api.post<UploadBatchResponse>('/resumes/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
-    // Dispatch event to refresh header quota display
-    dispatchUnitsConsumed();
-    return response.data;
+
+    const batchId = response.data.id;
+
+    // Poll for completion (max 5 minutes)
+    const maxAttempts = 300; // 300 * 1000ms = 5 minutes
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+
+      const batch = await this.getBatchStatus(batchId);
+
+      // Check if processing is complete
+      if (batch.pending === 0) {
+        // Dispatch event to refresh header quota display
+        dispatchUnitsConsumed();
+
+        // Check for errors
+        if (batch.errors > 0 && batch.items && batch.items.length > 0) {
+          const errorItem = batch.items[0];
+          throw new Error(errorItem.error_message || 'Failed to process resume');
+        }
+
+        // Check for duplicates
+        if (batch.duplicates > 0) {
+          throw new Error('Duplicate resume detected');
+        }
+
+        // Extract resume from completed batch item
+        if (batch.items && batch.items.length > 0) {
+          const item = batch.items[0];
+
+          // If we have a resume_id, fetch the full resume details
+          if (item.resume_id) {
+            const resume = await this.get(item.resume_id);
+            return resume;
+          } else {
+            // Construct resume from batch item data
+            return {
+              id: item.resume_id || '',
+              candidate_name: item.candidate_name || file.name.replace(/\.[^/.]+$/, ''),
+              file_name: file.name,
+              skills: [],
+              education: [],
+              experience: [],
+              certifications: [],
+              version: 1,
+              version_count: 1,
+              is_duplicate: false,
+              source: 'manual_upload',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            } as Resume;
+          }
+        }
+
+        throw new Error('Resume processed but no data returned');
+      }
+
+      attempts++;
+    }
+
+    throw new Error('Resume upload timed out after 5 minutes');
   },
 
   /**

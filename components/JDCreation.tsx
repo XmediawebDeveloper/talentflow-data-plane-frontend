@@ -1220,7 +1220,66 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (hasProceededToReview && originalStage1Values) {
       if (!hasStage1FieldsChanged()) {
         // No fields modified - skip extraction, go directly to Stage 2
-        console.log('[TalentFlow] No Stage 1 fields modified after review, skipping extraction');
+        console.log('[TalentFlow] No Stage 1 fields modified after review, checking extracted data...');
+
+        // Safety check: If extractedData is empty (no skills), reload from database
+        if (editingId && (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0)) {
+          console.log('[TalentFlow] Extracted data is empty after review, reloading from database...');
+          try {
+            const jd = await jdService.get(editingId);
+
+            // Map experience from database
+            const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
+              if (min === null || min === undefined) return '';
+              if (min >= 10) return 'senior';
+              if (min >= 7) return 'senior';
+              if (min >= 5) return 'mid';
+              if (min >= 2) return 'junior';
+              return 'entry';
+            };
+
+            const experienceValue = mapExpToLevel(jd.experience_min, jd.experience_max);
+            const educationValue = jd.education_requirements?.degree || '';
+            const industryValue = jd.industry_type || '';
+
+            setExtractedData({
+              mustHaveSkills: jd.must_have_skills || [],
+              niceToHaveSkills: jd.nice_to_have_skills || [],
+              mustHaveComments: jd.must_have_comments || [],
+              niceToHaveComments: jd.nice_to_have_comments || [],
+              education: educationValue,
+              educationRequired: false,
+              experience: experienceValue,
+              experienceRequired: false,
+              industryType: industryValue,
+              industryTypeRequired: false,
+              department: jd.department || '',
+              salaryFrom: jd.salary_min?.toString() || '',
+              salaryTo: jd.salary_max?.toString() || '',
+              compensationType: (jd.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
+              assessmentGuidance: jd.assessment_guidance || '',
+              internalRecruiterComments: jd.internal_comments ? jd.internal_comments.split('\n').filter(c => c.trim()) : [],
+              certifications: jd.certifications || [],
+              domainKeywords: jd.domain_keywords || [],
+              allowOverqualified: jd.allow_overqualified ?? false,
+              employmentType: (jd.employment_type as ExtractedData['employmentType']) || 'full_time',
+              workModel: (jd.remote_type as ExtractedData['workModel']) || 'onsite',
+              locations: jd.locations?.map(loc => ({
+                city: loc.state ? `${loc.city}, ${loc.state}` : loc.city,
+                radius: loc.radius_km?.toString() || '50',
+              })) || [],
+              locationsRequired: jd.locations?.some(loc => loc.is_required) || false,
+              codingRequired: jd.coding_required || false,
+              suggestedLanguages: jd.supported_languages || [],
+            });
+
+            console.log('[TalentFlow] Extracted data reloaded successfully after review');
+          } catch (error) {
+            console.error('[TalentFlow] Failed to reload extracted data after review:', error);
+          }
+        }
+
+        console.log('[TalentFlow] Skipping extraction after review');
         setHasProceededToExtract(true);
         setStep('extract');
         return;
@@ -1231,7 +1290,73 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     } else if (lastExtractedJD && jdText.trim() === lastExtractedJD.trim()) {
       // Normal flow: Check if JD has changed since last extraction
-      console.log('[TalentFlow] JD unchanged, skipping extraction and going directly to step 2');
+      console.log('[TalentFlow] JD unchanged, checking if extracted data exists...');
+
+      // Safety check: If extractedData is empty (no skills), reload from database
+      if (editingId && (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0)) {
+        console.log('[TalentFlow] Extracted data is empty, reloading from database...');
+        try {
+          const jd = await jdService.get(editingId);
+
+          // Map experience from database
+          const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
+            if (min === null || min === undefined) return '';
+            if (min >= 10) return 'senior';
+            if (min >= 7) return 'senior';
+            if (min >= 5) return 'mid';
+            if (min >= 2) return 'junior';
+            return 'entry';
+          };
+
+          const experienceValue = mapExpToLevel(jd.experience_min, jd.experience_max);
+          const educationValue = jd.education_requirements?.degree || '';
+          const industryValue = jd.industry_type || '';
+
+          console.log('[TalentFlow] Reloading extracted data from database:', {
+            mustHaveSkills: jd.must_have_skills,
+            niceToHaveSkills: jd.nice_to_have_skills,
+            mustHaveComments: jd.must_have_comments,
+            niceToHaveComments: jd.nice_to_have_comments,
+          });
+
+          setExtractedData({
+            mustHaveSkills: jd.must_have_skills || [],
+            niceToHaveSkills: jd.nice_to_have_skills || [],
+            mustHaveComments: jd.must_have_comments || [],
+            niceToHaveComments: jd.nice_to_have_comments || [],
+            education: educationValue,
+            educationRequired: false,
+            experience: experienceValue,
+            experienceRequired: false,
+            industryType: industryValue,
+            industryTypeRequired: false,
+            department: jd.department || '',
+            salaryFrom: jd.salary_min?.toString() || '',
+            salaryTo: jd.salary_max?.toString() || '',
+            compensationType: (jd.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
+            assessmentGuidance: jd.assessment_guidance || '',
+            internalRecruiterComments: jd.internal_comments ? jd.internal_comments.split('\n').filter(c => c.trim()) : [],
+            certifications: jd.certifications || [],
+            domainKeywords: jd.domain_keywords || [],
+            allowOverqualified: jd.allow_overqualified ?? false,
+            employmentType: (jd.employment_type as ExtractedData['employmentType']) || 'full_time',
+            workModel: (jd.remote_type as ExtractedData['workModel']) || 'onsite',
+            locations: jd.locations?.map(loc => ({
+              city: loc.state ? `${loc.city}, ${loc.state}` : loc.city,
+              radius: loc.radius_km?.toString() || '50',
+            })) || [],
+            locationsRequired: jd.locations?.some(loc => loc.is_required) || false,
+            codingRequired: jd.coding_required || false,
+            suggestedLanguages: jd.supported_languages || [],
+          });
+
+          console.log('[TalentFlow] Extracted data reloaded successfully');
+        } catch (error) {
+          console.error('[TalentFlow] Failed to reload extracted data:', error);
+        }
+      }
+
+      console.log('[TalentFlow] Skipping extraction and going directly to step 2');
       setHasProceededToExtract(true);
       setStep('extract');
       return;
@@ -2181,6 +2306,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setHasProceededToReview(true);  // Mark that user has proceeded to review (makes Stage 2 fields read-only)
     setHasFormattedForReview(true);  // Mark as formatted so we can skip on next "Next" click
     setExtractedDataModified(false);  // Reset modified flag after formatting
+    setValidationErrors({});  // Clear validation errors since all validations passed
 
     // Save JD with creation_stage: 'review' so refresh preserves the stage
     try {
@@ -2867,62 +2993,62 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // - Draft JD: editingId is already set in useState, so saves will update the same draft
   // - Published JD: editingId is null, so saves will create a new draft
   useEffect(() => {
-    if (editingJD && !hasLoadedFromEditingJD.current) {
-      // Only load from editingJD once on initial mount to prevent overwriting user edits
+    if (effectiveEditingJD && !hasLoadedFromEditingJD.current) {
+      // Only load from effectiveEditingJD once on initial mount to prevent overwriting user edits
       hasLoadedFromEditingJD.current = true;
 
-      console.log('[TalentFlow] Restoring JD state from editingJD:', {
-        id: editingJD.id,
-        title: editingJD.title,
-        creation_stage: editingJD.creation_stage,
-        creation_method: editingJD.creation_method,
-        status: editingJD.status
+      console.log('[TalentFlow] Restoring JD state from effectiveEditingJD:', {
+        id: effectiveEditingJD.id,
+        title: effectiveEditingJD.title,
+        creation_stage: effectiveEditingJD.creation_stage,
+        creation_method: effectiveEditingJD.creation_method,
+        status: effectiveEditingJD.status
       });
 
       // Use functional updates to preserve user edits if they exist
-      setJobTitle(prev => prev || editingJD.title);
-      setGeneratedJD(prev => prev || editingJD.description);
+      setJobTitle(prev => prev || effectiveEditingJD.title);
+      setGeneratedJD(prev => prev || effectiveEditingJD.description);
 
       // Populate AI prompt field with saved ai_prompt (not description)
       // Only set if current value is empty to avoid overwriting user edits
-      if (editingJD.creation_method === 'ai_generated') {
-        setAiPrompt(prev => prev || editingJD.ai_prompt || '');  // Preserve user edits
-      } else if (editingJD.creation_method === 'manual') {
-        setManualJD(prev => prev || editingJD.description || '');  // Preserve user edits
+      if (effectiveEditingJD.creation_method === 'ai_generated') {
+        setAiPrompt(prev => prev || effectiveEditingJD.ai_prompt || '');  // Preserve user edits
+      } else if (effectiveEditingJD.creation_method === 'manual') {
+        setManualJD(prev => prev || effectiveEditingJD.description || '');  // Preserve user edits
       }
 
       // Set lastExtractedJD to the loaded description so we can detect changes
-      setLastExtractedJD(editingJD.description || '');
+      setLastExtractedJD(effectiveEditingJD.description || '');
 
-      setStep(editingJD.creation_stage);
-      console.log('[TalentFlow] Set step to:', editingJD.creation_stage);
+      setStep(effectiveEditingJD.creation_stage);
+      console.log('[TalentFlow] Set step to:', effectiveEditingJD.creation_stage);
 
       // If already at review stage, mark as formatted to skip reformatting on next "Next" click
       // and mark as proceeded to review to make Stage 2 fields read-only
-      if (editingJD.creation_stage === 'review') {
+      if (effectiveEditingJD.creation_stage === 'review') {
         setHasFormattedForReview(true);
         setHasProceededToReview(true);
 
         // Save original Stage 1 values so we can detect modifications if user goes back to Stage 1
         setOriginalStage1Values({
-          jobTitle: editingJD.title || '',
-          aiPrompt: editingJD.ai_prompt || '',
-          generatedJD: editingJD.description || '',
-          manualJD: editingJD.creation_method === 'manual' ? (editingJD.description || '') : ''
+          jobTitle: effectiveEditingJD.title || '',
+          aiPrompt: effectiveEditingJD.ai_prompt || '',
+          generatedJD: effectiveEditingJD.description || '',
+          manualJD: effectiveEditingJD.creation_method === 'manual' ? (effectiveEditingJD.description || '') : ''
         });
       }
 
       // Restore the creation mode based on saved creation_method
-      if (editingJD.creation_method) {
-        setMode(editingJD.creation_method === 'ai_generated' ? 'ai' : 'manual');
+      if (effectiveEditingJD.creation_method) {
+        setMode(effectiveEditingJD.creation_method === 'ai_generated' ? 'ai' : 'manual');
       }
 
       // Load extracted data if:
       // 1. We're past the create step (draft JDs), OR
       // 2. It's a published JD (always has data regardless of stage)
-      if (editingJD.creation_stage !== 'create' || editingJD.status === 'published') {
+      if (effectiveEditingJD.creation_stage !== 'create' || effectiveEditingJD.status === 'published') {
         // Calculate actual values first, then set Required based on whether value exists
-        const educationValue = editingJD.education_requirements?.degree || '';
+        const educationValue = effectiveEditingJD.education_requirements?.degree || '';
 
         // Map experience_min/max to level codes (entry, junior, mid, senior, architect, management)
         const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
@@ -2932,7 +3058,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           // 10+ years
           if (min >= 10) {
             // Check JD description for architect/management keywords
-            const desc = (editingJD.description || '').toLowerCase();
+            const desc = (effectiveEditingJD.description || '').toLowerCase();
             const isArchitect = desc.includes('architect') || desc.includes('architecture');
             const isManagement = desc.includes('manager') || desc.includes('management') || desc.includes('director') || desc.includes('lead');
 
@@ -2954,52 +3080,56 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           return 'entry';
         };
 
-        const experienceValue = mapExpToLevel(editingJD.experience_min, editingJD.experience_max);
+        const experienceValue = mapExpToLevel(effectiveEditingJD.experience_min, effectiveEditingJD.experience_max);
         // Restore industry type from saved draft
-        const industryValue = editingJD.industry_type || '';
+        const industryValue = effectiveEditingJD.industry_type || '';
 
-        console.log('[DEBUG] Loading editingJD data:');
-        console.log('[DEBUG] - experience_min from API:', editingJD.experience_min);
-        console.log('[DEBUG] - experience_max from API:', editingJD.experience_max);
+        console.log('[DEBUG] Loading effectiveEditingJD data:');
+        console.log('[DEBUG] - experience_min from API:', effectiveEditingJD.experience_min);
+        console.log('[DEBUG] - experience_max from API:', effectiveEditingJD.experience_max);
         console.log('[DEBUG] - mapped experienceValue:', experienceValue);
-        console.log('[DEBUG] - industry_type from API:', editingJD.industry_type);
+        console.log('[DEBUG] - industry_type from API:', effectiveEditingJD.industry_type);
         console.log('[DEBUG] - mapped industryValue:', industryValue);
-        console.log('[DEBUG] - nice_to_have_comments from API:', editingJD.nice_to_have_comments);
-        console.log('[DEBUG] - must_have_comments from API:', editingJD.must_have_comments);
+        console.log('[DEBUG] - nice_to_have_comments from API:', effectiveEditingJD.nice_to_have_comments);
+        console.log('[DEBUG] - must_have_comments from API:', effectiveEditingJD.must_have_comments);
+        console.log('[DEBUG] - must_have_skills from API:', effectiveEditingJD.must_have_skills);
+        console.log('[DEBUG] - nice_to_have_skills from API:', effectiveEditingJD.nice_to_have_skills);
 
         setExtractedData(prev => ({
           ...prev,
-          mustHaveSkills: editingJD.must_have_skills || [],
-          niceToHaveSkills: editingJD.nice_to_have_skills || [],
+          mustHaveSkills: effectiveEditingJD.must_have_skills || [],
+          niceToHaveSkills: effectiveEditingJD.nice_to_have_skills || [],
           education: educationValue,
           educationRequired: false,  // Default to false - user can enable if needed
           experience: experienceValue,
           experienceRequired: false,  // Default to false - user can enable if needed
           industryType: industryValue,
           industryTypeRequired: false,  // Default to false - user can enable if needed
-          department: editingJD.department || '',
-          salaryFrom: editingJD.salary_min?.toString() || '',
-          salaryTo: editingJD.salary_max?.toString() || '',
-          compensationType: (editingJD.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
-          assessmentGuidance: editingJD.assessment_guidance || '',
-          internalRecruiterComments: editingJD.internal_comments ? editingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
-          mustHaveComments: editingJD.must_have_comments || [],
-          niceToHaveComments: editingJD.nice_to_have_comments || [],
-          certifications: editingJD.certifications || [],
-          domainKeywords: editingJD.domain_keywords || [],
-          allowOverqualified: editingJD.allow_overqualified ?? false,
-          employmentType: (editingJD.employment_type as ExtractedData['employmentType']) || 'full_time',
-          workModel: (editingJD.remote_type as ExtractedData['workModel']) || 'onsite',
-          locations: editingJD.locations?.map(loc => ({
+          department: effectiveEditingJD.department || '',
+          salaryFrom: effectiveEditingJD.salary_min?.toString() || '',
+          salaryTo: effectiveEditingJD.salary_max?.toString() || '',
+          compensationType: (effectiveEditingJD.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
+          assessmentGuidance: effectiveEditingJD.assessment_guidance || '',
+          internalRecruiterComments: effectiveEditingJD.internal_comments ? effectiveEditingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
+          mustHaveComments: effectiveEditingJD.must_have_comments || [],
+          niceToHaveComments: effectiveEditingJD.nice_to_have_comments || [],
+          certifications: effectiveEditingJD.certifications || [],
+          domainKeywords: effectiveEditingJD.domain_keywords || [],
+          allowOverqualified: effectiveEditingJD.allow_overqualified ?? false,
+          employmentType: (effectiveEditingJD.employment_type as ExtractedData['employmentType']) || 'full_time',
+          workModel: (effectiveEditingJD.remote_type as ExtractedData['workModel']) || 'onsite',
+          locations: effectiveEditingJD.locations?.map(loc => ({
             // Reconstruct "City, State" format for UI dropdown matching
             city: loc.state ? `${loc.city}, ${loc.state}` : loc.city,
             radius: loc.radius_km?.toString() || '50',
           })) || [],
-          locationsRequired: editingJD.locations?.some(loc => loc.is_required) || false,
+          locationsRequired: effectiveEditingJD.locations?.some(loc => loc.is_required) || false,
         }));
+
+        console.log('[TalentFlow] Extracted data loaded successfully from database');
       }
     }
-  }, [editingJD]);
+  }, [effectiveEditingJD]);
 
   // FIX-003: Show loading state when fetching JD in embedded mode
   if (loadingJD) {
@@ -4472,13 +4602,44 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         {/* Step 3: Review & Publish */}
         {step === 'review' && !isPublished && (
           <div className="space-y-6">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-gray-800 to-gray-800 rounded-lg p-6 text-white">
-              <h2 className="text-2xl mb-2">Review & Publish</h2>
-              <p className="text-gray-100">
-                Review all details before publishing. Once published, this JD will be locked and available to all authorized users.
-              </p>
-            </div>
+            {/* Guard: If Step 2 validation fails, redirect back to Step 2 */}
+            {!validationStatus.isValid ? (
+              <div className="bg-red-50 border-2 border-red-300 rounded-xl p-8">
+                <div className="flex items-start gap-4">
+                  <AlertCircle className="w-8 h-8 text-red-600 flex-shrink-0 mt-1" />
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-red-900 mb-3">Cannot Proceed to Review</h3>
+                    <p className="text-red-800 mb-4 text-lg">
+                      Please go back to <strong>Step 2</strong> and complete the following required fields:
+                    </p>
+                    <ul className="text-red-800 mb-6 list-disc list-inside space-y-2 text-base">
+                      {validationStatus.missingFields.map((field, index) => (
+                        <li key={index} className="font-semibold">{field}</li>
+                      ))}
+                    </ul>
+                    <button
+                      onClick={() => {
+                        setStep('extract');
+                        setValidationErrors({});
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold flex items-center gap-2 text-base"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                      Return to Step 2 (Extract Parameters)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Header */}
+                <div className="bg-gradient-to-r from-gray-800 to-gray-800 rounded-lg p-6 text-white">
+                  <h2 className="text-2xl mb-2">Review & Publish</h2>
+                  <p className="text-gray-100">
+                    Review all details before publishing. Once published, this JD will be locked and available to all authorized users.
+                  </p>
+                </div>
 
             {/* Final JD Document View */}
             <div className="bg-white rounded-lg border-2 border-gray-200 shadow-lg">
@@ -4870,32 +5031,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               )}
             </div>
 
-            {/* JD12: Validation Warning Banner */}
-            {!validationStatus.isValid && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="text-amber-800 font-medium">Cannot Publish - Missing Required Fields</h4>
-                    <p className="text-sm text-amber-700 mt-1">
-                      Please complete the following before publishing:
-                    </p>
-                    <ul className="text-sm text-amber-700 mt-2 list-disc list-inside">
-                      {validationStatus.missingFields.map((field, index) => (
-                        <li key={index}>{field}</li>
-                      ))}
-                    </ul>
-                    <button
-                      onClick={() => setStep('extract')}
-                      className="mt-3 text-sm text-amber-800 underline hover:text-amber-900"
-                    >
-                      Go back to edit →
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Action Buttons */}
             <div className="flex gap-4 justify-between">
               <div className="flex gap-3">
@@ -4957,6 +5092,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </button>
               </div>
             </div>
+              </>
+            )}
           </div>
         )}
 
