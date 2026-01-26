@@ -3192,28 +3192,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
-                            : aiPrompt.length > 0 && !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max) && !editingId
-                              ? 'border-orange-300 bg-orange-50'
-                              : aiPrompt.length > VALIDATION.AI_PROMPT.max
-                                ? 'border-red-300 bg-red-50'
-                                : 'border-gray-300'
+                            : aiPrompt.trim().length > VALIDATION.AI_PROMPT.max
+                              ? 'border-red-300 bg-red-50'
+                              : 'border-gray-300'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${aiPrompt.length < VALIDATION.AI_PROMPT.min && !editingId ? 'text-orange-500' : 'text-gray-500'}`}>
-                          {!editingId && aiPrompt.length === 0 && `AI Prompt is required (min ${VALIDATION.AI_PROMPT.min} characters)`}
-                          {!editingId && aiPrompt.length > 0 && aiPrompt.length < VALIDATION.AI_PROMPT.min && `Minimum ${VALIDATION.AI_PROMPT.min} characters required (${VALIDATION.AI_PROMPT.min - aiPrompt.length} more)`}
-                          {editingId && aiPrompt.length === 0 && 'Optional: Add details to customize the regenerated JD'}
+                        <p className={`text-xs ${!editingId && aiPrompt.trim().length > 0 && aiPrompt.trim().length < VALIDATION.AI_PROMPT.min ? 'text-red-500' : 'text-gray-500'}`}>
+                          {!editingId && aiPrompt.trim().length === 0 && `Min ${VALIDATION.AI_PROMPT.min} characters required`}
+                          {!editingId && aiPrompt.trim().length > 0 && aiPrompt.trim().length < VALIDATION.AI_PROMPT.min && `${VALIDATION.AI_PROMPT.min - aiPrompt.trim().length} more characters needed`}
+                          {editingId && aiPrompt.trim().length === 0 && 'Optional: Add details to regenerate JD'}
                         </p>
-                        <p className={`text-xs ${aiPrompt.length > VALIDATION.AI_PROMPT.max ? 'text-red-500' : 'text-gray-500'}`}>
-                          {aiPrompt.length}/{VALIDATION.AI_PROMPT.max}
+                        <p className={`text-xs ${aiPrompt.trim().length > VALIDATION.AI_PROMPT.max ? 'text-red-500' : 'text-gray-500'}`}>
+                          {aiPrompt.trim().length}/{VALIDATION.AI_PROMPT.max}
                         </p>
                       </div>
-                      {!editingId && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          💡 Tip: Describe the role, team size, or any specific requirements
-                        </p>
-                      )}
                     </div>
 
                     {/* Quota Warning */}
@@ -3250,8 +3243,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       disabled={
                         isJDInUse ||
                         !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
-                        (!editingId && !isValidLength(aiPrompt, VALIDATION.AI_PROMPT.min, VALIDATION.AI_PROMPT.max)) ||
-                        aiPrompt.length > VALIDATION.AI_PROMPT.max ||
+                        (!editingId && (aiPrompt.trim().length < VALIDATION.AI_PROMPT.min || aiPrompt.trim().length > VALIDATION.AI_PROMPT.max)) ||
+                        (editingId && aiPrompt.trim().length > VALIDATION.AI_PROMPT.max) ||
                         isGenerating ||
                         hasProceededToExtract
                       }
