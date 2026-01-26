@@ -153,6 +153,29 @@ export default function MyResumesPage() {
     }
   };
 
+  const handleCloseUploadHistory = async () => {
+    // Filter only my-resumes batches
+    const myResumesHistory = uploadHistory.filter(r => r.source === 'my-resumes');
+
+    // Check if there are any pending items
+    const hasPendingItems = myResumesHistory.some(batch => batch.pending > 0);
+
+    if (!hasPendingItems && myResumesHistory.length > 0) {
+      // All batches are completed, delete them from the backend
+      try {
+        await resumeService.deleteCompletedBatches();
+        // Clear local state
+        setUploadHistory([]);
+      } catch (error) {
+        console.error('Failed to delete completed batches:', error);
+      }
+    }
+
+    // Close the modal
+    setIsUploadHistoryModalOpen(false);
+    setIsUploadHistoryMinimized(false);
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -213,6 +236,8 @@ export default function MyResumesPage() {
           name: typeof lang === 'string' ? lang : (lang.name || lang.language || ''),
           proficiency: typeof lang === 'string' ? 'Fluent' : (lang.proficiency || lang.level || 'Fluent'),
         })),
+        fileName: r.file_name, // Original file name with extension
+        fileType: r.file_type, // File type (pdf, doc, docx)
       }));
 
       // Convert API Folder to component Folder type
@@ -306,7 +331,8 @@ export default function MyResumesPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${resume?.name || 'resume'}.pdf`;
+      // Use original fileName to preserve file extension (pdf, doc, docx, rtf, txt, etc.)
+      a.download = resume?.fileName || `${resume?.name || 'resume'}.${resume?.fileType || 'pdf'}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -336,12 +362,14 @@ export default function MyResumesPage() {
       for (let i = 0; i < selectedResumes.length; i++) {
         const resumeId = selectedResumes[i];
         const resume = resumes.find(r => r.id === resumeId);
-        const fileName = `resumes/${resume?.name || `resume_${i + 1}`}.pdf`;
+        // Use original fileName to preserve file extension (pdf, doc, docx, etc.)
+        const fileName = resume?.fileName || `${resume?.name || `resume_${i + 1}`}_resume`;
+        const zipPath = `resumes/${fileName}`;
 
         try {
           const blob = await resumeService.download(resumeId);
           const arrayBuffer = await blob.arrayBuffer();
-          files[fileName] = new Uint8Array(arrayBuffer);
+          files[zipPath] = new Uint8Array(arrayBuffer);
         } catch (err) {
           console.error(`Failed to download ${fileName}:`, err);
         }
@@ -1367,7 +1395,8 @@ export default function MyResumesPage() {
                                     const url = window.URL.createObjectURL(blob);
                                     const a = document.createElement('a');
                                     a.href = url;
-                                    a.download = resume.fileName || `${resume.name}.pdf`;
+                                    // Use original fileName to preserve file extension (pdf, doc, docx, rtf, txt, etc.)
+                                    a.download = resume.fileName || `${resume.name}.${resume.fileType || 'pdf'}`;
                                     a.click();
                                     window.URL.revokeObjectURL(url);
                                   } catch (err) {
@@ -1586,10 +1615,7 @@ export default function MyResumesPage() {
                       −
                     </button>
                     <button
-                      onClick={() => {
-                        setIsUploadHistoryModalOpen(false);
-                        setIsUploadHistoryMinimized(false);
-                      }}
+                      onClick={handleCloseUploadHistory}
                       className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                       title="Close"
                     >
@@ -1913,10 +1939,7 @@ export default function MyResumesPage() {
               {/* Footer */}
               <div className="border-t border-gray-200 px-6 py-4 bg-white rounded-b-2xl">
                 <button
-                  onClick={() => {
-                    setIsUploadHistoryModalOpen(false);
-                    setIsUploadHistoryMinimized(false);
-                  }}
+                  onClick={handleCloseUploadHistory}
                   className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
                 >
                   Close

@@ -1,15 +1,8 @@
 import { X, Download, FileText, User, History, Clock, Eye, Loader2, Mail, Phone, MapPin, Briefcase, Star, Building2, Calendar, GraduationCap, Code, ChevronRight, Award, Languages } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { Resume } from '@/lib/types/types';
+import { Resume, ResumeVersion } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
-
-interface ResumeVersion {
-  id: string;
-  version: number;
-  file_name: string;
-  created_at: string;
-}
 
 interface ResumeQuickViewModalProps {
   resume: Resume;
@@ -131,7 +124,8 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${resume.name || 'resume'}.pdf`;
+      // Use original filename to preserve file extension (pdf, doc, docx, rtf, txt, etc.)
+      a.download = resume.fileName || `${resume.name || 'resume'}.${resume.fileType || 'pdf'}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -142,13 +136,14 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
     }
   };
 
-  const handleDownloadVersion = async (versionId: string) => {
+  const handleDownloadVersion = async (version: ResumeVersion) => {
     try {
-      const blob = await resumeService.download(versionId);
+      const blob = await resumeService.download(version.id);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${resume.name || 'resume'}_version.pdf`;
+      // Use original filename from version to preserve file extension
+      a.download = version.fileName || `${resume.name || 'resume'}_v${version.version || 'version'}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -645,7 +640,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                             </div>
                             <div className="flex items-center gap-2">
                               <button
-                                onClick={() => handleDownloadVersion(version.id)}
+                                onClick={() => handleDownloadVersion(version)}
                                 className={`p-2 rounded-lg transition-colors ${
                                   index === 0 ? 'text-gray-800 hover:bg-gray-100' : 'text-gray-600 hover:bg-gray-100'
                                 }`}

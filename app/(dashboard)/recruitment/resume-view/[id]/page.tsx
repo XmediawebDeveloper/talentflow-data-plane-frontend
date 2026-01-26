@@ -321,7 +321,7 @@ export default function ResumeViewPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = resume?.fileName || `resume-${resumeId}.pdf`;
+      link.download = resume?.fileName || `resume-${resumeId}.${resume?.fileType || 'pdf'}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1039,7 +1039,7 @@ export default function ResumeViewPage() {
                             const url = window.URL.createObjectURL(blob);
                             const link = document.createElement('a');
                             link.href = url;
-                            link.download = version.name || `resume-v${index + 1}.pdf`;
+                            link.download = version.fileName || version.name || `resume-v${index + 1}.pdf`;
                             document.body.appendChild(link);
                             link.click();
                             document.body.removeChild(link);
