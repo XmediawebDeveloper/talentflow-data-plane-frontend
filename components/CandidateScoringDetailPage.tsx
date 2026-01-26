@@ -16,7 +16,7 @@ interface ScoredResume {
   scoredBy: string;
   experience?: string;
   education?: string;
-  certifications?: string[];
+  certifications?: (string | { name?: string; date?: string; issuer?: string; credential_id?: string })[];
   aiSummary?: string;
   strengths?: string[];
   gaps?: string[];
@@ -788,12 +788,22 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                     <h3 className="text-lg font-semibold text-gray-900">Certifications</h3>
                   </div>
                   <div className="space-y-3">
-                    {resume.certifications.map((cert, index) => (
-                      <div key={index} className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
-                        <span className="font-medium text-gray-900">{cert}</span>
-                        <Award className="w-5 h-5 text-yellow-600" />
-                      </div>
-                    ))}
+                    {resume.certifications.map((cert, index) => {
+                      // Handle both string and object formats
+                      const certName = typeof cert === 'string' ? cert : (cert.name || 'Certification');
+                      const certIssuer = typeof cert === 'object' ? cert.issuer : null;
+                      const certDate = typeof cert === 'object' ? cert.date : null;
+                      return (
+                        <div key={index} className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
+                          <div>
+                            <span className="font-medium text-gray-900">{certName}</span>
+                            {certIssuer && <span className="text-gray-600 text-sm ml-2">- {certIssuer}</span>}
+                            {certDate && <span className="text-gray-500 text-xs ml-2">({certDate})</span>}
+                          </div>
+                          <Award className="w-5 h-5 text-yellow-600" />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

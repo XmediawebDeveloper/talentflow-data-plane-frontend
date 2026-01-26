@@ -1060,6 +1060,20 @@ export default function CandidateResultDetails({
                         <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
+                      {/* Other Violations (uncategorized) - only show if > 0 */}
+                      {(detailedResult.proctoring_stats.other_violation_count || 0) > 0 && (
+                        <div className="rounded-xl p-5 border-2 bg-gray-50 border-gray-300">
+                          <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-3 bg-gray-200">
+                            <AlertCircle className="w-6 h-6 text-gray-600" />
+                          </div>
+                          <div className="text-sm text-gray-600 mb-1">Other</div>
+                          <div className="text-3xl font-bold text-gray-600">
+                            {detailedResult.proctoring_stats.other_violation_count}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">events</div>
+                        </div>
+                      )}
+
                       {/* Total Violations */}
                       <div className={`rounded-xl p-5 border-2 ${
                         detailedResult.proctoring_stats.total_violations > 0

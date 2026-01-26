@@ -341,10 +341,15 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
               <div className="text-xs text-gray-600">Time</div>
               <div className="text-sm font-medium text-gray-900">
                 {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
-                  ? new Date(resume.scoredDate).toLocaleTimeString('en-US', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })
+                  ? (() => {
+                      // Add 5 hours 30 minutes (IST offset) to server time
+                      const serverDate = new Date(resume.scoredDate);
+                      const istDate = new Date(serverDate.getTime() + (5 * 60 + 30) * 60 * 1000);
+                      return istDate.toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
+                    })()
                   : 'N/A'}
               </div>
             </div>
@@ -359,21 +364,18 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
         </div>
       </div>
 
-      {/* Score Summary - Compact */}
+      {/* Score Summary - Large Display */}
       {summaryData && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-700">Score Summary:</span>
-          <span className="text-xs text-gray-500">Required:</span>
-          <span className="text-sm font-bold text-red-600">{summaryData.requiredPercentage.toFixed(0)}%</span>
-          <span className="text-gray-300">|</span>
-          <span className="text-xs text-gray-500">Preferred:</span>
-          <span className="text-sm font-bold text-blue-600">{summaryData.preferredPercentage.toFixed(0)}%</span>
-          <span className="text-gray-300">|</span>
-          <span className="text-xs text-gray-500">Final:</span>
-          <span className={`text-sm font-bold ${
-            summaryData.finalPercentage >= 70 ? 'text-green-600' :
-            summaryData.finalPercentage >= 50 ? 'text-yellow-600' : 'text-red-600'
-          }`}>{summaryData.finalPercentage.toFixed(0)}%</span>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg px-6 py-4 flex items-center justify-center gap-8">
+          <div className="flex items-center gap-3">
+            <span className="text-base text-gray-600">Required:</span>
+            <span className="text-2xl font-bold text-red-600">{summaryData.requiredPercentage.toFixed(0)}%</span>
+          </div>
+          <span className="text-gray-300 text-2xl">|</span>
+          <div className="flex items-center gap-3">
+            <span className="text-base text-gray-600">Preferred:</span>
+            <span className="text-2xl font-bold text-blue-600">{summaryData.preferredPercentage.toFixed(0)}%</span>
+          </div>
         </div>
       )}
 

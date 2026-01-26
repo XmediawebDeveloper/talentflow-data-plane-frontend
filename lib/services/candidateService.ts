@@ -169,6 +169,13 @@ export interface QuestionOption {
   text: string;
 }
 
+// Status of a question for progress tracking
+export interface QuestionStatusInfo {
+  question_number: number;
+  has_answer: boolean;  // True if any answer (draft or submitted)
+  is_locked: boolean;   // True if submitted (locked)
+}
+
 export interface CurrentQuestion {
   question_id: string;
   question_number: number;
@@ -200,6 +207,8 @@ export interface CurrentQuestion {
     code_submission: string | null;
     is_locked: boolean;  // True = submitted (not editable), False = draft (editable)
   } | null;
+  // All question statuses for progress tracking
+  all_question_statuses: QuestionStatusInfo[] | null;
 }
 
 export interface StartAssessmentResponse {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, Loader2, Clock, Brain, Sparkles } from 'lucide-react';
+import { CheckCircle, Loader2, Clock, BarChart3, Sparkles } from 'lucide-react';
 
 export function ScoringScreen() {
   const [waitTime, setWaitTime] = useState(0);
@@ -23,9 +23,9 @@ export function ScoringScreen() {
   // Show different messages based on wait time
   const getMessage = () => {
     if (waitTime < 15) {
-      return 'Initializing AI evaluation engine...';
+      return 'Processing your responses...';
     } else if (waitTime < 30) {
-      return 'Analyzing your responses...';
+      return 'Analyzing your answers...';
     } else if (waitTime < 60) {
       return 'Evaluating technical accuracy...';
     } else if (waitTime < 90) {
@@ -60,8 +60,8 @@ export function ScoringScreen() {
         <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-6 mb-6 text-white">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Brain className="w-5 h-5" />
-              <span className="font-medium">AI Evaluation</span>
+              <BarChart3 className="w-5 h-5" />
+              <span className="font-medium">Evaluation in Progress</span>
             </div>
             <div className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full">
               <Clock className="w-4 h-4" />
@@ -103,7 +103,7 @@ export function ScoringScreen() {
             <div className={`w-6 h-6 rounded-full flex items-center justify-center ${waitTime >= 30 ? 'bg-green-100' : waitTime >= 15 ? 'bg-blue-100' : 'bg-gray-100'}`}>
               {waitTime >= 30 ? <CheckCircle className="w-4 h-4" /> : waitTime >= 15 ? <Loader2 className="w-4 h-4 animate-spin" /> : <div className="w-2 h-2 bg-gray-300 rounded-full" />}
             </div>
-            <span className="text-sm">AI analyzing responses</span>
+            <span className="text-sm">Analyzing responses</span>
           </div>
           <div className={`flex items-center gap-3 ${waitTime >= 60 ? 'text-green-600' : waitTime >= 30 ? 'text-blue-600' : 'text-gray-400'}`}>
             <div className={`w-6 h-6 rounded-full flex items-center justify-center ${waitTime >= 90 ? 'bg-green-100' : waitTime >= 60 ? 'bg-blue-100' : 'bg-gray-100'}`}>
@@ -122,7 +122,7 @@ export function ScoringScreen() {
         {/* Info Message */}
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <p className="text-sm text-amber-800">
-            <strong>Please wait:</strong> Our AI is carefully evaluating each of your responses to provide accurate scores and detailed feedback. This process typically takes 1-3 minutes.
+            <strong>Please wait:</strong> Your responses are being evaluated to provide accurate scores and detailed feedback. This process typically takes 1-3 minutes.
           </p>
         </div>
 
