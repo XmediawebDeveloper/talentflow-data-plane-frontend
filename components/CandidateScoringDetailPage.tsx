@@ -89,6 +89,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               gaps: completeResumeData.gaps || [],
               scoredDate: completeResumeData.created_at,
               matchStatus: completeResumeData.match_status,
+              scoredBy: completeResumeData.scored_by || completeResumeData.scored_by_name || resume.scoredBy || 'System',
             });
             setIsDataReady(true);
           } else {

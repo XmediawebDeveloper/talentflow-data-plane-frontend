@@ -1631,8 +1631,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
               </div>
 
-              {/* Proctoring & Security */}
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+              {/* Proctoring & Security - Hidden for now */}
+              {/* <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <Shield className="w-5 h-5 text-violet-600" />
                   <h3 className="font-medium text-gray-900">Proctoring & Security</h3>
@@ -1661,19 +1661,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                         </p>
 
                         {/* Privacy Notice */}
-                        {proctoringEnabled && (
+                        {/* {proctoringEnabled && (
                           <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
                             <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
                             <p className="text-xs text-blue-700">
                               Candidates will be notified about proctoring before starting. All recordings are encrypted and GDPR/DPDP compliant.
                             </p>
                           </div>
-                        )}
-                      </div>
-                    </div>
+                        )} */}
+                      {/* </div>
+                    </div> */}
 
                     {/* Toggle Switch */}
-                    <div className="flex flex-col items-center gap-1 ml-4">
+                    {/* <div className="flex flex-col items-center gap-1 ml-4">
                       <button
                         onClick={handleProctoringToggle}
                         className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ${
@@ -1690,7 +1690,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     </div>
                   </div>
                 </div>
-              </div>
+              </div> */}
 
               {/* Section Distribution */}
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">

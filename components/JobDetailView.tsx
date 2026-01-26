@@ -232,7 +232,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           matchStatus: matchStatus,
           scorePercentage: Math.round(item.overall_score || 0),
           scoredDate: item.created_at || new Date().toISOString(),
-          scoredBy: item.scored_by_name || 'System',
+          scoredBy: item.scored_by || item.scored_by_name || 'System',
           experience: item.experience_years ? `${item.experience_years} years` : undefined,
           education: item.education,
           certifications: item.certifications || [],
