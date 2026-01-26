@@ -93,7 +93,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'administration',
       label: 'ADMINISTRATION',
       items: [
-        { id: 'dashboard', label: 'Admin Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+        { id: 'dashboard', label: isTenantAdmin ? 'Admin Dashboard' : 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
       ]
     },
 
