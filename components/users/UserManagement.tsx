@@ -125,6 +125,33 @@ const defaultRoleBadgeColors: Record<string, string> = {
   standard_user: 'bg-gray-100 text-gray-600',
 };
 
+// Color palette for custom roles - each custom role gets a distinct color
+const customRoleColors = [
+  'bg-blue-100 text-blue-700',
+  'bg-purple-100 text-purple-700',
+  'bg-pink-100 text-pink-700',
+  'bg-indigo-100 text-indigo-700',
+  'bg-cyan-100 text-cyan-700',
+  'bg-teal-100 text-teal-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-lime-100 text-lime-700',
+  'bg-amber-100 text-amber-700',
+  'bg-orange-100 text-orange-700',
+  'bg-rose-100 text-rose-700',
+  'bg-fuchsia-100 text-fuchsia-700',
+];
+
+// Simple hash function for consistent color assignment based on role code
+const hashString = (str: string): number => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
+};
+
 // Get role label - use RBAC name or fallback to defaults
 const getRoleLabel = (role: string, availableRoles: RoleListItem[]): string => {
   const rbacRole = availableRoles.find(r => r.code.toLowerCase() === role.toLowerCase());
@@ -132,9 +159,25 @@ const getRoleLabel = (role: string, availableRoles: RoleListItem[]): string => {
   return defaultRoleLabels[role.toLowerCase()] || role.charAt(0).toUpperCase() + role.slice(1);
 };
 
-// Get role badge color - use defaults for known roles, gray for custom
-const getRoleBadgeColor = (role: string): string => {
-  return defaultRoleBadgeColors[role.toLowerCase()] || 'bg-blue-100 text-blue-700';
+// Get role badge color - system roles use default colors, custom roles get distinct colors from palette
+const getRoleBadgeColor = (role: string, availableRoles: RoleListItem[]): string => {
+  const roleCode = role.toLowerCase();
+
+  // Check if it's a known system role with predefined color
+  if (defaultRoleBadgeColors[roleCode]) {
+    return defaultRoleBadgeColors[roleCode];
+  }
+
+  // For custom roles, check if it exists in availableRoles
+  const customRole = availableRoles.find(r => r.code.toLowerCase() === roleCode);
+  if (customRole && !customRole.is_system) {
+    // Generate consistent color based on role code using hash
+    const colorIndex = hashString(roleCode) % customRoleColors.length;
+    return customRoleColors[colorIndex];
+  }
+
+  // Fallback for unknown roles
+  return 'bg-gray-100 text-gray-700';
 };
 
 const permissionLabels: Record<keyof UserPermissions, string> = {
@@ -285,6 +328,7 @@ export default function UserManagement() {
   // Tenant email domain (locked part of email)
   const [tenantEmailDomain, setTenantEmailDomain] = useState<string>('');
   const [emailUsername, setEmailUsername] = useState<string>(''); // Just the username part before @
+  const [editEmailUsername, setEditEmailUsername] = useState<string>(''); // Username part for edit modal
   const [showAtBlockedMessage, setShowAtBlockedMessage] = useState(false);
 
   // Email validation states
@@ -803,6 +847,14 @@ export default function UserManagement() {
       setEditSelectedPermissionIds(new Set());
       setEditOriginalPermissionIds(new Set());
     }
+
+    // Parse email to extract username part for editing
+    if (user.email && user.email.includes('@')) {
+      const username = user.email.split('@')[0];
+      setEditEmailUsername(username);
+    } else {
+      setEditEmailUsername('');
+    }
   };
 
   const resetEditModal = () => {
@@ -812,6 +864,7 @@ export default function UserManagement() {
     setEditOriginalPermissionIds(new Set());
     setEditOriginalRoleId(null);
     setEditRoleDropdownOpen(false);
+    setEditEmailUsername('');
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -900,9 +953,15 @@ export default function UserManagement() {
       editSelectedPermissionIds.size !== editOriginalPermissionIds.size ||
       ![...editSelectedPermissionIds].every(id => editOriginalPermissionIds.has(id));
 
+    // Reconstruct full email from username + domain
+    const fullEmail = editEmailUsername && tenantEmailDomain
+      ? `${editEmailUsername}@${tenantEmailDomain}`
+      : editingUser.email;
+
     // Build request body
     const requestBody: any = {
       name: editingUser.name,
+      email: fullEmail,
       role: roleCode,
       role_id: editSelectedRoleId,
     };
@@ -1113,7 +1172,7 @@ export default function UserManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getRoleBadgeColor(user.role)}`}>
+                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getRoleBadgeColor(user.role, availableRoles)}`}>
                       {getRoleLabel(user.role, availableRoles)}
                     </span>
                   </td>
@@ -1462,12 +1521,37 @@ export default function UserManagement() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Email
                 </label>
-                <input
-                  type="email"
-                  value={editingUser.email}
-                  disabled
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-100 text-gray-500"
-                />
+                {/* Email input with locked domain */}
+                <div className="relative flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-600 overflow-hidden">
+                  {/* Username input */}
+                  <input
+                    type="text"
+                    value={editEmailUsername}
+                    onChange={(e) => {
+                      let value = e.target.value;
+                      // Remove @ symbol if user tries to type it
+                      value = value.replace(/@/g, '');
+                      setEditEmailUsername(value);
+                    }}
+                    placeholder="username"
+                    className="flex-1 px-4 py-2.5 border-0 focus:outline-none focus:ring-0"
+                  />
+
+                  {/* @ symbol and locked domain */}
+                  <div className="flex items-center px-4 py-2.5 bg-gray-100 text-gray-600 font-medium border-l border-gray-300">
+                    <span className="text-gray-900">@</span>
+                    <span className="ml-1">
+                      {tenantEmailDomain || 'loading...'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Preview of full email */}
+                {editEmailUsername && tenantEmailDomain && (
+                  <div className="mt-1 text-xs text-gray-500">
+                    Full email: <span className="font-medium">{editEmailUsername}@{tenantEmailDomain}</span>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
