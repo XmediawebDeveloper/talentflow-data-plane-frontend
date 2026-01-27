@@ -112,7 +112,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                     className="hidden"
                   />
                 </label>
-                <p className="text-xs text-gray-500 mt-3">Supported formats: PDF, DOC, DOCX (Max 10MB)</p>
+                <p className="text-xs text-gray-500 mt-3">Supported formats: PDF, DOC, DOCX (Max 3MB)</p>
               </div>
             </div>
           ) : (

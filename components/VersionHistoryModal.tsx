@@ -1,25 +1,27 @@
 'use client'
 
-import { X, Download, Clock, User, FileText, History } from 'lucide-react';
+import { X, Download, Clock, User, FileText, History, Briefcase } from 'lucide-react';
 import { ResumeVersion } from '@/lib/types/types';
 
 interface VersionHistoryModalProps {
   candidateName?: string;
   versions?: ResumeVersion[];
   onClose: () => void;
+  onApplyToJob?: (versionId: string) => void;
   // Job-specific props
   isOpen?: boolean;
   jobTitle?: string;
   versionHistory?: any[];
 }
 
-export default function VersionHistoryModal({ 
-  candidateName, 
-  versions, 
+export default function VersionHistoryModal({
+  candidateName,
+  versions,
   onClose,
+  onApplyToJob,
   isOpen,
   jobTitle,
-  versionHistory 
+  versionHistory
 }: VersionHistoryModalProps) {
   // If isOpen is provided and false, don't render anything
   if (isOpen === false) {
@@ -32,18 +34,24 @@ export default function VersionHistoryModal({
   const versionData = isJobVersion ? versionHistory : versions;
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
+    // Add Z suffix if not present to treat as UTC
+    const utcDateString = dateString && !dateString.includes('Z') ? dateString + 'Z' : dateString;
+    const date = new Date(utcDateString);
+    return date.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      month: 'short',
+      day: 'numeric',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      hour12: true
     });
   };
 
   const getRelativeTime = (dateString: string) => {
-    const date = new Date(dateString);
+    // Add Z suffix if not present to treat as UTC
+    const utcDateString = dateString && !dateString.includes('Z') ? dateString + 'Z' : dateString;
+    const date = new Date(utcDateString);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -65,7 +73,7 @@ export default function VersionHistoryModal({
   );
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
@@ -147,16 +155,31 @@ export default function VersionHistoryModal({
                             </div>
                           </div>
                         </div>
-                        <button
-                          className={`p-2 rounded-md transition-colors flex-shrink-0 ${
-                            index === 0
-                              ? 'text-blue-600 hover:bg-blue-100'
-                              : 'text-gray-600 hover:bg-gray-100'
-                          }`}
-                          title="Download this version"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {onApplyToJob && (
+                            <button
+                              onClick={() => onApplyToJob(version.id)}
+                              className={`p-2 rounded-md transition-colors flex-shrink-0 ${
+                                index === 0
+                                  ? 'text-blue-600 hover:bg-blue-100'
+                                  : 'text-gray-600 hover:bg-gray-100'
+                              }`}
+                              title="Apply to Job"
+                            >
+                              <Briefcase className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            className={`p-2 rounded-md transition-colors flex-shrink-0 ${
+                              index === 0
+                                ? 'text-blue-600 hover:bg-blue-100'
+                                : 'text-gray-600 hover:bg-gray-100'
+                            }`}
+                            title="Download this version"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
 
                       {/* Details Row */}

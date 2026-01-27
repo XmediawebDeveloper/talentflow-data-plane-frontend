@@ -3,7 +3,7 @@ import { useState, useRef } from 'react';
 import DuplicateResolutionModal from './DuplicateResolutionModal';
 
 // File validation constants
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
 const ALLOWED_FORMATS = [
   'application/pdf',
   'application/msword',
@@ -196,7 +196,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                 Supported formats: PDF, DOCX, DOC
               </p>
               <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
-                <span>• Max file size: 10MB</span>
+                <span>• Max file size: 3MB</span>
               </div>
               <input
                 ref={fileInputRef}

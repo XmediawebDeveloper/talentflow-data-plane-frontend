@@ -5,7 +5,7 @@ import { Tenant } from '@/lib/types/tenant';
 import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
 
 // Default constants for fallback
-const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const DEFAULT_MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
 const MAX_BULK_FILES = 100; // Maximum files per bulk upload (matches backend limit)
 const ALLOWED_FORMATS = [
   'application/pdf',
@@ -102,7 +102,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   }, []);
 
   // Get tenant-specific limits or use defaults
-  const maxFileSizeMB = tenant?.subscription.limits.maxFileSizeMB || 10;
+  const maxFileSizeMB = tenant?.subscription.limits.maxFileSizeMB || 3;
   const maxFileSizeBytes = maxFileSizeMB * 1024 * 1024;
   const storageLimitMB = (tenant?.subscription.limits.storageGB || 50) * 1024; // Convert GB to MB
   const storageUsedMB = tenant?.subscription.usage.storageUsedMB || 0;

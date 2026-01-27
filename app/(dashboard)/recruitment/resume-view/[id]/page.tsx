@@ -1014,12 +1014,14 @@ export default function ResumeViewPage() {
                           <div className="flex items-center gap-3 text-xs text-gray-600">
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
-                              {new Date(version.uploadDate).toLocaleDateString('en-US', {
+                              {new Date(version.uploadDate + (version.uploadDate.includes('Z') ? '' : 'Z')).toLocaleString('en-IN', {
+                                timeZone: 'Asia/Kolkata',
                                 month: 'short',
                                 day: 'numeric',
                                 year: 'numeric',
                                 hour: '2-digit',
-                                minute: '2-digit'
+                                minute: '2-digit',
+                                hour12: true
                               })}
                             </span>
                             <span>•</span>
@@ -1111,12 +1113,14 @@ export default function ResumeViewPage() {
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Upload Date</div>
                     <div className="text-sm text-gray-900">
-                      {new Date(resume.uploadDate).toLocaleDateString('en-US', {
+                      {new Date(resume.uploadDate + (resume.uploadDate?.includes('Z') ? '' : 'Z')).toLocaleString('en-IN', {
+                        timeZone: 'Asia/Kolkata',
                         month: 'long',
                         day: 'numeric',
                         year: 'numeric',
                         hour: '2-digit',
-                        minute: '2-digit'
+                        minute: '2-digit',
+                        hour12: true
                       })}
                     </div>
                   </div>
@@ -1131,12 +1135,14 @@ export default function ResumeViewPage() {
                     <div className="text-xs text-gray-500 mb-1">Last Modified</div>
                     <div className="text-sm text-gray-900">
                       {resume.lastUpdated
-                        ? new Date(resume.lastUpdated).toLocaleDateString('en-US', {
+                        ? new Date(resume.lastUpdated + (resume.lastUpdated?.includes('Z') ? '' : 'Z')).toLocaleString('en-IN', {
+                            timeZone: 'Asia/Kolkata',
                             month: 'long',
                             day: 'numeric',
                             year: 'numeric',
                             hour: '2-digit',
-                            minute: '2-digit'
+                            minute: '2-digit',
+                            hour12: true
                           })
                         : 'Never'}
                     </div>
