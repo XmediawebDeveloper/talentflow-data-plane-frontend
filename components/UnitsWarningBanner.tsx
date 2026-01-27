@@ -27,7 +27,7 @@ export default function UnitsWarningBanner({ tenant, onUpgrade }: UnitsWarningBa
     }
   };
   
-  checkUnit('resumeUploads', 'Resume Uploads');
+  checkUnit('resumeUploads', 'Resume Storage');
   checkUnit('jobPostings', 'Job Postings');
   checkUnit('assessments', 'Assessments');
   checkUnit('aiInterviews', 'AI Interviews');

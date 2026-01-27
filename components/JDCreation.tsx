@@ -1139,11 +1139,36 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
             // Process extracted params
             if (response.extracted_params) {
+              console.log('[TalentFlow] AI Extraction - extracted_params received:', response.extracted_params);
               processExtractedParams(response.extracted_params);
-            }
 
-            // Note: Toast removed here to prevent it showing in stage 2 when user moves quickly
-            // The JD is already visible (streamed), so toast is redundant
+              // Show extraction summary toast
+              const params = response.extracted_params;
+              const extractedItems: string[] = [];
+              if (params.must_have_skills?.length > 0) extractedItems.push(`${params.must_have_skills.length} skills`);
+              if (params.experience_min || params.experience_max) extractedItems.push(`experience: ${params.experience_min || 0}-${params.experience_max || '+'} yrs`);
+              if (params.locations?.length > 0) extractedItems.push(`location: ${params.locations[0]?.city || 'detected'}`);
+              if (params.industry_type) extractedItems.push(`industry: ${params.industry_type}`);
+              if (params.salary_min || params.salary_max) extractedItems.push(`salary range detected`);
+
+              if (extractedItems.length > 0) {
+                toast.success({
+                  title: 'JD Generated & Parameters Extracted',
+                  description: `Extracted: ${extractedItems.join(', ')}. Click "Next" to review.`,
+                });
+              } else {
+                toast.success({
+                  title: 'JD Generated',
+                  description: 'Click "Next" to add skills, experience, and other details.',
+                });
+              }
+            } else {
+              console.log('[TalentFlow] AI Extraction - No extracted_params in response');
+              toast.success({
+                title: 'JD Generated',
+                description: 'Click "Next" to add job requirements and details.',
+              });
+            }
           }
         },
         onError: (message: string, errorCode?: string) => {

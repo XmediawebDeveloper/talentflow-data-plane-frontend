@@ -201,22 +201,74 @@ export default function ResumeTable({
   };
 
   // Handle apply to job with version detection
-  const handleApplyToJob = (resume: Resume) => {
-    // Check if resume has multiple versions
-    if ((resume.versionCount && resume.versionCount > 1) || (resume.versions && resume.versions.length > 1)) {
-      // Show version selector modal
-      setVersionSelectorResume(resume);
-    } else {
-      // Proceed directly with apply to job
-      onApplyToJob(resume);
+  // For SINGLE candidate: ALWAYS show version popup first, then job selection
+  const handleApplyToJob = async (resume: Resume) => {
+    console.log('[APPLY] handleApplyToJob called for:', resume.name);
+    // Always fetch versions and show selector for single candidate apply
+    setIsLoadingVersions(true);
+    try {
+      console.log('[APPLY] Fetching versions for resume:', resume.id);
+      const versions = await resumeService.getVersions(resume.id);
+      console.log('[APPLY] Got versions:', versions);
+      const resumeWithVersions = {
+        ...resume,
+        versions: versions && versions.length > 0
+          ? versions.map((v: any) => ({
+              id: v.id,
+              name: v.file_name || v.candidate_name || 'Resume',
+              uploadDate: v.created_at,
+              version: v.version || 1,
+              uploadedBy: v.uploaded_by_name || 'Unknown',
+            }))
+          : [{
+              id: resume.id,
+              name: resume.fileName || resume.name || 'Resume',
+              uploadDate: resume.uploadDate,
+              version: resume.version || 1,
+              uploadedBy: resume.uploadedBy || 'Unknown',
+            }],
+      };
+      console.log('[APPLY] Setting versionSelectorResume:', resumeWithVersions);
+      setVersionSelectorResume(resumeWithVersions);
+    } catch (error) {
+      console.error('[APPLY] Failed to fetch versions:', error);
+      // If can't fetch versions, create single version entry
+      const resumeWithVersions = {
+        ...resume,
+        versions: [{
+          id: resume.id,
+          name: resume.fileName || resume.name || 'Resume',
+          uploadDate: resume.uploadDate,
+          version: resume.version || 1,
+          uploadedBy: resume.uploadedBy || 'Unknown',
+        }],
+      };
+      console.log('[APPLY] Setting versionSelectorResume (fallback):', resumeWithVersions);
+      setVersionSelectorResume(resumeWithVersions);
+    } finally {
+      setIsLoadingVersions(false);
     }
   };
 
   // Handle version selection
   const handleVersionSelect = (versionId: string) => {
-    if (versionSelectorResume) {
-      toast.success(`Applying with ${versionSelectorResume.name}'s resume (${versionId})`);
-      onApplyToJob(versionSelectorResume);
+    if (versionSelectorResume && versionSelectorResume.versions) {
+      // Find the selected version
+      const selectedVersion = versionSelectorResume.versions.find((v: any) => v.id === versionId);
+      if (selectedVersion) {
+        // Create a resume object with the selected version's ID
+        const resumeWithSelectedVersion = {
+          ...versionSelectorResume,
+          id: versionId, // Use the selected version's ID
+          version: selectedVersion.version,
+        };
+        toast.success(`Applying with ${versionSelectorResume.name}'s resume (v${selectedVersion.version})`);
+        onApplyToJob(resumeWithSelectedVersion);
+      } else {
+        // Fallback to current resume if version not found
+        onApplyToJob(versionSelectorResume);
+      }
+      setVersionSelectorResume(null);
     }
   };
 
@@ -410,7 +462,7 @@ export default function ResumeTable({
                       ? 'bg-blue-100 text-blue-700 border-blue-200'
                       : 'bg-gray-100 text-gray-600 border-gray-200'
                   }`}>
-                    v{resume.versionCount || resume.versions?.length || 1}
+                    v{resume.version || 1}
                   </span>
                 </button>
               </td>
@@ -638,7 +690,7 @@ export default function ResumeTable({
                 View
               </button>
               <button
-                onClick={() => onApplyToJob(resume)}
+                onClick={() => handleApplyToJob(resume)}
                 className="flex-1 px-3 py-2 text-sm text-white bg-gray-800 hover:bg-gray-900 rounded-lg flex items-center justify-center gap-1"
               >
                 <Briefcase className="w-4 h-4" />
@@ -673,8 +725,18 @@ export default function ResumeTable({
         />
       )}
 
-      {/* Version Selector Modal */}
-      {versionSelectorResume && versionSelectorResume.versions && versionSelectorResume.versions.length > 1 && (
+      {/* Loading indicator for version fetch */}
+      {isLoadingVersions && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 flex items-center gap-3 shadow-xl">
+            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <span className="text-gray-700">Loading versions...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Version Selector Modal - shows for single candidate apply (even with 1 version) */}
+      {versionSelectorResume && versionSelectorResume.versions && versionSelectorResume.versions.length > 0 && (
         <ResumeVersionSelector
           resume={versionSelectorResume}
           onSelect={handleVersionSelect}

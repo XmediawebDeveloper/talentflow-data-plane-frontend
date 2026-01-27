@@ -10,6 +10,7 @@ const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 const DEFAULT_COLUMNS = [
   { id: 'candidateName', label: 'Candidate Name', enabled: true },
   { id: 'jobTitle', label: 'Job Title', enabled: false }, // Enabled in global view
+  { id: 'version', label: 'Version', enabled: true },
   { id: 'email', label: 'Email', enabled: true },
   { id: 'phone', label: 'Phone', enabled: true },
   { id: 'matchStatus', label: 'Match Status', enabled: true },
@@ -33,6 +34,13 @@ interface ScoredResume {
   experience?: string;
   education?: string;
   certifications?: string[];
+  // Version info
+  version?: number;
+  resumeVersion?: number;
+  // Source and status fields
+  source?: 'my-resumes' | 'database' | string;
+  status?: 'completed' | 'failed' | 'processing' | 'queued' | string;
+  errorReason?: string;
   // Real scoring data from API
   aiSummary?: string;
   strengths?: string[];
@@ -238,6 +246,8 @@ export default function ScoredResumesTable({
         return resume.candidateName || '';
       case 'jobTitle':
         return resume.jobTitle || '';
+      case 'version':
+        return `v${resume.version || resume.resumeVersion || 1}`;
       case 'email':
         return resume.email || '';
       case 'phone':
@@ -689,6 +699,16 @@ export default function ScoredResumesTable({
                     return (
                       <td key={col.id} className="py-3 px-4">
                         <div className="text-sm text-gray-700 font-medium">{resume.jobTitle || '-'}</div>
+                      </td>
+                    );
+                  }
+                  if (col.id === 'version') {
+                    const ver = resume.version || resume.resumeVersion || 1;
+                    return (
+                      <td key={col.id} className="py-3 px-4">
+                        <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
+                          v{ver}
+                        </span>
                       </td>
                     );
                   }

@@ -298,7 +298,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
           // Map quota_type to display names
           const quotaTypeToModule: Record<string, string> = {
-            'RU': 'Resume Uploads',
+            'RU': 'Resume Storage',
             'RS': 'Resume Scoring',
             'AS': 'Assessments',
             'AIU': 'AI Interviews',

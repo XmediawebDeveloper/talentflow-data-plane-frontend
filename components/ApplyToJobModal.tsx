@@ -1,4 +1,4 @@
-import { X, Search, Star, MapPin, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, User, DollarSign, Sparkles, PenLine, Hash, Monitor, Laptop, Home } from 'lucide-react';
+import { X, Search, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, MapPin, User, Monitor, Laptop, Home, Sparkles, PenLine } from 'lucide-react';
 import { useState } from 'react';
 import { Resume, Job } from '@/lib/types/types';
 
@@ -7,6 +7,31 @@ const workModeConfig: Record<string, { label: string; icon: React.ElementType; b
   onsite: { label: 'On-site', icon: Monitor, bgColor: 'bg-blue-50', textColor: 'text-blue-700' },
   hybrid: { label: 'Hybrid', icon: Laptop, bgColor: 'bg-purple-50', textColor: 'text-purple-700' },
   remote: { label: 'Remote', icon: Home, bgColor: 'bg-green-50', textColor: 'text-green-700' },
+};
+
+// Format employment type
+const formatEmploymentType = (type: string | undefined): string => {
+  if (!type) return '';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+// Format relative time
+const formatRelativeTime = (dateStr: string | undefined): string => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 60) return `${diffMins} minutes ago`;
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
 interface ApplyToJobModalProps {
@@ -135,95 +160,109 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
             </div>
             
             {filteredJobs.length > 0 ? (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
                 {filteredJobs.map(job => {
                   const isSelected = selectedJobs.includes(job.id);
-                  const workMode = workModeConfig[(job as any).workMode?.toLowerCase()] || null;
+                  const workMode = workModeConfig[(job as any).workMode?.toLowerCase() || (job as any).remote_type?.toLowerCase()] || null;
                   const WorkModeIcon = workMode?.icon;
 
-                  // Format posted date
-                  const formatPostedDate = (dateStr: string | undefined) => {
-                    if (!dateStr) return 'N/A';
+                  // Format date
+                  const formatDate = (dateStr: string | undefined) => {
+                    if (!dateStr) return '';
                     const date = new Date(dateStr);
-                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+                  };
+
+                  // Get status badge
+                  const getStatusBadge = (status: string) => {
+                    const configs: Record<string, { bg: string; text: string; dot: string }> = {
+                      draft: { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-500' },
+                      published: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
+                      Published: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
+                      archived: { bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-400' },
+                      disabled: { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-400' },
+                    };
+                    const config = configs[status] || configs.draft;
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`}></span>
+                        {status.charAt(0).toUpperCase() + status.slice(1)}
+                      </span>
+                    );
+                  };
+
+                  // Get creation method badge
+                  const getCreationMethodBadge = (creationMethod: string) => {
+                    const isAI = creationMethod === 'ai_generated' || creationMethod === 'ai';
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                        isAI ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
+                      }`}>
+                        {isAI ? <Sparkles className="w-3 h-3" /> : <PenLine className="w-3 h-3" />}
+                        {isAI ? 'AI' : 'Manual'}
+                      </span>
+                    );
                   };
 
                   return (
                     <label
                       key={job.id}
-                      className={`block p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                      className={`block bg-white rounded-xl border-2 p-5 cursor-pointer transition-all hover:shadow-md ${
                         isSelected
-                          ? 'border-gray-800 bg-gray-50'
-                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          ? 'border-gray-800 ring-1 ring-gray-800 bg-gray-50'
+                          : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-4">
+                        {/* Checkbox */}
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleJob(job.id)}
-                          className="mt-1 rounded border-gray-300 text-gray-800 focus:ring-gray-600"
+                          className="w-4 h-4 mt-1 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
                         />
                         <div className="flex-1 min-w-0">
-                          {/* Header Row: Job ID, Title, Status, Creation Method */}
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {/* Job ID Badge */}
-                              {(job as any).job_id && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs font-medium">
-                                  <Hash className="w-3 h-3" />
-                                  {(job as any).job_id}
-                                </span>
-                              )}
-                              {/* Title */}
-                              <span className="text-sm font-medium text-gray-900">{job.title}</span>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {/* Status Badge */}
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
-                                {job.status}
+                          {/* Row 1: Job ID, Title, Status, Creation Method */}
+                          <div className="flex items-center gap-3 mb-2 flex-wrap">
+                            {/* Job ID Badge */}
+                            {(job as any).job_id && (
+                              <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-sm font-medium border border-blue-200">
+                                {(job as any).job_id}
                               </span>
-                              {/* Creation Method Badge */}
-                              {(job as any).creation_method && (
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-                                  (job as any).creation_method === 'ai'
-                                    ? 'bg-purple-100 text-purple-700'
-                                    : 'bg-gray-100 text-gray-700'
-                                }`}>
-                                  {(job as any).creation_method === 'ai' ? (
-                                    <><Sparkles className="w-3 h-3" /> AI</>
-                                  ) : (
-                                    <><PenLine className="w-3 h-3" /> Manual</>
-                                  )}
-                                </span>
-                              )}
-                              {isSelected && (
-                                <CheckCircle className="w-5 h-5 text-gray-800" />
-                              )}
-                            </div>
+                            )}
+                            {/* Title */}
+                            <h3 className="text-base font-semibold text-gray-900">{job.title}</h3>
+                            {/* Status Badge */}
+                            {getStatusBadge(job.status)}
+                            {/* Creation Method Badge */}
+                            {(job as any).creation_method && getCreationMethodBadge((job as any).creation_method)}
+                            {/* Selected indicator */}
+                            {isSelected && (
+                              <CheckCircle className="w-5 h-5 text-gray-800 ml-auto flex-shrink-0" />
+                            )}
                           </div>
 
-                          {/* Info Row 1: Industry, Location, Employment Type, Work Mode */}
-                          <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap mb-2">
-                            {/* Industry */}
-                            {(job as any).industry_type && (
+                          {/* Row 2: Industry, Location, Employment Type, Work Mode */}
+                          <div className="flex items-center gap-4 text-sm text-gray-500 mb-2 flex-wrap">
+                            {/* Industry/Department */}
+                            {((job as any).industry_type || (job as any).department) && (
                               <span className="flex items-center gap-1">
-                                <Building2 className="w-3 h-3" />
-                                {(job as any).industry_type}
+                                <Building2 className="w-4 h-4" />
+                                {(job as any).industry_type || (job as any).department}
                               </span>
                             )}
                             {/* Location */}
                             {job.location && (
                               <span className="flex items-center gap-1">
-                                <MapPin className="w-3 h-3" />
+                                <MapPin className="w-4 h-4" />
                                 {job.location}
                               </span>
                             )}
                             {/* Employment Type */}
-                            {(job as any).employmentType && (
-                              <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded">
-                                <Briefcase className="w-3 h-3" />
-                                {(job as any).employmentType}
+                            {((job as any).employmentType || (job as any).employment_type) && (
+                              <span className="flex items-center gap-1">
+                                <Briefcase className="w-4 h-4" />
+                                {formatEmploymentType((job as any).employmentType || (job as any).employment_type)}
                               </span>
                             )}
                             {/* Work Mode */}
@@ -235,56 +274,35 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
                             )}
                           </div>
 
-                          {/* Info Row 2: Experience, Posted Date, Posted By */}
-                          <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap mb-2">
-                            {/* Experience */}
-                            {(job as any).experience && (
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {(job as any).experience} yrs exp
-                              </span>
-                            )}
+                          {/* Row 3: Posted Date, Posted By, Last Updated */}
+                          <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
                             {/* Posted Date */}
-                            {(job as any).postedDate && (
+                            {((job as any).postedDate || (job as any).published_at) && (
                               <span className="flex items-center gap-1">
-                                <Calendar className="w-3 h-3" />
-                                {formatPostedDate((job as any).postedDate)}
+                                <Calendar className="w-4 h-4" />
+                                Posted {formatDate((job as any).postedDate || (job as any).published_at)}
                               </span>
                             )}
-                            {/* Posted By */}
-                            {(job as any).postedBy && (
+                            {/* Posted By / Created By */}
+                            {((job as any).postedBy || (job as any).created_by_name) && (
                               <span className="flex items-center gap-1">
-                                <User className="w-3 h-3" />
-                                {(job as any).postedBy}
+                                <User className="w-4 h-4" />
+                                By {(job as any).postedBy || (job as any).created_by_name}
+                              </span>
+                            )}
+                            {/* Last Updated */}
+                            {(job as any).updated_at && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-4 h-4" />
+                                Last Updated: {formatRelativeTime((job as any).updated_at)}
                               </span>
                             )}
                           </div>
 
-                          {/* Info Row 3: Salary, Skills, Applicants */}
-                          <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
-                            {/* Salary */}
-                            {(job as any).salary && (
-                              <span className="flex items-center gap-1 text-green-600 font-medium">
-                                <DollarSign className="w-3 h-3" />
-                                {(job as any).salary}
-                              </span>
-                            )}
-                            {/* Skills Count */}
-                            {job.skills && job.skills.length > 0 && (
-                              <span className="flex items-center gap-1 px-2 py-0.5 bg-orange-50 text-orange-700 rounded">
-                                <Star className="w-3 h-3" />
-                                {job.skills.length} skill{job.skills.length > 1 ? 's' : ''}
-                              </span>
-                            )}
-                            {/* Applicants */}
-                            <span className="flex items-center gap-1">
-                              <Users className="w-3 h-3" />
-                              {job.applicants || 0} applicant{(job.applicants || 0) !== 1 ? 's' : ''}
-                            </span>
-                            {/* Days Active */}
-                            <span className="text-gray-400">
-                              {job.daysActive} day{job.daysActive !== 1 ? 's' : ''} active
-                            </span>
+                          {/* Row 4: Applicants */}
+                          <div className="flex items-center gap-2 text-sm">
+                            <Users className="w-4 h-4 text-gray-400" />
+                            <span className="text-gray-600">{job.applicants || (job as any).applicants_count || 0} applicants</span>
                           </div>
                         </div>
                       </div>

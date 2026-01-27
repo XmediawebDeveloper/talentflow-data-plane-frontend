@@ -172,23 +172,23 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
         { id: 'permissions', label: 'Permissions & Roles', icon: Shield, adminOnly: true },
         { id: 'api-management', label: 'API Management', icon: Key, adminOnly: true, feature: 'api_access' },
         { id: 'branding', label: 'Branding & White Label', icon: Palette, adminOnly: true },
-        { id: 'integrations', label: 'Integrations', icon: Link, adminOnly: true },
+        // { id: 'integrations', label: 'Integrations', icon: Link, adminOnly: true }, // Hidden for demo
         { id: 'security', label: 'Security Settings', icon: Lock, adminOnly: true },
       ]
     },
 
-    // Reports & Analytics - RBAC05: Viewers have read-only access
-    {
-      id: 'reports',
-      label: 'Reports & Analytics',
-      icon: BarChart3,
-      viewerAccess: true,  // RBAC05: Viewers can see reports
-      children: [
-        { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, adminOnly: true },
-        { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, permission: 'canViewAnalytics', viewerAccess: true, feature: 'reporting' },
-        { id: 'activity-logs', label: 'Activity Logs', icon: BarChart3, adminOnly: true },
-      ]
-    },
+    // Reports & Analytics - Hidden for demo, will be enabled in future
+    // {
+    //   id: 'reports',
+    //   label: 'Reports & Analytics',
+    //   icon: BarChart3,
+    //   viewerAccess: true,  // RBAC05: Viewers can see reports
+    //   children: [
+    //     { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, adminOnly: true },
+    //     { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, permission: 'canViewAnalytics', viewerAccess: true, feature: 'reporting' },
+    //     { id: 'activity-logs', label: 'Activity Logs', icon: BarChart3, adminOnly: true },
+    //   ]
+    // },
 
     // Support Tickets - Everyone
     {

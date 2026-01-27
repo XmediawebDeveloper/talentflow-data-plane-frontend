@@ -215,20 +215,20 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
         { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canManageUsers', adminOnly: true },
         { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'canManageSettings' },
         { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canManageSettings' },
-        { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' },
+        // { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' }, // Hidden for demo
         { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'canManageSettings' },
       ]
     },
 
-    // REPORTS & ANALYTICS
-    {
-      id: 'reports',
-      label: 'REPORTS & ANALYTICS',
-      items: [
-        { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, href: '/reports/team-usage', permission: 'canViewAnalytics' },
-        { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, href: '/reports/performance-reports', permission: 'canViewAnalytics' },
-      ]
-    },
+    // REPORTS & ANALYTICS - Hidden for demo, will be enabled in future
+    // {
+    //   id: 'reports',
+    //   label: 'REPORTS & ANALYTICS',
+    //   items: [
+    //     { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, href: '/reports/team-usage', permission: 'canViewAnalytics' },
+    //     { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, href: '/reports/performance-reports', permission: 'canViewAnalytics' },
+    //   ]
+    // },
 
     // AUDITS & TRAIL - Permission-based access
     {

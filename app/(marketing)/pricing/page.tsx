@@ -685,15 +685,15 @@ export default function PricingPage() {
                             <span className="font-semibold text-gray-900 dark:text-white">
                               {displayQuotas.max_seats.toLocaleString()}
                             </span>
-                            <span className="text-gray-600 dark:text-gray-400">No of Users</span>
+                            <span className="text-gray-600 dark:text-gray-400">Max Users</span>
                           </div>
                         )}
                         {displayQuotas.max_jobs !== undefined && displayQuotas.max_jobs >= 1 && (
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-gray-900 dark:text-white">
-                              {displayQuotas.max_jobs.toLocaleString()}
+                              {isTrialPlan ? displayQuotas.max_jobs.toLocaleString() : 'Unlimited'}
                             </span>
-                            <span className="text-gray-600 dark:text-gray-400">Job Postings</span>
+                            <span className="text-gray-600 dark:text-gray-400">Max Jobs</span>
                           </div>
                         )}
                         {displayQuotas.RU !== undefined && displayQuotas.RU >= 1 && (
@@ -701,7 +701,7 @@ export default function PricingPage() {
                             <span className="font-semibold text-gray-900 dark:text-white">
                               {displayQuotas.RU.toLocaleString()}
                             </span>
-                            <span className="text-gray-600 dark:text-gray-400">Resume Uploads</span>
+                            <span className="text-gray-600 dark:text-gray-400">Resume Storage</span>
                           </div>
                         )}
                         {displayQuotas.RS !== undefined && displayQuotas.RS >= 1 && (

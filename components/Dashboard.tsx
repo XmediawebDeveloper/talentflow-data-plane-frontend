@@ -244,7 +244,7 @@ export default function Dashboard({
                 </div>
               </div>
               <div className="text-2xl text-gray-900 mb-1">{limits?.resumeUploads?.toLocaleString() || '2,450'}</div>
-              <div className="text-xs text-gray-600 mb-3">Resume Uploads</div>
+              <div className="text-xs text-gray-600 mb-3">Resume Storage</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div 
