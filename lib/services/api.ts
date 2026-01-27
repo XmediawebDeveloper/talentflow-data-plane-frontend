@@ -184,22 +184,47 @@ api.interceptors.response.use(
 
 export default api;
 
-// Error handler helper
-export const handleApiError = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const detail = error.response?.data?.detail;
-    if (typeof detail === 'string') return detail;
-    if (Array.isArray(detail)) return detail[0]?.msg || 'Validation error';
-    // Handle object detail (e.g., quota errors with error_code)
-    if (detail && typeof detail === 'object') {
-      // Check for quota exceeded error
-      if (detail.error_code === 'QUOTA_EXCEEDED') {
-        return detail.message || 'OpenAI API quota exceeded. Please try again later or contact support.';
-      }
-      // Return message if available
-      if (detail.message) return detail.message;
-    }
-    return error.message;
+// Custom error class that preserves HTTP status code
+export class ApiError extends Error {
+  status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
   }
-  return 'An unexpected error occurred';
+}
+
+// Error handler helper that preserves status code
+// Now throws ApiError instead of returning a string
+export const handleApiError = (error: unknown): never => {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
+    const detail = error.response?.data?.detail;
+
+    let message: string;
+    if (typeof detail === 'string') {
+      message = detail;
+    } else if (Array.isArray(detail)) {
+      message = detail[0]?.msg || 'Validation error';
+    } else if (detail && typeof detail === 'object') {
+      // Handle object detail (e.g., quota errors with error_code)
+      if (detail.error_code === 'QUOTA_EXCEEDED') {
+        message = detail.message || 'OpenAI API quota exceeded. Please try again later or contact support.';
+      } else if (detail.message) {
+        message = detail.message;
+      } else {
+        message = error.message;
+      }
+    } else {
+      message = error.message;
+    }
+
+    // Check for permission denied (403)
+    if (status === 403) {
+      message = `Permission Denied: ${message}`;
+    }
+
+    throw new ApiError(message, status);
+  }
+  throw new ApiError('An unexpected error occurred');
 };

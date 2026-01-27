@@ -90,6 +90,17 @@ export default function Dashboard({
           assessmentService.getStats(),
         ]);
 
+        // Check for permission denied errors
+        const permissionErrors = [publishedResponse, draftResponse, statsResponse].filter(
+          result => result.status === 'rejected' &&
+          (result.reason?.message?.includes('403') || result.reason?.message?.includes('Permission'))
+        );
+
+        if (permissionErrors.length > 0) {
+          toast.error('Permission Denied: You do not have access to view dashboard data');
+          return;
+        }
+
         // Process published JDs
         if (publishedResponse.status === 'fulfilled') {
           setPublishedJDs(publishedResponse.value.items || []);

@@ -617,6 +617,10 @@ export default function UserManagement() {
       });
 
       if (!response.ok) {
+        // Check for permission denied (403 Forbidden)
+        if (response.status === 403) {
+          throw new Error('Permission Denied: You do not have access to view users');
+        }
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || 'Failed to fetch users');
       }

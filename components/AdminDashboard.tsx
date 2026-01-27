@@ -41,9 +41,16 @@ export default function AdminDashboard({
         setSubscriptionUnits(data.subscription_units);  // JD02A
         setJdRecentActivity(data.jd_recent_activity || []);  // JD02A
         setError(null);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to fetch dashboard:', err);
-        setError('Failed to load dashboard data');
+
+        // Check for permission denied (403 Forbidden)
+        if (err?.message?.includes('403') || err?.message?.includes('Permission') || err?.status === 403) {
+          setError('Permission Denied: You do not have access to view dashboard data');
+        } else {
+          setError('Failed to load dashboard data');
+        }
+
         // Set default stats on error
         setStats({
           total_resumes: 0,

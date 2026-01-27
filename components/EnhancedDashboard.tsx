@@ -227,10 +227,16 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           jdStatusCounts: statusCounts,
           stats: newStats,
         };
-      } catch (error) {
+      } catch (error: any) {
         if (!controller.signal.aborted) {
           console.error('Failed to fetch dashboard data:', error);
-          toast.error('Failed to load dashboard data');
+
+          // Check for permission denied (403 Forbidden)
+          if (error?.message?.includes('403') || error?.message?.includes('Permission') || error?.status === 403) {
+            toast.error('Permission Denied: You do not have access to view dashboard data');
+          } else {
+            toast.error('Failed to load dashboard data');
+          }
         }
       } finally {
         if (!controller.signal.aborted) {
