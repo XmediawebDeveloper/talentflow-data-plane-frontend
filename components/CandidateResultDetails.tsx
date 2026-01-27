@@ -48,6 +48,23 @@ export default function CandidateResultDetails({
       setDetailsError(null);
       try {
         const details = await assessmentService.getResultDetails(assessmentId, candidateId);
+        console.log('[CandidateResultDetails] API Response:', {
+          overall_score: details.overall_score,
+          round_scores: details.round_scores.map(r => ({
+            type: r.round_type,
+            raw_score: r.raw_score,
+            weighted_score: r.weighted_score,
+            weightage_percent: r.weightage_percent,
+            questions_correct: r.questions_correct,
+            questions_total: r.questions_total
+          })),
+          question_evaluations_sample: details.question_evaluations.slice(0, 2).map(q => ({
+            question_type: q.question_type,
+            points_earned: q.points_earned,
+            points_possible: q.points_possible,
+            is_correct: q.is_correct
+          }))
+        });
         setDetailedResult(details);
 
         // Set active tab based on available rounds
@@ -63,20 +80,35 @@ export default function CandidateResultDetails({
           status = 'Under Review';
         }
 
+        // Map section scores - RoundScore only has percentages, not points
+        const sections = details.round_scores.map(round => {
+          // raw_score is already a percentage (0-100)
+          const rawPercentage = round.raw_score ?? 0;
+          const percentage = Math.min(Math.round(rawPercentage), 100);
+
+          // Calculate the actual score out of 10 based on percentage
+          const score = Math.round((percentage / 100) * 10 * 10) / 10; // Round to 1 decimal
+
+          return {
+            name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
+            score: score,
+            totalScore: 10,
+            percentage: percentage
+          };
+        });
+
+        // Use overall score from API
+        const overallScore = details.overall_score ?? 0;
+
         setCandidateData({
           name: details.candidate_name || 'Unknown',
           email: details.candidate_email || '',
           phone: details.candidate_phone || '',
           completedDate: details.completed_at?.split('T')[0] || 'N/A',
           duration: details.time_spent_seconds ? `${Math.round(details.time_spent_seconds / 60)} min` : 'N/A',
-          percentage: details.overall_score ?? 0,
+          percentage: overallScore,
           status,
-          sections: details.round_scores.map(round => ({
-            name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
-            score: round.total_points || 0,
-            totalScore: round.max_points || 100,
-            percentage: Math.round(round.raw_score)
-          }))
+          sections
         });
       } catch (error) {
         console.error('Failed to fetch detailed results:', error);
@@ -270,6 +302,48 @@ export default function CandidateResultDetails({
           </div>
         </div>
 
+        {/* Score Calculation Notice - Show if individual questions are all 0 */}
+        {detailedResult && candidateData && (() => {
+          // Check if all questions show 0 points
+          const allQuestionsZero = detailedResult.question_evaluations.every(q => q.points_earned === 0);
+          const sectionsHaveScores = detailedResult.round_scores.some(r => (r.raw_score ?? 0) > 0);
+
+          if (allQuestionsZero && sectionsHaveScores) {
+            return (
+              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <Info className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-yellow-900 mb-2">Score Calculation Note</h3>
+                    <p className="text-sm text-yellow-800 mb-3">
+                      The overall score ({detailedResult.overall_score}%) is calculated using weighted section scores.
+                      Individual section scores may show 0% if questions are not yet scored or if there's a scoring status mismatch.
+                    </p>
+                    <div className="text-xs text-yellow-700 space-y-1">
+                      <div><strong>Scoring Status:</strong> {detailedResult.scoring_status}</div>
+                      <div className="mt-2 mb-1"><strong>Score Breakdown:</strong></div>
+                      {detailedResult.round_scores.map((round, idx) => (
+                        <div key={idx} className="ml-2">
+                          • <strong className="capitalize">{round.round_type}:</strong> {round.raw_score}% raw score × {round.weightage_percent}% weight = <strong>{round.weighted_score}% contribution</strong>
+                        </div>
+                      ))}
+                      <div className="mt-2 pt-2 border-t border-yellow-400">
+                        <strong>Overall Score:</strong> {detailedResult.round_scores.reduce((sum, r) => sum + (r.weighted_score || 0), 0).toFixed(1)}%
+                        (API reports: {detailedResult.overall_score}%)
+                      </div>
+                      <div className="mt-2 text-yellow-800 bg-yellow-100 rounded p-2">
+                        <strong>Note:</strong> Individual questions show 0 points because the backend hasn't populated the question-level scores,
+                        but section scores ({detailedResult.round_scores.map(r => r.raw_score).join('%, ')}%) are calculated correctly.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
         {/* Section Scores */}
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <h2 className="text-gray-900 mb-4">Section-wise Performance</h2>
@@ -305,10 +379,10 @@ export default function CandidateResultDetails({
                     {section.percentage}%
                   </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                   <div
                     className={`h-3 rounded-full ${section.percentage >= 80 ? 'bg-green-600' : section.percentage >= 60 ? 'bg-gray-800' : section.percentage >= 40 ? 'bg-yellow-600' : 'bg-red-600'}`}
-                    style={{ width: `${section.percentage}%` }}
+                    style={{ width: `${Math.min(section.percentage, 100)}%` }}
                   ></div>
                 </div>
               </div>
@@ -647,8 +721,8 @@ export default function CandidateResultDetails({
                         </div>
                         <div className="text-right">
                           <div className="text-sm text-gray-600 mb-1">Section Score</div>
-                          <div className={`text-3xl ${getScoreColor(round.raw_score)}`}>
-                            {Math.round(round.raw_score)}%
+                          <div className={`text-3xl ${getScoreColor(Math.min(round.raw_score, 100))}`}>
+                            {Math.min(Math.round(round.raw_score), 100)}%
                           </div>
                         </div>
                       </div>
@@ -691,11 +765,22 @@ export default function CandidateResultDetails({
                                   <div className="ml-6 text-right flex-shrink-0">
                                     <div className="text-xs text-gray-600 mb-1">Score</div>
                                     <div className="flex items-center gap-2">
-                                      <div className={`text-2xl font-bold ${getScoreColor((q.points_earned / q.points_possible) * 100)}`}>
-                                        {q.points_earned}
-                                      </div>
-                                      <div className="text-gray-400">/</div>
-                                      <div className="text-xl text-gray-600">{q.points_possible}</div>
+                                      {(() => {
+                                        // Normalize scores to be out of 10
+                                        const normalizedEarned = q.points_possible === 100 ? q.points_earned / 10 : q.points_earned;
+                                        const normalizedPossible = q.points_possible === 100 ? 10 : q.points_possible;
+                                        const percentage = (normalizedEarned / normalizedPossible) * 100;
+
+                                        return (
+                                          <>
+                                            <div className={`text-2xl font-bold ${getScoreColor(percentage)}`}>
+                                              {Math.round(normalizedEarned * 10) / 10}
+                                            </div>
+                                            <div className="text-gray-400">/</div>
+                                            <div className="text-xl text-gray-600">{normalizedPossible}</div>
+                                          </>
+                                        );
+                                      })()}
                                     </div>
                                   </div>
                                 </div>
