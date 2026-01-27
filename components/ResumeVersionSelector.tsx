@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react';
 import { X, FileText, Calendar, User, Clock, CheckCircle2 } from 'lucide-react';
 import { Resume, ResumeVersion } from '@/lib/types/types';
 
@@ -11,17 +12,22 @@ interface ResumeVersionSelectorProps {
 
 export default function ResumeVersionSelector({ resume, onSelect, onClose }: ResumeVersionSelectorProps) {
   const versions = resume.versions || [];
-  
+
   // Sort versions by date (newest first)
-  const sortedVersions = [...versions].sort((a, b) => 
+  const sortedVersions = [...versions].sort((a, b) =>
     new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
   );
 
   const latestVersionId = sortedVersions[0]?.id;
 
-  const handleSelectVersion = (versionId: string) => {
-    onSelect(versionId);
-    onClose();
+  // Track selected version (default to latest)
+  const [selectedVersionId, setSelectedVersionId] = useState<string>(latestVersionId || '');
+
+  const handleConfirm = () => {
+    if (selectedVersionId) {
+      onSelect(selectedVersionId);
+      onClose();
+    }
   };
 
   return (
@@ -32,7 +38,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-1">Select Resume Version</h2>
             <p className="text-sm text-gray-600">
-              Choose which version of <span className="font-medium">{resume.name}</span>'s resume to apply to the job
+              Choose which version of <span className="font-medium">{resume.name}</span>&apos;s resume to apply to the job
             </p>
           </div>
           <button
@@ -60,23 +66,24 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
         <div className="flex-1 overflow-y-auto p-6 space-y-3">
           {sortedVersions.map((version, index) => {
             const isLatest = version.id === latestVersionId;
+            const isSelected = version.id === selectedVersionId;
             const versionNumber = sortedVersions.length - index;
 
             return (
               <button
                 key={version.id}
-                onClick={() => handleSelectVersion(version.id)}
+                onClick={() => setSelectedVersionId(version.id)}
                 className={`w-full text-left p-4 rounded-lg border-2 transition-all hover:shadow-md ${
-                  isLatest
-                    ? 'border-blue-600 bg-blue-50'
+                  isSelected
+                    ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-600 ring-offset-2'
                     : 'border-gray-200 bg-white hover:border-blue-300'
                 }`}
               >
                 <div className="flex items-start gap-4">
                   <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    isLatest ? 'bg-blue-100' : 'bg-gray-100'
+                    isSelected ? 'bg-blue-100' : 'bg-gray-100'
                   }`}>
-                    <FileText className={`w-6 h-6 ${isLatest ? 'text-blue-600' : 'text-gray-600'}`} />
+                    <FileText className={`w-6 h-6 ${isSelected ? 'text-blue-600' : 'text-gray-600'}`} />
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -85,7 +92,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
                         Version {versionNumber}
                       </h3>
                       {isLatest && (
-                        <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full">
+                        <span className="px-2 py-0.5 bg-green-600 text-white text-xs rounded-full">
                           Latest
                         </span>
                       )}
@@ -121,11 +128,11 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
                   </div>
 
                   <div className="flex-shrink-0">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      isLatest ? 'bg-blue-600' : 'bg-gray-200'
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                      isSelected ? 'bg-blue-600' : 'bg-gray-200'
                     }`}>
                       <CheckCircle2 className={`w-5 h-5 ${
-                        isLatest ? 'text-white' : 'text-gray-400'
+                        isSelected ? 'text-white' : 'text-gray-400'
                       }`} />
                     </div>
                   </div>
@@ -141,12 +148,21 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
             <p className="text-sm text-gray-600">
               {sortedVersions.length} version{sortedVersions.length !== 1 ? 's' : ''} available
             </p>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
-            >
-              Cancel
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirm}
+                disabled={!selectedVersionId}
+                className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Confirm & Continue
+              </button>
+            </div>
           </div>
         </div>
       </div>

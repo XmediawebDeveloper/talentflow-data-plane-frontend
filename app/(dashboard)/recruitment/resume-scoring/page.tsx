@@ -229,26 +229,33 @@ export default function ResumeScoringRoute() {
           scoresByJd.set(jdId, { jdTitle: item.jd_title || 'Unknown Job', scores: [] });
         }
 
-        // Convert score to display format
+        // Convert score to display format (70+ = Exact Match, 50+ = Partial Match)
+        const matchScore = Math.round(item.overall_score || 0);
         let matchStatus = 'No Match';
-        if (item.match_status === 'exact_match' || item.match_status === 'excellent') {
+        if (item.match_status === 'exact_match' || item.match_status === 'Exact Match' || matchScore >= 70) {
           matchStatus = 'Exact Match';
-        } else if (item.match_status === 'partial_match' || item.match_status === 'partial') {
+        } else if (item.match_status === 'partial_match' || item.match_status === 'Partial Match' || matchScore >= 50) {
           matchStatus = 'Partial Match';
         }
-        const matchScore = Math.round(item.overall_score || 0);
 
         scoresByJd.get(jdId)!.scores.push({
           id: item.id,
           candidateName: item.candidate_name || 'Unknown',
-          candidateEmail: item.candidate_email || '',
-          email: item.candidate_email || '',
+          candidateEmail: item.email || item.candidate_email || '',
+          email: item.email || item.candidate_email || '',
           phone: item.phone || '',
           matchScore: matchScore,
           matchStatus: matchStatus,
           scorePercentage: matchScore,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by_name || item.scored_by || 'System',
+          // Version info
+          version: item.resume_version || item.version || 1,
+          resumeVersion: item.resume_version || item.version || 1,
+          // Source, Status, Error Reason fields
+          source: item.source || 'database',
+          status: item.status || 'completed',
+          errorReason: item.error_message || item.error_reason || '',
           experience: item.experience_years ? `${item.experience_years} years` : undefined,
           education: item.education,
           certifications: item.certifications || [],

@@ -276,7 +276,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
   };
 
   const getEligibleStatus = (rating: number): { status: string; icon: JSX.Element; color: string } => {
-    if (rating > 7) {
+    if (rating >= 7) {
       return {
         status: 'Eligible',
         icon: <CheckCircle className="w-5 h-5 text-green-600" />,
@@ -469,13 +469,13 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
         <div className="grid grid-cols-4 gap-4">
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="text-2xl font-bold text-green-700">
-              {criteriaScores.filter(c => c.rating > 7).length}
+              {criteriaScores.filter(c => c.rating >= 7).length}
             </div>
             <div className="text-sm text-gray-700 mt-1">Eligible Criteria</div>
           </div>
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="text-2xl font-bold text-red-700">
-              {criteriaScores.filter(c => c.rating <= 7).length}
+              {criteriaScores.filter(c => c.rating < 7).length}
             </div>
             <div className="text-sm text-gray-700 mt-1">Not Eligible Criteria</div>
           </div>

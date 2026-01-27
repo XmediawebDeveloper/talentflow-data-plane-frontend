@@ -360,10 +360,17 @@ export default function ResumeViewPage() {
         daysActive: jd.created_at ? Math.ceil((new Date().getTime() - new Date(jd.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0,
         requiredMatch: jd.required_match || 70,
         department: jd.department,
+        industry_type: jd.industry_type,
         applicants: jd.applicants_count || 0,
         description: jd.description,
         skills: jd.skills || jd.must_have_skills || [],
-        postedDate: jd.created_at,
+        postedDate: jd.published_at || jd.created_at,
+        postedBy: jd.created_by_name,
+        employmentType: jd.employment_type,
+        workMode: jd.remote_type,
+        created_at: jd.created_at,
+        updated_at: jd.updated_at,
+        creation_method: jd.creation_method,
       }));
       setPublishedJobs(convertedJobs);
     } catch (error) {

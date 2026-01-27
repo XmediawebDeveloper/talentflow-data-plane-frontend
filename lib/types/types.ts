@@ -17,6 +17,7 @@ export interface Resume {
   previousCompany?: string;
   noticePeriod?: string;
   lastUpdated?: string;
+  version?: number; // Current version number (v1, v2, etc.)
   versions?: ResumeVersion[];
   versionCount?: number; // Total number of versions
   assignedTo?: string; // Team member ID
@@ -129,6 +130,7 @@ export interface Job {
   internalRecruiterComments?: string[];
   assessmentGuidance?: string;
   employmentType?: string;
+  workMode?: string; // Remote type: onsite, hybrid, remote
   currentVersion?: number;
   versionHistory?: JobSnapshot[];
   assignedTo?: string; // Team member ID

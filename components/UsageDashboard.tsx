@@ -640,7 +640,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               <div>
                 <h1 className="text-2xl text-gray-900">Usage & Quotas Dashboard</h1>
                 <p className="text-sm text-gray-600 mt-0.5">
-                  Track your quota consumption across Resume Uploads, Scoring, Assessments, and AI Interviews
+                  Track your quota consumption across Resume Storage, Scoring, Assessments, and AI Interviews
                 </p>
               </div>
             </div>

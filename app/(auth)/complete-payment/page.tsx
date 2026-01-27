@@ -249,10 +249,10 @@ function CompletePaymentContent() {
   // Helper to get quota label
   const getQuotaLabel = (key: string): string => {
     const labels: Record<string, string> = {
-      max_seats: 'No of Users',
-      max_jobs: 'Job Postings',
+      max_seats: 'Max Users',
+      max_jobs: 'Max Jobs',
       RS: 'Resume Scores',
-      RU: 'Resume Uploads',
+      RU: 'Resume Storage',
       AS: 'Assessments',
       AIU: 'AI Interviews',
       api_rate_limit: 'API Rate Limit',

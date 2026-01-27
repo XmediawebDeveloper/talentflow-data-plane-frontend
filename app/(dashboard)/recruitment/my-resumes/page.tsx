@@ -15,6 +15,7 @@ import DuplicateResumeModal, { DuplicateFile, ExistingResume } from '@/component
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import UploadHistoryDetailModal, { UploadHistoryItem } from '@/components/UploadHistoryDetailModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
+import ResumeVersionSelector from '@/components/ResumeVersionSelector';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
@@ -103,6 +104,11 @@ export default function MyResumesPage() {
   const [publishedJobs, setPublishedJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [uploadedResumeToScore, setUploadedResumeToScore] = useState<{ id: string; candidateName: string } | null>(null);
+  const [singleResumeToApply, setSingleResumeToApply] = useState<Resume | null>(null);
+
+  // Version selector state (for single candidate apply)
+  const [versionSelectorResume, setVersionSelectorResume] = useState<Resume | null>(null);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
 
   // ZIP download confirmation modal state
   const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
@@ -238,6 +244,9 @@ export default function MyResumesPage() {
         })),
         fileName: r.file_name, // Original file name with extension
         fileType: r.file_type, // File type (pdf, doc, docx)
+        // Version info
+        version: r.version || 1,
+        versionCount: r.version_count || 1,
       }));
 
       // Convert API Folder to component Folder type
@@ -413,10 +422,17 @@ export default function MyResumesPage() {
         daysActive: jd.created_at ? Math.ceil((new Date().getTime() - new Date(jd.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0,
         requiredMatch: jd.required_match || 70,
         department: jd.department,
+        industry_type: jd.industry_type,
         applicants: jd.applicants_count || 0,
         description: jd.description,
         skills: jd.skills || jd.must_have_skills || [],
-        postedDate: jd.created_at,
+        postedDate: jd.published_at || jd.created_at,
+        postedBy: jd.created_by_name,
+        employmentType: jd.employment_type,
+        workMode: jd.remote_type,
+        created_at: jd.created_at,
+        updated_at: jd.updated_at,
+        creation_method: jd.creation_method,
       }));
       setPublishedJobs(convertedJobs);
     } catch (error) {
@@ -427,11 +443,98 @@ export default function MyResumesPage() {
     }
   };
 
-  // Handle apply to job - open the modal
+  // Handle apply to job
+  // Single candidate: show version selector first
+  // Multiple candidates: use latest version directly
   const handleApplyToJob = async () => {
     if (selectedResumes.length === 0) return;
 
-    // Fetch published jobs and open modal
+    if (selectedResumes.length === 1) {
+      // Single candidate - show version selector first
+      const resume = resumes.find(r => r.id === selectedResumes[0]);
+      if (resume) {
+        await showVersionSelector(resume);
+        return;
+      }
+    }
+
+    // Multiple candidates - use latest versions directly (resumes in list are already latest)
+    await fetchPublishedJobs();
+    setIsApplyToJobModalOpen(true);
+  };
+
+  // Show version selector for a single resume
+  const showVersionSelector = async (resume: Resume) => {
+    setIsLoadingVersions(true);
+    try {
+      const versions = await resumeService.getVersions(resume.id);
+      const resumeWithVersions = {
+        ...resume,
+        versions: versions && versions.length > 0
+          ? versions.map((v: any) => ({
+              id: v.id,
+              name: v.file_name || v.candidate_name || 'Resume',
+              uploadDate: v.created_at,
+              version: v.version || 1,
+              uploadedBy: v.uploaded_by_name || 'Unknown',
+            }))
+          : [{
+              id: resume.id,
+              name: resume.fileName || resume.name || 'Resume',
+              uploadDate: resume.uploadDate,
+              version: resume.version || 1,
+              uploadedBy: resume.uploadedBy || 'Unknown',
+            }],
+      };
+      setVersionSelectorResume(resumeWithVersions);
+    } catch (error) {
+      console.error('Failed to fetch versions:', error);
+      // On error, create single version entry
+      const resumeWithVersions = {
+        ...resume,
+        versions: [{
+          id: resume.id,
+          name: resume.fileName || resume.name || 'Resume',
+          uploadDate: resume.uploadDate,
+          version: resume.version || 1,
+          uploadedBy: resume.uploadedBy || 'Unknown',
+        }],
+      };
+      setVersionSelectorResume(resumeWithVersions);
+    } finally {
+      setIsLoadingVersions(false);
+    }
+  };
+
+  // Handle version selection - proceed to job modal with selected version
+  const handleVersionSelect = async (versionId: string) => {
+    // Capture resume data immediately (before component's onClose runs)
+    const currentResume = versionSelectorResume;
+    if (!currentResume || !currentResume.versions) return;
+
+    const selectedVersion = currentResume.versions.find((v: any) => v.id === versionId);
+    if (!selectedVersion) return;
+
+    // Create resume with selected version ID
+    const resumeWithSelectedVersion = {
+      ...currentResume,
+      id: versionId,
+      version: selectedVersion.version,
+    };
+
+    // Set the resume to apply and fetch jobs
+    setSingleResumeToApply(resumeWithSelectedVersion);
+
+    // Fetch published jobs then open modal
+    await fetchPublishedJobs();
+    setIsApplyToJobModalOpen(true);
+  };
+
+  // Handle apply to job for a single resume (from table action button)
+  // This is called from ResumeTable after version is selected there
+  const handleSingleResumeApplyToJob = async (resume: Resume) => {
+    // Resume already has selected version ID from ResumeTable's version selector
+    setSingleResumeToApply(resume);
     await fetchPublishedJobs();
     setIsApplyToJobModalOpen(true);
   };
@@ -457,7 +560,7 @@ export default function MyResumesPage() {
     const selectedJob = publishedJobs.find(j => j.id === jobId);
 
     try {
-      // Start async bulk scoring via Celery
+      // Start async bulk scoring via Celery (resumeIds already have correct version IDs)
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
       // Store batch info for the resume-scoring page to poll
@@ -850,7 +953,7 @@ export default function MyResumesPage() {
     source: 'Manual',
     folderId: r.folder_id || '',
     uploadDate: r.created_at,
-    attachments: 1,
+    attachments: r.file_name ? 1 : 0,
     uploadedBy: r.uploaded_by_name || 'Unknown',
     currentCompany: r.current_company,
     previousCompany: r.previous_company,
@@ -887,6 +990,8 @@ export default function MyResumesPage() {
       name: typeof lang === 'string' ? lang : (lang.name || lang.language || ''),
       proficiency: typeof lang === 'string' ? 'Fluent' : (lang.proficiency || lang.level || 'Fluent'),
     })),
+    version: r.version || 1,
+    versionCount: r.version_count || 1,
   });
 
   // Handle search change from SearchFilterBarCompact (already debounced)
@@ -978,13 +1083,16 @@ export default function MyResumesPage() {
           );
 
           const converted = convertApiResume(result);
-          setResumes(prev => [converted, ...prev]);
 
           if (resolution.action === 'overwrite') {
-            // Remove the old resume from the list
-            setResumes(prev => prev.filter(r => r.id !== duplicateFile.existingResume.id));
+            // Overwrite updates the SAME row (same ID), so REPLACE the existing item in list
+            setResumes(prev => prev.map(r =>
+              r.id === duplicateFile.existingResume.id ? converted : r
+            ));
             toast.success('Resume overwritten successfully', { id: toastId });
           } else {
+            // Version creates NEW row (new ID), so add new and remove old
+            setResumes(prev => [converted, ...prev.filter(r => r.id !== duplicateFile.existingResume.id)]);
             toast.success(`Resume saved as version ${(duplicateFile.existingResume.version || 1) + 1}`, { id: toastId });
           }
         }
@@ -1153,7 +1261,7 @@ export default function MyResumesPage() {
               onSelectResume={handleSelectResume}
               onSelectAll={handleSelectAll}
               onQuickView={(resume) => setQuickViewResume(resume)}
-              onApplyToJob={(resume) => console.log('Apply to job:', resume)}
+              onApplyToJob={handleSingleResumeApplyToJob}
               onDelete={(id) => handleDelete(id)}
               onMoveToFolder={handleMoveToFolder}
               folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
@@ -1479,18 +1587,40 @@ export default function MyResumesPage() {
         />
       )}
 
+      {/* Loading overlay for version fetch */}
+      {isLoadingVersions && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 flex items-center gap-3">
+            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+            <span className="text-gray-700">Loading versions...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Version Selector Modal (for single candidate apply) */}
+      {versionSelectorResume && versionSelectorResume.versions && versionSelectorResume.versions.length > 0 && (
+        <ResumeVersionSelector
+          resume={versionSelectorResume}
+          onSelect={handleVersionSelect}
+          onClose={() => setVersionSelectorResume(null)}
+        />
+      )}
+
       {/* Apply to Job Modal */}
       {isApplyToJobModalOpen && (
         <ApplyToJobModal
           resumes={
-            uploadedResumeToScore
-              ? resumes.filter(r => r.id === uploadedResumeToScore.id)
-              : resumes.filter(r => selectedResumes.includes(r.id))
+            singleResumeToApply
+              ? [singleResumeToApply]
+              : uploadedResumeToScore
+                ? resumes.filter(r => r.id === uploadedResumeToScore.id)
+                : resumes.filter(r => selectedResumes.includes(r.id))
           }
           jobs={publishedJobs}
           onClose={() => {
             setIsApplyToJobModalOpen(false);
-            setUploadedResumeToScore(null); // Clear the uploaded resume state
+            setUploadedResumeToScore(null);
+            setSingleResumeToApply(null);
           }}
           onApply={handleApplyToJobSubmit}
         />

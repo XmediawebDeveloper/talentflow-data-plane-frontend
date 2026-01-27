@@ -246,6 +246,10 @@ export default function ResumeScoringPage({
         scorePercentage: Math.round(item.overall_score || 0),
         scoredDate: item.created_at || new Date().toISOString(),
         scoredBy: item.scored_by || 'AI Engine',
+        // Source, Status, Error Reason fields
+        source: item.source || 'database',
+        status: item.status || 'completed',
+        errorReason: item.error_message || item.error_reason || '',
         experience: item.experience,
         education: item.education,
         certifications: item.certifications,
@@ -560,26 +564,26 @@ export default function ResumeScoringPage({
   };
 
   const getMatchReason = (score: number) => {
-    if (score >= 85) return 'Excellent match with strong alignment on key skills and experience requirements. Highly recommended candidate.';
-    if (score >= 70) return 'Good match with relevant skills and experience. Solid candidate for consideration.';
+    if (score >= 70) return 'Excellent match with strong alignment on key skills and experience requirements. Highly recommended candidate.';
+    if (score >= 50) return 'Good match with relevant skills and experience. Solid candidate for consideration.';
     return 'Moderate match with some relevant skills. May require additional evaluation.';
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-gray-800';
+    if (score >= 70) return 'text-green-600';
+    if (score >= 50) return 'text-gray-800';
     return 'text-yellow-600';
   };
 
   const getScoreBgColor = (score: number) => {
-    if (score >= 85) return 'bg-green-100 border-green-300 text-green-700';
-    if (score >= 70) return 'bg-gray-100 border-gray-300 text-gray-900';
+    if (score >= 70) return 'bg-green-100 border-green-300 text-green-700';
+    if (score >= 50) return 'bg-gray-100 border-gray-300 text-gray-900';
     return 'bg-yellow-100 border-yellow-300 text-yellow-700';
   };
 
   const getScoreLabel = (score: number) => {
-    if (score >= 85) return 'Exact Match';
-    if (score >= 70) return 'Partial Match';
+    if (score >= 70) return 'Exact Match';
+    if (score >= 50) return 'Partial Match';
     return 'No Match';
   };
 
@@ -668,10 +672,10 @@ export default function ResumeScoringPage({
         return 'Current';
       };
 
-      // Use matchStatus from API if available, otherwise calculate from score
+      // Use matchStatus from API if available, otherwise calculate from score (70+ = Exact Match)
       const matchStatus = resume.matchStatus || (
-        resume.matchScore >= 85 ? 'Exact Match' :
-        resume.matchScore >= 70 ? 'Partial Match' : 'No Match'
+        resume.matchScore >= 70 ? 'Exact Match' :
+        resume.matchScore >= 50 ? 'Partial Match' : 'No Match'
       );
 
       return {
@@ -692,6 +696,16 @@ export default function ResumeScoringPage({
         education: resume.education || 'N/A',
         certifications: resume.certifications || [],
         resumeVersion: getResumeVersion(),
+        // Job Title and JD ID from parent scoredData
+        jobTitle: scoredData.jobTitle,
+        jdId: scoredData.jobId,
+        // Version info
+        version: resume.version || resume.resumeVersion || 1,
+        resumeVersion: resume.version || resume.resumeVersion || 1,
+        // Source, Status, Error Reason fields
+        source: resume.source || scoredData.source || 'database',
+        status: resume.status || 'completed',
+        errorReason: resume.errorReason || resume.error_reason || '',
         // Pass real scoring data from API
         aiSummary: resume.aiSummary,
         strengths: resume.strengths,
@@ -1456,19 +1470,24 @@ export default function ResumeScoringPage({
                           onClick={(e) => {
                             e.stopPropagation();
                             // Show COMPLETED progress for this specific job - don't re-score
+                            // Calculate actual completed/failed counts
+                            const failedCount = item.scoredResumes.filter(r => r.status === 'failed' || r.errorReason).length;
+                            const completedCount = item.totalScored - failedCount;
+
                             const jobProgress: JobScoringProgress[] = [{
                               jobId: item.jobId,
                               jobTitle: item.jobTitle,
                               total: item.totalScored,
                               queued: 0,
                               inProgress: 0,
-                              completed: item.totalScored, // All completed
-                              failed: 0,
+                              completed: completedCount,
+                              failed: failedCount,
                               items: item.scoredResumes.map(resume => ({
                                 resumeId: resume.id,
-                                candidateName: resume.candidateName,
-                                status: 'completed' as const,
-                                score: resume.matchScore,
+                                candidateName: resume.candidateName || resume.name || 'Unknown',
+                                status: (resume.status === 'failed' || resume.errorReason) ? 'failed' as const : 'completed' as const,
+                                score: resume.matchScore || resume.scorePercentage,
+                                errorMessage: resume.errorReason || resume.error_reason,
                               })),
                             }];
                             setJobProgressData(jobProgress);
@@ -1637,19 +1656,24 @@ export default function ResumeScoringPage({
                           onClick={(e) => {
                             e.stopPropagation();
                             // Show COMPLETED progress for this specific job - don't re-score
+                            // Calculate actual completed/failed counts
+                            const failedCount = item.scoredResumes.filter(r => r.status === 'failed' || r.errorReason).length;
+                            const completedCount = item.totalScored - failedCount;
+
                             const jobProgress: JobScoringProgress[] = [{
                               jobId: item.jobId,
                               jobTitle: item.jobTitle,
                               total: item.totalScored,
                               queued: 0,
                               inProgress: 0,
-                              completed: item.totalScored, // All completed
-                              failed: 0,
+                              completed: completedCount,
+                              failed: failedCount,
                               items: item.scoredResumes.map(resume => ({
                                 resumeId: resume.id,
-                                candidateName: resume.candidateName,
-                                status: 'completed' as const,
-                                score: resume.matchScore,
+                                candidateName: resume.candidateName || resume.name || 'Unknown',
+                                status: (resume.status === 'failed' || resume.errorReason) ? 'failed' as const : 'completed' as const,
+                                score: resume.matchScore || resume.scorePercentage,
+                                errorMessage: resume.errorReason || resume.error_reason,
                               })),
                             }];
                             setJobProgressData(jobProgress);

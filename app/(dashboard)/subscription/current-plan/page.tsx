@@ -1530,7 +1530,7 @@ function CurrentPlanContent() {
                   <p className="text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_resume_uploads)}
                   </p>
-                  <p className="text-xs text-gray-600">Resume Uploads</p>
+                  <p className="text-xs text-gray-600">Resume Storage</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <p className="text-2xl font-semibold text-gray-900">
@@ -1828,19 +1828,19 @@ function CurrentPlanContent() {
                             {displayQuotas.max_seats !== undefined && displayQuotas.max_seats >= 1 && (
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-900">{displayQuotas.max_seats.toLocaleString()}</span>
-                                <span className="text-gray-600">No of Users</span>
+                                <span className="text-gray-600">Max Users</span>
                               </div>
                             )}
                             {displayQuotas.max_jobs !== undefined && displayQuotas.max_jobs >= 1 && (
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-900">{displayQuotas.max_jobs.toLocaleString()}</span>
-                                <span className="text-gray-600">Job Postings</span>
+                                <span className="font-semibold text-gray-900">Unlimited</span>
+                                <span className="text-gray-600">Max Jobs</span>
                               </div>
                             )}
                             {displayQuotas.RU !== undefined && displayQuotas.RU >= 1 && (
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-900">{displayQuotas.RU.toLocaleString()}</span>
-                                <span className="text-gray-600">Resume Uploads</span>
+                                <span className="text-gray-600">Resume Storage</span>
                               </div>
                             )}
                             {displayQuotas.RS !== undefined && displayQuotas.RS >= 1 && (
@@ -2328,7 +2328,7 @@ function CurrentPlanContent() {
                           <div className="flex justify-between text-sm">
                             <span className="text-green-700 flex items-center gap-1.5">
                               <ArrowUpRight className="w-3.5 h-3.5" />
-                              Resume Uploads (RU):
+                              Resume Storage (RU):
                             </span>
                             <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.RU} units</span>
                           </div>
