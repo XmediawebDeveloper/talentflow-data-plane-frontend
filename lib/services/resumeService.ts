@@ -141,21 +141,43 @@ export const resumeService = {
       formData.append('folder_id', folderId);
     }
 
-    // Call async endpoint which returns batch response
+    // Call endpoint which returns batch response
     const response = await api.post<UploadBatchResponse>('/resumes/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
 
     const batchId = response.data.id;
+    let batch = response.data;
 
-    // Poll for completion (max 5 minutes)
+    // If already completed (synchronous upload), skip polling
+    if (batch.pending === 0) {
+      // Dispatch event to refresh header quota display
+      dispatchUnitsConsumed();
+
+      // Check for errors
+      if (batch.errors > 0 && batch.items && batch.items.length > 0) {
+        const errorItem = batch.items[0];
+        throw new Error(errorItem.error_message || 'Failed to process resume');
+      }
+
+      // Extract resume from completed batch item
+      if (batch.items && batch.items.length > 0) {
+        const item = batch.items[0];
+        if (item.resume_id) {
+          const resume = await this.get(item.resume_id);
+          return resume;
+        }
+      }
+    }
+
+    // Poll for completion (max 5 minutes) - only if not already completed
     const maxAttempts = 300; // 300 * 1000ms = 5 minutes
     let attempts = 0;
 
     while (attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
 
-      const batch = await this.getBatchStatus(batchId);
+      batch = await this.getBatchStatus(batchId);
 
       // Check if processing is complete
       if (batch.pending === 0) {

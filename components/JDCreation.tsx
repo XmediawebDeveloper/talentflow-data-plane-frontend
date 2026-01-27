@@ -962,6 +962,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   }, []);
 
   const handleGenerateJD = async () => {
+    // Validate AI prompt before proceeding
+    const promptLength = aiPrompt.trim().length;
+    if (promptLength < VALIDATION.AI_PROMPT.min) {
+      toast.error({
+        title: 'AI Prompt Required',
+        description: `Please enter at least ${VALIDATION.AI_PROMPT.min} characters in the AI prompt field.`,
+      });
+      return;
+    }
+    if (promptLength > VALIDATION.AI_PROMPT.max) {
+      toast.error({
+        title: 'AI Prompt Too Long',
+        description: `AI prompt must be less than ${VALIDATION.AI_PROMPT.max} characters.`,
+      });
+      return;
+    }
+
     // Note: Quota check moved to publish action - generation doesn't consume quota
     setIsGenerating(true);
     setIsStreaming(true);
@@ -3310,13 +3327,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                     <div>
                       <label className="block text-sm text-gray-700 mb-2">
-                        AI Prompt – Quick Job Details {!editingId && <span className="text-red-500">*</span>}
+                        AI Prompt – Quick Job Details <span className="text-red-500">*</span>
                       </label>
                       <textarea
                         value={aiPrompt}
                         onChange={(e) => setAiPrompt(e.target.value)}
                         maxLength={VALIDATION.AI_PROMPT.max}
-                        placeholder={editingId ? "Add additional details or context to regenerate the job description..." : "Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"}
+                        placeholder="Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"
                         rows={12}
                         disabled={isJDInUse}
                         className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
@@ -3328,10 +3345,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${!editingId && aiPrompt.trim().length > 0 && aiPrompt.trim().length < VALIDATION.AI_PROMPT.min ? 'text-red-500' : 'text-gray-500'}`}>
-                          {!editingId && aiPrompt.trim().length === 0 && `Min ${VALIDATION.AI_PROMPT.min} characters required`}
-                          {!editingId && aiPrompt.trim().length > 0 && aiPrompt.trim().length < VALIDATION.AI_PROMPT.min && `${VALIDATION.AI_PROMPT.min - aiPrompt.trim().length} more characters needed`}
-                          {editingId && aiPrompt.trim().length === 0 && 'Optional: Add details to regenerate JD'}
+                        <p className={`text-xs ${aiPrompt.trim().length > 0 && aiPrompt.trim().length < VALIDATION.AI_PROMPT.min ? 'text-red-500' : 'text-gray-500'}`}>
+                          {aiPrompt.trim().length === 0 && `Min ${VALIDATION.AI_PROMPT.min} characters required`}
+                          {aiPrompt.trim().length > 0 && aiPrompt.trim().length < VALIDATION.AI_PROMPT.min && `${VALIDATION.AI_PROMPT.min - aiPrompt.trim().length} more characters needed`}
                         </p>
                         <p className={`text-xs ${aiPrompt.trim().length > VALIDATION.AI_PROMPT.max ? 'text-red-500' : 'text-gray-500'}`}>
                           {aiPrompt.trim().length}/{VALIDATION.AI_PROMPT.max}
@@ -3370,20 +3386,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                     <button
                       onClick={handleGenerateJD}
-                      disabled={
-                        isJDInUse ||
-                        !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
-                        (!editingId && (aiPrompt.trim().length < VALIDATION.AI_PROMPT.min || aiPrompt.trim().length > VALIDATION.AI_PROMPT.max)) ||
-                        (editingId && aiPrompt.trim().length > VALIDATION.AI_PROMPT.max) ||
-                        isGenerating ||
-                        hasProceededToExtract
-                      }
+                      disabled={(() => {
+                        const promptLength = aiPrompt.trim().length;
+
+                        return (
+                          isJDInUse ||
+                          !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
+                          // Always require AI prompt with min/max length validation (for both generate and regenerate)
+                          promptLength < VALIDATION.AI_PROMPT.min ||
+                          promptLength > VALIDATION.AI_PROMPT.max ||
+                          isGenerating ||
+                          hasProceededToExtract
+                        );
+                      })()}
                       className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gray-800 to-gray-800 text-white px-6 py-3 rounded-md hover:from-gray-700 hover:to-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Wand2 className="w-5 h-5" />
                       {isGenerating ? (
                         <span className="animate-pulse">Generating with AI...</span>
-                      ) : generatedJD ? (
+                      ) : (generatedJD && !generatedJD.startsWith('[AI Prompt - Pending Generation]')) ? (
                         'Regenerate Job Description'
                       ) : (
                         'Generate Job Description'

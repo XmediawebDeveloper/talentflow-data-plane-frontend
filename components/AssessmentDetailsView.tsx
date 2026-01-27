@@ -212,7 +212,7 @@ export default function AssessmentDetailsView({
                   <span className="flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
                     Created {assessment.created_at
-                      ? `${new Date(assessment.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${new Date(assessment.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`
+                      ? `${new Date(assessment.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' })} at ${new Date(assessment.created_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}`
                       : assessment.created}
                   </span>
                   {assessment.created_by_name && (
@@ -801,8 +801,8 @@ export default function AssessmentDetailsView({
                   const info = getActivityInfo();
                   const ActivityIcon = info.icon;
                   const activityDate = activity.completed_at || activity.started_at || activity.created_at;
-                  const formattedDate = activityDate ? new Date(activityDate).toLocaleDateString('en-US', {
-                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                  const formattedDate = activityDate ? new Date(activityDate).toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
                   }) : 'N/A';
 
                   return (

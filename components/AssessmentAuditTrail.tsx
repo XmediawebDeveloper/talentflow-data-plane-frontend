@@ -145,12 +145,14 @@ export default function AssessmentAuditTrail() {
     if (diffHours < 24) return `${diffHours} hours ago`;
     if (diffDays < 7) return `${diffDays} days ago`;
 
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
       hour: '2-digit',
       minute: '2-digit',
+      hour12: true,
     });
   };
 
@@ -457,7 +459,7 @@ export default function AssessmentAuditTrail() {
                           <div>
                             <span className="text-gray-500">Timestamp:</span>
                             <span className="ml-2 text-gray-900">
-                              {new Date(activity.timestamp).toLocaleString()}
+                              {new Date(activity.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}
                             </span>
                           </div>
                           {activity.assessment_id && (

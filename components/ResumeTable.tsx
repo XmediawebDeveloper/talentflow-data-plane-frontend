@@ -187,7 +187,8 @@ export default function ResumeTable({
           id: v.id,
           name: v.file_name || v.candidate_name || 'Resume',
           uploadDate: v.created_at,
-          size: v.file_size ? `${Math.round(v.file_size / 1024)} KB` : 'N/A',
+          size: v.file_size_kb ? `${v.file_size_kb} KB` : (v.file_size ? `${Math.round(v.file_size / 1024)} KB` : 'N/A'),
+          uploadedBy: v.uploaded_by_name || 'Unknown',
         })),
       };
       setVersionHistoryResume(resumeWithVersions);
@@ -395,26 +396,23 @@ export default function ResumeTable({
                 </div>
               </td>
               <td className="px-4 py-4">
-                {(resume.versionCount && resume.versionCount > 1) || (resume.versions && resume.versions.length > 1) ? (
-                  <button
-                    onClick={() => handleShowVersionHistory(resume)}
-                    disabled={isLoadingVersions}
-                    className="flex items-center gap-2 text-sm text-gray-700 hover:text-blue-600 transition-colors group disabled:opacity-50"
-                  >
-                    <div className="flex items-center gap-1">
-                      <Paperclip className="w-4 h-4" />
-                      <span>{resume.attachments}</span>
-                    </div>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 border border-blue-200 group-hover:bg-blue-200 transition-colors">
-                      v{resume.versionCount || resume.versions?.length || 1}
-                    </span>
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-1 text-sm text-gray-700">
+                <button
+                  onClick={() => handleShowVersionHistory(resume)}
+                  disabled={isLoadingVersions}
+                  className="flex items-center gap-2 text-sm text-gray-700 hover:text-blue-600 transition-colors group disabled:opacity-50"
+                >
+                  <div className="flex items-center gap-1">
                     <Paperclip className="w-4 h-4" />
-                    {resume.attachments}
+                    <span>{resume.attachments}</span>
                   </div>
-                )}
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border group-hover:bg-blue-200 transition-colors ${
+                    (resume.versionCount && resume.versionCount > 1) || (resume.versions && resume.versions.length > 1)
+                      ? 'bg-blue-100 text-blue-700 border-blue-200'
+                      : 'bg-gray-100 text-gray-600 border-gray-200'
+                  }`}>
+                    v{resume.versionCount || resume.versions?.length || 1}
+                  </span>
+                </button>
               </td>
               <td className="px-4 py-4">
                 <div className="flex items-center gap-2">
@@ -434,9 +432,9 @@ export default function ResumeTable({
                   ) : (
                     <>
                       <button
-                        onClick={() => router.push(`/recruitment/resume-detail/${resume.id}`)}
+                        onClick={() => onQuickView(resume)}
                         className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                        title="View Resume Details"
+                        title="Preview Resume"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
@@ -668,6 +666,10 @@ export default function ResumeTable({
           candidateName={versionHistoryResume.name}
           versions={versionHistoryResume.versions}
           onClose={() => setVersionHistoryResume(null)}
+          onApplyToJob={(versionId) => {
+            setVersionHistoryResume(null);
+            onApplyToJob(versionHistoryResume);
+          }}
         />
       )}
 

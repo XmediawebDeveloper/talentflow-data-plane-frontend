@@ -17,6 +17,46 @@ import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
+// Helper function to format date/time in IST (Asia/Kolkata timezone)
+const formatDateTimeIST = (dateStr: string | null | undefined, options?: { includeTime?: boolean }) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const dateOptions: Intl.DateTimeFormatOptions = {
+    timeZone: 'Asia/Kolkata',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  };
+  if (options?.includeTime) {
+    dateOptions.hour = '2-digit';
+    dateOptions.minute = '2-digit';
+    dateOptions.hour12 = true;
+  }
+  return date.toLocaleString('en-IN', dateOptions);
+};
+
+const formatTimeIST = (dateStr: string | null | undefined) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return date.toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
+const formatDateOnlyIST = (dateStr: string | null | undefined) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
 interface AssessmentsProps {
   jobs: Job[];
   onOpenCandidateView?: () => void;
@@ -1950,7 +1990,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <span className="ml-2">• Created by: {assessment.created_by_name}</span>
                               )}
                               {assessment.created_at && (
-                                <span className="ml-2">• {new Date(assessment.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(assessment.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                                <span className="ml-2">• {formatDateOnlyIST(assessment.created_at)} at {formatTimeIST(assessment.created_at)}</span>
                               )}
                             </div>
                           )}
@@ -2344,13 +2384,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                       const formatDate = (dateStr: string | null) => {
                         if (!dateStr) return null;
-                        return new Date(dateStr).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        });
+                        return formatDateTimeIST(dateStr, { includeTime: true });
                       };
 
                       const initials = invitation.candidate_name

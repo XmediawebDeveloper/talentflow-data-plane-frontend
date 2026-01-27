@@ -656,12 +656,18 @@ export default function MyResumesPage() {
           candidateName: r.candidate_name || files[0].name
         };
       } catch (error: any) {
+        console.log('[UPLOAD-ERROR] Caught error:', error);
+        console.log('[UPLOAD-ERROR] Response status:', error?.response?.status);
+        console.log('[UPLOAD-ERROR] Response data:', error?.response?.data);
+
         // Check for duplicate error (409 Conflict)
         if (error?.response?.status === 409) {
           const detail = error?.response?.data?.detail;
+          console.log('[UPLOAD-ERROR] 409 detail:', detail);
           const existingResume = detail?.existing_resume;
           const isExactDuplicate = detail?.is_exact_duplicate ?? true;
           const contentDifferences = detail?.content_differences || [];
+          console.log('[UPLOAD-ERROR] existingResume:', existingResume);
 
           if (existingResume) {
             // Show duplicate modal instead of simple error
