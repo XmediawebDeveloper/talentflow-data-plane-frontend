@@ -52,7 +52,8 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   href?: string;
-  permission?: string;
+  permission?: string;           // Single permission check (legacy)
+  permissions?: string[];        // Multiple permissions check (show if ANY match)
   adminOnly?: boolean;
 }
 
@@ -78,12 +79,52 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
 
   const isTenantAdmin = user?.role === 'tenant_admin';
 
+  // Debug: Log user permissions on sidebar render
+  console.log('[SIDEBAR] User:', user?.email, 'Role:', user?.role, 'Permissions:', user?.permissions);
+
+  /**
+   * PERMISSION CHECKING LOGIC:
+   *
+   * 1. tenant_admin → ALWAYS returns true (bypass all checks)
+   * 2. All other roles → Check ONLY the explicitly assigned permissions
+   *    - Permissions come from backend API (user.permissions)
+   *    - NO role-based defaults are applied
+   *    - If permission is not in user.permissions, access is DENIED
+   *
+   * This ensures users ONLY see menus for permissions explicitly granted to them.
+   */
+
   // Check if user has a specific permission
   const hasPermission = (permission?: string): boolean => {
     if (!permission) return true;
+
+    // tenant_admin bypasses all permission checks
     if (isTenantAdmin) return true;
+
+    // For all other roles, check ONLY explicitly assigned permissions
+    if (!user?.permissions) {
+      console.log('[SIDEBAR] No permissions found for user');
+      return false;
+    }
+
+    const hasAccess = user.permissions[permission as keyof typeof user.permissions] === true;
+    console.log(`[SIDEBAR] Permission check: ${permission} = ${hasAccess}`);
+    return hasAccess;
+  };
+
+  // Check if user has ANY of the specified permissions (for grouped checks)
+  const hasAnyPermission = (permissions: string[]): boolean => {
+    // tenant_admin bypasses all permission checks
+    if (isTenantAdmin) return true;
+
+    // For all other roles, check ONLY explicitly assigned permissions
     if (!user?.permissions) return false;
-    return user.permissions[permission as keyof typeof user.permissions] === true;
+
+    const hasAny = permissions.some(perm =>
+      user.permissions[perm as keyof typeof user.permissions] === true
+    );
+    console.log(`[SIDEBAR] Any permission check: ${permissions.join(', ')} = ${hasAny}`);
+    return hasAny;
   };
 
   // Define menu sections with grouped items
@@ -93,7 +134,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'administration',
       label: 'ADMINISTRATION',
       items: [
-        { id: 'dashboard', label: 'Admin Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+        { id: 'dashboard', label: isTenantAdmin ? 'Admin Dashboard' : 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
       ]
     },
 
@@ -102,9 +143,9 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'recruitment',
       label: 'RECRUITMENT',
       items: [
-        { id: 'job-openings', label: 'Job Descriptions', icon: Briefcase, href: '/recruitment/job-openings', permission: 'can_create_jd' },
-        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permission: 'can_view_resumes' },
-        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permission: 'can_view_resumes' },
+        { id: 'job-openings', label: 'Job Descriptions', icon: Briefcase, href: '/recruitment/job-openings', permissions: ['canReadJD', 'canCreateJD', 'canUpdateJD', 'canDeleteJD'] },
+        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permissions: ['canViewResumes', 'canRunScoring'] },
+        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permissions: ['canViewResumes', 'canRunAiMatch'] },
       ]
     },
 
@@ -113,8 +154,8 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'resume-management',
       label: 'RESUME MANAGEMENT',
       items: [
-        { id: 'my-resumes', label: 'My Resumes', icon: Users, href: '/recruitment/my-resumes', permission: 'can_upload_resumes' },
-        { id: 'resume-database', label: 'Internal Database', icon: Database, href: '/recruitment/resume-database', permission: 'can_access_internal_db' },
+        { id: 'my-resumes', label: 'My Resumes', icon: Users, href: '/recruitment/my-resumes', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes'] },
+        { id: 'resume-database', label: 'Internal Database', icon: Database, href: '/recruitment/resume-database', permissions: ['canAccessInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'] },
       ]
     },
 
@@ -123,8 +164,8 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'evaluation',
       label: 'EVALUATION',
       items: [
-        { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permission: 'can_create_assessments' },
-        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permission: 'can_view_resumes' },
+        { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permissions: ['canViewAssessments', 'canCreateAssessments', 'canUpdateAssessments', 'canDeleteAssessments'] },
+        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permissions: ['canViewResumes', 'canRunAiInterviews'] },
       ]
     },
 
@@ -133,10 +174,10 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'organization',
       label: 'ORGANIZATION',
       items: [
-        { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', permission: 'can_manage_settings' },
-        { id: 'team-management', label: 'Team Management', icon: Users, href: '/organization/team-management', permission: 'can_manage_users' },
-        { id: 'user-management', label: 'User Management', icon: UserCog, href: '/organization/user-management', permission: 'can_manage_users' },
-        { id: 'role-management', label: 'Role Management', icon: Shield, href: '/organization/role-management', permission: 'can_manage_users' },
+        { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', permission: 'canManageSettings' },
+        { id: 'team-management', label: 'Team Management', icon: Users, href: '/organization/team-management', permission: 'canManageUsers' },
+        { id: 'user-management', label: 'User Management', icon: UserCog, href: '/organization/user-management', permission: 'canManageUsers' },
+        { id: 'role-management', label: 'Role Management', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
       ]
     },
 
@@ -145,9 +186,9 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'masters',
       label: 'MASTERS',
       items: [
-        { id: 'experience-levels', label: 'Experience Levels', icon: Clock, href: '/masters/experience-levels', permission: 'can_manage_settings' },
-        { id: 'education-levels', label: 'Education Levels', icon: GraduationCap, href: '/masters/education-levels', permission: 'can_manage_settings' },
-        { id: 'industry-types', label: 'Industry Types', icon: Factory, href: '/masters/industry-types', permission: 'can_manage_settings' },
+        { id: 'experience-levels', label: 'Experience Levels', icon: Clock, href: '/masters/experience-levels', permission: 'canManageSettings' },
+        { id: 'education-levels', label: 'Education Levels', icon: GraduationCap, href: '/masters/education-levels', permission: 'canManageSettings' },
+        { id: 'industry-types', label: 'Industry Types', icon: Factory, href: '/masters/industry-types', permission: 'canManageSettings' },
       ]
     },
 
@@ -156,12 +197,12 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'subscription',
       label: 'SUBSCRIPTION & BILLING',
       items: [
-        { id: 'current-plan', label: 'Current Plan', icon: CreditCard, href: '/subscription/current-plan', permission: 'can_view_billing' },
-        { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', permission: 'can_view_usage' },
-        { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', permission: 'can_view_billing' },
-        { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', permission: 'can_view_invoices' },
-        { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', permission: 'can_view_invoices' },
-        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', permission: 'can_view_invoices' },
+        { id: 'current-plan', label: 'Current Plan', icon: CreditCard, href: '/subscription/current-plan', permission: 'canViewBilling' },
+        { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', permission: 'canViewUsage' },
+        { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', permission: 'canViewBilling' },
+        { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', permission: 'canViewInvoices' },
+        { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', permission: 'canViewInvoices' },
+        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', permission: 'canViewInvoices' },
       ]
     },
 
@@ -170,12 +211,12 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'settings',
       label: 'SETTINGS',
       items: [
-        { id: 'general-settings', label: 'General Settings', icon: Settings, href: '/settings/general-settings', permission: 'can_manage_settings' },
-        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'can_manage_users' },
-        { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'can_manage_settings' },
-        { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'can_manage_settings' },
-        { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'can_manage_settings' },
-        { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'can_manage_settings' },
+        { id: 'general-settings', label: 'General Settings', icon: Settings, href: '/settings/general-settings', permission: 'canManageSettings' },
+        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canManageUsers', adminOnly: true },
+        { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'canManageSettings' },
+        { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canManageSettings' },
+        { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' },
+        { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'canManageSettings' },
       ]
     },
 
@@ -184,8 +225,8 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'reports',
       label: 'REPORTS & ANALYTICS',
       items: [
-        { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, href: '/reports/team-usage', permission: 'can_view_analytics' },
-        { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, href: '/reports/performance-reports', permission: 'can_view_analytics' },
+        { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, href: '/reports/team-usage', permission: 'canViewAnalytics' },
+        { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, href: '/reports/performance-reports', permission: 'canViewAnalytics' },
       ]
     },
 
@@ -194,8 +235,8 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'audits',
       label: 'AUDITS & TRAIL',
       items: [
-        { id: 'audit-trail', label: 'Audit Trail', icon: ScrollText, href: '/audits/trail', permission: 'can_view_analytics' },
-        { id: 'activity-logs', label: 'Activity Logs', icon: Activity, href: '/audits/activity', permission: 'can_view_analytics' },
+        { id: 'audit-trail', label: 'Audit Trail', icon: ScrollText, href: '/audits/trail', permission: 'canViewAnalytics' },
+        { id: 'activity-logs', label: 'Activity Logs', icon: Activity, href: '/audits/activity', permission: 'canViewAnalytics' },
       ]
     },
 
@@ -215,7 +256,15 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       // Filter items within section
       const filteredItems = section.items.filter(item => {
         if (item.adminOnly && !isTenantAdmin) return false;
+
+        // Check permissions array (granular - show if ANY match)
+        if (item.permissions && item.permissions.length > 0) {
+          return hasAnyPermission(item.permissions);
+        }
+
+        // Fallback to single permission check (legacy)
         if (item.permission && !hasPermission(item.permission)) return false;
+
         return true;
       });
 

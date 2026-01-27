@@ -462,10 +462,13 @@ export default function RoleManagement() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => {
+                              console.log('[ROLE EDIT] Attempting to edit role:', { id: role.id, name: role.name, code: role.code });
                               if (!role.id || role.id <= 0) {
-                                toast.error('Invalid role ID');
+                                console.error('[ROLE EDIT] Invalid role ID:', role.id, 'Full role object:', role);
+                                toast.error(`Invalid role ID: ${role.id}`);
                                 return;
                               }
+                              console.log('[ROLE EDIT] Navigating to edit page with ID:', role.id);
                               router.push(`/organization/role-management/edit/${role.id}`);
                             }}
                             className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"

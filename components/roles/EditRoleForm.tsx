@@ -136,6 +136,31 @@ export default function EditRoleForm({ roleId }: EditRoleFormProps) {
     });
   };
 
+  const handleSelectAll = () => {
+    if (!role) return;
+
+    const allPermissionIds = permissions.map(p => p.id);
+    const currentPermissions = role.permissions.map(p => p.id);
+    const allSelected = allPermissionIds.every(id => currentPermissions.includes(id));
+
+    if (allSelected) {
+      // Deselect all
+      setRole({ ...role, permissions: [] });
+    } else {
+      // Select all
+      setRole({
+        ...role,
+        permissions: permissions.map(p => ({
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          module: p.module,
+          action: p.action,
+        })),
+      });
+    }
+  };
+
   const handleParentRoleChange = async (parentRoleId: string) => {
     if (!role) return;
 
@@ -193,9 +218,39 @@ export default function EditRoleForm({ roleId }: EditRoleFormProps) {
     if (!role) return null;
 
     const selectedPermissions = role.permissions.map(p => p.id);
+    const allPermissionIds = permissions.map(p => p.id);
+    const allSelected = allPermissionIds.every(id => selectedPermissions.includes(id));
+    const someSelected = selectedPermissions.length > 0 && !allSelected;
 
     return (
       <div className="space-y-2">
+        {/* Select All Option */}
+        <div className="border border-gray-300 rounded-lg overflow-hidden bg-gray-50">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSelectAll}
+                className={`w-5 h-5 rounded flex items-center justify-center border-2 ${
+                  allSelected
+                    ? 'bg-gray-800 border-gray-800'
+                    : someSelected
+                    ? 'bg-gray-200 border-gray-800'
+                    : 'border-gray-300'
+                }`}
+              >
+                {(allSelected || someSelected) && <Check className="w-3 h-3 text-white" />}
+              </button>
+              <span className="font-semibold text-gray-900">
+                Select All Permissions
+              </span>
+              <span className="text-xs text-gray-500">
+                ({selectedPermissions.length}/{allPermissionIds.length} selected)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Module-wise Permissions */}
         {Object.entries(permissionsByModule).map(([module, perms]) => {
           const allSelected = perms.every(p => selectedPermissions.includes(p.id));
           const someSelected = perms.some(p => selectedPermissions.includes(p.id));

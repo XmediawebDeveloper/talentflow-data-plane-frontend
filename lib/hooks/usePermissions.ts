@@ -282,3 +282,119 @@ export function usePermissions(): UsePermissionsReturn {
 }
 
 export default usePermissions;
+
+/**
+ * useModulePermissions - Get granular CRUD permissions for a specific module
+ *
+ * Usage:
+ * const jdPerms = useModulePermissions('jd');
+ * {jdPerms.canCreate && <Button>Create JD</Button>}
+ * {jdPerms.canUpdate && <Button>Edit</Button>}
+ * {jdPerms.canDelete && <Button>Delete</Button>}
+ */
+
+export type ModuleType = 'jd' | 'resume' | 'assessment' | 'internal_db';
+
+export interface ModuleCRUDPermissions {
+  canRead: boolean;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  hasAnyAccess: boolean; // True if ANY permission is granted
+}
+
+export function useModulePermissions(module: ModuleType): ModuleCRUDPermissions {
+  const { user, isTenantAdmin } = useAuth();
+
+  /**
+   * PERMISSION LOGIC:
+   * 1. tenant_admin → Full access to everything (bypass)
+   * 2. All other roles → ONLY check explicitly assigned permissions
+   *    - Permissions come from backend API (user.permissions)
+   *    - NO role-based defaults applied
+   *    - Missing permission = access denied
+   */
+
+  // tenant_admin bypasses all checks - has full access
+  if (isTenantAdmin) {
+    return {
+      canRead: true,
+      canCreate: true,
+      canUpdate: true,
+      canDelete: true,
+      hasAnyAccess: true,
+    };
+  }
+
+  // For all other roles, check ONLY explicitly assigned permissions
+  if (!user || !user.permissions) {
+    return {
+      canRead: false,
+      canCreate: false,
+      canUpdate: false,
+      canDelete: false,
+      hasAnyAccess: false,
+    };
+  }
+
+  // Get permissions DIRECTLY from backend API response
+  const perms = user.permissions;
+  let result: ModuleCRUDPermissions;
+
+  // Map module to specific permissions
+  switch (module) {
+    case 'jd':
+      result = {
+        canRead: perms.canReadJD ?? false,
+        canCreate: perms.canCreateJD ?? false,
+        canUpdate: perms.canUpdateJD ?? false,
+        canDelete: perms.canDeleteJD ?? false,
+        hasAnyAccess: false,
+      };
+      break;
+
+    case 'resume':
+      result = {
+        canRead: perms.canViewResumes ?? false,
+        canCreate: perms.canUploadResumes ?? false,
+        canUpdate: perms.canUpdateResumes ?? false,
+        canDelete: perms.canDeleteResumes ?? false,
+        hasAnyAccess: false,
+      };
+      break;
+
+    case 'assessment':
+      result = {
+        canRead: perms.canViewAssessments ?? false,
+        canCreate: perms.canCreateAssessments ?? false,
+        canUpdate: perms.canUpdateAssessments ?? false,
+        canDelete: perms.canDeleteAssessments ?? false,
+        hasAnyAccess: false,
+      };
+      break;
+
+    case 'internal_db':
+      result = {
+        canRead: perms.canAccessInternalDB ?? false,
+        canCreate: false, // Internal DB doesn't have create (resumes are uploaded elsewhere)
+        canUpdate: perms.canUpdateInternalDB ?? false,
+        canDelete: perms.canDeleteInternalDB ?? false,
+        hasAnyAccess: false,
+      };
+      break;
+
+    default:
+      result = {
+        canRead: false,
+        canCreate: false,
+        canUpdate: false,
+        canDelete: false,
+        hasAnyAccess: false,
+      };
+  }
+
+  // Calculate hasAnyAccess
+  result.hasAnyAccess = result.canRead || result.canCreate || result.canUpdate || result.canDelete;
+
+  return result;
+}

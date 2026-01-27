@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
+import { use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import EditRoleForm from '@/components/roles/EditRoleForm';
 
-export default function EditRolePage({ params }: { params: { id: string } }) {
+export default function EditRolePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
-  const roleId = parseInt(params.id);
+  // Unwrap the params Promise using React.use()
+  const resolvedParams = use(params);
+  const roleId = parseInt(resolvedParams.id);
 
   // Validate role ID
   useEffect(() => {
