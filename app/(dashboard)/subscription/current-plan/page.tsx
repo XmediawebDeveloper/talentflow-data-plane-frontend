@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -331,6 +332,7 @@ const formatQuotaValue = (value: number | string | undefined | null): string => 
 function CurrentPlanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { logout } = useAuth();
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
@@ -758,26 +760,28 @@ function CurrentPlanContent() {
         if (data.status === 'partial') {
           // Show warning message for partial success
           const adminError = data.data?.admin_error || 'Admin system sync failed';
-          setError(`Plan upgraded locally, but sync with admin system failed: ${adminError}. Your plan is active but please contact support if you experience issues.`);
+          toast.warning('Plan upgraded with warnings', {
+            description: `${adminError}. You will be redirected to login.`,
+            duration: 3000,
+          });
         } else {
-          setSuccessMessage(`Successfully upgraded to ${selectedQueuedUpgrade.new_plan_name}!`);
+          toast.success(`Successfully upgraded to ${selectedQueuedUpgrade.new_plan_name}!`, {
+            description: 'You will be redirected to login to apply your new plan.',
+            duration: 3000,
+          });
         }
 
         setShowTCModal(false);
         setSelectedQueuedUpgrade(null);
         setTcAccepted(false);
 
-        // Refresh shared quota context first (this updates the source of truth)
-        await refetchQuota();
-
-        // Reset the fetch flag so fetchData runs again with new quota data
-        hasFetchedRef.current = false;
-
-        // Refresh page data and queued upgrades
-        await fetchQueuedUpgrades();
-
-        // Notify Header component to refresh quota/plan display
-        window.dispatchEvent(new CustomEvent('planChanged'));
+        // Plan upgraded successfully - logout and redirect to login
+        // This ensures user gets fresh session with new plan data
+        setTimeout(() => {
+          logout();
+          router.push('/login?upgraded=true');
+        }, 2000);
+        return; // Exit early
       } else {
         setError(data.detail || data.data?.message || 'Failed to apply upgrade');
       }
@@ -1057,46 +1061,22 @@ function CurrentPlanContent() {
           // Refresh queued upgrades list
           await fetchQueuedUpgrades();
         } else {
-          // The /subscription/{tenant_id}/select-plan endpoint already updates:
-          // 1. tenants table in landlord DB
-          // 2. company_settings in tenant DB
-          // 3. POSTs to external admin API
-          // So no additional API calls needed here
+          // Plan upgraded successfully - logout and redirect to login
+          // This ensures user gets fresh session with new plan data
+          toast.success('Plan upgraded successfully!', {
+            description: 'You will be redirected to login to apply your new plan.',
+            duration: 3000,
+          });
 
-          // Update local state with the new plan and quotas
-          if (selectedPlanForPayment) {
-            setCompanySettings(prev => ({
-              ...prev!,
-              selected_plan_id: selectedPlanForPayment.numericId,
-              current_plan_id: selectedPlanForPayment.numericId,
-              current_plan_name: selectedPlanForPayment.name,
-              subscription_status: 'active',
-              status: 'active',
-              payment_status: 'success',
-              // Update quotas from the selected plan
-              max_seats: selectedPlanForPayment.quotas?.max_seats || prev?.max_seats || 5,
-              max_jobs: selectedPlanForPayment.quotas?.max_jobs || prev?.max_jobs || 5,
-              max_resume_uploads: selectedPlanForPayment.quotas?.RU || prev?.max_resume_uploads || 100,
-              max_resume_searches: selectedPlanForPayment.quotas?.RS || prev?.max_resume_searches || 100,
-              max_assessments: selectedPlanForPayment.quotas?.AS || prev?.max_assessments || 10,
-              max_ai_interviews: selectedPlanForPayment.quotas?.AIU || prev?.max_ai_interviews || 10,
-              storage_limit_gb: selectedPlanForPayment.quotas?.storage_gb || prev?.storage_limit_gb || 5,
-            }));
-
-            // Update the plans to mark the new one as current based on billing toggle
-            setPlans(prevPlans => prevPlans.map(p => {
-              const isThisPlan = p.numericId === selectedPlanForPayment.numericId;
-              return {
-                ...p,
-                isCurrent: isThisPlan,
-                isCurrentMonthly: isThisPlan && !isYearly,
-                isCurrentAnnual: isThisPlan && isYearly,
-              };
-            }));
-          }
+          // Wait a moment for the toast to show, then logout
+          setTimeout(() => {
+            logout();
+            router.push('/login?upgraded=true');
+          }, 2000);
+          return; // Exit early, no need to update local state
         }
 
-        // Refresh data after upgrade
+        // Refresh data after queued upgrade
         await fetchData();
 
         // Notify Header component to refresh quota/plan display
