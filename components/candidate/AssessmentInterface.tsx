@@ -109,7 +109,9 @@ export function AssessmentInterface({
   const [answerStatuses, setAnswerStatuses] = useState<Map<string, { hasDraft: boolean; isLocked: boolean }>>(new Map());
 
   // Check if current answer is locked (submitted)
-  const isCurrentAnswerLocked = currentQuestion.previous_answer?.is_locked || false;
+  // Check BOTH backend state AND local state (local state updates immediately after submit)
+  const localLockStatus = answerStatuses.get(`question_${currentQuestion.question_number}`)?.isLocked || false;
+  const isCurrentAnswerLocked = currentQuestion.previous_answer?.is_locked || localLockStatus;
 
   // Global assessment timer (30 minutes)
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
@@ -302,19 +304,20 @@ export function AssessmentInterface({
     }
   };
 
-  // Navigate to previous question
+  // Navigate to previous question (submit and lock answer)
   const handlePrevious = async () => {
     if (isNavigating || currentQuestion.question_number <= 1) return;
     setIsNavigating(true);
 
     try {
-      // Auto-save current answer as draft if there's any answer
+      // Submit and lock current answer if there's any answer
       const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
       if (hasAnswer && !isCurrentAnswerLocked) {
-        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+        // Submit with is_draft: false to lock the answer
+        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
         setAnswerStatuses(prev => {
           const newMap = new Map(prev);
-          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: false });
+          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: true });
           return newMap;
         });
       }
@@ -328,19 +331,20 @@ export function AssessmentInterface({
     }
   };
 
-  // Navigate to next question (auto-save draft)
+  // Navigate to next question (submit and lock answer)
   const handleNext = async () => {
     if (isNavigating || isLastQuestion) return;
     setIsNavigating(true);
 
     try {
-      // Auto-save current answer as draft if there's any answer
+      // Submit and lock current answer if there's any answer
       const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
       if (hasAnswer && !isCurrentAnswerLocked) {
-        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+        // Submit with is_draft: false to lock the answer
+        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
         setAnswerStatuses(prev => {
           const newMap = new Map(prev);
-          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: false });
+          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: true });
           return newMap;
         });
       }

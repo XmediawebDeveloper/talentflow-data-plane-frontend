@@ -429,7 +429,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           )}
         </div>
 
-        {/* Plan & Unit Balance Display - FIX-001 */}
+        {/* Plan & Unit Balance Display - Hidden for demo, data not updating correctly
         <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl">
           <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm border border-indigo-100">
             <CreditCard className="w-5 h-5 text-indigo-600" />
@@ -462,6 +462,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             </div>
           )}
         </div>
+        */}
 
         {/* FIX-010: Settings with Tooltip */}
         <Tooltip content="Settings" position="bottom">
