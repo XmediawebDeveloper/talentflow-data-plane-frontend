@@ -516,9 +516,9 @@ export default function ResumeScoringPage({
       inProgress: batchProgress.processing,
       completed: batchProgress.completed,
       failed: batchProgress.failed,
-      items: batchProgress.items?.map(item => ({
+      items: (batchProgress.items || []).map(item => ({
         resumeId: item.resumeId,
-        candidateName: item.candidateName,
+        candidateName: item.candidateName || 'Unknown',
         status: item.status,
         score: item.score,
         errorMessage: item.errorMessage,
@@ -2151,7 +2151,7 @@ export default function ResumeScoringPage({
           databaseResumes={databaseResumes}
           folders={folders}
           onClose={() => setShowResumeSelectionModal(false)}
-          onScoreResumes={async (selectedIds, source) => {
+          onScoreResumes={async (selectedIds, source, versionSelections) => {
             setShowResumeSelectionModal(false);
 
             // Check for existing scores before proceeding
@@ -2179,8 +2179,16 @@ export default function ResumeScoringPage({
               // Continue with scoring if check fails
             }
 
-            // No existing scores, proceed with scoring
-            const selectedResumesData = resumes.filter(r => selectedIds.includes(r.id));
+            // Get resume names - use versionSelections if available, otherwise fall back to resumes list
+            let resumeNames: string[];
+            if (versionSelections && versionSelections.length > 0) {
+              // Use candidate names from version selections
+              resumeNames = versionSelections.map(v => v.candidateName || 'Unknown');
+            } else {
+              // Fall back to finding names from resumes list
+              const selectedResumesData = resumes.filter(r => selectedIds.includes(r.id));
+              resumeNames = selectedResumesData.map(r => r.name || r.candidateName || r.candidate_name || 'Unknown');
+            }
 
             // Start scoring in background and redirect to resume-scoring page with progress view
             // Store pending scoring data in sessionStorage so it can be picked up after redirect
@@ -2188,7 +2196,7 @@ export default function ResumeScoringPage({
               jobId: selectedJob,
               jobTitle: selectedJobData.title,
               resumeIds: selectedIds,
-              resumeNames: selectedResumesData.map(r => r.name || r.candidateName || r.candidate_name || 'Unknown'),
+              resumeNames: resumeNames,
             };
             sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
 

@@ -1,6 +1,13 @@
 import { X, FolderOpen, Database, Search, CheckSquare, Square, User, Mail, Award, Target, ChevronRight, ChevronDown, Folder, FileText, MapPin, Phone, Briefcase } from 'lucide-react';
 import { useState } from 'react';
 import { Resume, Folder as FolderType } from '@/lib/types/types';
+import ScoringVersionSelectionModal from './ScoringVersionSelectionModal';
+
+interface VersionSelection {
+  resumeId: string;
+  versionId: string;
+  candidateName?: string;
+}
 
 interface ResumeSelectionModalProps {
   jobTitle: string;
@@ -8,7 +15,7 @@ interface ResumeSelectionModalProps {
   databaseResumes: Resume[];
   folders: FolderType[];
   onClose: () => void;
-  onScoreResumes: (selectedIds: string[], source: 'my-resumes' | 'database') => void;
+  onScoreResumes: (selectedIds: string[], source: 'my-resumes' | 'database', versionSelections?: VersionSelection[]) => void;
 }
 
 export default function ResumeSelectionModal({
@@ -24,6 +31,8 @@ export default function ResumeSelectionModal({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+  const [showVersionSelection, setShowVersionSelection] = useState(false);
+  const [resumesForVersionSelection, setResumesForVersionSelection] = useState<Resume[]>([]);
 
   // Debug: Log folders data
   console.log('[ResumeSelectionModal] Folders received:', folders);
@@ -89,8 +98,41 @@ export default function ResumeSelectionModal({
 
   const handleScore = () => {
     if (selectedResumes.length > 0) {
-      onScoreResumes(selectedResumes, activeTab);
+      // Get the selected resume objects
+      const allResumes = activeTab === 'my-resumes' ? myResumes : databaseResumes;
+      const selectedResumeObjects = allResumes.filter(r => selectedResumes.includes(r.id));
+
+      // Debug: Log version counts
+      console.log('[ResumeSelectionModal] Selected resumes version info:',
+        selectedResumeObjects.map(r => ({
+          id: r.id,
+          name: r.name,
+          versionCount: r.versionCount,
+          version: r.version
+        }))
+      );
+
+      // Check if any selected resume has multiple versions
+      const hasMultipleVersions = selectedResumeObjects.some(r => (r.versionCount || 1) > 1);
+      console.log('[ResumeSelectionModal] hasMultipleVersions:', hasMultipleVersions);
+
+      if (hasMultipleVersions) {
+        // Show version selection modal
+        setResumesForVersionSelection(selectedResumeObjects);
+        setShowVersionSelection(true);
+      } else {
+        // No multiple versions, proceed directly with scoring
+        onScoreResumes(selectedResumes, activeTab);
+      }
     }
+  };
+
+  const handleVersionSelectionConfirm = (selectedVersions: { resumeId: string; versionId: string; candidateName?: string }[]) => {
+    // Use the selected version IDs for scoring
+    const versionIds = selectedVersions.map(v => v.versionId);
+    setShowVersionSelection(false);
+    // Pass version IDs along with the resume data for proper name mapping
+    onScoreResumes(versionIds, activeTab, selectedVersions);
   };
 
   const toggleFolder = (id: string) => {
@@ -495,6 +537,16 @@ export default function ResumeSelectionModal({
           </div>
         </div>
       </div>
+
+      {/* Version Selection Modal */}
+      {showVersionSelection && resumesForVersionSelection.length > 0 && (
+        <ScoringVersionSelectionModal
+          resumes={resumesForVersionSelection}
+          jobTitle={jobTitle}
+          onClose={() => setShowVersionSelection(false)}
+          onConfirm={handleVersionSelectionConfirm}
+        />
+      )}
     </div>
   );
 }

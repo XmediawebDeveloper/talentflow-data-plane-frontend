@@ -101,7 +101,7 @@ export default function ResumeScoringRoute() {
             processing: status.processing,
             completed: status.completed,
             failed: status.failed,
-            items: status.items?.map(item => ({
+            items: (status.items || []).map(item => ({
               resumeId: item.resume_id,
               candidateName: item.candidate_name || 'Unknown',
               status: item.status,
@@ -166,7 +166,7 @@ export default function ResumeScoringRoute() {
         console.log('[ResumeScoringRoute] Batch status:', status);
 
         // Map items from API response to our format
-        const items = status.items?.map(item => ({
+        const items = (status.items || []).map(item => ({
           resumeId: item.resume_id,
           candidateName: item.candidate_name || 'Unknown',
           status: item.status,
@@ -374,7 +374,12 @@ export default function ResumeScoringRoute() {
         folderId: r.folder_id || '',
         uploadDate: r.created_at,
         attachments: r.file_name ? 1 : 0,
-        uploadedBy: 'System',
+        uploadedBy: r.uploaded_by || 'System',
+        // Version info for scoring version selection
+        version: r.version || 1,
+        versionCount: r.version_count || 1,
+        fileName: r.file_name,
+        fileSizeKb: r.file_size_kb,
       }));
 
       // Convert API Folder to component Folder type

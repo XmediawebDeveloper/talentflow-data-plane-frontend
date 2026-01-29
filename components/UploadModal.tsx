@@ -55,7 +55,22 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadSuccess, setUploadSuccess] = useState<{ resumeId: string; candidateName: string } | null>(null);
-  const [selectedFolder, setSelectedFolder] = useState<string>(targetFolder || '');
+  // Find root folder for default selection
+  const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
+
+  // Initialize with targetFolder, or root folder if available
+  const [selectedFolder, setSelectedFolder] = useState<string>(() => {
+    if (targetFolder) return targetFolder;
+    if (rootFolder?.id) return rootFolder.id;
+    return '';
+  });
+
+  // Auto-select root folder when folders are loaded (in case folders weren't available on mount)
+  useEffect(() => {
+    if (!targetFolder && rootFolder?.id) {
+      setSelectedFolder(rootFolder.id);
+    }
+  }, [rootFolder?.id, targetFolder]);
   const [isDragging, setIsDragging] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -173,7 +188,8 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
 
   const handleUpload = () => {
     if (selectedFiles.length > 0) {
-      onUpload(selectedFiles, selectedFolder || undefined);
+      // Use root folder as fallback when no folder is selected
+      onUpload(selectedFiles, selectedFolder || rootFolder?.id || undefined);
 
       // Track usage - POST /api/v1/external/usage/record (RU for each resume uploaded)
       selectedFiles.forEach((file, index) => {
@@ -385,7 +401,8 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     setValidationErrors([]);
 
     try {
-      const result = await onUpload(selectedFiles, selectedFolder || undefined);
+      // Use root folder as fallback when no folder is selected
+      const result = await onUpload(selectedFiles, selectedFolder || rootFolder?.id || undefined);
       console.log('[UPLOAD-MODAL-DEBUG] Result from onUpload:', result);
       console.log('[UPLOAD-MODAL-DEBUG] result.existingResume:', result.existingResume);
 
@@ -619,16 +636,19 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                   {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
                 </span>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      fileInputRef.current?.click();
-                    }}
-                    className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    Add More Files
-                  </button>
+                  {/* Only show Add More Files button in bulk upload mode */}
+                  {activeTab === 'bulk' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fileInputRef.current?.click();
+                      }}
+                      className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      Add More Files
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setSelectedFiles([]);
@@ -755,6 +775,13 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                 >
                   <option value="">Choose folder...</option>
+                  {/* Show Root folder first */}
+                  {rootFolder && (
+                    <option key={rootFolder.id} value={rootFolder.id}>
+                      Root (Default)
+                    </option>
+                  )}
+                  {/* Then show other folders excluding 'all' and root */}
                   {folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId)).map(folder => (
                     <option key={folder.id} value={folder.id}>
                       {folder.name}
