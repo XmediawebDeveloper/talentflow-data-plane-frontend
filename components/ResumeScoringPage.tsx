@@ -993,6 +993,47 @@ export default function ResumeScoringPage({
           onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
           isMinimized={isJobProgressMinimized}
           jobProgressData={jobProgressData}
+          onRetryFailed={async (resumeId, jobId) => {
+            try {
+              // Update item status to processing
+              setJobProgressData(prev => prev.map(job => ({
+                ...job,
+                items: job.items?.map(item =>
+                  item.resumeId === resumeId
+                    ? { ...item, status: 'processing' as const, errorMessage: undefined }
+                    : item
+                )
+              })));
+
+              // Call scoring API
+              const result = await scoringService.scoreResume(jobId, resumeId);
+
+              // Update item with success
+              setJobProgressData(prev => prev.map(job => ({
+                ...job,
+                failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
+                completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
+                items: job.items?.map(item =>
+                  item.resumeId === resumeId
+                    ? { ...item, status: 'completed' as const, score: result?.match_score }
+                    : item
+                )
+              })));
+
+              toast.success('Retry successful');
+            } catch (error: any) {
+              // Update item with failure
+              setJobProgressData(prev => prev.map(job => ({
+                ...job,
+                items: job.items?.map(item =>
+                  item.resumeId === resumeId
+                    ? { ...item, status: 'failed' as const, errorMessage: error?.message || 'Retry failed' }
+                    : item
+                )
+              })));
+              toast.error('Retry failed');
+            }
+          }}
           onViewJobDetails={(jobId) => {
             setShowJobProgressModal(false);
             setIsJobProgressMinimized(false);
@@ -1844,6 +1885,40 @@ export default function ResumeScoringPage({
           onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
           isMinimized={isJobProgressMinimized}
           jobProgressData={jobProgressData}
+          onRetryFailed={async (resumeId, jobId) => {
+            try {
+              setJobProgressData(prev => prev.map(job => ({
+                ...job,
+                items: job.items?.map(item =>
+                  item.resumeId === resumeId
+                    ? { ...item, status: 'processing' as const, errorMessage: undefined }
+                    : item
+                )
+              })));
+              const result = await scoringService.scoreResume(jobId, resumeId);
+              setJobProgressData(prev => prev.map(job => ({
+                ...job,
+                failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
+                completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
+                items: job.items?.map(item =>
+                  item.resumeId === resumeId
+                    ? { ...item, status: 'completed' as const, score: result?.match_score }
+                    : item
+                )
+              })));
+              toast.success('Retry successful');
+            } catch (error: any) {
+              setJobProgressData(prev => prev.map(job => ({
+                ...job,
+                items: job.items?.map(item =>
+                  item.resumeId === resumeId
+                    ? { ...item, status: 'failed' as const, errorMessage: error?.message || 'Retry failed' }
+                    : item
+                )
+              })));
+              toast.error('Retry failed');
+            }
+          }}
           onViewJobDetails={(jobId) => {
             setShowJobProgressModal(false);
             setIsJobProgressMinimized(false);
@@ -2298,6 +2373,40 @@ export default function ResumeScoringPage({
         onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
         isMinimized={isJobProgressMinimized}
         jobProgressData={jobProgressData}
+        onRetryFailed={async (resumeId, jobId) => {
+          try {
+            setJobProgressData(prev => prev.map(job => ({
+              ...job,
+              items: job.items?.map(item =>
+                item.resumeId === resumeId
+                  ? { ...item, status: 'processing' as const, errorMessage: undefined }
+                  : item
+              )
+            })));
+            const result = await scoringService.scoreResume(jobId, resumeId);
+            setJobProgressData(prev => prev.map(job => ({
+              ...job,
+              failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
+              completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
+              items: job.items?.map(item =>
+                item.resumeId === resumeId
+                  ? { ...item, status: 'completed' as const, score: result?.match_score }
+                  : item
+              )
+            })));
+            toast.success('Retry successful');
+          } catch (error: any) {
+            setJobProgressData(prev => prev.map(job => ({
+              ...job,
+              items: job.items?.map(item =>
+                item.resumeId === resumeId
+                  ? { ...item, status: 'failed' as const, errorMessage: error?.message || 'Retry failed' }
+                  : item
+              )
+            })));
+            toast.error('Retry failed');
+          }
+        }}
         onViewJobDetails={(jobId) => {
           setShowJobProgressModal(false);
           setIsJobProgressMinimized(false);

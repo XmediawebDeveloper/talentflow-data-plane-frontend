@@ -6,7 +6,8 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 
 interface ScoredResume {
-  id: string;
+  id: string;  // This is the SCORE ID, not resume ID!
+  resumeId?: string;  // The actual resume ID (from API's resume_id field)
   candidateName: string;
   email: string;
   phone: string;
@@ -32,10 +33,21 @@ interface ScoredResume {
   softSkills?: string[];
   educationDetails?: any[];
   experienceDetails?: any[];
-  languages?: string[];
+  languages?: any[];
   // Explicit matched and missing skills (from scoring)
   matchedSkills?: string[];
   missingSkills?: string[];
+  // Additional fields from full resume
+  projects?: any[];
+  awards?: any[];
+  achievements?: any[];
+  hobbies?: any[];
+  volunteerExperience?: any[];
+  linkedinUrl?: string;
+  githubUrl?: string;
+  portfolioUrl?: string;
+  objective?: string;
+  noticePeriod?: string;
 }
 
 interface CandidateScoringDetailPageProps {
@@ -49,6 +61,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const [activeTab, setActiveTab] = useState<'overview' | 'comparison' | 'scoretable' | 'personalinfo'>('overview');
   const [isDataReady, setIsDataReady] = useState(false);
   const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
+  const [fullResumeLoaded, setFullResumeLoaded] = useState(false);
 
   // Debug: Check props
   console.log('[CandidateScoringDetailPage] Props:', {
@@ -60,27 +73,74 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     criteriaScores: resume?.criteriaScores
   });
 
-  // Always fetch complete scoring data from API to ensure fresh data
+  // Always fetch complete scoring data AND full resume data from API
   useEffect(() => {
     const fetchCompleteData = async () => {
       console.log('[CandidateScoringDetailPage] Fetching complete data from API');
 
       // Always fetch from API when jobId is available to get latest data
       if (jobId && resume?.id) {
-        console.log('[CandidateScoringDetailPage] Fetching from API for jobId:', jobId, 'resumeId:', resume.id);
+        console.log('[CandidateScoringDetailPage] Fetching from API for jobId:', jobId, 'scoreId:', resume.id);
         try {
           const { jdService } = await import('@/lib/services/jdService');
+          const { resumeService } = await import('@/lib/services/resumeService');
+
+          // First fetch scored resumes to get the actual resume_id
           const scoredResumes = await jdService.getScoredResumes(jobId, { page_size: 100 });
           const completeResumeData = scoredResumes.items.find((r: any) => r.id === resume.id);
+
+          // IMPORTANT: API returns 'id' as score ID and 'resume_id' as the actual resume ID
+          const actualResumeId = completeResumeData?.resume_id || resume.resumeId || resume.id;
+          console.log('[CandidateScoringDetailPage] Score ID:', resume.id, 'Actual Resume ID:', actualResumeId);
+
+          // Now fetch the full resume using the correct resume ID
+          const fullResume = await resumeService.get(actualResumeId).catch((err) => {
+            console.error('[CandidateScoringDetailPage] Failed to fetch full resume:', err);
+            return null;
+          });
 
           if (completeResumeData) {
             console.log('[CandidateScoringDetailPage] Complete data fetched successfully:', {
               overall_score: completeResumeData.overall_score,
               has_criteria_scores: !!completeResumeData.criteria_scores,
-              criteria_count: Object.keys(completeResumeData.criteria_scores || {}).length
+              criteria_count: Object.keys(completeResumeData.criteria_scores || {}).length,
+              hasFullResume: !!fullResume
             });
+
+            // Debug: Log full resume data to check available fields
+            if (fullResume) {
+              const fr = fullResume as any;
+              console.log('[CandidateScoringDetailPage] Full resume data from API:', {
+                candidate_name: fr.candidate_name,
+                current_title: fr.current_title,
+                current_company: fr.current_company,
+                experience_years: fr.experience_years,
+                professional_summary: fr.professional_summary?.substring(0, 100) + '...',
+                experience_count: fr.experience?.length,
+                education_count: fr.education?.length,
+                skills_count: fr.skills?.length,
+                technical_skills_count: fr.technical_skills?.length,
+                soft_skills_count: fr.soft_skills?.length,
+                certifications_count: fr.certifications?.length,
+                languages_count: fr.languages?.length,
+                hasProjects: !!(fr.projects?.length),
+                hasAwards: !!(fr.awards?.length),
+                allKeys: Object.keys(fullResume),
+              });
+              setFullResumeLoaded(true);
+            } else {
+              console.warn('[CandidateScoringDetailPage] Full resume fetch returned null - using fallback data');
+              setFullResumeLoaded(false);
+            }
+
+            // Merge scoring data with full resume data
+            // IMPORTANT: Prioritize full resume data over scored resume data for Personal Info
+            const fr = fullResume as any;
             setFullResumeData({
               ...resume,
+              // Store the actual resume ID (different from score ID!)
+              resumeId: actualResumeId,
+              // Scoring-specific data
               scorePercentage: Math.round(completeResumeData.overall_score || 0),
               criteriaScores: completeResumeData.criteria_scores || {},
               scoreBreakdown: completeResumeData.score_breakdown || [],
@@ -90,6 +150,32 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               scoredDate: completeResumeData.created_at,
               matchStatus: completeResumeData.match_status,
               scoredBy: completeResumeData.scored_by || completeResumeData.scored_by_name || resume.scoredBy || 'System',
+              // Full resume data for Personal Info tab (prioritize full resume over scored resume)
+              // Note: Backend returns snake_case, we map to camelCase for frontend
+              candidateName: fr?.candidate_name || resume.candidateName,
+              professionalSummary: fr?.professional_summary || '', // Don't fall back to AI summary
+              experienceDetails: fr?.experience || [],
+              educationDetails: fr?.education || [],
+              skills: fr?.skills || [],
+              technicalSkills: fr?.technical_skills || [],
+              softSkills: fr?.soft_skills || [],
+              certifications: fr?.certifications || resume.certifications || [],
+              languages: fr?.languages || [],
+              currentCompany: fr?.current_company || '',
+              title: fr?.current_title || resume.title || '',
+              location: fr?.location || resume.location || '',
+              experience: fr?.experience_years ? `${fr.experience_years} years` : '',
+              // Additional fields from full resume
+              projects: fr?.projects || [],
+              awards: fr?.awards || [],
+              achievements: fr?.achievements || [],
+              hobbies: fr?.hobbies || [],
+              volunteerExperience: fr?.volunteer_experience || [],
+              linkedinUrl: fr?.linkedin_url || '',
+              githubUrl: fr?.github_url || '',
+              portfolioUrl: fr?.portfolio_url || '',
+              objective: fr?.objective || '',
+              noticePeriod: fr?.notice_period || '',
             });
             setIsDataReady(true);
           } else {
@@ -587,106 +673,197 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
           {activeTab === 'personalinfo' && (
             <div className="space-y-6">
-              {/* Professional Summary */}
-              <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <Star className="w-5 h-5 text-yellow-600" />
-                  <h3 className="text-lg font-semibold text-gray-900">Professional Summary</h3>
+              {/* Warning if full resume data couldn't be loaded */}
+              {!fullResumeLoaded && (
+                <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-yellow-800 font-medium">Limited resume data available</p>
+                    <p className="text-yellow-700 text-sm mt-1">
+                      Some details may be missing. View the full resume in{' '}
+                      <a href={`/recruitment/resume-view/${fullResumeData.resumeId || resume.resumeId || resume.id}`} className="underline hover:text-yellow-900">
+                        Resume Details
+                      </a>{' '}
+                      for complete information, or re-upload the resume to refresh data.
+                    </p>
+                  </div>
                 </div>
-                <p className="text-gray-700 leading-relaxed">
-                  {resume.professionalSummary || resume.aiSummary || `${resume.title || 'Professional'} with ${resume.experience || 'experience'} in the field.`}
-                </p>
+              )}
+
+              {/* Personal Info Card - Same as Resume View */}
+              <div className="bg-gray-50 border border-gray-300 rounded-xl p-6 shadow-sm">
+                <div className="flex items-start gap-6">
+                  <div className="w-24 h-24 rounded-full bg-gray-400 flex items-center justify-center text-white text-3xl flex-shrink-0">
+                    {(fullResumeData.candidateName || 'U').split(' ').map(n => n[0]).join('').substring(0, 2)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="mb-4">
+                      <h2 className="text-2xl font-bold text-gray-900 mb-2">{fullResumeData.candidateName || resume.candidateName}</h2>
+                      <p className="text-lg text-gray-700 mb-3">{fullResumeData.title || resume.title || 'Candidate'}</p>
+                      <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
+                        {fullResumeData.location && fullResumeData.location !== 'N/A' && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-4 h-4" />
+                            {fullResumeData.location}
+                          </span>
+                        )}
+                        {fullResumeData.experience && fullResumeData.experience !== 'N/A' && fullResumeData.experience !== '' && (
+                          <span className="flex items-center gap-1">
+                            <Briefcase className="w-4 h-4" />
+                            {fullResumeData.experience}
+                          </span>
+                        )}
+                        {fullResumeData.currentCompany && fullResumeData.currentCompany !== 'N/A' && fullResumeData.currentCompany !== '' && (
+                          <span className="flex items-center gap-1">
+                            <Building2 className="w-4 h-4" />
+                            {fullResumeData.currentCompany}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Contact Info */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      {resume.email && (
+                        <div className="flex items-center gap-2 text-sm text-gray-700">
+                          <Mail className="w-4 h-4 text-gray-500" />
+                          <a href={`mailto:${resume.email}`} className="hover:text-gray-900">{resume.email}</a>
+                        </div>
+                      )}
+                      {resume.phone && (
+                        <div className="flex items-center gap-2 text-sm text-gray-700">
+                          <Phone className="w-4 h-4 text-gray-500" />
+                          <a href={`tel:${resume.phone}`} className="hover:text-gray-900">{resume.phone}</a>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Top Skills Tags */}
+                    {(fullResumeData.skills?.length > 0 || fullResumeData.technicalSkills?.length > 0) && (
+                      <div className="flex flex-wrap gap-2">
+                        {(fullResumeData.technicalSkills || fullResumeData.skills || []).slice(0, 8).map((skill: string, index: number) => (
+                          <span key={index} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs border border-gray-300">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Work Experience */}
-              <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                <div className="flex items-center gap-2 mb-6">
-                  <Briefcase className="w-5 h-5 text-gray-800" />
-                  <h3 className="text-lg font-semibold text-gray-900">Work Experience</h3>
+              {/* Professional Summary - Only show actual resume summary, NOT AI scoring summary */}
+              {fullResumeData.professionalSummary && (
+              <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Star className="w-5 h-5 text-gray-500" />
+                  <h3 className="text-lg font-semibold text-gray-800">Professional Summary</h3>
                 </div>
-                {resume.experienceDetails && resume.experienceDetails.length > 0 ? (
-                  <div className="space-y-4">
-                    {resume.experienceDetails.map((exp: any, index: number) => (
-                      <div key={index} className="relative pl-6 border-l-2 border-gray-200">
-                        <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gray-600 border-2 border-white"></div>
-                        <div className="mb-4">
-                          <h4 className="font-semibold text-gray-900 mb-1">{exp.title || exp.position || 'Position'}</h4>
-                          <div className="flex items-center gap-2 text-gray-700 mb-1">
-                            <Building2 className="w-4 h-4" />
-                            <span>{exp.company || 'Company'}</span>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            {exp.location && (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-3.5 h-3.5" />
-                                {exp.location}
-                              </span>
-                            )}
-                            {(exp.start_date || exp.end_date || exp.duration) && (
-                              <span className="text-gray-800">
-                                {exp.duration || `${exp.start_date || ''} - ${exp.end_date || 'Present'}`}
-                              </span>
-                            )}
+                <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  {fullResumeData.professionalSummary}
+                </p>
+              </div>
+              )}
+
+              {/* Work Experience */}
+              <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <Briefcase className="w-5 h-5 text-gray-500" />
+                  <h3 className="text-lg font-semibold text-gray-800">Work Experience</h3>
+                </div>
+                {fullResumeData.experienceDetails && fullResumeData.experienceDetails.length > 0 ? (
+                  <div className="space-y-6">
+                    {fullResumeData.experienceDetails.map((exp: any, index: number) => (
+                      <div key={index} className="relative pl-6 pb-6 border-l-2 border-gray-400 last:pb-0">
+                        <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gray-500 border-2 border-gray-50"></div>
+                        <div className="mb-3">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <h4 className="font-semibold text-gray-900 mb-1">{exp.title || exp.position || 'Position'}</h4>
+                              <div className="flex items-center gap-2 text-gray-700 mb-1">
+                                <Building2 className="w-4 h-4" />
+                                <span>{exp.company || 'Company'}</span>
+                              </div>
+                              <div className="flex items-center gap-4 text-sm text-gray-600">
+                                {exp.location && (
+                                  <span className="flex items-center gap-1">
+                                    <MapPin className="w-3 h-3" />
+                                    {exp.location}
+                                  </span>
+                                )}
+                                {(exp.start_date || exp.end_date) && (
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" />
+                                    {exp.start_date || ''} - {exp.end_date || 'Present'}
+                                  </span>
+                                )}
+                                {exp.duration && (
+                                  <span className="text-gray-600">({exp.duration})</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                           {exp.description && (
-                            <p className="mt-2 text-sm text-gray-600">{exp.description}</p>
+                            <p className="text-gray-700 mb-3">{exp.description}</p>
+                          )}
+                          {exp.achievements && exp.achievements.length > 0 && (
+                            <div className="space-y-2">
+                              {exp.achievements.map((achievement: string, achIndex: number) => (
+                                <div key={achIndex} className="flex items-start gap-2 text-sm text-gray-700">
+                                  <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                                  <span>{achievement}</span>
+                                </div>
+                              ))}
+                            </div>
                           )}
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="relative pl-6 border-l-2 border-gray-200">
-                    <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-gray-600 border-2 border-white"></div>
-                    <div className="mb-4">
-                      <h4 className="font-semibold text-gray-900 mb-1">{resume.title || 'Current Position'}</h4>
-                      <div className="flex items-center gap-2 text-gray-700 mb-1">
-                        <Building2 className="w-4 h-4" />
-                        <span>{resume.currentCompany || 'Company Not Specified'}</span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-600">
-                        {resume.location && (
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-3.5 h-3.5" />
-                            {resume.location}
-                          </span>
-                        )}
-                        <span className="text-gray-800">({resume.experience || 'N/A'})</span>
-                      </div>
-                    </div>
+                  <div className="p-4 bg-gray-100 border border-gray-300 rounded-lg text-center">
+                    <p className="text-gray-600">Work experience details not available.</p>
+                    <p className="text-sm text-gray-500 mt-2">Please re-upload the resume to extract full details.</p>
                   </div>
                 )}
               </div>
 
               {/* Education */}
-              <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
+              <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-6">
-                  <GraduationCap className="w-5 h-5 text-gray-800" />
-                  <h3 className="text-lg font-semibold text-gray-900">Education</h3>
+                  <GraduationCap className="w-5 h-5 text-gray-500" />
+                  <h3 className="text-lg font-semibold text-gray-800">Education</h3>
                 </div>
-                {resume.educationDetails && resume.educationDetails.length > 0 ? (
-                  <div className="space-y-3">
-                    {resume.educationDetails.map((edu: any, index: number) => (
-                      <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                        <h4 className="font-semibold text-gray-900 mb-1">
+                {fullResumeData.educationDetails && fullResumeData.educationDetails.length > 0 ? (
+                  <div className="space-y-4">
+                    {fullResumeData.educationDetails.map((edu: any, index: number) => (
+                      <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                        <h4 className="font-semibold text-gray-800 mb-1">
                           {edu.degree || edu.qualification || 'Degree'}
+                          {edu.field && ` in ${edu.field}`}
                         </h4>
-                        {edu.institution && (
-                          <p className="text-gray-700">{edu.institution}</p>
+                        {(edu.institution || edu.school) && (
+                          <div className="text-gray-700 mb-1">{edu.institution || edu.school}</div>
                         )}
-                        {edu.year && (
-                          <p className="text-sm text-gray-500">{edu.year}</p>
-                        )}
+                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                          {(edu.year || edu.graduation_year) && (
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {edu.year || edu.graduation_year}
+                            </span>
+                          )}
+                          {edu.gpa && <span className="text-gray-700">GPA: {edu.gpa}</span>}
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <h4 className="font-semibold text-gray-900 mb-2">{
-                      typeof resume.education === 'string'
-                        ? resume.education
-                        : Array.isArray(resume.education) && resume.education.length > 0
-                          ? (resume.education[0]?.degree || resume.education[0]?.institution || 'Education available')
+                  <div className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                    <h4 className="font-semibold text-gray-800 mb-2">{
+                      typeof fullResumeData.education === 'string'
+                        ? fullResumeData.education
+                        : Array.isArray(fullResumeData.education) && fullResumeData.education.length > 0
+                          ? (fullResumeData.education[0]?.degree || fullResumeData.education[0]?.institution || 'Education available')
                           : 'Education not specified'
                     }</h4>
                   </div>
@@ -694,23 +871,23 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               </div>
 
               {/* Skills */}
-              {(resume.skills && resume.skills.length > 0) ||
-               (resume.technicalSkills && resume.technicalSkills.length > 0) ||
-               (resume.softSkills && resume.softSkills.length > 0) ||
+              {(fullResumeData.skills && fullResumeData.skills.length > 0) ||
+               (fullResumeData.technicalSkills && fullResumeData.technicalSkills.length > 0) ||
+               (fullResumeData.softSkills && fullResumeData.softSkills.length > 0) ||
                matchedSkills.length > 0 ? (
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
+                <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
                   <div className="flex items-center gap-2 mb-6">
-                    <Code className="w-5 h-5 text-green-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">Skills</h3>
+                    <Code className="w-5 h-5 text-gray-500" />
+                    <h3 className="text-lg font-semibold text-gray-800">Skills</h3>
                   </div>
 
                   {/* Technical Skills */}
-                  {resume.technicalSkills && resume.technicalSkills.length > 0 && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Technical Skills</h4>
+                  {fullResumeData.technicalSkills && fullResumeData.technicalSkills.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="font-medium text-gray-900 mb-4">Technical Skills</h4>
                       <div className="flex flex-wrap gap-2">
-                        {resume.technicalSkills.map((skill: string, index: number) => (
-                          <span key={index} className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm border border-blue-200">
+                        {fullResumeData.technicalSkills.map((skill: string, index: number) => (
+                          <span key={index} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-300">
                             {skill}
                           </span>
                         ))}
@@ -719,12 +896,12 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                   )}
 
                   {/* Soft Skills */}
-                  {resume.softSkills && resume.softSkills.length > 0 && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Soft Skills</h4>
+                  {fullResumeData.softSkills && fullResumeData.softSkills.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="font-medium text-gray-900 mb-4">Soft Skills</h4>
                       <div className="flex flex-wrap gap-2">
-                        {resume.softSkills.map((skill: string, index: number) => (
-                          <span key={index} className="px-4 py-2 bg-purple-50 text-purple-700 rounded-lg text-sm border border-purple-200">
+                        {fullResumeData.softSkills.map((skill: string, index: number) => (
+                          <span key={index} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-300">
                             {skill}
                           </span>
                         ))}
@@ -732,25 +909,22 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                     </div>
                   )}
 
-                  {/* General Skills */}
-                  {resume.skills && resume.skills.length > 0 && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">All Skills</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {resume.skills.map((skill: string, index: number) => (
-                          <span key={index} className="px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm border border-green-200">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
+                  {/* General Skills - only show if no technical/soft skills */}
+                  {fullResumeData.skills && fullResumeData.skills.length > 0 && !fullResumeData.technicalSkills?.length && !fullResumeData.softSkills?.length && (
+                    <div className="flex flex-wrap gap-2">
+                      {fullResumeData.skills.map((skill: string, index: number) => (
+                        <span key={index} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-300">
+                          {skill}
+                        </span>
+                      ))}
                     </div>
                   )}
 
                   {/* Fallback to matched skills if no specific skills available */}
-                  {!resume.skills?.length && !resume.technicalSkills?.length && !resume.softSkills?.length && matchedSkills.length > 0 && (
+                  {!fullResumeData.skills?.length && !fullResumeData.technicalSkills?.length && !fullResumeData.softSkills?.length && matchedSkills.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {matchedSkills.map((skill, index) => (
-                        <span key={index} className="px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm border border-green-200">
+                        <span key={index} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-300">
                           {skill}
                         </span>
                       ))}
@@ -760,21 +934,22 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               ) : null}
 
               {/* Languages */}
-              {resume.languages && resume.languages.length > 0 && (
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
+              {fullResumeData.languages && fullResumeData.languages.length > 0 && (
+                <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
                   <div className="flex items-center gap-2 mb-6">
-                    <Languages className="w-5 h-5 text-indigo-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">Languages</h3>
+                    <Languages className="w-5 h-5 text-gray-500" />
+                    <h3 className="text-lg font-semibold text-gray-800">Languages</h3>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {resume.languages.map((language: any, index: number) => {
+                  <div className="grid grid-cols-3 gap-4">
+                    {fullResumeData.languages.map((language: any, index: number) => {
                       // Handle both string and object formats
                       const langName = typeof language === 'string' ? language : (language.name || language.language || 'Unknown');
-                      const proficiency = typeof language === 'object' ? language.proficiency : null;
+                      const proficiency = typeof language === 'object' ? (language.proficiency || language.level || 'Fluent') : 'Fluent';
                       return (
-                        <span key={index} className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm border border-indigo-200">
-                          {langName}{proficiency ? ` (${proficiency})` : ''}
-                        </span>
+                        <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg text-center">
+                          <div className="font-medium text-gray-800 mb-1">{langName}</div>
+                          <div className="text-sm text-gray-600">{proficiency}</div>
+                        </div>
                       );
                     })}
                   </div>
@@ -782,30 +957,223 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               )}
 
               {/* Certifications */}
-              {resume.certifications && resume.certifications.length > 0 && (
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
+              {fullResumeData.certifications && fullResumeData.certifications.length > 0 && (
+                <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
                   <div className="flex items-center gap-2 mb-6">
-                    <Award className="w-5 h-5 text-yellow-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">Certifications</h3>
+                    <Award className="w-5 h-5 text-gray-500" />
+                    <h3 className="text-lg font-semibold text-gray-800">Certifications</h3>
                   </div>
-                  <div className="space-y-3">
-                    {resume.certifications.map((cert, index) => {
+                  <div className="space-y-4">
+                    {fullResumeData.certifications.map((cert, index) => {
                       // Handle both string and object formats
                       const certName = typeof cert === 'string' ? cert : (cert.name || 'Certification');
                       const certIssuer = typeof cert === 'object' ? cert.issuer : null;
                       const certDate = typeof cert === 'object' ? cert.date : null;
+                      const certCredentialId = typeof cert === 'object' ? cert.credential_id : null;
                       return (
-                        <div key={index} className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
-                          <div>
-                            <span className="font-medium text-gray-900">{certName}</span>
-                            {certIssuer && <span className="text-gray-600 text-sm ml-2">- {certIssuer}</span>}
-                            {certDate && <span className="text-gray-500 text-xs ml-2">({certDate})</span>}
+                        <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h4 className="font-semibold text-gray-800 mb-1">{certName}</h4>
+                              {certIssuer && <div className="text-sm text-gray-700 mb-1">{certIssuer}</div>}
+                              <div className="flex items-center gap-4 text-xs text-gray-600">
+                                {certDate && (
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" />
+                                    Issued {certDate}
+                                  </span>
+                                )}
+                                {certCredentialId && <span>ID: {certCredentialId}</span>}
+                              </div>
+                            </div>
+                            <Award className="w-6 h-6 text-gray-500" />
                           </div>
-                          <Award className="w-5 h-5 text-yellow-600" />
                         </div>
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* Projects */}
+              {fullResumeData.projects && fullResumeData.projects.length > 0 && (
+                <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <Code className="w-5 h-5 text-gray-500" />
+                    <h3 className="text-lg font-semibold text-gray-800">Projects</h3>
+                  </div>
+                  <div className="space-y-4">
+                    {fullResumeData.projects.map((project: any, index: number) => (
+                      <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="font-semibold text-gray-800">{project.name}</h4>
+                          {project.url && (
+                            <a href={project.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                              <FileText className="w-4 h-4" />
+                            </a>
+                          )}
+                        </div>
+                        {project.description && (
+                          <p className="text-gray-700 text-sm mb-2">{project.description}</p>
+                        )}
+                        <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                          {project.duration && (
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {project.duration}
+                            </span>
+                          )}
+                          {project.technologies && (
+                            <span className="px-2 py-0.5 bg-gray-200 rounded">{project.technologies}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Awards */}
+              {fullResumeData.awards && fullResumeData.awards.length > 0 && (
+                <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <Award className="w-5 h-5 text-yellow-500" />
+                    <h3 className="text-lg font-semibold text-gray-800">Awards & Honors</h3>
+                  </div>
+                  <div className="space-y-4">
+                    {fullResumeData.awards.map((award: any, index: number) => (
+                      <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="font-semibold text-gray-800 mb-1">{award.name}</h4>
+                            {award.issuer && <div className="text-sm text-gray-700">{award.issuer}</div>}
+                            {award.date && (
+                              <div className="text-xs text-gray-600 flex items-center gap-1 mt-1">
+                                <Calendar className="w-3 h-3" />
+                                {award.date}
+                              </div>
+                            )}
+                            {award.description && (
+                              <p className="text-sm text-gray-600 mt-2">{award.description}</p>
+                            )}
+                          </div>
+                          <Award className="w-6 h-6 text-yellow-500" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Achievements */}
+              {fullResumeData.achievements && fullResumeData.achievements.length > 0 && (
+                <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <Star className="w-5 h-5 text-gray-500" />
+                    <h3 className="text-lg font-semibold text-gray-800">Achievements</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {fullResumeData.achievements.map((achievement: any, index: number) => (
+                      <div key={index} className="flex items-start gap-2 text-gray-700">
+                        <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                        <span>{typeof achievement === 'string' ? achievement : achievement.description || achievement.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Hobbies & Interests */}
+              {fullResumeData.hobbies && fullResumeData.hobbies.length > 0 && (
+                <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <Star className="w-5 h-5 text-gray-500" />
+                    <h3 className="text-lg font-semibold text-gray-800">Hobbies & Interests</h3>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {fullResumeData.hobbies.map((hobby: any, index: number) => (
+                      <span key={index} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm border border-gray-300">
+                        {typeof hobby === 'string' ? hobby : hobby.name || hobby}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Social Links */}
+              {(fullResumeData.linkedinUrl || fullResumeData.githubUrl || fullResumeData.portfolioUrl) && (
+                <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <FileText className="w-5 h-5 text-gray-500" />
+                    <h3 className="text-lg font-semibold text-gray-800">Social & Portfolio Links</h3>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    {fullResumeData.linkedinUrl && (
+                      <a href={fullResumeData.linkedinUrl} target="_blank" rel="noopener noreferrer"
+                         className="flex items-center gap-2 p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
+                        <span className="text-blue-700 text-sm font-medium">LinkedIn</span>
+                      </a>
+                    )}
+                    {fullResumeData.githubUrl && (
+                      <a href={fullResumeData.githubUrl} target="_blank" rel="noopener noreferrer"
+                         className="flex items-center gap-2 p-4 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors">
+                        <span className="text-gray-700 text-sm font-medium">GitHub</span>
+                      </a>
+                    )}
+                    {fullResumeData.portfolioUrl && (
+                      <a href={fullResumeData.portfolioUrl} target="_blank" rel="noopener noreferrer"
+                         className="flex items-center gap-2 p-4 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors">
+                        <span className="text-purple-700 text-sm font-medium">Portfolio</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Notice Period */}
+              {fullResumeData.noticePeriod && (
+                <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Clock className="w-5 h-5 text-gray-500" />
+                    <h3 className="text-lg font-semibold text-gray-800">Notice Period</h3>
+                  </div>
+                  <p className="text-gray-700">{fullResumeData.noticePeriod}</p>
+                </div>
+              )}
+
+              {/* Volunteer Experience */}
+              {fullResumeData.volunteerExperience && fullResumeData.volunteerExperience.length > 0 && (
+                <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <Star className="w-5 h-5 text-gray-500" />
+                    <h3 className="text-lg font-semibold text-gray-800">Volunteer Experience</h3>
+                  </div>
+                  <div className="space-y-4">
+                    {fullResumeData.volunteerExperience.map((vol: any, index: number) => (
+                      <div key={index} className="p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                        <h4 className="font-semibold text-gray-800 mb-1">{vol.role || vol.title}</h4>
+                        {vol.organization && <div className="text-sm text-gray-700 mb-1">{vol.organization}</div>}
+                        {vol.duration && (
+                          <div className="text-xs text-gray-600 flex items-center gap-1 mb-2">
+                            <Calendar className="w-3 h-3" />
+                            {vol.duration}
+                          </div>
+                        )}
+                        {vol.description && <p className="text-sm text-gray-600">{vol.description}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Objective */}
+              {fullResumeData.objective && fullResumeData.objective !== fullResumeData.professionalSummary && (
+                <div className="bg-gray-50 border border-gray-300 rounded-lg p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText className="w-5 h-5 text-gray-500" />
+                    <h3 className="text-lg font-semibold text-gray-800">Career Objective</h3>
+                  </div>
+                  <p className="text-gray-700 leading-relaxed">{fullResumeData.objective}</p>
                 </div>
               )}
             </div>

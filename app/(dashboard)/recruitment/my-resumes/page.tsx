@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import ResumeTable from '@/components/ResumeTable';
@@ -113,6 +113,10 @@ export default function MyResumesPage() {
   // ZIP download confirmation modal state
   const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+
+  // Assessment modal state
+  const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
+  const [selectedJobForAssessment, setSelectedJobForAssessment] = useState<string | null>(null);
 
   // Delete folder confirmation state
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<{
@@ -406,6 +410,19 @@ export default function MyResumesPage() {
     } finally {
       setIsDownloadingZip(false);
     }
+  };
+
+  // Handle Assessment button click
+  const handleAssessment = async () => {
+    if (selectedResumes.length === 0) {
+      toast.error('Please select at least one resume');
+      return;
+    }
+    // Fetch published jobs if not already loaded
+    if (publishedJobs.length === 0) {
+      await fetchPublishedJobs();
+    }
+    setIsAssessmentModalOpen(true);
   };
 
   // Fetch published jobs for the Apply to Job modal
@@ -1168,6 +1185,7 @@ export default function MyResumesPage() {
             onDownload={handleBulkDownload}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
+            onAssessment={handleAssessment}
           />
         )}
 
@@ -1437,10 +1455,7 @@ export default function MyResumesPage() {
                               />
                             </div>
                             {/* Candidate Name */}
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-medium text-xs flex-shrink-0">
-                                {resume.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
-                              </div>
+                            <div className="flex items-center min-w-0">
                               <span className="font-medium text-gray-900 text-sm truncate">{resume.name}</span>
                             </div>
                             {/* Email */}
@@ -2092,6 +2107,135 @@ export default function MyResumesPage() {
           item={selectedHistoryItem}
           onClose={() => setSelectedHistoryItem(null)}
         />
+      )}
+
+      {/* Assessment Modal - Select Job First */}
+      {isAssessmentModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200"
+            onClick={() => setIsAssessmentModalOpen(false)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="flex items-center gap-4 p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+                <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center">
+                  <ClipboardCheck className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900">Invite to Assessment</h3>
+                  <p className="text-sm text-gray-500">
+                    {selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsAssessmentModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 overflow-y-auto max-h-[calc(80vh-200px)]">
+                {/* Selected Candidates Preview */}
+                <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Selected Candidates</h4>
+                  <div className="space-y-1">
+                    {resumes.filter(r => selectedResumes.includes(r.id)).slice(0, 5).map(resume => (
+                      <div key={resume.id} className="flex items-center gap-2 text-sm text-gray-600">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <span>{resume.name}</span>
+                        <span className="text-gray-400">- {resume.email || 'No email'}</span>
+                      </div>
+                    ))}
+                    {selectedResumes.length > 5 && (
+                      <p className="text-sm text-gray-500 italic">+{selectedResumes.length - 5} more</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Job Selection */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Select a Job for Assessment</h4>
+                  {loadingJobs ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                    </div>
+                  ) : publishedJobs.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p>No published jobs found</p>
+                      <p className="text-sm">Create and publish a job first to send assessment invitations</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {publishedJobs.map(job => (
+                        <button
+                          key={job.id}
+                          onClick={() => setSelectedJobForAssessment(job.id)}
+                          className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                            selectedJobForAssessment === job.id
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h5 className="font-medium text-gray-900">{job.title}</h5>
+                              <p className="text-sm text-gray-500">{job.location || 'No location'}</p>
+                            </div>
+                            {selectedJobForAssessment === job.id && (
+                              <CheckCircle className="w-5 h-5 text-blue-500" />
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <button
+                  onClick={() => setIsAssessmentModalOpen(false)}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (!selectedJobForAssessment) {
+                      toast.error('Please select a job first');
+                      return;
+                    }
+                    // Navigate to assessment page with job and candidates
+                    const selectedJob = publishedJobs.find(j => j.id === selectedJobForAssessment);
+                    if (selectedJob) {
+                      // Store selected candidates in session storage for the assessment page
+                      const candidateData = resumes
+                        .filter(r => selectedResumes.includes(r.id))
+                        .map(r => ({
+                          name: r.name,
+                          email: r.email,
+                          resumeId: r.id
+                        }));
+                      sessionStorage.setItem('assessmentCandidates', JSON.stringify(candidateData));
+                      router.push(`/recruitment/assessments?job_id=${selectedJobForAssessment}&invite=true`);
+                    }
+                  }}
+                  disabled={!selectedJobForAssessment}
+                  className="flex items-center gap-2 px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Continue to Assessment
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Delete Folder Confirmation Dialog */}

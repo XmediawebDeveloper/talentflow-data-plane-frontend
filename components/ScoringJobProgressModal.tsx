@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Target, Clock, Loader, CheckCircle2, XCircle, Minus, Maximize2, User, FileText } from 'lucide-react';
+import { X, Target, Clock, Loader, CheckCircle2, XCircle, Minus, Maximize2, User, FileText, RotateCcw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export interface ResumeProgressItem {
@@ -29,6 +29,7 @@ interface ScoringJobProgressModalProps {
   isMinimized?: boolean;
   jobProgressData: JobScoringProgress[];
   onViewJobDetails?: (jobId: string) => void;
+  onRetryFailed?: (resumeId: string, jobId: string) => Promise<void>;
 }
 
 export default function ScoringJobProgressModal({
@@ -38,8 +39,26 @@ export default function ScoringJobProgressModal({
   isMinimized = false,
   jobProgressData,
   onViewJobDetails,
+  onRetryFailed,
 }: ScoringJobProgressModalProps) {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
+
+  // Handle retry for a failed item
+  const handleRetry = async (resumeId: string, jobId: string) => {
+    if (!onRetryFailed || retryingItems.has(resumeId)) return;
+
+    setRetryingItems(prev => new Set(prev).add(resumeId));
+    try {
+      await onRetryFailed(resumeId, jobId);
+    } finally {
+      setRetryingItems(prev => {
+        const next = new Set(prev);
+        next.delete(resumeId);
+        return next;
+      });
+    }
+  };
 
   // Real-time update - refresh every second
   useEffect(() => {
@@ -146,7 +165,7 @@ export default function ScoringJobProgressModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-gray-900 to-gray-800 text-white">
           <div className="flex items-center gap-4">
@@ -220,7 +239,7 @@ export default function ScoringJobProgressModal({
         </div>
 
         {/* Resume List */}
-        <div className="max-h-64 overflow-y-auto">
+        <div className="max-h-96 overflow-y-auto">
           {allItems.length > 0 ? (
             <div className="divide-y divide-gray-100">
               {allItems.map((item, index) => (
@@ -276,6 +295,32 @@ export default function ScoringJobProgressModal({
                     <div className="flex items-center gap-1 px-3 py-1 bg-green-100 rounded-full">
                       <span className="text-sm font-bold text-green-700">{item.score}%</span>
                     </div>
+                  )}
+
+                  {/* Retry button for failed items */}
+                  {item.status === 'failed' && onRetryFailed && (
+                    <button
+                      onClick={() => handleRetry(item.resumeId, jobProgressData[0]?.jobId || '')}
+                      disabled={retryingItems.has(item.resumeId)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        retryingItems.has(item.resumeId)
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                      }`}
+                      title="Retry scoring"
+                    >
+                      {retryingItems.has(item.resumeId) ? (
+                        <>
+                          <Loader className="w-3 h-3 animate-spin" />
+                          Retrying...
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw className="w-3 h-3" />
+                          Retry
+                        </>
+                      )}
+                    </button>
                   )}
                 </div>
               ))}
