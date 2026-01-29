@@ -429,10 +429,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           )}
         </div>
 
-        {/* Plan & Unit Balance Display - Hidden for demo, data not updating correctly
-        <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl">
-          <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm border border-indigo-100">
-            <CreditCard className="w-5 h-5 text-indigo-600" />
+        {/* Plan & Unit Balance Display */}
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl">
+          <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm border border-gray-200">
+            <CreditCard className="w-5 h-5 text-gray-600" />
           </div>
           <div className="flex flex-col gap-0.5 min-w-0">
             <span className="text-sm font-semibold text-gray-900 truncate max-w-[140px]" title={loadingQuota ? 'Loading...' : planName}>
@@ -440,7 +440,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             </span>
             {!loadingQuota && !quotaError && !isPendingStatus && (
               <div className="flex items-center gap-1.5">
-                <span className="text-sm font-bold text-indigo-600">{totalUnits.remaining.toLocaleString()}</span>
+                <span className="text-sm font-bold text-gray-700">{totalUnits.remaining.toLocaleString()}</span>
                 <span className="text-xs text-gray-500">units left</span>
               </div>
             )}
@@ -451,18 +451,17 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             )}
           </div>
           {!loadingQuota && !quotaError && !isPendingStatus && totalUnits.limit > 0 && (
-            <div className="w-16 h-2 bg-white/60 rounded-full overflow-hidden border border-indigo-100">
+            <div className="w-16 h-2 bg-white/60 rounded-full overflow-hidden border border-gray-200">
               <div
                 className={`h-full rounded-full transition-all ${
                   usagePercentage > 90 ? 'bg-red-500' :
-                  usagePercentage > 70 ? 'bg-yellow-500' : 'bg-indigo-500'
+                  usagePercentage > 70 ? 'bg-yellow-500' : 'bg-gray-600'
                 }`}
                 style={{ width: `${Math.min(usagePercentage, 100)}%` }}
               />
             </div>
           )}
         </div>
-        */}
 
         {/* FIX-010: Settings with Tooltip */}
         <Tooltip content="Settings" position="bottom">

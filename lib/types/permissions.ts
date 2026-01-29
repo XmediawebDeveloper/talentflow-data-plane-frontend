@@ -484,14 +484,14 @@ export const PERMISSION_MODULES: ModulePermissions[] = [
   },
   {
     id: 'audit_logs',
-    name: 'Audit Logs',
+    name: 'Activity Logs',
     icon: 'FileText',
-    description: 'View audit logs and changes',
+    description: 'View activity logs and changes',
     permissions: [
       {
         action: 'view_audit',
-        label: 'View Audit',
-        description: 'View audit logs and changes',
+        label: 'View Activity',
+        description: 'View activity logs and changes',
       },
     ],
   },

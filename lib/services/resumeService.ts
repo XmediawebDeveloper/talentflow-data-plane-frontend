@@ -12,7 +12,8 @@ export interface Resume {
   folder_id?: string;
   folder_name?: string;
   candidate_name?: string;
-  email?: string;
+  candidate_email?: string;  // Backend uses candidate_email
+  email?: string;  // Alias for candidate_email
   phone?: string;
   current_title?: string;
   current_company?: string;
@@ -30,6 +31,7 @@ export interface Resume {
   professional_summary?: string;
   extracted_text?: string;  // Full extracted content from resume
   file_name: string;
+  file_size?: number;  // In bytes
   file_size_kb?: number;
   file_type?: string;
   source: 'manual_upload' | 'bulk_upload' | 'api_import' | 'ai_match';
@@ -38,6 +40,21 @@ export interface Resume {
   is_duplicate: boolean;
   created_at: string;
   updated_at: string;
+  // Additional sections (snake_case from backend)
+  projects?: any[];
+  publications?: any[];
+  awards?: any[];
+  hobbies?: any[];
+  references?: any[];
+  volunteer_experience?: any[];
+  achievements?: any[];
+  // Social/Portfolio Links (snake_case from backend)
+  linkedin_url?: string;
+  github_url?: string;
+  portfolio_url?: string;
+  // Additional content
+  objective?: string;
+  additional_info?: string;
 }
 
 export interface ResumeListResponse {
@@ -402,6 +419,21 @@ export const resumeService = {
     try {
       const response = await api.get(`/resumes/${resumeId}/versions/${versionId}/download`, {
         responseType: 'blob',
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Share resume via email
+   */
+  async share(resumeId: string, toEmail: string, customMessage?: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await api.post(`/resumes/${resumeId}/share`, {
+        to_email: toEmail,
+        custom_message: customMessage,
       });
       return response.data;
     } catch (error) {

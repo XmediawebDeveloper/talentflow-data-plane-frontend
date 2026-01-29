@@ -516,9 +516,9 @@ export default function ResumeScoringPage({
       inProgress: batchProgress.processing,
       completed: batchProgress.completed,
       failed: batchProgress.failed,
-      items: batchProgress.items?.map(item => ({
+      items: (batchProgress.items || []).map(item => ({
         resumeId: item.resumeId,
-        candidateName: item.candidateName,
+        candidateName: item.candidateName || 'Unknown',
         status: item.status,
         score: item.score,
         errorMessage: item.errorMessage,
@@ -680,6 +680,7 @@ export default function ResumeScoringPage({
 
       return {
         id: resume.id,
+        resumeId: resume.resumeId || resume.resume_id || '',  // CRITICAL: Resume ID for fetching full details
         // Use candidateName from API, fallback to name, then 'Unknown Candidate'
         candidateName: resume.candidateName || resume.name || 'Unknown Candidate',
         email: resume.candidateEmail || resume.email || 'N/A',
@@ -993,6 +994,47 @@ export default function ResumeScoringPage({
           onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
           isMinimized={isJobProgressMinimized}
           jobProgressData={jobProgressData}
+          onRetryFailed={async (resumeId, jobId) => {
+            try {
+              // Update item status to processing
+              setJobProgressData(prev => prev.map(job => ({
+                ...job,
+                items: job.items?.map(item =>
+                  item.resumeId === resumeId
+                    ? { ...item, status: 'processing' as const, errorMessage: undefined }
+                    : item
+                )
+              })));
+
+              // Call scoring API
+              const result = await scoringService.scoreResume(jobId, resumeId);
+
+              // Update item with success
+              setJobProgressData(prev => prev.map(job => ({
+                ...job,
+                failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
+                completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
+                items: job.items?.map(item =>
+                  item.resumeId === resumeId
+                    ? { ...item, status: 'completed' as const, score: result?.match_score }
+                    : item
+                )
+              })));
+
+              toast.success('Retry successful');
+            } catch (error: any) {
+              // Update item with failure
+              setJobProgressData(prev => prev.map(job => ({
+                ...job,
+                items: job.items?.map(item =>
+                  item.resumeId === resumeId
+                    ? { ...item, status: 'failed' as const, errorMessage: error?.message || 'Retry failed' }
+                    : item
+                )
+              })));
+              toast.error('Retry failed');
+            }
+          }}
           onViewJobDetails={(jobId) => {
             setShowJobProgressModal(false);
             setIsJobProgressMinimized(false);
@@ -1844,6 +1886,40 @@ export default function ResumeScoringPage({
           onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
           isMinimized={isJobProgressMinimized}
           jobProgressData={jobProgressData}
+          onRetryFailed={async (resumeId, jobId) => {
+            try {
+              setJobProgressData(prev => prev.map(job => ({
+                ...job,
+                items: job.items?.map(item =>
+                  item.resumeId === resumeId
+                    ? { ...item, status: 'processing' as const, errorMessage: undefined }
+                    : item
+                )
+              })));
+              const result = await scoringService.scoreResume(jobId, resumeId);
+              setJobProgressData(prev => prev.map(job => ({
+                ...job,
+                failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
+                completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
+                items: job.items?.map(item =>
+                  item.resumeId === resumeId
+                    ? { ...item, status: 'completed' as const, score: result?.match_score }
+                    : item
+                )
+              })));
+              toast.success('Retry successful');
+            } catch (error: any) {
+              setJobProgressData(prev => prev.map(job => ({
+                ...job,
+                items: job.items?.map(item =>
+                  item.resumeId === resumeId
+                    ? { ...item, status: 'failed' as const, errorMessage: error?.message || 'Retry failed' }
+                    : item
+                )
+              })));
+              toast.error('Retry failed');
+            }
+          }}
           onViewJobDetails={(jobId) => {
             setShowJobProgressModal(false);
             setIsJobProgressMinimized(false);
@@ -2076,7 +2152,7 @@ export default function ResumeScoringPage({
           databaseResumes={databaseResumes}
           folders={folders}
           onClose={() => setShowResumeSelectionModal(false)}
-          onScoreResumes={async (selectedIds, source) => {
+          onScoreResumes={async (selectedIds, source, versionSelections) => {
             setShowResumeSelectionModal(false);
 
             // Check for existing scores before proceeding
@@ -2104,8 +2180,16 @@ export default function ResumeScoringPage({
               // Continue with scoring if check fails
             }
 
-            // No existing scores, proceed with scoring
-            const selectedResumesData = resumes.filter(r => selectedIds.includes(r.id));
+            // Get resume names - use versionSelections if available, otherwise fall back to resumes list
+            let resumeNames: string[];
+            if (versionSelections && versionSelections.length > 0) {
+              // Use candidate names from version selections
+              resumeNames = versionSelections.map(v => v.candidateName || 'Unknown');
+            } else {
+              // Fall back to finding names from resumes list
+              const selectedResumesData = resumes.filter(r => selectedIds.includes(r.id));
+              resumeNames = selectedResumesData.map(r => r.name || r.candidateName || r.candidate_name || 'Unknown');
+            }
 
             // Start scoring in background and redirect to resume-scoring page with progress view
             // Store pending scoring data in sessionStorage so it can be picked up after redirect
@@ -2113,7 +2197,7 @@ export default function ResumeScoringPage({
               jobId: selectedJob,
               jobTitle: selectedJobData.title,
               resumeIds: selectedIds,
-              resumeNames: selectedResumesData.map(r => r.name || r.candidateName || r.candidate_name || 'Unknown'),
+              resumeNames: resumeNames,
             };
             sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
 
@@ -2298,6 +2382,40 @@ export default function ResumeScoringPage({
         onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
         isMinimized={isJobProgressMinimized}
         jobProgressData={jobProgressData}
+        onRetryFailed={async (resumeId, jobId) => {
+          try {
+            setJobProgressData(prev => prev.map(job => ({
+              ...job,
+              items: job.items?.map(item =>
+                item.resumeId === resumeId
+                  ? { ...item, status: 'processing' as const, errorMessage: undefined }
+                  : item
+              )
+            })));
+            const result = await scoringService.scoreResume(jobId, resumeId);
+            setJobProgressData(prev => prev.map(job => ({
+              ...job,
+              failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
+              completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
+              items: job.items?.map(item =>
+                item.resumeId === resumeId
+                  ? { ...item, status: 'completed' as const, score: result?.match_score }
+                  : item
+              )
+            })));
+            toast.success('Retry successful');
+          } catch (error: any) {
+            setJobProgressData(prev => prev.map(job => ({
+              ...job,
+              items: job.items?.map(item =>
+                item.resumeId === resumeId
+                  ? { ...item, status: 'failed' as const, errorMessage: error?.message || 'Retry failed' }
+                  : item
+              )
+            })));
+            toast.error('Retry failed');
+          }
+        }}
         onViewJobDetails={(jobId) => {
           setShowJobProgressModal(false);
           setIsJobProgressMinimized(false);

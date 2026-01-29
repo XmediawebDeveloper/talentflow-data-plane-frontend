@@ -10,7 +10,6 @@ const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 const DEFAULT_COLUMNS = [
   { id: 'candidateName', label: 'Candidate Name', enabled: true },
   { id: 'jobTitle', label: 'Job Title', enabled: false }, // Enabled in global view
-  { id: 'version', label: 'Version', enabled: true },
   { id: 'email', label: 'Email', enabled: true },
   { id: 'phone', label: 'Phone', enabled: true },
   { id: 'matchStatus', label: 'Match Status', enabled: true },
@@ -19,11 +18,13 @@ const DEFAULT_COLUMNS = [
   { id: 'education', label: 'Education', enabled: false },
   { id: 'certifications', label: 'Certifications', enabled: false },
   { id: 'scoredDate', label: 'Scored Date', enabled: true },
+  { id: 'version', label: 'Version', enabled: true },
   { id: 'scoredBy', label: 'Scored By', enabled: true },
 ];
 
 interface ScoredResume {
   id: string;
+  resumeId?: string;  // Actual resume ID (different from score ID)
   candidateName: string;
   email: string;
   phone: string;
@@ -501,7 +502,7 @@ export default function ScoredResumesTable({
                 className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
               >
                 <FileDown className="w-4 h-4" />
-                Export to Excel
+                Export
               </button>
             </>
           )}
@@ -511,7 +512,7 @@ export default function ScoredResumesTable({
               className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
               <FileDown className="w-4 h-4" />
-              Export to Excel
+              Export
             </button>
           )}
         </div>

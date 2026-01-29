@@ -107,7 +107,7 @@ function DroppableFolderItem({
       )}
       <span className="flex-1 text-left">{folder.name}</span>
       <span className="text-xs text-gray-500">({count})</span>
-      {folder.id !== 'all' && (
+      {folder.id !== 'all' && !(folder.name.toLowerCase() === 'root' && !folder.parentId) && (
         <button
           onClick={(e) => {
             e.stopPropagation();

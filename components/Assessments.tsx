@@ -1114,7 +1114,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   }`}
                 >
                   <Activity className="w-4 h-4" />
-                  Audit Logs
+                  Activity Logs
                 </button>
                 <button
                   onClick={() => setActiveTab('archived')}
@@ -1169,7 +1169,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           {/* Assessment List */}
           <div className="p-6">
             {activeTab === 'audit' ? (
-              /* Audit Logs Tab */
+              /* Activity Logs Tab */
               <AssessmentAuditTrail />
             ) : activeTab === 'settings' ? (
               /* Settings Tab with Sub-tabs */
