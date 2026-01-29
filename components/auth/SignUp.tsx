@@ -617,7 +617,16 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     } catch (err: any) {
       console.error('Send OTP error:', err);
       const errorMessage = err.message || 'Failed to send OTP. Please try again.';
-      setError(errorMessage);
+
+      // Show email-related errors under the email field for better UX
+      if (errorMessage.toLowerCase().includes('email') &&
+          (errorMessage.toLowerCase().includes('already') ||
+           errorMessage.toLowerCase().includes('registered') ||
+           errorMessage.toLowerCase().includes('exists'))) {
+        setEmailError(errorMessage);
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setIsSendingOtp(false);
     }
