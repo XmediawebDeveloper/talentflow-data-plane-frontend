@@ -71,6 +71,7 @@ interface JobsListingProps {
   onDisableJob?: (job: Job) => void;
   onRepublishJob?: (job: Job) => void;
   onArchiveJob?: (job: Job) => void;
+  onUnarchiveJob?: (job: Job) => void;
   onDeleteJob?: (job: Job) => void;
   // Quota information for showing limit reached message
   quotaInfo?: {
@@ -82,7 +83,7 @@ interface JobsListingProps {
   initialStatusFilter?: string;
 }
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onDeleteJob, quotaInfo, initialStatusFilter }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, quotaInfo, initialStatusFilter }: JobsListingProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'all');
   const [creationMethodFilter, setCreationMethodFilter] = useState<'manual' | 'ai' | null>(null);
@@ -1173,6 +1174,34 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                   Archive Job
                                 </button>
                               )}
+                              {/* Unarchive Job */}
+                              {job.status === 'Archived' && onUnarchiveJob && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUnarchiveJob(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
+                                >
+                                  <RefreshCw className="w-4 h-4" />
+                                  Unarchive Job
+                                </button>
+                              )}
+                              {/* Delete Job */}
+                              {onDeleteJob && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDeleteJob(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete Job
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1393,6 +1422,34 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                 >
                                   <Archive className="w-4 h-4" />
                                   Archive Job
+                                </button>
+                              )}
+                              {/* Unarchive Job */}
+                              {job.status === 'Archived' && onUnarchiveJob && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUnarchiveJob(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                                >
+                                  <RefreshCw className="w-4 h-4" />
+                                  Unarchive Job
+                                </button>
+                              )}
+                              {/* Delete Job */}
+                              {onDeleteJob && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDeleteJob(job);
+                                    setActiveDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete Job
                                 </button>
                               )}
                             </div>

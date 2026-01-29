@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle, X } from 'lucide-react';
 import JobsListing from '@/components/JobsListing';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
@@ -9,6 +9,15 @@ import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
 
@@ -17,6 +26,11 @@ export default function JobOpeningsPage() {
   const [loading, setLoading] = useState(true);
   const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | undefined>();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
+  const [editWarningDialog, setEditWarningDialog] = useState<{
+    open: boolean;
+    jobTitle: string;
+    usageDetails: string;
+  }>({ open: false, jobTitle: '', usageDetails: '' });
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -159,17 +173,18 @@ export default function JobOpeningsPage() {
     try {
       const usageStatus = await jdService.getUsageStatus(job.id);
       if (usageStatus && usageStatus.is_used) {
-        // JD has modules in use - show error and block edit
+        // JD has modules in use - show warning dialog and block edit
         const usageDetails = [
           usageStatus.usage?.resume_scores_count ? `Resume Scoring (${usageStatus.usage.resume_scores_count})` : '',
           usageStatus.usage?.assessments_count ? `Assessments (${usageStatus.usage.assessments_count})` : '',
           usageStatus.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : ''
         ].filter(Boolean).join(', ');
 
-        toast.error(
-          usageStatus.edit_restriction_reason ||
-          `This job description cannot be edited because it has been used in: ${usageDetails}. Please create a new JD instead.`
-        );
+        setEditWarningDialog({
+          open: true,
+          jobTitle: job.title,
+          usageDetails: usageDetails
+        });
         return;
       }
 
@@ -237,6 +252,18 @@ export default function JobOpeningsPage() {
     }
   };
 
+  const handleUnarchiveJob = async (job: Job) => {
+    try {
+      await jdService.updateStatus(job.id, 'published');
+      setJobs(prev => prev.map(j =>
+        j.id === job.id ? { ...j, status: 'Published' } : j
+      ));
+      toast.success(`"${job.title}" has been unarchived and published`);
+    } catch (error) {
+      toast.error('Failed to unarchive job');
+    }
+  };
+
   const handleDeleteJob = async (job: Job) => {
     if (!confirm(`Are you sure you want to delete "${job.title}"?`)) return;
     try {
@@ -258,20 +285,71 @@ export default function JobOpeningsPage() {
   }
 
   return (
-    <JobsListing
-      jobs={jobs}
-      onCreateNew={handleCreateNew}
-      onViewJob={handleViewJob}
-      onAIMatch={handleAIMatch}
-      onUpdateJobStatus={handleUpdateJobStatus}
-      onEditJob={handleEditJob}
-      onPublishJob={handlePublishJob}
-      onDisableJob={handleDisableJob}
-      onRepublishJob={handleRepublishJob}
-      onArchiveJob={handleArchiveJob}
-      onDeleteJob={handleDeleteJob}
-      quotaInfo={quotaInfo}
-      initialStatusFilter={activeFilter}
-    />
+    <>
+      <JobsListing
+        jobs={jobs}
+        onCreateNew={handleCreateNew}
+        onViewJob={handleViewJob}
+        onAIMatch={handleAIMatch}
+        onUpdateJobStatus={handleUpdateJobStatus}
+        onEditJob={handleEditJob}
+        onPublishJob={handlePublishJob}
+        onDisableJob={handleDisableJob}
+        onRepublishJob={handleRepublishJob}
+        onArchiveJob={handleArchiveJob}
+        onUnarchiveJob={handleUnarchiveJob}
+        onDeleteJob={handleDeleteJob}
+        quotaInfo={quotaInfo}
+        initialStatusFilter={activeFilter}
+      />
+
+      {/* Edit Warning Dialog */}
+      <AlertDialog open={editWarningDialog.open} onOpenChange={(open) => setEditWarningDialog(prev => ({ ...prev, open }))}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-amber-600" />
+              </div>
+              <div className="flex-1 pt-1">
+                <AlertDialogTitle className="text-lg font-semibold text-gray-900">
+                  Cannot Edit Job Description
+                </AlertDialogTitle>
+                <AlertDialogDescription className="mt-2 text-sm text-gray-600">
+                  <span className="font-medium text-gray-800">&quot;{editWarningDialog.jobTitle}&quot;</span> has been used in:
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="mt-4 ml-16">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <div className="flex flex-wrap gap-2">
+                {editWarningDialog.usageDetails.split(', ').map((usage, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800"
+                  >
+                    {usage}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-gray-600">
+              To maintain data integrity, this job description cannot be modified. Please create a new job description instead.
+            </p>
+          </div>
+
+          <AlertDialogFooter className="mt-6 flex gap-3 sm:justify-end">
+            <AlertDialogAction
+              onClick={() => setEditWarningDialog({ open: false, jobTitle: '', usageDetails: '' })}
+              className="bg-gray-900 hover:bg-gray-800 text-white"
+            >
+              I Understand
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
