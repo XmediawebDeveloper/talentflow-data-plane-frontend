@@ -400,6 +400,7 @@ function CurrentPlanContent() {
   const [isCancellingUpgrade, setIsCancellingUpgrade] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
 
   // Use ref to track if data has been fetched to prevent duplicate calls
   const hasFetchedRef = useRef(false);
@@ -693,10 +694,10 @@ function CurrentPlanContent() {
         })
         .filter((plan): plan is DisplayPlan => plan !== null)
         .sort((a, b) => {
-          // Sort by price (monthly price as baseline)
+          // Sort by price descending (highest first)
           const orderA = a.monthlyPrice || 0;
           const orderB = b.monthlyPrice || 0;
-          return orderA - orderB;
+          return orderB - orderA;
         });
 
       setPlans(transformedPlans);
@@ -1674,29 +1675,51 @@ function CurrentPlanContent() {
                 </span>
               </div>
             </div>
-            <div className={`grid gap-8 pt-8 max-w-6xl mx-auto ${
-              plans.length === 1 ? 'md:grid-cols-1 max-w-md' :
-              plans.length === 2 ? 'md:grid-cols-2 max-w-3xl' :
-              'md:grid-cols-3'
-            }`} style={{ gridAutoRows: '1fr' }}>
-              {plans.map((plan) => {
+            <div
+              className={`grid gap-8 pt-8 max-w-6xl mx-auto ${
+                plans.length === 1 ? 'md:grid-cols-1 max-w-md' :
+                plans.length === 2 ? 'md:grid-cols-2 max-w-3xl' :
+                'md:grid-cols-3'
+              }`}
+              style={{ gridAutoRows: '1fr' }}
+              onMouseLeave={() => setHoveredPlan(null)}
+            >
+              {[...plans].sort((a, b) => {
+                // Sort by price descending (highest first)
+                const priceA = a.monthlyPrice || a.annualPrice || 0;
+                const priceB = b.monthlyPrice || b.annualPrice || 0;
+                return priceB - priceA;
+              }).map((plan) => {
                 const Icon = plan.icon;
                 const isSelectedPending = isPendingPayment && companySettings?.selected_plan_id === plan.numericId;
                 // Show "Current Plan" only when viewing the matching billing period
                 // e.g., if user has Annual plan, show "Current Plan" only when toggle is on Annual
                 const isCurrentForToggle = (plan.isCurrentMonthly && !isYearly) || (plan.isCurrentAnnual && isYearly);
+                const isHovered = hoveredPlan === plan.id;
+                const hasHoveredPlan = hoveredPlan !== null;
 
                 return (
-                  <div key={plan.id} className="flex">
+                  <div
+                    key={plan.id}
+                    className="flex"
+                    onMouseEnter={() => setHoveredPlan(plan.id)}
+                    style={{
+                      transition: 'all 0.3s ease-out',
+                      opacity: hasHoveredPlan && !isHovered ? 0.5 : 1,
+                      transform: isHovered ? 'translateY(-8px)' : 'translateY(0)',
+                    }}
+                  >
                   <Card
-                    className={`relative p-8 flex flex-col w-full ${
+                    className={`relative p-8 flex flex-col w-full transition-all duration-300 ease-out ${
                       isSelectedPending
                         ? "border-2 border-orange-500 shadow-xl"
                         : isCurrentForToggle
                           ? "border-2 border-gray-600 shadow-xl"
-                          : plan.popular
-                            ? "border-2 border-gray-800 shadow-xl"
-                            : "border border-gray-200"
+                          : isHovered
+                            ? "border-2 border-gray-400 shadow-xl"
+                            : plan.popular
+                              ? "border-2 border-gray-800 shadow-xl"
+                              : "border border-gray-200 shadow-sm"
                     }`}
                   >
                     {isSelectedPending && (
@@ -1793,7 +1816,7 @@ function CurrentPlanContent() {
                       )}
                     </div>
 
-                    {/* Quotas Section - Use API values directly based on billing toggle */}
+                    {/* Quotas Section - Single column layout */}
                     {(() => {
                       // Use correct quotas based on billing toggle - all values from API directly
                       const displayQuotas = isYearly
@@ -1803,42 +1826,42 @@ function CurrentPlanContent() {
                       if (!displayQuotas) return null;
 
                       return (
-                        <div className="mb-6">
-                          <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="mb-6 py-4 border-t border-b border-gray-100">
+                          <div className="space-y-2 text-sm">
                             {displayQuotas.max_seats !== undefined && displayQuotas.max_seats >= 1 && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-gray-500">Max Users</span>
                                 <span className="font-semibold text-gray-900">{displayQuotas.max_seats.toLocaleString()}</span>
-                                <span className="text-gray-600">Max Users</span>
                               </div>
                             )}
                             {displayQuotas.max_jobs !== undefined && displayQuotas.max_jobs >= 1 && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-gray-500">Max Jobs</span>
                                 <span className="font-semibold text-gray-900">Unlimited</span>
-                                <span className="text-gray-600">Max Jobs</span>
                               </div>
                             )}
                             {displayQuotas.RU !== undefined && displayQuotas.RU >= 1 && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-gray-500">Resume Storage</span>
                                 <span className="font-semibold text-gray-900">{displayQuotas.RU.toLocaleString()}</span>
-                                <span className="text-gray-600">Resume Storage</span>
                               </div>
                             )}
                             {displayQuotas.RS !== undefined && displayQuotas.RS >= 1 && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-gray-500">Resume Scores</span>
                                 <span className="font-semibold text-gray-900">{displayQuotas.RS.toLocaleString()}</span>
-                                <span className="text-gray-600">Resume Scores</span>
                               </div>
                             )}
                             {displayQuotas.AS !== undefined && displayQuotas.AS >= 1 && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-gray-500">Assessments</span>
                                 <span className="font-semibold text-gray-900">{displayQuotas.AS.toLocaleString()}</span>
-                                <span className="text-gray-600">Assessments</span>
                               </div>
                             )}
                             {displayQuotas.AIU !== undefined && displayQuotas.AIU >= 1 && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-gray-500">AI Interviews</span>
                                 <span className="font-semibold text-gray-900">{displayQuotas.AIU.toLocaleString()}</span>
-                                <span className="text-gray-600">AI Interviews</span>
                               </div>
                             )}
                           </div>
@@ -1846,16 +1869,23 @@ function CurrentPlanContent() {
                       );
                     })()}
 
-                    {/* Features Section */}
+                    {/* Features Section - Expand on hover */}
                     {plan.features.length > 0 && (
-                      <ul className="space-y-3">
-                        {plan.features.map((feature, idx) => (
-                          <li key={idx} className="flex items-start gap-3">
-                            <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                            <span className="text-gray-700 text-sm">{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="mb-6">
+                        <ul className="space-y-2.5">
+                          {plan.features.slice(0, isHovered ? undefined : 4).map((feature, idx) => (
+                            <li key={idx} className="flex items-start gap-2.5">
+                              <Check className="w-4 h-4 text-gray-600 flex-shrink-0 mt-0.5" />
+                              <span className="text-gray-700 text-sm">{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        {!isHovered && plan.features.length > 4 && (
+                          <p className="text-gray-400 text-sm mt-2 pl-6">
+                            +{plan.features.length - 4} more features
+                          </p>
+                        )}
+                      </div>
                     )}
 
                     {/* Spacer to push button to bottom */}

@@ -609,7 +609,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       const totalCredits = (selectedAddon.credit_amount || 0) * addonQuantity;
       const cleanName = (selectedAddon.name || 'quota').replace(/\s*-?\s*Pro$/i, '').trim();
       console.log('[UsageDashboard] Addon purchase result:', result);
-      setAddonPurchaseSuccess(`Successfully added ${totalCredits} credits to your ${cleanName}!`);
+      setAddonPurchaseSuccess(`Successfully added ${totalCredits} Units to your ${cleanName}!`);
 
       // Refresh quota data to show updated credits after a short delay
       setTimeout(async () => {
@@ -767,7 +767,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900">Quota Running Low!</h3>
-                    <p className="text-sm text-gray-600">Purchase add-on credits to continue using these features.</p>
+                    <p className="text-sm text-gray-600">Purchase add-on Units to continue using these features.</p>
                   </div>
                 </div>
                 {/* Show each low quota with its own Add Credits button */}
@@ -1050,8 +1050,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 <Sparkles className="w-5 h-5 text-gray-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Add-on Credits</h2>
-                <p className="text-sm text-gray-600">Purchase additional credits to extend your quota limits</p>
+                <h2 className="text-lg font-semibold text-gray-900">Add-on Units</h2>
+                <p className="text-sm text-gray-600">Purchase additional Units to extend your quota limits</p>
               </div>
             </div>
           </div>
@@ -1111,7 +1111,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         <div className="text-xl font-bold text-gray-900">
                           {addon.credit_amount || addon.min_quantity || 0}
                         </div>
-                        <div className="text-xs text-gray-500">credits</div>
+                        <div className="text-xs text-gray-500">Units</div>
                       </div>
                       <div className="text-right">
                         <div className="text-xl font-bold text-gray-700">
@@ -1302,7 +1302,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900">Purchase Add-on</h2>
-                    <p className="text-sm text-gray-600">Add credits to your quota</p>
+                    <p className="text-sm text-gray-600">Add Units to your quota</p>
                   </div>
                 </div>
                 <button
@@ -1348,7 +1348,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   Quantity
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
-                  {selectedAddon.credit_amount || 0} credits for ₹{selectedAddon.price || selectedAddon.unit_price || 0}
+                  {selectedAddon.credit_amount || 0} Units for ₹{selectedAddon.price || selectedAddon.unit_price || 0}
                 </p>
                 <div className="flex items-center gap-3">
                   <button
@@ -1378,7 +1378,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Base unit</span>
-                  <span className="font-medium">{selectedAddon.credit_amount || 0} credits = ₹{selectedAddon.price || selectedAddon.unit_price || 0}</span>
+                  <span className="font-medium">{selectedAddon.credit_amount || 0} Units = ₹{selectedAddon.price || selectedAddon.unit_price || 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Quantity</span>
@@ -1386,7 +1386,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 </div>
                 <hr className="border-gray-200" />
                 <div className="flex justify-between items-center bg-gray-200 p-2 rounded-lg -mx-2">
-                  <span className="text-gray-800 font-medium">Credits to be added</span>
+                  <span className="text-gray-800 font-medium">Units to be added</span>
                   <span className="text-2xl font-bold text-gray-900">
                     +{(selectedAddon.credit_amount || 0) * addonQuantity}
                   </span>
