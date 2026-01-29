@@ -68,6 +68,7 @@ interface ExtendedJob extends Job {
   hasAiMatchResults?: boolean;
   rawDescription?: string;
   mustHaveComments?: string[];
+  education?: string;
   // JD13: Usage status for edit/republish logic
   usageStatus?: JDUsageStatus;
 }
@@ -683,11 +684,51 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 </div>
               </div>
+
+              {/* Job Attributes - Experience, Education, Employment Type, Work Mode */}
+              {(job.experience || job.education || job.employmentType || job.workMode) && (
+                <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-gray-200">
+                  {job.experience && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                      {job.experience}
+                    </span>
+                  )}
+                  {job.education && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                      {job.education === 'bachelors' ? "Bachelor's Degree" :
+                       job.education === 'masters' ? "Master's Degree" :
+                       job.education === 'doctorate' ? 'Doctorate / PhD' :
+                       job.education === 'associate' ? 'Associate Degree' :
+                       job.education === 'diploma' ? 'Diploma' :
+                       job.education}
+                    </span>
+                  )}
+                  {job.employmentType && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                      {job.employmentType === 'full_time' ? 'Full Time' :
+                       job.employmentType === 'part_time' ? 'Part Time' :
+                       job.employmentType === 'contract' ? 'Contract' :
+                       job.employmentType === 'internship' ? 'Internship' :
+                       job.employmentType === 'temporary' ? 'Temporary' :
+                       job.employmentType}
+                    </span>
+                  )}
+                  {job.workMode && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                      {job.workMode === 'onsite' ? 'On-site' :
+                       job.workMode === 'remote' ? 'Remote' :
+                       job.workMode === 'hybrid' ? 'Hybrid' :
+                       job.workMode === 'field_based' ? 'Field-based' :
+                       job.workMode}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-3 ml-6">
-            {/* AI Talent Match Button - Disabled for Disabled JDs */}
-            {job.status !== 'Disabled' ? (
+            {/* AI Talent Match Button - COMMENTED OUT */}
+            {false && (job.status !== 'Disabled' ? (
               <button
                 onClick={handleAITalentMatch}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors shadow-sm"
@@ -704,7 +745,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <Sparkles className="w-4 h-4" />
                 AI Talent Match
               </button>
-            )}
+            ))}
 
             {/* Add Applicants Dropdown */}
             {/* <div className="relative" ref={menuRef}>
@@ -744,8 +785,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               )}
             </div> */}
 
-            {/* JD13: Usage Status Info Banner */}
-            {job.status === 'Published' && job.usageStatus?.is_used && (
+            {/* JD13: Usage Status Info Banner - COMMENTED OUT */}
+            {false && job.status === 'Published' && job.usageStatus?.is_used && (
               <div className="bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
                 <Ban className="w-4 h-4 flex-shrink-0" />
                 <span>
@@ -757,8 +798,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             {/* Action Buttons - Only for Published jobs */}
             {job.status === 'Published' && (
               <div className="flex items-center gap-2">
-                {/* JD13: Edit Button - Disabled when JD is used in modules */}
-                {onEdit && (
+                {/* JD13: Edit Button - COMMENTED OUT */}
+                {false && onEdit && (
                   <button
                     onClick={handleEdit}
                     disabled={job.usageStatus?.is_used}
@@ -773,7 +814,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     <span className="font-medium">Edit & Republish</span>
                   </button>
                 )}
-                {onArchive && (
+                {/* Archive button - COMMENTED OUT */}
+                {false && onArchive && (
                   <button
                     onClick={handleArchive}
                     className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-all flex items-center gap-2"
@@ -782,8 +824,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     <span className="font-medium">Archive</span>
                   </button>
                 )}
-                {/* JD15: Disable button - Only visible to Owners */}
-                {onDisable && isTenantAdmin && (
+                {/* JD15: Disable button - COMMENTED OUT */}
+                {false && onDisable && isTenantAdmin && (
                   <button
                     onClick={handleDisable}
                     className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all flex items-center gap-2"
@@ -793,7 +835,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     <span className="font-medium">Disable</span>
                   </button>
                 )}
-                {onDelete && (
+                {/* Delete button - COMMENTED OUT */}
+                {false && onDelete && (
                   <button
                     onClick={handleDelete}
                     className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
@@ -819,7 +862,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     <span className="font-medium">Re-enable JD</span>
                   </button>
                 )}
-                {onArchive && (
+                {/* Archive button - COMMENTED OUT */}
+                {false && onArchive && (
                   <button
                     onClick={handleArchive}
                     className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-all flex items-center gap-2"
@@ -843,7 +887,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     <span className="font-medium">Unarchive</span>
                   </button>
                 )}
-                {onDelete && (
+                {/* Delete button - COMMENTED OUT */}
+                {false && onDelete && (
                   <button
                     onClick={handleDelete}
                     className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
@@ -925,11 +970,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         <div className="col-span-10 space-y-6">
           {/* Complete Job Description */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            {/* JD Header */}
+            {/* JD Header - COMMENTED OUT
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 px-8 py-6">
               <div className="flex items-start justify-between mb-2">
                 <h1 className="text-2xl text-gray-900">{job.title}</h1>
-                {/* Current Version Badge */}
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg shadow-sm">
                   <History className="w-4 h-4" />
                   <span className="text-sm font-medium">
@@ -966,6 +1010,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 </div>
               </div>
             </div>
+            */}
 
             {/* JD Content */}
             <div className="p-8">
@@ -994,8 +1039,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 )}
 
 
-                {/* Compensation */}
-                {(job.salaryMin || job.salaryMax) && (
+                {/* Compensation - COMMENTED OUT */}
+                {false && (job.salaryMin || job.salaryMax) && (
                   <div>
                     <h2 className="text-base font-semibold text-gray-900 mb-4">
                       Compensation
@@ -1056,7 +1101,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 </button>
               )}
 
-              {/* AI Talent Match Results - Always allow viewing existing results */}
+              {/* AI Talent Match Results - COMMENTED OUT */}
+              {false && (
               <button
                 onClick={() => {
                   // Set flag to show results only (not run new match)
@@ -1070,6 +1116,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <Sparkles className="w-4 h-4" />
                 <span>AI Talent Match Results</span>
               </button>
+              )}
 
               {/* View JD History */}
               <button
@@ -1091,11 +1138,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </div>
           </div>
 
-          {/* Recent Activity */}
+          {/* Recent Activity - Show last 5 activities */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h3 className="text-gray-900 mb-4">Recent Activity</h3>
             <div className="space-y-4">
-              {/* Show real activity based on JD data */}
+              {/* Activity 1: Resume scoring */}
               {scoredResumesStats.total > 0 && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -1105,26 +1152,49 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 </div>
               )}
-              {job.currentVersion && job.currentVersion > 1 && (
+              {/* Activity 2: Exact matches found */}
+              {scoredResumesStats.exactMatch > 0 && (
+                <div className="flex gap-3">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                  <div>
+                    <div className="text-sm text-gray-900">{scoredResumesStats.exactMatch} exact match(es) found</div>
+                    <div className="text-xs text-gray-500">High-quality candidates identified</div>
+                  </div>
+                </div>
+              )}
+              {/* Activity 3: Partial matches found */}
+              {scoredResumesStats.partialMatch > 0 && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-yellow-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                  <div>
+                    <div className="text-sm text-gray-900">{scoredResumesStats.partialMatch} partial match(es) found</div>
+                    <div className="text-xs text-gray-500">Candidates with potential identified</div>
+                  </div>
+                </div>
+              )}
+              {/* Activity 4: JD version update */}
+              {job.currentVersion && job.currentVersion > 1 && (
+                <div className="flex gap-3">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></div>
                   <div>
                     <div className="text-sm text-gray-900">JD updated to version {job.currentVersion}.0</div>
                     <div className="text-xs text-gray-500">Job description republished</div>
                   </div>
                 </div>
               )}
-              {job.status === 'Published' && (
+              {/* Activity 5: Job published */}
+              {job.status === 'Published' && job.postedDate && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
                   <div>
-                    <div className="text-sm text-gray-900">Job published</div>
+                    <div className="text-sm text-gray-900">Job published by {job.postedBy || 'System'}</div>
                     <div className="text-xs text-gray-500">
-                      {job.postedDate ? new Date(new Date(job.postedDate).getTime() + 19800000).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A'}
+                      {new Date(new Date(job.postedDate).getTime() + 19800000).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                     </div>
                   </div>
                 </div>
               )}
+              {/* No activity fallback */}
               {scoredResumesStats.total === 0 && job.status !== 'Published' && !job.currentVersion && (
                 <div className="text-sm text-gray-500 italic">No recent activity</div>
               )}

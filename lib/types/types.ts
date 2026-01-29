@@ -131,6 +131,7 @@ export interface Job {
   assessmentGuidance?: string;
   employmentType?: string;
   workMode?: string; // Remote type: onsite, hybrid, remote
+  education?: string; // Education requirement: bachelors, masters, doctorate, etc.
   currentVersion?: number;
   versionHistory?: JobSnapshot[];
   assignedTo?: string; // Team member ID
