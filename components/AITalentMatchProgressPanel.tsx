@@ -1,7 +1,6 @@
 import { Sparkles, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService';
-import AITalentMatchSettings from './AITalentMatchSettings';
 
 interface AITalentMatchProgressPanelProps {
   jobTitle: string;
@@ -19,9 +18,8 @@ export default function AITalentMatchProgressPanel({
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showSettings, setShowSettings] = useState(true);
-  const [selectedModel, setSelectedModel] = useState('bge-small-en-v1.5');  // Default model
+  const [isLoading, setIsLoading] = useState(true);
+  const selectedModel = 'bge-small-en-v1.5';  // Use recommended model directly
   const hasStarted = useRef(false);
 
   const steps = [
@@ -33,10 +31,12 @@ export default function AITalentMatchProgressPanel({
     'Finalizing results'
   ];
 
-  const startMatching = () => {
-    setShowSettings(false);
-    setIsLoading(true);
+  // Start matching immediately on mount
+  useEffect(() => {
+    startMatching();
+  }, []);
 
+  const startMatching = () => {
     if (hasStarted.current) return;
     hasStarted.current = true;
 
@@ -105,51 +105,6 @@ export default function AITalentMatchProgressPanel({
     );
   }
 
-  // Show settings panel first - model selection
-  if (showSettings) {
-    return (
-      <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-          {/* Header */}
-          <div className="border-b border-gray-200 p-4 rounded-t-xl">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">AI Talent Match</h2>
-                <p className="text-sm text-gray-500 truncate max-w-[280px]">{jobTitle}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Model Selection */}
-          <AITalentMatchSettings
-            selectedModel={selectedModel}
-            onModelChange={setSelectedModel}
-          />
-
-          {/* Actions */}
-          <div className="border-t border-gray-200 p-4 rounded-b-xl flex items-center justify-between gap-3">
-            <button
-              onClick={() => onError?.('Cancelled')}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={startMatching}
-              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium text-sm flex items-center gap-2"
-            >
-              <Sparkles className="w-4 h-4" />
-              Start Matching
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // Show progress panel
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
@@ -161,7 +116,6 @@ export default function AITalentMatchProgressPanel({
           </div>
           <h2 className="text-lg font-semibold text-gray-900 mb-1">AI Matching in Progress</h2>
           <p className="text-sm text-gray-600 truncate px-4">{jobTitle}</p>
-          <p className="text-xs text-gray-400 mt-1">Using {selectedModel}</p>
         </div>
 
         {/* Progress Bar */}

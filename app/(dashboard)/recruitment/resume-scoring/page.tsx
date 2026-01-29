@@ -240,6 +240,7 @@ export default function ResumeScoringRoute() {
 
         scoresByJd.get(jdId)!.scores.push({
           id: item.id,
+          resumeId: item.resume_id || item.resumeId || '',  // CRITICAL: Resume ID for fetching details
           candidateName: item.candidate_name || 'Unknown',
           candidateEmail: item.email || item.candidate_email || '',
           email: item.email || item.candidate_email || '',

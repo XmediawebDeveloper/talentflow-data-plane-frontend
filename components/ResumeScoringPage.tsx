@@ -680,6 +680,7 @@ export default function ResumeScoringPage({
 
       return {
         id: resume.id,
+        resumeId: resume.resumeId || resume.resume_id || '',  // CRITICAL: Resume ID for fetching full details
         // Use candidateName from API, fallback to name, then 'Unknown Candidate'
         candidateName: resume.candidateName || resume.name || 'Unknown Candidate',
         email: resume.candidateEmail || resume.email || 'N/A',

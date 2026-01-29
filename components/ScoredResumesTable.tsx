@@ -24,6 +24,7 @@ const DEFAULT_COLUMNS = [
 
 interface ScoredResume {
   id: string;
+  resumeId?: string;  // Actual resume ID (different from score ID)
   candidateName: string;
   email: string;
   phone: string;

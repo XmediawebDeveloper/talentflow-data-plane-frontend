@@ -309,6 +309,8 @@ export default function ResumeViewPage() {
       uploadDate: v.created_at || v.upload_date,
       size: v.file_size_kb ? `${v.file_size_kb} KB` : 'Unknown',
       uploadedBy: v.uploaded_by_name || 'Unknown',
+      version: v.version || 1,  // Version number from API
+      fileName: v.file_name,
     })),
     versionCount: r.version_count || versionsData.length || 1,
     extractedText: r.extracted_text,
@@ -1383,7 +1385,8 @@ Best regards`);
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <File className="w-4 h-4 text-gray-400" />
-                          <span className="font-medium text-gray-700">{version.name || `Version ${resume.versions.length - index}`}</span>
+                          <span className="font-medium text-gray-700">Version {version.version || (resume.versions.length - index)}</span>
+                          <span className="text-xs text-gray-500">({version.name})</span>
                         </div>
                         <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
                           <span className="flex items-center gap-1">

@@ -39,11 +39,24 @@ export default function ScoringVersionSelectionModal({
         if (hasMultipleVersions) {
           try {
             const versionsData = await resumeService.getVersions(resume.id);
-            const versions = versionsData.versions || versionsData || [];
+            const rawVersions = versionsData.versions || versionsData || [];
 
-            // Sort versions by date (newest first)
-            const sortedVersions = [...versions].sort((a: ResumeVersion, b: ResumeVersion) =>
-              new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
+            // Map API response fields to frontend ResumeVersion type
+            // API returns: { id, version, file_name, created_at, uploaded_by_name, file_size_kb }
+            // Frontend expects: { id, name, uploadDate, size, uploadedBy, version }
+            const mappedVersions: ResumeVersion[] = rawVersions.map((v: any) => ({
+              id: v.id,
+              name: v.file_name || v.name || 'Unknown',
+              uploadDate: v.created_at || v.uploadDate || new Date().toISOString(),
+              size: v.file_size_kb ? `${v.file_size_kb} KB` : (v.size || ''),
+              uploadedBy: v.uploaded_by_name || v.uploadedBy || 'Unknown',
+              version: v.version || 1,
+              fileName: v.file_name,
+            }));
+
+            // Sort versions by version number (highest first = latest)
+            const sortedVersions = [...mappedVersions].sort((a, b) =>
+              (b.version || 0) - (a.version || 0)
             );
 
             updatedResumes.push({
@@ -226,7 +239,8 @@ export default function ScoringVersionSelectionModal({
                               {versions.map((version, index) => {
                                 const isLatest = index === 0;
                                 const isSelected = version.id === resume.selectedVersionId;
-                                const versionNumber = versions.length - index;
+                                // Use actual version number from API, fallback to calculated
+                                const versionNumber = version.version || (versions.length - index);
 
                                 return (
                                   <button
