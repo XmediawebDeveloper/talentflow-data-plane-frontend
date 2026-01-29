@@ -39,9 +39,11 @@ export interface UnitAvailability {
 
 // JD02A: Subscription units
 export interface SubscriptionUnits {
-  RS: UnitAvailability;  // Resume Scoring
-  AS: UnitAvailability;  // Assessment
-  AIU: UnitAvailability; // AI Interview
+  RU?: UnitAvailability;  // Resume Upload
+  RS?: UnitAvailability;  // Resume Scoring
+  AS?: UnitAvailability;  // Assessment
+  AIU?: UnitAvailability; // AI Interview
+  max_seats?: UnitAvailability; // Max Users
 }
 
 // JD02A: JD-specific activity

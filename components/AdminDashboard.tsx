@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Building2, Users, BarChart3, Settings, Activity, FileText, Briefcase, Award, Loader2, Zap, ClipboardCheck, Video } from 'lucide-react';
+import { Building2, Users, BarChart3, Settings, Activity, FileText, Briefcase, Award, Loader2, Zap, ClipboardCheck, Video, Upload, UserCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
 import { dashboardService, DashboardStats, RecentActivity, SubscriptionUnits, JDActivity } from '@/lib/services/dashboardService';
@@ -176,7 +176,7 @@ export default function AdminDashboard({
                       className="text-xs text-blue-600 cursor-pointer hover:underline hover:text-blue-700 transition-colors"
                       onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?filter=mine'); }}
                     >
-                      {stats?.my_jds || 0} mine
+                      {stats?.my_jds || 0} my job descriptions
                     </span>
                   </>
                 )}
@@ -238,93 +238,156 @@ export default function AdminDashboard({
       {subscriptionUnits && (
         <div className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Units</h2>
-          <div className="grid grid-cols-3 gap-4">
-            {/* Resume Scoring Units */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Zap className="w-5 h-5 text-blue-600" />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {/* Resume Upload Units */}
+            {subscriptionUnits.RU && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                    <Upload className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-600">Resume Upload</p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {subscriptionUnits.RU.is_unlimited ? 'Unlimited' : subscriptionUnits.RU.available}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-600">Scoring Units</p>
-                  <p className="text-xl font-semibold text-gray-900">
-                    {subscriptionUnits.RS.is_unlimited ? 'Unlimited' : subscriptionUnits.RS.available}
-                  </p>
-                </div>
+                {!subscriptionUnits.RU.is_unlimited && (
+                  <div className="mt-3">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>{subscriptionUnits.RU.used} / {subscriptionUnits.RU.limit} used</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className={`h-1.5 rounded-full ${subscriptionUnits.RU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RU.percentage_used > 50 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                        style={{ width: `${Math.min(subscriptionUnits.RU.percentage_used, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-              {!subscriptionUnits.RS.is_unlimited && (
-                <div className="mt-3">
-                  <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>{subscriptionUnits.RS.used} / {subscriptionUnits.RS.limit} used</span>
-                    <span className="font-medium text-gray-700">{subscriptionUnits.RS.available} remaining</span>
+            )}
+
+            {/* Resume Scoring Units */}
+            {subscriptionUnits.RS && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Zap className="w-5 h-5 text-blue-600" />
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5">
-                    <div
-                      className={`h-1.5 rounded-full ${subscriptionUnits.RS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RS.percentage_used > 50 ? 'bg-yellow-500' : 'bg-blue-500'}`}
-                      style={{ width: `${Math.min(subscriptionUnits.RS.percentage_used, 100)}%` }}
-                    />
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-600">Resume Scoring</p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {subscriptionUnits.RS.is_unlimited ? 'Unlimited' : subscriptionUnits.RS.available}
+                    </p>
                   </div>
                 </div>
-              )}
-            </div>
+                {!subscriptionUnits.RS.is_unlimited && (
+                  <div className="mt-3">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>{subscriptionUnits.RS.used} / {subscriptionUnits.RS.limit} used</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className={`h-1.5 rounded-full ${subscriptionUnits.RS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RS.percentage_used > 50 ? 'bg-yellow-500' : 'bg-blue-500'}`}
+                        style={{ width: `${Math.min(subscriptionUnits.RS.percentage_used, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Assessment Units */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <ClipboardCheck className="w-5 h-5 text-orange-600" />
+            {subscriptionUnits.AS && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <ClipboardCheck className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-600">Assessment</p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {subscriptionUnits.AS.is_unlimited ? 'Unlimited' : subscriptionUnits.AS.available}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-600">Assessment Units</p>
-                  <p className="text-xl font-semibold text-gray-900">
-                    {subscriptionUnits.AS.is_unlimited ? 'Unlimited' : subscriptionUnits.AS.available}
-                  </p>
-                </div>
+                {!subscriptionUnits.AS.is_unlimited && (
+                  <div className="mt-3">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>{subscriptionUnits.AS.used} / {subscriptionUnits.AS.limit} used</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className={`h-1.5 rounded-full ${subscriptionUnits.AS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AS.percentage_used > 50 ? 'bg-yellow-500' : 'bg-orange-500'}`}
+                        style={{ width: `${Math.min(subscriptionUnits.AS.percentage_used, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-              {!subscriptionUnits.AS.is_unlimited && (
-                <div className="mt-3">
-                  <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>{subscriptionUnits.AS.used} / {subscriptionUnits.AS.limit} used</span>
-                    <span className="font-medium text-gray-700">{subscriptionUnits.AS.available} remaining</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5">
-                    <div
-                      className={`h-1.5 rounded-full ${subscriptionUnits.AS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AS.percentage_used > 50 ? 'bg-yellow-500' : 'bg-orange-500'}`}
-                      style={{ width: `${Math.min(subscriptionUnits.AS.percentage_used, 100)}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
 
             {/* AI Interview Units */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <Video className="w-5 h-5 text-purple-600" />
+            {subscriptionUnits.AIU && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <Video className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-600">AI Interview</p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {subscriptionUnits.AIU.is_unlimited ? 'Unlimited' : subscriptionUnits.AIU.available}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-600">Interview Units</p>
-                  <p className="text-xl font-semibold text-gray-900">
-                    {subscriptionUnits.AIU.is_unlimited ? 'Unlimited' : subscriptionUnits.AIU.available}
-                  </p>
-                </div>
+                {!subscriptionUnits.AIU.is_unlimited && (
+                  <div className="mt-3">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>{subscriptionUnits.AIU.used} / {subscriptionUnits.AIU.limit} used</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className={`h-1.5 rounded-full ${subscriptionUnits.AIU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AIU.percentage_used > 50 ? 'bg-yellow-500' : 'bg-purple-500'}`}
+                        style={{ width: `${Math.min(subscriptionUnits.AIU.percentage_used, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-              {!subscriptionUnits.AIU.is_unlimited && (
-                <div className="mt-3">
-                  <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>{subscriptionUnits.AIU.used} / {subscriptionUnits.AIU.limit} used</span>
-                    <span className="font-medium text-gray-700">{subscriptionUnits.AIU.available} remaining</span>
+            )}
+
+            {/* Max Users */}
+            {subscriptionUnits.max_seats && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
+                    <UserCheck className="w-5 h-5 text-teal-600" />
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5">
-                    <div
-                      className={`h-1.5 rounded-full ${subscriptionUnits.AIU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AIU.percentage_used > 50 ? 'bg-yellow-500' : 'bg-purple-500'}`}
-                      style={{ width: `${Math.min(subscriptionUnits.AIU.percentage_used, 100)}%` }}
-                    />
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-600">Max Users</p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {subscriptionUnits.max_seats.is_unlimited ? 'Unlimited' : subscriptionUnits.max_seats.available}
+                    </p>
                   </div>
                 </div>
-              )}
-            </div>
+                {!subscriptionUnits.max_seats.is_unlimited && (
+                  <div className="mt-3">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>{subscriptionUnits.max_seats.used} / {subscriptionUnits.max_seats.limit} used</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className={`h-1.5 rounded-full ${subscriptionUnits.max_seats.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.max_seats.percentage_used > 50 ? 'bg-yellow-500' : 'bg-teal-500'}`}
+                        style={{ width: `${Math.min(subscriptionUnits.max_seats.percentage_used, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -338,7 +401,7 @@ export default function AdminDashboard({
               <Briefcase className="w-5 h-5 text-gray-400" />
             </div>
             <div className="space-y-3">
-              {jdRecentActivity.map((activity) => (
+              {jdRecentActivity.slice(0, 10).map((activity) => (
                 <div
                   key={activity.id}
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
@@ -421,7 +484,7 @@ export default function AdminDashboard({
           </div>
           <div className="space-y-4">
             {recentActivity.length > 0 ? (
-              recentActivity.map((activity) => (
+              recentActivity.slice(0, 10).map((activity) => (
                 <div
                   key={activity.id}
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
