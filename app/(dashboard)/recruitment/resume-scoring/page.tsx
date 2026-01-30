@@ -132,6 +132,13 @@ export default function ResumeScoringRoute() {
         }
       };
       fetchInitialStatus();
+    } else {
+      // No batch_id in URL - clear any stale sessionStorage data to prevent modal from appearing
+      try {
+        sessionStorage.removeItem('pendingScoringBatch');
+      } catch (e) {
+        // Ignore sessionStorage errors
+      }
     }
 
     // Check for pending scoring data from my-resumes page (old sync method)
