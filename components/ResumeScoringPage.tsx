@@ -2151,6 +2151,7 @@ export default function ResumeScoringPage({
           myResumes={myResumes}
           databaseResumes={databaseResumes}
           folders={folders}
+          availableUnits={availableUnits}
           onClose={() => setShowResumeSelectionModal(false)}
           onScoreResumes={async (selectedIds, source, versionSelections) => {
             setShowResumeSelectionModal(false);
