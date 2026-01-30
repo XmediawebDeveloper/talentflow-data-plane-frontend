@@ -506,6 +506,16 @@ export default function ResumeScoringPage({
     if (!batchProgress) return;
 
     console.log('[ResumeScoringPage] Batch progress update:', batchProgress);
+    console.log('[ResumeScoringPage] Batch items count:', batchProgress.items?.length || 0);
+
+    // Map items from batchProgress
+    const items = (batchProgress.items || []).map(item => ({
+      resumeId: item.resumeId,
+      candidateName: item.candidateName || 'Unknown',
+      status: item.status,
+      score: item.score,
+      errorMessage: item.errorMessage,
+    }));
 
     // Update job progress modal with batch status including individual resume items
     const progress: JobScoringProgress = {
@@ -516,14 +526,10 @@ export default function ResumeScoringPage({
       inProgress: batchProgress.processing,
       completed: batchProgress.completed,
       failed: batchProgress.failed,
-      items: (batchProgress.items || []).map(item => ({
-        resumeId: item.resumeId,
-        candidateName: item.candidateName || 'Unknown',
-        status: item.status,
-        score: item.score,
-        errorMessage: item.errorMessage,
-      })),
+      items: items,
     };
+
+    console.log('[ResumeScoringPage] Setting jobProgressData with items:', items.length);
     setJobProgressData([progress]);
     setShowJobProgressModal(true);
   }, [batchProgress]);
@@ -1512,26 +1518,30 @@ export default function ResumeScoringPage({
                           onClick={(e) => {
                             e.stopPropagation();
                             // Show COMPLETED progress for this specific job - don't re-score
+                            const resumes = item.scoredResumes || [];
+                            console.log('[ViewProgress] scoredResumes:', resumes);
+
                             // Calculate actual completed/failed counts
-                            const failedCount = item.scoredResumes.filter(r => r.status === 'failed' || r.errorReason).length;
-                            const completedCount = item.totalScored - failedCount;
+                            const failedCount = resumes.filter(r => r.status === 'failed' || r.errorReason).length;
+                            const completedCount = resumes.length - failedCount;
 
                             const jobProgress: JobScoringProgress[] = [{
                               jobId: item.jobId,
                               jobTitle: item.jobTitle,
-                              total: item.totalScored,
+                              total: resumes.length || item.totalScored,
                               queued: 0,
                               inProgress: 0,
                               completed: completedCount,
                               failed: failedCount,
-                              items: item.scoredResumes.map(resume => ({
-                                resumeId: resume.id,
-                                candidateName: resume.candidateName || resume.name || 'Unknown',
+                              items: resumes.map(resume => ({
+                                resumeId: resume.resumeId || resume.id || '',
+                                candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
                                 status: (resume.status === 'failed' || resume.errorReason) ? 'failed' as const : 'completed' as const,
-                                score: resume.matchScore || resume.scorePercentage,
+                                score: resume.matchScore || resume.scorePercentage || resume.score,
                                 errorMessage: resume.errorReason || resume.error_reason,
                               })),
                             }];
+                            console.log('[ViewProgress] jobProgress items:', jobProgress[0].items);
                             setJobProgressData(jobProgress);
                             setShowJobProgressModal(true);
                           }}
@@ -1698,23 +1708,25 @@ export default function ResumeScoringPage({
                           onClick={(e) => {
                             e.stopPropagation();
                             // Show COMPLETED progress for this specific job - don't re-score
+                            const resumes = item.scoredResumes || [];
+
                             // Calculate actual completed/failed counts
-                            const failedCount = item.scoredResumes.filter(r => r.status === 'failed' || r.errorReason).length;
-                            const completedCount = item.totalScored - failedCount;
+                            const failedCount = resumes.filter(r => r.status === 'failed' || r.errorReason).length;
+                            const completedCount = resumes.length - failedCount;
 
                             const jobProgress: JobScoringProgress[] = [{
                               jobId: item.jobId,
                               jobTitle: item.jobTitle,
-                              total: item.totalScored,
+                              total: resumes.length || item.totalScored,
                               queued: 0,
                               inProgress: 0,
                               completed: completedCount,
                               failed: failedCount,
-                              items: item.scoredResumes.map(resume => ({
-                                resumeId: resume.id,
-                                candidateName: resume.candidateName || resume.name || 'Unknown',
+                              items: resumes.map(resume => ({
+                                resumeId: resume.resumeId || resume.id || '',
+                                candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
                                 status: (resume.status === 'failed' || resume.errorReason) ? 'failed' as const : 'completed' as const,
-                                score: resume.matchScore || resume.scorePercentage,
+                                score: resume.matchScore || resume.scorePercentage || resume.score,
                                 errorMessage: resume.errorReason || resume.error_reason,
                               })),
                             }];
@@ -2308,6 +2320,8 @@ export default function ResumeScoringPage({
           showJobTitleColumn={showJobTitleColumn}
           onRetryFailed={async (item) => {
             try {
+              console.log('[Retry] Starting retry for:', item.candidateName, 'resumeId:', item.resumeId, 'jobId:', item.jobId);
+
               // Update item status to "Scoring in progress"
               setProgressData(prev => prev.map(p =>
                 p.id === item.id
@@ -2331,13 +2345,11 @@ export default function ResumeScoringPage({
               }
 
               // Retry scoring
-              await scoringService.scoreResume(item.jobId, item.resumeId);
+              console.log('[Retry] Calling scoreResume with jobId:', item.jobId, 'resumeId:', item.resumeId);
+              const scoreResult = await scoringService.scoreResume(item.jobId, item.resumeId);
+              console.log('[Retry] Score result:', scoreResult);
 
-              // Fetch updated score
-              const historyResponse = await jdService.getScoredResumes(item.jobId);
-              const scoredResume = historyResponse.resumes?.find(r => r.resume_id === item.resumeId);
-
-              // Update item with success status
+              // Update item with success status using the direct result
               setProgressData(prev => prev.map(p =>
                 p.id === item.id
                   ? {
@@ -2345,29 +2357,32 @@ export default function ResumeScoringPage({
                       status: 'Scored successfully' as const,
                       errorReason: undefined,
                       scoredDateTime: new Date(),
-                      matchResult: scoredResume
-                        ? (scoredResume.match_score >= 85 ? 'Exact Match'
-                           : scoredResume.match_score >= 70 ? 'Partial Match'
-                           : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
-                        : undefined,
-                      score: scoredResume?.match_score
+                      matchResult: scoreResult.overall_score >= 85 ? 'Exact Match' as const
+                                 : scoreResult.overall_score >= 70 ? 'Partial Match' as const
+                                 : 'No Match' as const,
+                      score: scoreResult.overall_score
                     }
                   : p
               ));
 
               toast.success(`Successfully scored ${item.candidateName}`);
             } catch (error: any) {
+              console.error('[Retry] Error:', error);
+              // Extract detailed error message
+              const errorDetail = error?.response?.data?.detail || error?.message || 'Retry failed';
+              const errorMsg = typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail);
+
               // Update item with failure status
               setProgressData(prev => prev.map(p =>
                 p.id === item.id
                   ? {
                       ...p,
                       status: 'Failed' as const,
-                      errorReason: error?.message || 'Retry failed'
+                      errorReason: errorMsg
                     }
                   : p
               ));
-              toast.error(`Failed to retry scoring for ${item.candidateName}`);
+              toast.error(`Failed: ${errorMsg}`);
             }
           }}
         />
@@ -2385,6 +2400,7 @@ export default function ResumeScoringPage({
         jobProgressData={jobProgressData}
         onRetryFailed={async (resumeId, jobId) => {
           try {
+            console.log('[JobProgressRetry] Starting retry for resumeId:', resumeId, 'jobId:', jobId);
             setJobProgressData(prev => prev.map(job => ({
               ...job,
               items: job.items?.map(item =>
@@ -2394,27 +2410,31 @@ export default function ResumeScoringPage({
               )
             })));
             const result = await scoringService.scoreResume(jobId, resumeId);
+            console.log('[JobProgressRetry] Score result:', result);
             setJobProgressData(prev => prev.map(job => ({
               ...job,
               failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
               completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
               items: job.items?.map(item =>
                 item.resumeId === resumeId
-                  ? { ...item, status: 'completed' as const, score: result?.match_score }
+                  ? { ...item, status: 'completed' as const, score: result?.overall_score || result?.match_score }
                   : item
               )
             })));
             toast.success('Retry successful');
           } catch (error: any) {
+            console.error('[JobProgressRetry] Error:', error);
+            const errorDetail = error?.response?.data?.detail || error?.message || 'Retry failed';
+            const errorMsg = typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail);
             setJobProgressData(prev => prev.map(job => ({
               ...job,
               items: job.items?.map(item =>
                 item.resumeId === resumeId
-                  ? { ...item, status: 'failed' as const, errorMessage: error?.message || 'Retry failed' }
+                  ? { ...item, status: 'failed' as const, errorMessage: errorMsg }
                   : item
               )
             })));
-            toast.error('Retry failed');
+            toast.error(`Failed: ${errorMsg}`);
           }
         }}
         onViewJobDetails={(jobId) => {

@@ -114,16 +114,19 @@ export default function ResumeSelectionModal({
         }))
       );
 
-      // Check if any selected resume has multiple versions
-      const hasMultipleVersions = selectedResumeObjects.some(r => (r.versionCount || 1) > 1);
-      console.log('[ResumeSelectionModal] hasMultipleVersions:', hasMultipleVersions);
+      console.log('[ResumeSelectionModal] selectedCount:', selectedResumeObjects.length);
 
-      if (hasMultipleVersions) {
-        // Show version selection modal
+      // SINGLE candidate → Always show version selection popup (modal will fetch versions from API)
+      // MULTIPLE candidates → Auto-select latest version, no popup
+      if (selectedResumeObjects.length === 1) {
+        // Single candidate - always show version selection modal
+        // The modal will fetch versions from API and display them
+        console.log('[ResumeSelectionModal] Single candidate - showing version selection popup');
         setResumesForVersionSelection(selectedResumeObjects);
         setShowVersionSelection(true);
       } else {
-        // No multiple versions, proceed directly with scoring
+        // Multiple candidates - proceed directly with scoring (uses latest version automatically)
+        console.log('[ResumeSelectionModal] Multiple candidates - auto-selecting latest versions');
         onScoreResumes(selectedResumes, activeTab);
       }
     }

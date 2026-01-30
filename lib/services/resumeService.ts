@@ -440,6 +440,20 @@ export const resumeService = {
       throw new Error(handleApiError(error));
     }
   },
+
+  /**
+   * Archive or unarchive a resume
+   */
+  async archive(resumeId: string, isArchived: boolean): Promise<{ message: string; is_archived: boolean }> {
+    try {
+      const response = await api.put(`/resumes/${resumeId}/archive`, {
+        is_archived: isArchived,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
 };
 
 export const folderService = {

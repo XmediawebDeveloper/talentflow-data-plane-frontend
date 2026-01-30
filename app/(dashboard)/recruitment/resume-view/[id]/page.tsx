@@ -477,12 +477,19 @@ Best regards`);
       // Start async bulk scoring via Celery
       const response = await scoringService.startBulkScoringAsync(jobId, [resumeIdToScore]);
 
-      // Store batch info for the resume-scoring page to poll
+      // Get candidate name for fallback display
+      const resumeItems = [{
+        resumeId: resumeIdToScore,
+        candidateName: resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown',
+      }];
+
+      // Store batch info for the resume-scoring page to poll (including resume items for fallback)
       const scoringData = {
         batchId: response.batch_id,
         jobId: response.jd_id,
         jobTitle: response.jd_title,
         totalResumes: response.total_resumes,
+        resumeItems: resumeItems,
       };
       sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
 
