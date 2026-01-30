@@ -1,7 +1,7 @@
 'use client';
 
-import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Filter, Calendar } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -49,6 +49,15 @@ interface RefundStats {
   pending_count: number;
 }
 
+const STATUS_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'processing', label: 'Processing' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'rejected', label: 'Rejected' },
+];
+
 export default function RefundHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -56,6 +65,11 @@ export default function RefundHistoryPage() {
   const [stats, setStats] = useState<RefundStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedRefund, setSelectedRefund] = useState<RefundInvoice | null>(null);
+
+  // New filter states
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
   useEffect(() => {
     fetchRefundData();
@@ -108,11 +122,39 @@ export default function RefundHistoryPage() {
     }
   };
 
-  const filteredRefunds = refunds.filter(inv =>
-    inv.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (inv.metadata?.original_invoice_number && inv.metadata.original_invoice_number.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (inv.line_items?.[0]?.description && inv.line_items[0].description.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Filter refunds based on search, status, and date range
+  const filteredRefunds = useMemo(() => {
+    return refunds.filter(inv => {
+      // Search filter
+      const matchesSearch = searchQuery === '' ||
+        inv.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (inv.metadata?.original_invoice_number && inv.metadata.original_invoice_number.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (inv.line_items?.[0]?.description && inv.line_items[0].description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      // Status filter
+      const matchesStatus = statusFilter === 'all' ||
+        inv.status.toLowerCase() === statusFilter.toLowerCase() ||
+        (statusFilter === 'completed' && ['paid', 'refunded', 'completed', 'success'].includes(inv.status.toLowerCase()));
+
+      // Date filter
+      let matchesDate = true;
+      if (inv.issue_date) {
+        const itemDate = new Date(inv.issue_date);
+        if (startDate) {
+          const start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          if (itemDate < start) matchesDate = false;
+        }
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          if (itemDate > end) matchesDate = false;
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+  }, [refunds, searchQuery, statusFilter, startDate, endDate]);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
@@ -195,6 +237,46 @@ Refund processed successfully.
     URL.revokeObjectURL(url);
   };
 
+  // Export filtered data to CSV
+  const handleExportCSV = () => {
+    const csvHeaders = ['Refund #', 'Date', 'Original Invoice', 'Reason', 'Amount', 'Status', 'Refund Method', 'Processed By'];
+    const csvRows = filteredRefunds.map(r => [
+      r.invoice_number || '',
+      formatDate(r.issue_date),
+      r.metadata?.original_invoice_number || '',
+      r.metadata?.reason || r.line_items?.[0]?.description || '',
+      Math.abs(r.total_amount_inr || 0).toFixed(2),
+      r.status || '',
+      r.metadata?.refund_method || '',
+      r.metadata?.processed_by || '',
+    ]);
+
+    const csvContent = [
+      csvHeaders.join(','),
+      ...csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().split('T')[0];
+    link.href = url;
+    link.download = `refund-history-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setStartDate('');
+    setEndDate('');
+  };
+
+  const hasActiveFilters = searchQuery || statusFilter !== 'all' || startDate || endDate;
+
   return (
     <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
       <div className="max-w-6xl mx-auto">
@@ -210,14 +292,24 @@ Refund processed successfully.
                 <p className="text-sm text-gray-600">View your refund transactions and download receipts</p>
               </div>
             </div>
-            <button
-              onClick={fetchRefundData}
-              disabled={loading}
-              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportCSV}
+                disabled={loading || filteredRefunds.length === 0}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                Export CSV
+              </button>
+              <button
+                onClick={fetchRefundData}
+                disabled={loading}
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
         </div>
 
@@ -242,17 +334,69 @@ Refund processed successfully.
           </div>
         )}
 
-        {/* Search */}
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by refund number, plan name, or reason..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-            />
+        {/* Filters Section */}
+        <div className="mb-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <Filter className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Filters</span>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="ml-auto text-xs text-blue-600 hover:text-blue-800"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search refunds..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+              />
+            </div>
+
+            {/* Status Filter */}
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500 appearance-none bg-white"
+              >
+                {STATUS_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Start Date */}
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                placeholder="From date"
+              />
+            </div>
+
+            {/* End Date */}
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                placeholder="To date"
+              />
+            </div>
           </div>
         </div>
 
@@ -280,19 +424,28 @@ Refund processed successfully.
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Refunds</h3>
             <p className="text-gray-600 max-w-md mx-auto">
-              {searchQuery
-                ? 'No refunds match your search criteria.'
+              {hasActiveFilters
+                ? 'No refunds match your filter criteria. Try adjusting your filters.'
                 : 'You have no refund transactions. Refunds will appear here when you cancel a subscription or request a refund.'}
             </p>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="mt-4 text-sm text-blue-600 hover:text-blue-800"
+              >
+                Clear all filters
+              </button>
+            )}
           </div>
         )}
 
         {/* Refunds Table */}
         {!loading && !error && filteredRefunds.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
               <p className="text-sm text-gray-600">
                 Showing {filteredRefunds.length} refund{filteredRefunds.length !== 1 ? 's' : ''}
+                {hasActiveFilters && ` (filtered from ${refunds.length})`}
               </p>
             </div>
             <div className="overflow-x-auto">
