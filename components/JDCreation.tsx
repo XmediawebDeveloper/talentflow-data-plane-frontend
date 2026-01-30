@@ -988,12 +988,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     const prompt = `${jobTitle}${aiPrompt ? ` - ${aiPrompt}` : ''}`;
 
-    // Helper function to process extracted params
+    // Helper function to process extracted params from generation response
+    // This pre-fills step 2 form with salary, skills, etc. extracted by backend
     const processExtractedParams = (params: any) => {
+      console.log('[TalentFlow] Processing extracted params from generation:', params);
+
       // Map experience - prioritize explicit min/max values over level mapping
       let expValue = '';
-
-      // First try to use experience_min and experience_max (more accurate)
       if (params.experience_min !== null && params.experience_min !== undefined) {
         if (params.experience_max !== null && params.experience_max !== undefined) {
           expValue = `${params.experience_min}-${params.experience_max}`;
@@ -1018,37 +1019,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         expValue = levelMap[normalizedLevel] || '';
       }
 
-      console.log('[TalentFlow] AI Generation - extracted coding fields:', {
-        coding_required: params.coding_required,
-        suggested_languages: params.suggested_languages
-      });
-
       // When in edit mode, preserve existing values if extraction returns empty arrays
       const isEditMode = !!editingId;
 
-      // Debug logging for extraction
-      console.log('[DEBUG] Extraction params received:', {
-        nice_to_have_skills: params.nice_to_have_skills,
-        nice_to_have_comments: params.nice_to_have_comments,
-        must_have_skills: params.must_have_skills,
-        must_have_comments: params.must_have_comments,
-      });
-
-      // During AI generation, don't overwrite comments - they will be properly extracted when user clicks "Next"
-      // Only update skills and other basic fields here
       setExtractedData(prev => ({
         ...prev,
         mustHaveSkills: params.must_have_skills?.length > 0 ? params.must_have_skills : (isEditMode ? prev.mustHaveSkills : []),
-        // Don't overwrite comments during AI generation - preserve existing or keep empty for proper extraction later
         mustHaveComments: params.must_have_comments?.length > 0 ? params.must_have_comments : prev.mustHaveComments,
         niceToHaveSkills: params.nice_to_have_skills?.length > 0 ? params.nice_to_have_skills : (isEditMode ? prev.niceToHaveSkills : []),
-        // Don't overwrite comments during AI generation - preserve existing or keep empty for proper extraction later
         niceToHaveComments: params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : prev.niceToHaveComments,
         education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || (isEditMode ? prev.education : ''),
         experience: expValue || prev.experience,
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
         employmentType: prev.employmentType,
         workModel: prev.workModel,
+        // Pre-fill salary from generation response
         salaryFrom: params.salary_min ? params.salary_min.toString() : (isEditMode ? prev.salaryFrom : ''),
         salaryTo: params.salary_max ? params.salary_max.toString() : (isEditMode ? prev.salaryTo : ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
@@ -1062,6 +1047,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         certifications: params.certifications?.length > 0 ? params.certifications : (isEditMode ? prev.certifications : []),
         domainKeywords: params.domain_keywords?.length > 0 ? params.domain_keywords : (isEditMode ? prev.domainKeywords : []),
       }));
+
+      // Log what was pre-filled
+      if (params.salary_min || params.salary_max) {
+        console.log('[TalentFlow] Salary pre-filled:', { min: params.salary_min, max: params.salary_max });
+      }
     };
 
     // Fallback function for non-streaming
@@ -1076,6 +1066,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           }
           setGeneratedJD(response.description);
 
+          // Pre-fill step 2 form with extracted params (salary, skills, etc.)
           if (response.extracted_params) {
             processExtractedParams(response.extracted_params);
           }
@@ -1124,49 +1115,48 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           }
         },
         onTextComplete: () => {
-          // Text streaming is done, hide "Generating..." indicator
-          // Parameter extraction is still happening in background
-          console.log('[TalentFlow] Text generation complete, extracting params...');
+          // Text streaming is done, update button immediately
+          console.log('[TalentFlow] Text generation complete');
           setIsStreaming(false);
+          setIsGenerating(false);
         },
         onComplete: (response) => {
-          // IMPORTANT: Set isStreaming to false FIRST to prevent "Generating..." from showing
+          // IMPORTANT: Set both isStreaming and isGenerating to false immediately
+          // This ensures the button changes from "Generating..." to "Regenerate" right away
           setIsStreaming(false);
+          setIsGenerating(false);
 
           // Then set final content
           if (response?.description) {
             setGeneratedJD(response.description);
 
-            // Process extracted params
+            // Pre-fill step 2 form with extracted params (salary, skills, etc.)
             if (response.extracted_params) {
-              console.log('[TalentFlow] AI Extraction - extracted_params received:', response.extracted_params);
+              console.log('[TalentFlow] Extracted params from stream:', response.extracted_params);
               processExtractedParams(response.extracted_params);
 
-              // Show extraction summary toast
+              // Show what was extracted
               const params = response.extracted_params;
               const extractedItems: string[] = [];
               if (params.must_have_skills?.length > 0) extractedItems.push(`${params.must_have_skills.length} skills`);
-              if (params.experience_min || params.experience_max) extractedItems.push(`experience: ${params.experience_min || 0}-${params.experience_max || '+'} yrs`);
-              if (params.locations?.length > 0) extractedItems.push(`location: ${params.locations[0]?.city || 'detected'}`);
-              if (params.industry_type) extractedItems.push(`industry: ${params.industry_type}`);
-              if (params.salary_min || params.salary_max) extractedItems.push(`salary range detected`);
+              if (params.salary_min || params.salary_max) extractedItems.push(`salary: ₹${params.salary_min || 0} - ₹${params.salary_max || 0}`);
+              if (params.experience_min || params.experience_max) extractedItems.push(`${params.experience_min || 0}-${params.experience_max || '+'} yrs exp`);
 
               if (extractedItems.length > 0) {
                 toast.success({
-                  title: 'JD Generated & Parameters Extracted',
-                  description: `Extracted: ${extractedItems.join(', ')}. Click "Next" to review.`,
+                  title: 'JD Generated Successfully',
+                  description: `Extracted: ${extractedItems.join(', ')}`,
                 });
               } else {
                 toast.success({
-                  title: 'JD Generated',
-                  description: 'Click "Next" to add skills, experience, and other details.',
+                  title: 'JD Generated Successfully',
+                  description: 'Click "Next" to add job details.',
                 });
               }
             } else {
-              console.log('[TalentFlow] AI Extraction - No extracted_params in response');
               toast.success({
-                title: 'JD Generated',
-                description: 'Click "Next" to add job requirements and details.',
+                title: 'JD Generated Successfully',
+                description: 'Click "Next" to add job details.',
               });
             }
           }

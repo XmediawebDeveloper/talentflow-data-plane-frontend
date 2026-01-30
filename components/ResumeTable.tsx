@@ -367,10 +367,7 @@ export default function ResumeTable({
                 </td>
               )}
               <td className="px-4 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm text-gray-700">
-                    {resume.name.split(' ').map(n => n[0]).join('')}
-                  </div>
+                <div className="flex items-center">
                   <div>
                     {onViewDetails ? (
                       <button
@@ -440,12 +437,7 @@ export default function ResumeTable({
                 {formatDate(resume.uploadDate)}
               </td>
               <td className="px-4 py-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-xs text-white">
-                    {resume.uploadedBy.split(' ').map(n => n[0]).join('')}
-                  </div>
-                  <span className="text-sm text-gray-700">{resume.uploadedBy}</span>
-                </div>
+                <span className="text-sm text-gray-700">{resume.uploadedBy}</span>
               </td>
               <td className="px-4 py-4">
                 <button
@@ -643,9 +635,6 @@ export default function ResumeTable({
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-600 mt-1"
                 />
               )}
-              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm text-gray-700 flex-shrink-0">
-                {resume.name.split(' ').map(n => n[0]).join('')}
-              </div>
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-gray-900 truncate">{resume.name}</div>
                 <div className="text-sm text-gray-500 truncate">{resume.title}</div>

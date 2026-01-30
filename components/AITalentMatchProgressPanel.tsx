@@ -1,5 +1,5 @@
 import { Sparkles, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService';
 
 interface AITalentMatchProgressPanelProps {
@@ -17,23 +17,26 @@ export default function AITalentMatchProgressPanel({
 }: AITalentMatchProgressPanelProps) {
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(1);
-  const [completedCandidates, setCompletedCandidates] = useState(0);
-  const [totalCandidates, setTotalCandidates] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const selectedModel = 'bge-small-en-v1.5';  // Use recommended model directly
   const hasStarted = useRef(false);
 
   const steps = [
     'Analyzing job requirements',
     'Generating embeddings',
     'Scanning candidate database',
-    'Computing AI match scores',
-    'Ranking candidates',
+    'Computing similarity scores',
+    'AI filtering candidates',
     'Finalizing results'
   ];
 
+  // Start matching immediately on mount
   useEffect(() => {
-    // Prevent double execution in React Strict Mode
+    startMatching();
+  }, []);
+
+  const startMatching = () => {
     if (hasStarted.current) return;
     hasStarted.current = true;
 
@@ -42,38 +45,26 @@ export default function AITalentMatchProgressPanel({
 
     const runAIMatch = async () => {
       try {
-        // Start progress animation
         progressInterval = setInterval(() => {
-          setProgress(prev => {
-            if (prev >= 90) return 90; // Cap at 90% until API returns
-            return prev + 2;
-          });
+          setProgress(prev => prev >= 90 ? 90 : prev + 2);
         }, 100);
 
-        // Update steps animation
         stepInterval = setInterval(() => {
-          setCurrentStep(prev => {
-            if (prev >= steps.length - 1) return prev;
-            return prev + 1;
-          });
+          setCurrentStep(prev => prev >= steps.length - 1 ? prev : prev + 1);
         }, 1500);
 
-        // Call the real RAG API - Top 9 candidates with good similarity threshold
+        // Call API with selected model - returns all matching candidates (like rag.py)
         const { session, candidates } = await aiMatchService.run(jobId, {
-          limit: 9,
-          minSimilarity: 0.5,  // 50% similarity threshold for quality matches
+          embeddingModel: selectedModel,
+          minSimilarity: 0.5,
         });
 
-        // Update progress to 100%
         clearInterval(progressInterval);
         clearInterval(stepInterval);
         setProgress(100);
         setCurrentStep(steps.length);
-        setTotalCandidates(candidates.length);
-        setCompletedCandidates(candidates.length);
         setIsLoading(false);
 
-        // Small delay to show completion
         setTimeout(() => {
           onComplete(candidates);
         }, 500);
@@ -89,12 +80,7 @@ export default function AITalentMatchProgressPanel({
     };
 
     runAIMatch();
-
-    return () => {
-      clearInterval(progressInterval);
-      clearInterval(stepInterval);
-    };
-  }, [jobId, onComplete, onError]);
+  };
 
   // Show error state
   if (error) {
@@ -119,6 +105,7 @@ export default function AITalentMatchProgressPanel({
     );
   }
 
+  // Show progress panel
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
@@ -128,9 +115,7 @@ export default function AITalentMatchProgressPanel({
             <Sparkles className="w-7 h-7 text-white" />
           </div>
           <h2 className="text-lg font-semibold text-gray-900 mb-1">AI Matching in Progress</h2>
-          <p className="text-sm text-gray-600 truncate px-4">
-            {jobTitle}
-          </p>
+          <p className="text-sm text-gray-600 truncate px-4">{jobTitle}</p>
         </div>
 
         {/* Progress Bar */}
@@ -148,12 +133,12 @@ export default function AITalentMatchProgressPanel({
         </div>
 
         {/* Current Steps */}
-        <div className="space-y-2 mb-5">
+        <div className="space-y-2">
           {steps.map((step, index) => {
             const stepNumber = index + 1;
             const isComplete = currentStep > stepNumber;
             const isCurrent = currentStep === stepNumber;
-            
+
             return (
               <div
                 key={index}
@@ -187,7 +172,6 @@ export default function AITalentMatchProgressPanel({
             );
           })}
         </div>
-
       </div>
     </div>
   );

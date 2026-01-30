@@ -7,7 +7,7 @@ import {
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ExternalLink, Linkedin, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
-  AlignLeft, Hash
+  AlignLeft, Hash, X
 } from 'lucide-react';
 
 // Full Resume Content Component with better UI
@@ -212,6 +212,17 @@ export default function ResumeViewPage() {
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
   const [publishedJobs, setPublishedJobs] = useState<Job[]>([]);
 
+  // Version selection state for Apply to Job
+  const [showVersionSelectModal, setShowVersionSelectModal] = useState(false);
+  const [selectedVersionForApply, setSelectedVersionForApply] = useState<string | null>(null);
+
+  // Share modal state
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareEmail, setShareEmail] = useState('');
+  const [shareSubject, setShareSubject] = useState('');
+  const [shareMessage, setShareMessage] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
   useEffect(() => {
     if (resumeId) {
       fetchResume();
@@ -298,6 +309,8 @@ export default function ResumeViewPage() {
       uploadDate: v.created_at || v.upload_date,
       size: v.file_size_kb ? `${v.file_size_kb} KB` : 'Unknown',
       uploadedBy: v.uploaded_by_name || 'Unknown',
+      version: v.version || 1,  // Version number from API
+      fileName: v.file_name,
     })),
     versionCount: r.version_count || versionsData.length || 1,
     extractedText: r.extracted_text,
@@ -332,7 +345,59 @@ export default function ResumeViewPage() {
   };
 
   const handleShare = () => {
-    toast.info('Share functionality coming soon');
+    if (resume) {
+      setShareSubject(`Resume: ${resume.name} - ${resume.title || 'Candidate'}`);
+      setShareMessage(`Hi,
+
+I'm sharing the resume of ${resume.name} for your review.
+
+Candidate Details:
+- Name: ${resume.name}
+- Title: ${resume.title || 'N/A'}
+- Experience: ${resume.experience || 'N/A'}
+- Location: ${resume.location || 'N/A'}
+- Skills: ${resume.skills?.slice(0, 5).join(', ') || 'N/A'}
+
+You can view the full resume at: ${window.location.href}
+
+Best regards`);
+      setIsShareModalOpen(true);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!shareEmail.trim()) {
+      toast.error('Please enter an email address');
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(shareEmail.trim())) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setIsSendingEmail(true);
+
+    try {
+      // Call API to send email
+      const result = await resumeService.share(resumeId, shareEmail.trim(), shareMessage);
+
+      if (result.success) {
+        toast.success('Resume shared successfully');
+        setIsShareModalOpen(false);
+        setShareEmail('');
+        setShareMessage('');
+      } else {
+        toast.error(result.message || 'Failed to send email');
+      }
+    } catch (error: any) {
+      console.error('Failed to share resume:', error);
+      toast.error(error?.message || 'Failed to send email');
+    } finally {
+      setIsSendingEmail(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -380,6 +445,20 @@ export default function ResumeViewPage() {
   };
 
   const handleApplyToJob = async () => {
+    // If resume has multiple versions, show version selection first
+    if (resume && resume.versions && resume.versions.length > 1) {
+      setSelectedVersionForApply(resumeId); // Default to current version
+      setShowVersionSelectModal(true);
+    } else {
+      // No versions or single version - proceed directly to job selection
+      await fetchPublishedJobs();
+      setIsApplyToJobModalOpen(true);
+    }
+  };
+
+  const handleVersionSelectForApply = async (versionId: string) => {
+    setSelectedVersionForApply(versionId);
+    setShowVersionSelectModal(false);
     await fetchPublishedJobs();
     setIsApplyToJobModalOpen(true);
   };
@@ -391,10 +470,12 @@ export default function ResumeViewPage() {
     setIsApplyToJobModalOpen(false);
 
     const jobId = jobIds[0];
+    // Use selected version if available, otherwise use current resume
+    const resumeIdToScore = selectedVersionForApply || resumeId;
 
     try {
       // Start async bulk scoring via Celery
-      const response = await scoringService.startBulkScoringAsync(jobId, [resumeId]);
+      const response = await scoringService.startBulkScoringAsync(jobId, [resumeIdToScore]);
 
       // Store batch info for the resume-scoring page to poll
       const scoringData = {
@@ -529,10 +610,7 @@ export default function ResumeViewPage() {
 
           {/* Personal Info Card */}
           <div className="bg-gray-50 border border-gray-300 rounded-xl p-6 shadow-sm">
-            <div className="flex items-start gap-6">
-              <div className="w-24 h-24 rounded-full bg-gray-400 flex items-center justify-center text-white text-3xl flex-shrink-0">
-                {(resume.name || 'U').split(' ').map(n => n[0]).join('')}
-              </div>
+            <div className="flex items-start">
               <div className="flex-1">
                 <div className="flex items-start justify-between mb-4">
                   <div>
@@ -1218,14 +1296,257 @@ export default function ResumeViewPage() {
         </div>
       </div>
 
+      {/* Version Selection Modal for Apply to Job */}
+      {showVersionSelectModal && resume && resume.versions && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
+                  <History className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Select Resume Version</h2>
+                  <p className="text-sm text-gray-600">Choose which version to apply for the job</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowVersionSelectModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Version List */}
+            <div className="p-6 max-h-96 overflow-y-auto">
+              <div className="space-y-3">
+                {/* Current Version */}
+                <label
+                  className={`block p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                    selectedVersionForApply === resumeId
+                      ? 'border-gray-800 bg-gray-50 ring-1 ring-gray-800'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      name="version"
+                      checked={selectedVersionForApply === resumeId}
+                      onChange={() => setSelectedVersionForApply(resumeId)}
+                      className="w-4 h-4 text-gray-800 border-gray-300 focus:ring-gray-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <File className="w-4 h-4 text-gray-500" />
+                        <span className="font-medium text-gray-900">{resume.fileName || 'Current Version'}</span>
+                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">Current</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {resume.uploadDate ? new Date(resume.uploadDate).toLocaleDateString() : 'N/A'}
+                        </span>
+                        {resume.fileSizeKb && (
+                          <span className="flex items-center gap-1">
+                            <HardDrive className="w-3 h-3" />
+                            {resume.fileSizeKb} KB
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          {resume.uploadedBy}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+
+                {/* Previous Versions */}
+                {resume.versions.filter(v => v.id !== resumeId).map((version, index) => (
+                  <label
+                    key={version.id}
+                    className={`block p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                      selectedVersionForApply === version.id
+                        ? 'border-gray-800 bg-gray-50 ring-1 ring-gray-800'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        name="version"
+                        checked={selectedVersionForApply === version.id}
+                        onChange={() => setSelectedVersionForApply(version.id)}
+                        className="w-4 h-4 text-gray-800 border-gray-300 focus:ring-gray-500"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <File className="w-4 h-4 text-gray-400" />
+                          <span className="font-medium text-gray-700">Version {version.version || (resume.versions.length - index)}</span>
+                          <span className="text-xs text-gray-500">({version.name})</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {version.uploadDate ? new Date(version.uploadDate).toLocaleDateString() : 'N/A'}
+                          </span>
+                          {version.size && (
+                            <span className="flex items-center gap-1">
+                              <HardDrive className="w-3 h-3" />
+                              {version.size}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            {version.uploadedBy}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => setShowVersionSelectModal(false)}
+                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => selectedVersionForApply && handleVersionSelectForApply(selectedVersionForApply)}
+                disabled={!selectedVersionForApply}
+                className="px-4 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <Send className="w-4 h-4" />
+                Continue to Job Selection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Apply to Job Modal */}
       {isApplyToJobModalOpen && resume && (
         <ApplyToJobModal
           resumes={[resume]}
           jobs={publishedJobs}
-          onClose={() => setIsApplyToJobModalOpen(false)}
+          onClose={() => {
+            setIsApplyToJobModalOpen(false);
+            setSelectedVersionForApply(null);
+          }}
           onApply={handleApplyToJobSubmit}
         />
+      )}
+
+      {/* Share via Email Modal */}
+      {isShareModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Mail className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Share Resume</h2>
+                    <p className="text-sm text-gray-500">Send resume via email</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsShareModalOpen(false);
+                    setShareEmail('');
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Email Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Recipient Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={shareEmail}
+                    onChange={(e) => setShareEmail(e.target.value)}
+                    placeholder="Enter email address"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  />
+                </div>
+
+                {/* Subject Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Subject
+                  </label>
+                  <input
+                    type="text"
+                    value={shareSubject}
+                    onChange={(e) => setShareSubject(e.target.value)}
+                    placeholder="Email subject"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  />
+                </div>
+
+                {/* Message Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Message
+                  </label>
+                  <textarea
+                    value={shareMessage}
+                    onChange={(e) => setShareMessage(e.target.value)}
+                    placeholder="Enter your message"
+                    rows={8}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    setIsShareModalOpen(false);
+                    setShareEmail('');
+                  }}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendEmail}
+                  disabled={isSendingEmail || !shareEmail.trim()}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSendingEmail ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Opening...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Send Email
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

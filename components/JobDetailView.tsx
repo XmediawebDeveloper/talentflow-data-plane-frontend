@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import ReactMarkdown from 'react-markdown';
@@ -108,6 +108,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const [showJDHistory, setShowJDHistory] = useState(false);
   const [jdHistory, setJdHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [selectedHistoryVersion, setSelectedHistoryVersion] = useState<any>(null);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
 
   // Scored resumes state
   const [scoredResumes, setScoredResumes] = useState<any[]>([]);
@@ -644,6 +646,46 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               </div>
               )}
 
+              {/* Job Attributes - Experience, Education, Employment Type, Work Mode */}
+              {(job.experience || job.education || job.employmentType || job.workMode) && (
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  {job.experience && (
+                    <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                      {job.experience}
+                    </span>
+                  )}
+                  {job.education && (
+                    <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                      {job.education === 'bachelors' ? "Bachelor's Degree" :
+                       job.education === 'masters' ? "Master's Degree" :
+                       job.education === 'doctorate' ? 'Doctorate / PhD' :
+                       job.education === 'associate' ? 'Associate Degree' :
+                       job.education === 'diploma' ? 'Diploma' :
+                       job.education}
+                    </span>
+                  )}
+                  {job.employmentType && (
+                    <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                      {job.employmentType === 'full_time' ? 'Full Time' :
+                       job.employmentType === 'part_time' ? 'Part Time' :
+                       job.employmentType === 'contract' ? 'Contract' :
+                       job.employmentType === 'internship' ? 'Internship' :
+                       job.employmentType === 'temporary' ? 'Temporary' :
+                       job.employmentType}
+                    </span>
+                  )}
+                  {job.workMode && (
+                    <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                      {job.workMode === 'onsite' ? 'On-site' :
+                       job.workMode === 'remote' ? 'Remote' :
+                       job.workMode === 'hybrid' ? 'Hybrid' :
+                       job.workMode === 'field_based' ? 'Field-based' :
+                       job.workMode}
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Job Meta Information */}
               <div className="flex items-center gap-6 pt-4 border-t border-gray-200">
                 <div className="flex items-center gap-2">
@@ -684,46 +726,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 </div>
               </div>
-
-              {/* Job Attributes - Experience, Education, Employment Type, Work Mode */}
-              {(job.experience || job.education || job.employmentType || job.workMode) && (
-                <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-gray-200">
-                  {job.experience && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                      {job.experience}
-                    </span>
-                  )}
-                  {job.education && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                      {job.education === 'bachelors' ? "Bachelor's Degree" :
-                       job.education === 'masters' ? "Master's Degree" :
-                       job.education === 'doctorate' ? 'Doctorate / PhD' :
-                       job.education === 'associate' ? 'Associate Degree' :
-                       job.education === 'diploma' ? 'Diploma' :
-                       job.education}
-                    </span>
-                  )}
-                  {job.employmentType && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                      {job.employmentType === 'full_time' ? 'Full Time' :
-                       job.employmentType === 'part_time' ? 'Part Time' :
-                       job.employmentType === 'contract' ? 'Contract' :
-                       job.employmentType === 'internship' ? 'Internship' :
-                       job.employmentType === 'temporary' ? 'Temporary' :
-                       job.employmentType}
-                    </span>
-                  )}
-                  {job.workMode && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                      {job.workMode === 'onsite' ? 'On-site' :
-                       job.workMode === 'remote' ? 'Remote' :
-                       job.workMode === 'hybrid' ? 'Hybrid' :
-                       job.workMode === 'field_based' ? 'Field-based' :
-                       job.workMode}
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
 
             <div className="flex items-center gap-3 ml-6">
@@ -1383,16 +1385,30 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             {/* Header */}
             <div className="bg-gray-800 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                  <History className="w-6 h-6 text-white" />
-                </div>
+                {selectedHistoryVersion ? (
+                  <button
+                    onClick={() => setSelectedHistoryVersion(null)}
+                    className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center hover:bg-white/30 transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-white" />
+                  </button>
+                ) : (
+                  <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                    <History className="w-6 h-6 text-white" />
+                  </div>
+                )}
                 <div>
-                  <h2 className="text-xl font-semibold text-white">Job Description History</h2>
+                  <h2 className="text-xl font-semibold text-white">
+                    {selectedHistoryVersion ? `Version ${selectedHistoryVersion.version.version_number}.0` : 'Job Description History'}
+                  </h2>
                   <p className="text-sm text-gray-300">{job.title}</p>
                 </div>
               </div>
               <button
-                onClick={() => setShowJDHistory(false)}
+                onClick={() => {
+                  setShowJDHistory(false);
+                  setSelectedHistoryVersion(null);
+                }}
                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
               >
                 <X className="w-5 h-5 text-white" />
@@ -1400,11 +1416,259 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </div>
 
             {/* Content */}
-            <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)]">
+            <div className="p-6 overflow-y-auto max-h-[calc(85vh-140px)]">
               {loadingHistory ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
                   <span className="ml-3 text-gray-600">Loading history...</span>
+                </div>
+              ) : selectedHistoryVersion ? (
+                /* Version Detail View */
+                <div>
+                  {/* Version Info */}
+                  <div className="flex items-center justify-between mb-4 p-4 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-4">
+                      <span className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-sm font-semibold">
+                        v{selectedHistoryVersion.version.version_number}.0
+                      </span>
+                      <div className="text-sm text-gray-600">
+                        <span className="flex items-center gap-1">
+                          <User className="w-4 h-4" />
+                          {selectedHistoryVersion.performedBy}
+                        </span>
+                      </div>
+                      <span className="text-sm text-gray-500">{selectedHistoryVersion.timestamp}</span>
+                    </div>
+                  </div>
+
+                  {/* Changes Summary for v2+ */}
+                  {selectedHistoryVersion.version.version_number > 1 && (() => {
+                    const currentIndex = jdHistory.findIndex((h: any) => h.id === selectedHistoryVersion.id);
+                    const prevVersion = currentIndex < jdHistory.length - 1 ? jdHistory[currentIndex + 1] : null;
+
+                    if (!prevVersion) return null;
+
+                    const changes: string[] = [];
+                    const curr = selectedHistoryVersion.version;
+                    const prev = prevVersion.version;
+
+                    // Compare fields
+                    if (curr.title !== prev.title) changes.push('Title updated');
+                    if (curr.department !== prev.department) changes.push('Department changed');
+                    if (curr.location !== prev.location) changes.push('Location changed');
+                    if (curr.experience_min !== prev.experience_min || curr.experience_max !== prev.experience_max) changes.push('Experience requirement changed');
+                    if (curr.employment_type !== prev.employment_type) changes.push('Employment type changed');
+                    if (curr.remote_type !== prev.remote_type) changes.push('Work mode changed');
+
+                    // Compare skills
+                    const currMustHave = new Set(curr.must_have_skills || []);
+                    const prevMustHave = new Set(prev.must_have_skills || []);
+                    const newMustHave = [...currMustHave].filter(s => !prevMustHave.has(s));
+                    const removedMustHave = [...prevMustHave].filter(s => !currMustHave.has(s));
+                    if (newMustHave.length > 0) changes.push(`${newMustHave.length} must-have skill(s) added`);
+                    if (removedMustHave.length > 0) changes.push(`${removedMustHave.length} must-have skill(s) removed`);
+
+                    const currNiceToHave = new Set(curr.nice_to_have_skills || []);
+                    const prevNiceToHave = new Set(prev.nice_to_have_skills || []);
+                    const newNiceToHave = [...currNiceToHave].filter(s => !prevNiceToHave.has(s));
+                    const removedNiceToHave = [...prevNiceToHave].filter(s => !currNiceToHave.has(s));
+                    if (newNiceToHave.length > 0) changes.push(`${newNiceToHave.length} nice-to-have skill(s) added`);
+                    if (removedNiceToHave.length > 0) changes.push(`${removedNiceToHave.length} nice-to-have skill(s) removed`);
+
+                    // Compare description
+                    if (curr.description !== prev.description) changes.push('Job description updated');
+
+                    if (changes.length === 0) changes.push('Republished without changes');
+
+                    return (
+                      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <h4 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                          <RefreshCw className="w-4 h-4" />
+                          Changes from v{prev.version_number}.0 to v{curr.version_number}.0
+                        </h4>
+                        <ul className="space-y-1">
+                          {changes.map((change, idx) => (
+                            <li key={idx} className="text-sm text-blue-800 flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
+                              {change}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="text-xs text-blue-600 mt-2">New skills are highlighted in green below</p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Job Title */}
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">{selectedHistoryVersion.version.title}</h3>
+
+                  {/* Job Attributes */}
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {selectedHistoryVersion.version.department && (
+                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                        {selectedHistoryVersion.version.department}
+                      </span>
+                    )}
+                    {selectedHistoryVersion.version.location && (
+                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                        {selectedHistoryVersion.version.location}
+                      </span>
+                    )}
+                    {(selectedHistoryVersion.version.experience_min || selectedHistoryVersion.version.experience_max) && (
+                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                        {selectedHistoryVersion.version.experience_min || 0}-{selectedHistoryVersion.version.experience_max || '10+'} years
+                      </span>
+                    )}
+                    {selectedHistoryVersion.version.employment_type && (
+                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                        {selectedHistoryVersion.version.employment_type === 'full_time' ? 'Full Time' :
+                         selectedHistoryVersion.version.employment_type === 'part_time' ? 'Part Time' :
+                         selectedHistoryVersion.version.employment_type === 'contract' ? 'Contract' :
+                         selectedHistoryVersion.version.employment_type}
+                      </span>
+                    )}
+                    {selectedHistoryVersion.version.remote_type && (
+                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                        {selectedHistoryVersion.version.remote_type === 'onsite' ? 'On-site' :
+                         selectedHistoryVersion.version.remote_type === 'remote' ? 'Remote' :
+                         selectedHistoryVersion.version.remote_type === 'hybrid' ? 'Hybrid' :
+                         selectedHistoryVersion.version.remote_type}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Skills - with diff highlighting */}
+                  {(() => {
+                    const currentIndex = jdHistory.findIndex((h: any) => h.id === selectedHistoryVersion.id);
+                    const prevVersion = currentIndex < jdHistory.length - 1 ? jdHistory[currentIndex + 1] : null;
+                    const prevMustHave = new Set(prevVersion?.version?.must_have_skills || []);
+                    const prevNiceToHave = new Set(prevVersion?.version?.nice_to_have_skills || []);
+                    const isV1 = selectedHistoryVersion.version.version_number === 1;
+
+                    return (
+                      <>
+                        {selectedHistoryVersion.version.must_have_skills && selectedHistoryVersion.version.must_have_skills.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-sm font-medium text-gray-700 mb-2">Must Have Skills</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedHistoryVersion.version.must_have_skills.map((skill: string, idx: number) => {
+                                const isNew = !isV1 && !prevMustHave.has(skill);
+                                return (
+                                  <span
+                                    key={idx}
+                                    className={`px-2 py-1 rounded-md text-xs ${isNew ? 'bg-green-100 text-green-800 font-bold ring-2 ring-green-300' : 'bg-gray-100 text-gray-700'}`}
+                                  >
+                                    {skill} {isNew && <span className="text-green-600 ml-1">NEW</span>}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedHistoryVersion.version.nice_to_have_skills && selectedHistoryVersion.version.nice_to_have_skills.length > 0 && (
+                          <div className="mb-6">
+                            <h4 className="text-sm font-medium text-gray-700 mb-2">Nice to Have Skills</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedHistoryVersion.version.nice_to_have_skills.map((skill: string, idx: number) => {
+                                const isNew = !isV1 && !prevNiceToHave.has(skill);
+                                return (
+                                  <span
+                                    key={idx}
+                                    className={`px-2 py-1 rounded-md text-xs ${isNew ? 'bg-green-100 text-green-800 font-bold ring-2 ring-green-300' : 'bg-gray-50 text-gray-600'}`}
+                                  >
+                                    {skill} {isNew && <span className="text-green-600 ml-1">NEW</span>}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+
+                  {/* Job Description */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-medium text-gray-700">Job Description</h4>
+                      <button
+                        disabled={downloadingPDF}
+                        onClick={async () => {
+                          if (downloadingPDF) return;
+                          setDownloadingPDF(true);
+
+                          const jdContent = selectedHistoryVersion.version.description || '';
+                          const title = selectedHistoryVersion.version.title || job.title;
+                          const version = selectedHistoryVersion.version.version_number;
+
+                          // Create HTML content for PDF
+                          const htmlContent = `
+                            <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 800px; line-height: 1.6;">
+                              <h1 style="color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 5px;">${title}</h1>
+                              <p style="color: #6b7280; font-size: 14px; margin-bottom: 24px;">Version ${version}.0 | Generated on ${new Date().toLocaleDateString()}</p>
+                              <div style="color: #4b5563;">
+                                ${jdContent
+                                  .replace(/^### (.*$)/gm, '<h3 style="color: #4b5563; margin-top: 20px; font-size: 16px;">$1</h3>')
+                                  .replace(/^## (.*$)/gm, '<h2 style="color: #374151; margin-top: 24px; font-size: 18px;">$1</h2>')
+                                  .replace(/^# (.*$)/gm, '<h1 style="color: #1f2937; font-size: 22px;">$1</h1>')
+                                  .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1f2937;">$1</strong>')
+                                  .replace(/^\- (.*$)/gm, '<li style="margin: 4px 0;">$1</li>')
+                                  .replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul style="padding-left: 24px; margin: 8px 0;">$&</ul>')
+                                  .replace(/\n\n/g, '</p><p style="margin: 8px 0;">')
+                                  .replace(/\n/g, '<br>')}
+                              </div>
+                            </div>
+                          `;
+
+                          // Create a temporary div to render the content
+                          const tempDiv = document.createElement('div');
+                          tempDiv.innerHTML = htmlContent;
+                          document.body.appendChild(tempDiv);
+
+                          try {
+                            // Dynamically import html2pdf
+                            const html2pdf = (await import('html2pdf.js')).default;
+
+                            await html2pdf().set({
+                              margin: 10,
+                              filename: `${title.replace(/[^a-zA-Z0-9]/g, '_')}_v${version}.pdf`,
+                              image: { type: 'jpeg', quality: 0.98 },
+                              html2canvas: { scale: 2 },
+                              jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                            }).from(tempDiv).save();
+                          } catch (error) {
+                            console.error('PDF generation failed:', error);
+                            alert('Failed to generate PDF. Please try again.');
+                          } finally {
+                            document.body.removeChild(tempDiv);
+                            setDownloadingPDF(false);
+                          }
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${downloadingPDF ? 'text-gray-400 cursor-not-allowed' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
+                      >
+                        {downloadingPDF ? (
+                          <>
+                            <svg className="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4" />
+                            Download PDF
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4 prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-gray-900">
+                      <ReactMarkdown>
+                        {selectedHistoryVersion.version.description || ''}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
                 </div>
               ) : jdHistory.length === 0 ? (
                 <div className="text-center py-12">
@@ -1447,7 +1711,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
                     // Color mapping - All grey theme
                     const colorClasses = 'bg-gray-600 border-gray-700';
-                    const bgColorClasses = 'bg-gray-50 border-gray-200';
+                    const bgColorClasses = 'bg-gray-50 border-gray-200 hover:border-gray-400 cursor-pointer';
                     const textColorClasses = 'text-gray-900';
 
                     return (
@@ -1462,9 +1726,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                           )}
                         </div>
 
-                        {/* Content Card */}
+                        {/* Content Card - Now Clickable */}
                         <div className={`flex-1 pb-6 ${!isLast ? '' : 'pb-0'}`}>
-                          <div className={`rounded-lg border-2 ${bgColorClasses} p-5 shadow-sm hover:shadow-md transition-shadow`}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedHistoryVersion(item)}
+                            className={`w-full text-left rounded-lg border-2 ${bgColorClasses} p-5 shadow-sm hover:shadow-md transition-all`}
+                          >
                             {/* Action Header */}
                             <div className="flex items-start justify-between mb-3">
                               <div>
@@ -1480,21 +1748,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                               </span>
                             </div>
 
-                            {/* Changes List */}
-                            {item.changes && item.changes.length > 0 && (
-                              <div className="mb-3 bg-white/60 rounded-lg p-3 border border-gray-200">
-                                <p className="text-xs text-gray-600 font-medium mb-2">Changes Made:</p>
-                                <ul className="space-y-1">
-                                  {item.changes.map((change, idx) => (
-                                    <li key={idx} className="text-sm text-gray-700 flex items-start gap-2">
-                                      <span className="text-gray-600 mt-1">•</span>
-                                      <span>{change}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-
                             {/* Performed By Info */}
                             <div className="flex items-center gap-3 pt-3 border-t border-gray-200">
                               <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
@@ -1509,7 +1762,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                                 {item.timestamp}
                               </div>
                             </div>
-                          </div>
+
+                            {/* Click hint */}
+                            <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-center gap-2 text-gray-500">
+                              <Eye className="w-4 h-4" />
+                              <span className="text-xs">Click to view full JD</span>
+                            </div>
+                          </button>
                         </div>
                       </div>
                     );
@@ -1523,10 +1782,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             {/* Footer */}
             <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
               <p className="text-sm text-gray-600">
-                Showing complete history from creation to present
+                {selectedHistoryVersion ? `Viewing version ${selectedHistoryVersion.version.version_number}.0` : 'Showing complete history from creation to present'}
               </p>
               <button
-                onClick={() => setShowJDHistory(false)}
+                onClick={() => {
+                  setShowJDHistory(false);
+                  setSelectedHistoryVersion(null);
+                }}
                 className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm"
               >
                 Close
