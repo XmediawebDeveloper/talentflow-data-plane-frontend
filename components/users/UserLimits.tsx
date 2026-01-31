@@ -24,9 +24,10 @@ interface UserLimitsProps {
   onUpgradeClick?: () => void;
   onAddSeatsClick?: () => void;
   compact?: boolean;
+  refreshTrigger?: number;
 }
 
-export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = false }: UserLimitsProps) {
+export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = false, refreshTrigger = 0 }: UserLimitsProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [limits, setLimits] = useState<UserLimitsResponse | null>(null);
@@ -34,7 +35,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
 
   useEffect(() => {
     loadLimits();
-  }, []);
+  }, [refreshTrigger]);
 
   const loadLimits = async () => {
     setIsLoading(true);

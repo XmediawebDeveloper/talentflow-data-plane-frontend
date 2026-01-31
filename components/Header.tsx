@@ -1,11 +1,14 @@
-import { Bell, Search, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Bell, Search, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command, Loader2, X, Wifi, WifiOff } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { User as UserType } from '@/lib/types/tenant';
 import NotificationCenter from './NotificationCenter';
 import QuickActions from './QuickActions';
 // FIX-010: Import Tooltip for icon buttons
 import { Tooltip } from '@/components/ui/tooltip';
 import { useQuota } from '@/contexts/QuotaContext';
+import notificationService, { Notification } from '@/lib/services/notificationService';
+import { useRouter } from 'next/navigation';
+import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket';
 
 interface HeaderProps {
   onLogout: () => void;
@@ -18,11 +21,18 @@ interface HeaderProps {
 
 export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings }: HeaderProps) {
   if (!user) return null;
+  const router = useRouter();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
   const [tenantStatus, setTenantStatus] = useState<string | null>(null);
+
+  // Notification state
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [activeNotificationTab, setActiveNotificationTab] = useState<'all' | 'unread'>('all');
 
   // Use shared quota context instead of separate API call
   const { quotaData, loading: loadingQuota, error: quotaError, refetch: fetchQuotaStatus } = useQuota();
@@ -46,6 +56,205 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
       window.removeEventListener('unitsConsumed', handleUnitsConsumed);
     };
   }, [user]);
+
+  // Get JWT token for WebSocket
+  const [wsToken, setWsToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Get token from localStorage (same as auth service uses)
+    const token = localStorage.getItem('accessToken');
+    setWsToken(token);
+  }, [user]);
+
+  // Fetch notifications
+  const fetchNotifications = useCallback(async () => {
+    if (!user) return;
+    setNotificationsLoading(true);
+    try {
+      const response = await notificationService.getNotifications(
+        20, 0, activeNotificationTab === 'unread'
+      );
+      setNotifications(response.notifications);
+      setUnreadCount(response.unread_count);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, [user, activeNotificationTab]);
+
+  // Fetch notification count only
+  const fetchNotificationCount = useCallback(async () => {
+    if (!user) return;
+    try {
+      const response = await notificationService.getNotificationCounts();
+      setUnreadCount(response.unread);
+    } catch (error) {
+      console.error('Error fetching notification count:', error);
+    }
+  }, [user]);
+
+  // Use ref to track showNotifications for WebSocket callback without causing re-renders
+  const showNotificationsRef = useRef(showNotifications);
+  useEffect(() => {
+    showNotificationsRef.current = showNotifications;
+  }, [showNotifications]);
+
+  // Handle new notification from WebSocket - stable callback
+  const handleNewNotification = useCallback((notification: any) => {
+    console.log('[Header] New notification via WebSocket:', notification);
+    // Increment unread count
+    setUnreadCount(prev => prev + 1);
+    // Dispatch event to trigger refresh if panel is open
+    window.dispatchEvent(new CustomEvent('wsNotificationReceived'));
+  }, []);
+
+  // Handle count update from WebSocket - stable callback
+  const handleCountUpdate = useCallback((count: number) => {
+    console.log('[Header] Count update via WebSocket:', count);
+    setUnreadCount(count);
+  }, []);
+
+  // Listen for WebSocket notification events to refresh list if panel is open
+  useEffect(() => {
+    const handleWsNotification = () => {
+      if (showNotificationsRef.current) {
+        fetchNotifications();
+      }
+    };
+    window.addEventListener('wsNotificationReceived', handleWsNotification);
+    return () => window.removeEventListener('wsNotificationReceived', handleWsNotification);
+  }, [fetchNotifications]);
+
+  // WebSocket connection for real-time notifications
+  const { isConnected: wsConnected, connectionError: wsError } = useNotificationWebSocket({
+    token: wsToken,
+    onNewNotification: handleNewNotification,
+    onCountUpdate: handleCountUpdate,
+    enabled: !!user && !!wsToken,
+  });
+
+  // Fetch notifications on mount and when dropdown opens
+  useEffect(() => {
+    if (showNotifications) {
+      fetchNotifications();
+    }
+  }, [showNotifications, fetchNotifications]);
+
+  // Fallback polling: Only when WebSocket is not connected
+  useEffect(() => {
+    fetchNotificationCount(); // Fetch immediately on mount
+
+    // Only poll if WebSocket is not connected
+    if (wsConnected) {
+      console.log('[Header] WebSocket connected - polling disabled');
+      return;
+    }
+
+    console.log('[Header] WebSocket not connected - using fallback polling');
+    // Fallback polling: 60 seconds when panel is closed, 10 seconds when open
+    const pollInterval = showNotifications ? 10000 : 60000;
+    const interval = setInterval(() => {
+      if (showNotifications) {
+        fetchNotifications();
+      } else {
+        fetchNotificationCount();
+      }
+    }, pollInterval);
+
+    return () => clearInterval(interval);
+  }, [user, wsConnected, showNotifications, fetchNotifications, fetchNotificationCount]);
+
+  // Instant refresh: Listen for notification trigger events (for local actions)
+  useEffect(() => {
+    const handleNotificationTrigger = () => {
+      console.log('[Header] Notification trigger received, refreshing...');
+      fetchNotificationCount();
+      if (showNotifications) {
+        fetchNotifications();
+      }
+    };
+
+    window.addEventListener('notificationTrigger', handleNotificationTrigger);
+    return () => window.removeEventListener('notificationTrigger', handleNotificationTrigger);
+  }, [fetchNotificationCount, fetchNotifications, showNotifications]);
+
+  // Handle mark notification as read
+  const handleMarkAsRead = async (notificationId: string) => {
+    try {
+      await notificationService.markAsRead([notificationId]);
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  // Handle mark all as read
+  const handleMarkAllAsRead = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+    }
+  };
+
+  // Handle notification click
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!notification.is_read) {
+      await handleMarkAsRead(notification.id);
+    }
+    if (notification.action_url) {
+      setShowNotifications(false);
+      router.push(notification.action_url);
+    }
+  };
+
+  // Get icon and colors for notification type
+  const getNotificationStyle = (type: string) => {
+    switch (type) {
+      case 'success':
+        return {
+          icon: CheckCircle,
+          bgColor: 'bg-green-100',
+          iconColor: 'text-green-600',
+          borderColor: 'border-green-500',
+          labelColor: 'text-green-600',
+          bgTint: 'bg-green-50/30',
+        };
+      case 'warning':
+        return {
+          icon: AlertCircle,
+          bgColor: 'bg-orange-100',
+          iconColor: 'text-orange-600',
+          borderColor: 'border-orange-500',
+          labelColor: 'text-orange-600',
+          bgTint: 'bg-orange-50/30',
+        };
+      case 'error':
+        return {
+          icon: AlertCircle,
+          bgColor: 'bg-red-100',
+          iconColor: 'text-red-600',
+          borderColor: 'border-red-500',
+          labelColor: 'text-red-600',
+          bgTint: 'bg-red-50/30',
+        };
+      default:
+        return {
+          icon: Info,
+          bgColor: 'bg-gray-100',
+          iconColor: 'text-gray-600',
+          borderColor: 'border-gray-500',
+          labelColor: 'text-gray-700',
+          bgTint: 'bg-gray-50/30',
+        };
+    }
+  };
   
   // Calculate total units across all quota types (RU + RS + AS + AIU + max_seats)
   const calculateTotalUnits = () => {
@@ -176,25 +385,27 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 <div className="p-4">
                   {/* Quick Actions */}
                   <div className="grid grid-cols-2 gap-2 mb-4">
-                    <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
+                    <button
+                      onClick={() => {
+                        setShowHelpMenu(false);
+                        router.push('/help');
+                      }}
+                      className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left"
+                    >
                       <Book className="w-5 h-5 text-gray-700 mb-2" />
                       <div className="text-sm text-gray-900">Knowledge Base</div>
                       <div className="text-xs text-gray-500">Browse articles</div>
                     </button>
-                    <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
-                      <Video className="w-5 h-5 text-gray-600 mb-2" />
-                      <div className="text-sm text-gray-900">Video Tutorials</div>
-                      <div className="text-xs text-gray-500">Watch & learn</div>
-                    </button>
-                    <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
+                    <button
+                      onClick={() => {
+                        setShowHelpMenu(false);
+                        router.push('/help?article=getting-started');
+                      }}
+                      className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left"
+                    >
                       <FileText className="w-5 h-5 text-gray-600 mb-2" />
                       <div className="text-sm text-gray-900">Documentation</div>
                       <div className="text-xs text-gray-500">Full guides</div>
-                    </button>
-                    <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
-                      <MessageCircle className="w-5 h-5 text-gray-500 mb-2" />
-                      <div className="text-sm text-gray-900">Live Chat</div>
-                      <div className="text-xs text-gray-500">Chat with us</div>
                     </button>
                   </div>
 
@@ -202,7 +413,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   <div className="mb-4">
                     <h4 className="text-sm text-gray-900 mb-2">Popular Articles</h4>
                     <div className="space-y-2">
-                      <button className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group">
+                      <button
+                        onClick={() => {
+                          setShowHelpMenu(false);
+                          router.push('/help?article=getting-started');
+                        }}
+                        className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group"
+                      >
                         <div className="flex items-start gap-2">
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                           <div>
@@ -211,16 +428,43 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                           </div>
                         </div>
                       </button>
-                      <button className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group">
+                      <button
+                        onClick={() => {
+                          setShowHelpMenu(false);
+                          router.push('/help?article=upload-parse-resumes');
+                        }}
+                        className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group"
+                      >
                         <div className="flex items-start gap-2">
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                           <div>
-                            <div className="text-sm text-gray-900 group-hover:text-gray-700">How to Parse Resumes with AI</div>
+                            <div className="text-sm text-gray-900 group-hover:text-gray-700">How to Upload & Parse Resumes</div>
+                            <div className="text-xs text-gray-500">6 min read</div>
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowHelpMenu(false);
+                          router.push('/help?article=create-job-description');
+                        }}
+                        className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group"
+                      >
+                        <div className="flex items-start gap-2">
+                          <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
+                          <div>
+                            <div className="text-sm text-gray-900 group-hover:text-gray-700">How to Create a Job Description</div>
                             <div className="text-xs text-gray-500">8 min read</div>
                           </div>
                         </div>
                       </button>
-                      <button className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group">
+                      <button
+                        onClick={() => {
+                          setShowHelpMenu(false);
+                          router.push('/help?article=create-assessments');
+                        }}
+                        className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group"
+                      >
                         <div className="flex items-start gap-2">
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                           <div>
@@ -236,7 +480,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   <div className="border-t border-gray-200 pt-4">
                     <h4 className="text-sm text-gray-900 mb-3">Contact Support</h4>
                     <div className="space-y-2">
-                      <button className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors text-left">
+                      <a
+                        href="mailto:support@talentflow.com"
+                        className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors text-left"
+                      >
                         <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
                           <Mail className="w-4 h-4 text-gray-600" />
                         </div>
@@ -245,8 +492,11 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                           <div className="text-xs text-gray-500">support@talentflow.com</div>
                         </div>
                         <ExternalLink className="w-4 h-4 text-gray-400" />
-                      </button>
-                      <button className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors text-left">
+                      </a>
+                      <a
+                        href="tel:+18001234567"
+                        className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors text-left"
+                      >
                         <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
                           <Phone className="w-4 h-4 text-gray-600" />
                         </div>
@@ -255,13 +505,19 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                           <div className="text-xs text-gray-500">+1 (800) 123-4567</div>
                         </div>
                         <ExternalLink className="w-4 h-4 text-gray-400" />
-                      </button>
+                      </a>
                     </div>
                   </div>
 
                   {/* Action Buttons */}
                   <div className="flex gap-2 mt-4">
-                    <button className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium">
+                    <button
+                      onClick={() => {
+                        setShowHelpMenu(false);
+                        router.push('/support-tickets');
+                      }}
+                      className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+                    >
                       Open Support Ticket
                     </button>
                   </div>
@@ -285,8 +541,14 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
-              <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">5</span>
+              {unreadCount > 0 && (
+                <>
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+                  <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                </>
+              )}
             </button>
           </Tooltip>
 
@@ -300,127 +562,110 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 <div className="px-4 py-3 bg-gray-800 text-white">
                   <div className="flex items-center justify-between">
                     <h3 className="font-medium flex items-center gap-2">
+                      {/* Real-time connection indicator */}
+                      <Tooltip content={wsConnected ? 'Real-time connected' : 'Using polling'} position="bottom">
+                        <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-400' : 'bg-yellow-400'}`}></span>
+                      </Tooltip>
                       <Bell className="w-5 h-5" />
                       Notifications
                     </h3>
-                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">5 new</span>
+                    {unreadCount > 0 && (
+                      <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">{unreadCount} new</span>
+                    )}
                   </div>
                   <p className="text-sm text-gray-300 mt-1">Stay updated with latest activities</p>
                 </div>
 
                 {/* Filter Tabs */}
                 <div className="flex border-b border-gray-200 bg-gray-50">
-                  <button className="flex-1 px-4 py-2 text-sm font-medium text-gray-900 border-b-2 border-gray-800 bg-white">
-                    All (5)
+                  <button
+                    onClick={() => setActiveNotificationTab('all')}
+                    className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                      activeNotificationTab === 'all'
+                        ? 'text-gray-900 border-b-2 border-gray-800 bg-white'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    All ({notifications.length})
                   </button>
-                  <button className="flex-1 px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
-                    Unread (3)
-                  </button>
-                  <button className="flex-1 px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
-                    Mentions
+                  <button
+                    onClick={() => setActiveNotificationTab('unread')}
+                    className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                      activeNotificationTab === 'unread'
+                        ? 'text-gray-900 border-b-2 border-gray-800 bg-white'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Unread ({unreadCount})
                   </button>
                 </div>
 
                 <div className="max-h-96 overflow-y-auto">
-                  {/* Notification Items */}
-                  <div className="p-2 space-y-1">
-                    {/* Success Notification */}
-                    <button className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors border-l-4 border-green-500 bg-green-50/30">
-                      <div className="flex gap-3">
-                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="text-sm text-gray-900">Resume parsing completed</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">2m ago</span>
-                          </div>
-                          <p className="text-xs text-gray-600">Successfully parsed 24 resumes from "Software Engineer" batch</p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs text-green-600 font-medium">View Results</span>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Info Notification */}
-                    <button className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors border-l-4 border-gray-500 bg-gray-50/30">
-                      <div className="flex gap-3">
-                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                          <Info className="w-5 h-5 text-gray-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="text-sm text-gray-900">New candidate applied</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">15m ago</span>
-                          </div>
-                          <p className="text-xs text-gray-600">John Smith applied for "Senior React Developer" position</p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs text-gray-700 font-medium">Review Application</span>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Warning Notification */}
-                    <button className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors border-l-4 border-orange-500 bg-orange-50/30">
-                      <div className="flex gap-3">
-                        <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
-                          <AlertCircle className="w-5 h-5 text-orange-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="text-sm text-gray-900">Assessment deadline approaching</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">1h ago</span>
-                          </div>
-                          <p className="text-xs text-gray-600">Python Developer assessment closes in 24 hours</p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs text-orange-600 font-medium">Extend Deadline</span>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Clock Notification */}
-                    <button className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                      <div className="flex gap-3">
-                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                          <Clock className="w-5 h-5 text-gray-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="text-sm text-gray-900">Scheduled AI Interview starting soon</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">2h ago</span>
-                          </div>
-                          <p className="text-xs text-gray-600">Interview with Sarah Johnson begins at 3:00 PM</p>
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Info Notification */}
-                    <button className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                      <div className="flex gap-3">
-                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                          <User className="w-5 h-5 text-gray-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="text-sm text-gray-900">Team member added</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">3h ago</span>
-                          </div>
-                          <p className="text-xs text-gray-600">Mike Johnson joined your recruitment team</p>
-                        </div>
-                      </div>
-                    </button>
-                  </div>
+                  {notificationsLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                    </div>
+                  ) : notifications.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+                      <Bell className="w-8 h-8 mb-2 opacity-50" />
+                      <p className="text-sm">No notifications</p>
+                      <p className="text-xs text-gray-400 mt-1">You're all caught up!</p>
+                    </div>
+                  ) : (
+                    <div className="p-2 space-y-1">
+                      {notifications.map((notification) => {
+                        const style = getNotificationStyle(notification.type);
+                        const IconComponent = style.icon;
+                        return (
+                          <button
+                            key={notification.id}
+                            onClick={() => handleNotificationClick(notification)}
+                            className={`w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors ${
+                              !notification.is_read ? `border-l-4 ${style.borderColor} ${style.bgTint}` : ''
+                            }`}
+                          >
+                            <div className="flex gap-3">
+                              <div className={`w-10 h-10 ${style.bgColor} rounded-full flex items-center justify-center flex-shrink-0`}>
+                                <IconComponent className={`w-5 h-5 ${style.iconColor}`} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <p className={`text-sm ${notification.is_read ? 'text-gray-600' : 'text-gray-900 font-medium'}`}>
+                                    {notification.title}
+                                  </p>
+                                  <span className="text-xs text-gray-500 whitespace-nowrap">{notification.time_ago}</span>
+                                </div>
+                                <p className="text-xs text-gray-600">{notification.message}</p>
+                                {notification.action_label && (
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <span className={`text-xs ${style.labelColor} font-medium`}>{notification.action_label}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Footer Actions */}
                 <div className="border-t border-gray-200 p-3 bg-gray-50 flex gap-2">
-                  <button className="flex-1 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium">
+                  <button
+                    onClick={handleMarkAllAsRead}
+                    disabled={unreadCount === 0}
+                    className="flex-1 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     Mark All Read
                   </button>
-                  <button className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium">
+                  <button
+                    onClick={() => {
+                      setShowNotifications(false);
+                      router.push('/notifications');
+                    }}
+                    className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+                  >
                     View All
                   </button>
                 </div>
@@ -466,6 +711,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
         {/* FIX-010: Settings with Tooltip */}
         <Tooltip content="Settings" position="bottom">
           <button
+            onClick={() => router.push('/settings/general-settings')}
             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             aria-label="Settings"
           >

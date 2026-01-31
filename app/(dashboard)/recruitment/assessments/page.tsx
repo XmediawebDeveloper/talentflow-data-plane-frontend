@@ -16,6 +16,14 @@ export default function AssessmentsRoute() {
   const autoCreate = searchParams.get('create') === 'true';
   const preSelectedJdId = searchParams.get('jd_id');
   const preSelectedJdTitle = searchParams.get('jd_title');
+  const assessmentIdFromUrl = searchParams.get('assessment_id');
+
+  // Handle deep link to specific assessment from notifications
+  useEffect(() => {
+    if (assessmentIdFromUrl) {
+      router.replace(`/recruitment/assessments/${assessmentIdFromUrl}`);
+    }
+  }, [assessmentIdFromUrl, router]);
 
   // Clear query params after reading (to prevent re-triggering on refresh)
   useEffect(() => {
