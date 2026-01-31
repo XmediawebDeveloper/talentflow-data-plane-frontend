@@ -1,6 +1,6 @@
 'use client'
 
-import { X, FolderInput, Briefcase, Download, Trash2, CheckCircle2, Target, ClipboardCheck } from 'lucide-react';
+import { X, FolderInput, Briefcase, Download, Trash2, CheckCircle2, Target, ClipboardCheck, Archive } from 'lucide-react';
 import { Folder } from '@/lib/types/types';
 import { useState } from 'react';
 import { toast } from './ui/enhanced-toast';
@@ -15,6 +15,7 @@ interface BulkActionsBarProps {
   folders?: Folder[];
   onResumeScoring?: () => void;
   onAssessment?: () => void;
+  onArchive?: () => void;
 }
 
 export default function BulkActionsBar({
@@ -27,6 +28,7 @@ export default function BulkActionsBar({
   folders,
   onResumeScoring,
   onAssessment,
+  onArchive,
 }: BulkActionsBarProps) {
   const [showFolderMenu, setShowFolderMenu] = useState(false);
 
@@ -134,6 +136,16 @@ export default function BulkActionsBar({
             >
               <Download className="w-4 h-4" />
               Download
+            </button>
+          )}
+
+          {onArchive && (
+            <button
+              onClick={onArchive}
+              className="flex items-center gap-2 px-4 py-2 text-white bg-amber-500/90 backdrop-blur-sm rounded-lg hover:bg-amber-600 transition-all text-sm shadow-sm border border-amber-400/30"
+            >
+              <Archive className="w-4 h-4" />
+              Archive
             </button>
           )}
 

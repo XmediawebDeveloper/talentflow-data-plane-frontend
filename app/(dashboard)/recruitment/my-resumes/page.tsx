@@ -283,6 +283,9 @@ export default function MyResumesPage() {
         // Version info
         version: r.version || 1,
         versionCount: r.version_count || 1,
+        // Archive status
+        isArchived: r.is_archived || false,
+        archivedAt: r.archived_at,
       }));
 
       // Convert API Folder to component Folder type
@@ -293,7 +296,24 @@ export default function MyResumesPage() {
         parentId: f.parent_id,
         children: f.children?.map(convertApiFolder),
       });
-      const apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+      let apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+
+      // Ensure "Archived Resumes" folder always exists
+      const hasArchivedFolder = apiFolders.some(f => f.name === 'Archived Resumes' && !f.parentId);
+      if (!hasArchivedFolder) {
+        try {
+          const newArchivedFolder = await folderService.create('Archived Resumes');
+          const archivedFolderConverted: FolderType = {
+            id: newArchivedFolder.id,
+            name: newArchivedFolder.name,
+            count: 0,
+            parentId: newArchivedFolder.parent_id,
+          };
+          apiFolders = [...apiFolders, archivedFolderConverted];
+        } catch (error) {
+          console.error('Failed to create Archived Resumes folder:', error);
+        }
+      }
 
       // Add "All Resumes" virtual folder at the top
       const allResumesFolder: FolderType = {
@@ -354,6 +374,55 @@ export default function MyResumesPage() {
       toast.success(`${resumeIds.length} resume(s) moved`);
     } catch (error) {
       toast.error('Failed to move resumes');
+    }
+  };
+
+  // Handle archive resumes - sets is_archived AND moves to Archived Resumes folder
+  const handleArchiveResumes = async (resumeIds: string[]) => {
+    try {
+      // Find the "Archived Resumes" folder
+      const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+      if (!archivedFolder) {
+        toast.error('Archived Resumes folder not found');
+        return;
+      }
+
+      // Get old folder IDs for count update
+      const oldFolderIds = resumeIds.map(id => {
+        const resume = resumes.find(r => r.id === id);
+        return resume?.folderId;
+      }).filter(Boolean);
+
+      // Archive and move each resume
+      await Promise.all(resumeIds.map(async (id) => {
+        await resumeService.archive(id, true);
+        await resumeService.move(id, archivedFolder.id);
+      }));
+
+      // Update local state - set archived flag AND move to archived folder
+      setResumes(prev => prev.map(r =>
+        resumeIds.includes(r.id)
+          ? { ...r, isArchived: true, archivedAt: new Date().toISOString(), folderId: archivedFolder.id }
+          : r
+      ));
+
+      // Update folder counts
+      setFolders(prev => prev.map(f => {
+        if (f.id === archivedFolder.id) {
+          return { ...f, count: f.count + resumeIds.length };
+        }
+        // Decrease count from old folders
+        const decreaseCount = oldFolderIds.filter(fid => fid === f.id).length;
+        if (decreaseCount > 0) {
+          return { ...f, count: Math.max(0, f.count - decreaseCount) };
+        }
+        return f;
+      }));
+
+      setSelectedResumes([]);
+      toast.success(`${resumeIds.length} resume(s) archived`);
+    } catch (error) {
+      toast.error('Failed to archive resumes');
     }
   };
 
@@ -612,12 +681,22 @@ export default function MyResumesPage() {
       // Start async bulk scoring via Celery (resumeIds already have correct version IDs)
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
-      // Store batch info for the resume-scoring page to poll
+      // Get candidate names for the selected resumes
+      const resumeItems = resumeIds.map(id => {
+        const resume = resumes.find(r => r.id === id);
+        return {
+          resumeId: id,
+          candidateName: resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown',
+        };
+      });
+
+      // Store batch info for the resume-scoring page to poll (including resume items for fallback)
       const scoringData = {
         batchId: response.batch_id,
         jobId: response.jd_id,
         jobTitle: response.jd_title,
         totalResumes: response.total_resumes,
+        resumeItems: resumeItems,
       };
       sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
 
@@ -632,6 +711,31 @@ export default function MyResumesPage() {
 
   const handleCreateFolder = async (name: string, parentId?: string) => {
     try {
+      // Helper to get all folders including nested children
+      const getAllFolders = (folderList: FolderType[]): FolderType[] => {
+        const result: FolderType[] = [];
+        const traverse = (list: FolderType[]) => {
+          for (const f of list) {
+            result.push(f);
+            if (f.children) traverse(f.children);
+          }
+        };
+        traverse(folderList);
+        return result;
+      };
+
+      // Check if folder with same name already exists ANYWHERE (globally unique)
+      const allFolders = getAllFolders(folders);
+      const existingFolder = allFolders.find(f =>
+        f.name.toLowerCase() === name.toLowerCase() &&
+        f.id !== 'all'
+      );
+
+      if (existingFolder) {
+        toast.error(`Folder "${name}" already exists`);
+        return;
+      }
+
       console.log('[DEBUG] Creating folder:', { name, parentId });
       const newFolder = await folderService.create(name, parentId);
       console.log('[DEBUG] Folder created:', newFolder);
@@ -665,6 +769,39 @@ export default function MyResumesPage() {
 
   const handleRenameFolder = async (id: string, name: string) => {
     try {
+      // Prevent renaming "Archived Resumes" folder
+      const folderToRename = folders.find(f => f.id === id);
+      if (folderToRename && folderToRename.name === 'Archived Resumes' && !folderToRename.parentId) {
+        toast.error('Archived Resumes folder cannot be renamed');
+        return;
+      }
+
+      // Helper to get all folders including nested children
+      const getAllFolders = (folderList: FolderType[]): FolderType[] => {
+        const result: FolderType[] = [];
+        const traverse = (list: FolderType[]) => {
+          for (const f of list) {
+            result.push(f);
+            if (f.children) traverse(f.children);
+          }
+        };
+        traverse(folderList);
+        return result;
+      };
+
+      // Check if folder with same name already exists ANYWHERE (globally unique)
+      const allFolders = getAllFolders(folders);
+      const existingFolder = allFolders.find(f =>
+        f.name.toLowerCase() === name.toLowerCase() &&
+        f.id !== id &&
+        f.id !== 'all'
+      );
+
+      if (existingFolder) {
+        toast.error(`Folder "${name}" already exists`);
+        return;
+      }
+
       await folderService.update(id, { name });
       setFolders(prev => prev.map(f => f.id === id ? { ...f, name } : f));
       toast.success('Folder renamed');
@@ -674,12 +811,18 @@ export default function MyResumesPage() {
   };
 
   const handleDeleteFolder = (id: string) => {
-    // Find the folder to check if it's the root folder
+    // Find the folder to check if it's a system folder
     const folderToDelete = folders.find(f => f.id === id);
 
     // Prevent deletion of root folder
     if (folderToDelete && folderToDelete.name.toLowerCase() === 'root' && !folderToDelete.parentId) {
       toast.error('Root folder cannot be deleted');
+      return;
+    }
+
+    // Prevent deletion of "Archived Resumes" folder
+    if (folderToDelete && folderToDelete.name === 'Archived Resumes' && !folderToDelete.parentId) {
+      toast.error('Archived Resumes folder cannot be deleted');
       return;
     }
 
@@ -746,6 +889,30 @@ export default function MyResumesPage() {
     } catch (error: any) {
       console.error('Failed to create root folder:', error);
       throw error;
+    }
+  };
+
+  // Helper function to find or create "Archived Resumes" folder
+  const getOrCreateArchivedFolder = async (existingFolders: FolderType[]): Promise<FolderType | null> => {
+    // Check if "Archived Resumes" folder already exists
+    const existingArchived = existingFolders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+    if (existingArchived) {
+      return existingArchived;
+    }
+
+    // Create "Archived Resumes" folder
+    try {
+      const newFolder = await folderService.create('Archived Resumes');
+      const converted: FolderType = {
+        id: newFolder.id,
+        name: newFolder.name,
+        count: 0,
+        parentId: newFolder.parent_id,
+      };
+      return converted;
+    } catch (error: any) {
+      console.error('Failed to create Archived Resumes folder:', error);
+      return null;
     }
   };
 
@@ -1218,6 +1385,7 @@ export default function MyResumesPage() {
             onDelete={() => handleDeleteResumes(selectedResumes)}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
             onAssessment={handleAssessment}
+            onArchive={() => handleArchiveResumes(selectedResumes)}
           />
         )}
 
@@ -1317,6 +1485,7 @@ export default function MyResumesPage() {
               folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
               onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
               highlightQuery={appliedSearchQuery}
+              onArchive={(resumeId) => handleArchiveResumes([resumeId])}
             />
           </div>
         ) : (
@@ -1325,7 +1494,10 @@ export default function MyResumesPage() {
             {cardViewFolder === null ? (
               // Show Folder Cards
               (() => {
-                const realFolders = folders.filter(f => f.id !== 'all');
+                // Filter out 'all' and 'root' folders - root is a system folder for unorganized resumes
+                const realFolders = folders.filter(f =>
+                  f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId)
+                );
 
                 // Group resumes by folder to get counts
                 const resumesByFolder = new Map<string, Resume[]>();

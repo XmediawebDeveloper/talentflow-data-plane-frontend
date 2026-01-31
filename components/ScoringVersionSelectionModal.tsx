@@ -27,49 +27,53 @@ export default function ScoringVersionSelectionModal({
   const [loading, setLoading] = useState(true);
   const [expandedResumes, setExpandedResumes] = useState<Set<string>>(new Set());
 
-  // Load versions for resumes that have multiple versions
+  // Load versions for ALL resumes from API (don't trust versionCount from initial data)
   useEffect(() => {
     const loadVersions = async () => {
       setLoading(true);
       const updatedResumes: ResumeWithVersions[] = [];
 
       for (const resume of resumes) {
-        const hasMultipleVersions = (resume.versionCount || 1) > 1;
+        // ALWAYS fetch versions from API to get accurate data
+        try {
+          console.log(`[ScoringVersionModal] Fetching versions for resume ${resume.id}`);
+          const versionsData = await resumeService.getVersions(resume.id);
+          const rawVersions = versionsData.versions || versionsData || [];
 
-        if (hasMultipleVersions) {
-          try {
-            const versionsData = await resumeService.getVersions(resume.id);
-            const rawVersions = versionsData.versions || versionsData || [];
+          console.log(`[ScoringVersionModal] Found ${rawVersions.length} versions for resume ${resume.id}`);
 
-            // Map API response fields to frontend ResumeVersion type
-            // API returns: { id, version, file_name, created_at, uploaded_by_name, file_size_kb }
-            // Frontend expects: { id, name, uploadDate, size, uploadedBy, version }
-            const mappedVersions: ResumeVersion[] = rawVersions.map((v: any) => ({
-              id: v.id,
-              name: v.file_name || v.name || 'Unknown',
-              uploadDate: v.created_at || v.uploadDate || new Date().toISOString(),
-              size: v.file_size_kb ? `${v.file_size_kb} KB` : (v.size || ''),
-              uploadedBy: v.uploaded_by_name || v.uploadedBy || 'Unknown',
-              version: v.version || 1,
-              fileName: v.file_name,
-            }));
+          // Map API response fields to frontend ResumeVersion type
+          // API returns: { id, version, file_name, created_at, uploaded_by_name, file_size_kb }
+          // Frontend expects: { id, name, uploadDate, size, uploadedBy, version }
+          const mappedVersions: ResumeVersion[] = rawVersions.map((v: any) => ({
+            id: v.id,
+            name: v.file_name || v.name || 'Unknown',
+            uploadDate: v.created_at || v.uploadDate || new Date().toISOString(),
+            size: v.file_size_kb ? `${v.file_size_kb} KB` : (v.size || ''),
+            uploadedBy: v.uploaded_by_name || v.uploadedBy || 'Unknown',
+            version: v.version || 1,
+            fileName: v.file_name,
+          }));
 
-            // Sort versions by version number (highest first = latest)
-            const sortedVersions = [...mappedVersions].sort((a, b) =>
-              (b.version || 0) - (a.version || 0)
-            );
+          // Sort versions by version number (highest first = latest)
+          const sortedVersions = [...mappedVersions].sort((a, b) =>
+            (b.version || 0) - (a.version || 0)
+          );
 
+          // If API returned versions, use them; otherwise fallback to resume itself
+          if (sortedVersions.length > 0) {
             updatedResumes.push({
               ...resume,
               loadedVersions: sortedVersions,
               selectedVersionId: sortedVersions[0]?.id || resume.id, // Default to latest
             });
 
-            // Auto-expand resumes with multiple versions
-            setExpandedResumes(prev => new Set(prev).add(resume.id));
-          } catch (error) {
-            console.error(`Failed to load versions for resume ${resume.id}:`, error);
-            // Use the resume itself as the only version
+            // Auto-expand if multiple versions
+            if (sortedVersions.length > 1) {
+              setExpandedResumes(prev => new Set(prev).add(resume.id));
+            }
+          } else {
+            // No versions returned, use resume itself
             updatedResumes.push({
               ...resume,
               loadedVersions: [{
@@ -83,8 +87,9 @@ export default function ScoringVersionSelectionModal({
               selectedVersionId: resume.id,
             });
           }
-        } else {
-          // Single version, use the resume ID directly
+        } catch (error) {
+          console.error(`[ScoringVersionModal] Failed to load versions for resume ${resume.id}:`, error);
+          // Use the resume itself as the only version
           updatedResumes.push({
             ...resume,
             loadedVersions: [{

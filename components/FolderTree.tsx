@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Upload, Edit2, Trash2, LayoutGrid } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Upload, Edit2, Trash2, LayoutGrid, Archive } from 'lucide-react';
 import { useState, useCallback } from 'react';
 import { useDrop } from 'react-dnd';
 import { Folder as FolderType, Resume } from '@/lib/types/types';
@@ -100,6 +100,8 @@ function DroppableFolderItem({
       {!hasChildren && <div className="w-5" />}
       {folder.id === 'all' ? (
         <LayoutGrid className="w-4 h-4 text-blue-600" />
+      ) : folder.name === 'Archived Resumes' && !folder.parentId ? (
+        <Archive className="w-4 h-4 text-amber-600" />
       ) : isExpanded && hasChildren ? (
         <FolderOpen className="w-4 h-4" />
       ) : (
@@ -107,7 +109,7 @@ function DroppableFolderItem({
       )}
       <span className="flex-1 text-left">{folder.name}</span>
       <span className="text-xs text-gray-500">({count})</span>
-      {folder.id !== 'all' && !(folder.name.toLowerCase() === 'root' && !folder.parentId) && (
+      {folder.id !== 'all' && !(folder.name.toLowerCase() === 'root' && !folder.parentId) && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -327,8 +329,8 @@ export default function FolderTree({
               Create Subfolder
               {!canCreateSubfolder && <span className="text-xs text-gray-400 ml-auto">(max depth)</span>}
             </button>
-            {/* Only show rename option if not root folder */}
-            {!(folder.name.toLowerCase() === 'root' && !folder.parentId) && (
+            {/* Only show rename option if not root folder or Archived Resumes folder */}
+            {!(folder.name.toLowerCase() === 'root' && !folder.parentId) && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -342,8 +344,8 @@ export default function FolderTree({
                 Rename Folder
               </button>
             )}
-            {/* Only show delete option if not root folder */}
-            {!(folder.name.toLowerCase() === 'root' && !folder.parentId) && (
+            {/* Only show delete option if not root folder or Archived Resumes folder */}
+            {!(folder.name.toLowerCase() === 'root' && !folder.parentId) && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
               <>
                 <div className="border-t border-gray-200 my-1" />
                 <button
