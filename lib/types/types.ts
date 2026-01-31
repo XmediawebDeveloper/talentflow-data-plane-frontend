@@ -24,6 +24,8 @@ export interface Resume {
   fileName?: string; // Original file name
   fileType?: string; // File type (pdf, doc, docx)
   fileSizeKb?: number; // File size in KB
+  isArchived?: boolean; // Whether resume is archived
+  archivedAt?: string; // When resume was archived
 
   // Extended fields for detailed view
   professionalSummary?: string;
@@ -131,6 +133,7 @@ export interface Job {
   assessmentGuidance?: string;
   employmentType?: string;
   workMode?: string; // Remote type: onsite, hybrid, remote
+  education?: string; // Education requirement: bachelors, masters, doctorate, etc.
   currentVersion?: number;
   versionHistory?: JobSnapshot[];
   assignedTo?: string; // Team member ID

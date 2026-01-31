@@ -324,12 +324,19 @@ export default function AITalentMatchPage({
       // Start async bulk scoring via Celery (background processing)
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
-      // Store batch info for the resume-scoring page to poll
+      // Get candidate names for fallback display
+      const resumeItems = selected.map(c => ({
+        resumeId: c.resumeId,
+        candidateName: c.name || 'Unknown',
+      }));
+
+      // Store batch info for the resume-scoring page to poll (including resume items for fallback)
       const scoringData = {
         batchId: response.batch_id,
         jobId: response.jd_id,
         jobTitle: response.jd_title,
         totalResumes: response.total_resumes,
+        resumeItems: resumeItems,
       };
       sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
 

@@ -7,6 +7,8 @@
  * Endpoint: POST /api/v1/usage/record (proxies to Admin API)
  */
 
+import { dispatchUnitsConsumed } from './api';
+
 // Use backend API - no direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -100,6 +102,8 @@ export async function recordUsage(request: RecordUsageRequest): Promise<RecordUs
     const data = await response.json();
 
     if (response.ok) {
+      // Dispatch event to refresh header quota display
+      dispatchUnitsConsumed();
       return {
         status: 'success',
         data: data.data || data,

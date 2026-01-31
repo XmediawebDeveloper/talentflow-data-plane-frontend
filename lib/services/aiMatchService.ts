@@ -1,6 +1,7 @@
 /**
  * AI Talent Match Service
  * Connects to RAG-powered backend for candidate matching
+ * Same design as rag.py: OpenAI Embedding + Similarity Search + AI Filtering + 1-10 Rating
  */
 
 import api, { handleApiError } from './api';
@@ -15,6 +16,7 @@ export interface AIMatchResultItem {
   candidate_skills?: string[];
   experience_years?: number;
   similarity_score: number;
+  dynamic_score?: number;     // 1-10 rating
   ai_score?: number;
   final_score?: number;
   match_reasons: string[];
@@ -134,11 +136,11 @@ async function enrichCandidatesWithResumeDetails(candidates: MatchedCandidate[])
 export const aiMatchService = {
   /**
    * Run AI Talent Match for a JD
-   * Uses RAG pipeline: Vector similarity + AI filtering
+   * Uses local embedding models (sentence-transformers) + Similarity Search + AI Filtering
    * FREE - No units consumed
    */
   async run(jdId: string, options?: {
-    limit?: number;
+    embeddingModel?: string;  // Local model: bge-small-en-v1.5, all-MiniLM-L6-v2, etc.
     minSimilarity?: number;
     searchQuery?: string;
   }): Promise<{ session: AIMatchSessionResponse; candidates: MatchedCandidate[] }> {
@@ -147,7 +149,7 @@ export const aiMatchService = {
         jd_id: jdId,
         search_query: options?.searchQuery,
         min_similarity: options?.minSimilarity ?? 0.5,
-        limit: options?.limit ?? 9,  // Default to top 9 ranked candidates
+        embedding_model: options?.embeddingModel ?? 'bge-small-en-v1.5',
       });
 
       const session = response.data;
@@ -166,14 +168,14 @@ export const aiMatchService = {
    * Run AI Match with custom search query (no JD required)
    */
   async runWithQuery(searchQuery: string, options?: {
-    limit?: number;
+    embeddingModel?: string;
     minSimilarity?: number;
   }): Promise<{ session: AIMatchSessionResponse; candidates: MatchedCandidate[] }> {
     try {
       const response = await api.post<AIMatchSessionResponse>('/ai-match/run', {
         search_query: searchQuery,
         min_similarity: options?.minSimilarity ?? 0.5,
-        limit: options?.limit ?? 9,  // Default to top 9 ranked candidates
+        embedding_model: options?.embeddingModel ?? 'bge-small-en-v1.5',
       });
 
       const session = response.data;

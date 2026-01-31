@@ -1,6 +1,13 @@
-import { X, FolderOpen, Database, Search, CheckSquare, Square, User, Mail, Award, Target, ChevronRight, ChevronDown, Folder, FileText, MapPin, Phone, Briefcase } from 'lucide-react';
+import { X, FolderOpen, Database, Search, CheckSquare, Square, User, Mail, Award, Target, ChevronRight, ChevronDown, Folder, FileText, MapPin, Phone, Briefcase, AlertTriangle, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { Resume, Folder as FolderType } from '@/lib/types/types';
+import ScoringVersionSelectionModal from './ScoringVersionSelectionModal';
+
+interface VersionSelection {
+  resumeId: string;
+  versionId: string;
+  candidateName?: string;
+}
 
 interface ResumeSelectionModalProps {
   jobTitle: string;
@@ -8,7 +15,8 @@ interface ResumeSelectionModalProps {
   databaseResumes: Resume[];
   folders: FolderType[];
   onClose: () => void;
-  onScoreResumes: (selectedIds: string[], source: 'my-resumes' | 'database') => void;
+  onScoreResumes: (selectedIds: string[], source: 'my-resumes' | 'database', versionSelections?: VersionSelection[]) => void;
+  availableUnits?: number | null;
 }
 
 export default function ResumeSelectionModal({
@@ -17,13 +25,16 @@ export default function ResumeSelectionModal({
   databaseResumes,
   folders,
   onClose,
-  onScoreResumes
+  onScoreResumes,
+  availableUnits
 }: ResumeSelectionModalProps) {
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'database'>('my-resumes');
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+  const [showVersionSelection, setShowVersionSelection] = useState(false);
+  const [resumesForVersionSelection, setResumesForVersionSelection] = useState<Resume[]>([]);
 
   // Debug: Log folders data
   console.log('[ResumeSelectionModal] Folders received:', folders);
@@ -89,8 +100,44 @@ export default function ResumeSelectionModal({
 
   const handleScore = () => {
     if (selectedResumes.length > 0) {
-      onScoreResumes(selectedResumes, activeTab);
+      // Get the selected resume objects
+      const allResumes = activeTab === 'my-resumes' ? myResumes : databaseResumes;
+      const selectedResumeObjects = allResumes.filter(r => selectedResumes.includes(r.id));
+
+      // Debug: Log version counts
+      console.log('[ResumeSelectionModal] Selected resumes version info:',
+        selectedResumeObjects.map(r => ({
+          id: r.id,
+          name: r.name,
+          versionCount: r.versionCount,
+          version: r.version
+        }))
+      );
+
+      console.log('[ResumeSelectionModal] selectedCount:', selectedResumeObjects.length);
+
+      // SINGLE candidate → Always show version selection popup (modal will fetch versions from API)
+      // MULTIPLE candidates → Auto-select latest version, no popup
+      if (selectedResumeObjects.length === 1) {
+        // Single candidate - always show version selection modal
+        // The modal will fetch versions from API and display them
+        console.log('[ResumeSelectionModal] Single candidate - showing version selection popup');
+        setResumesForVersionSelection(selectedResumeObjects);
+        setShowVersionSelection(true);
+      } else {
+        // Multiple candidates - proceed directly with scoring (uses latest version automatically)
+        console.log('[ResumeSelectionModal] Multiple candidates - auto-selecting latest versions');
+        onScoreResumes(selectedResumes, activeTab);
+      }
     }
+  };
+
+  const handleVersionSelectionConfirm = (selectedVersions: { resumeId: string; versionId: string; candidateName?: string }[]) => {
+    // Use the selected version IDs for scoring
+    const versionIds = selectedVersions.map(v => v.versionId);
+    setShowVersionSelection(false);
+    // Pass version IDs along with the resume data for proper name mapping
+    onScoreResumes(versionIds, activeTab, selectedVersions);
   };
 
   const toggleFolder = (id: string) => {
@@ -458,22 +505,50 @@ export default function ResumeSelectionModal({
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              {selectedResumes.length > 0 ? (
-                <span>
-                  <span className="font-medium text-gray-900">{selectedResumes.length}</span> resume{selectedResumes.length === 1 ? '' : 's'} selected from{' '}
-                  <span className="font-medium text-gray-900">
-                    {activeTab === 'my-resumes' 
-                      ? selectedFolder === 'all' 
-                        ? 'All Folders' 
-                        : folders.find(f => f.id === selectedFolder)?.name || 'Selected Folder'
-                      : 'Internal Database'
-                    }
-                  </span>
+          {/* Quota Warning */}
+          {availableUnits !== null && availableUnits !== undefined && selectedResumes.length > 0 && selectedResumes.length > availableUnits && (
+            <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+              <div className="flex-1 text-sm">
+                <span className="font-medium text-amber-800">Insufficient Units!</span>
+                <span className="text-amber-700 ml-1">
+                  You selected {selectedResumes.length} resumes but only have {availableUnits} RS units available.
+                  Need {selectedResumes.length - availableUnits} more unit{selectedResumes.length - availableUnits > 1 ? 's' : ''}.
                 </span>
-              ) : (
-                <span>Select resumes to score against this job</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-600">
+                {selectedResumes.length > 0 ? (
+                  <span>
+                    <span className="font-medium text-gray-900">{selectedResumes.length}</span> resume{selectedResumes.length === 1 ? '' : 's'} selected from{' '}
+                    <span className="font-medium text-gray-900">
+                      {activeTab === 'my-resumes'
+                        ? selectedFolder === 'all'
+                          ? 'All Folders'
+                          : folders.find(f => f.id === selectedFolder)?.name || 'Selected Folder'
+                        : 'Internal Database'
+                      }
+                    </span>
+                  </span>
+                ) : (
+                  <span>Select resumes to score against this job</span>
+                )}
+              </div>
+
+              {/* Available Units Display */}
+              {availableUnits !== null && availableUnits !== undefined && (
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${
+                  selectedResumes.length > availableUnits
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-green-100 text-green-800'
+                }`}>
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>{availableUnits} RS units available</span>
+                </div>
               )}
             </div>
             <div className="flex items-center gap-3">
@@ -486,7 +561,11 @@ export default function ResumeSelectionModal({
               <button
                 onClick={handleScore}
                 disabled={selectedResumes.length === 0}
-                className="px-6 py-2.5 bg-gradient-to-r from-gray-800 to-gray-800 text-white rounded-lg hover:from-blue-700 hover:to-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2"
+                className={`px-6 py-2.5 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2 ${
+                  selectedResumes.length > 0 && availableUnits !== null && availableUnits !== undefined && selectedResumes.length > availableUnits
+                    ? 'bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800'
+                    : 'bg-gradient-to-r from-gray-800 to-gray-800 hover:from-gray-700 hover:to-gray-900'
+                }`}
               >
                 <Target className="w-4 h-4" />
                 Score {selectedResumes.length > 0 && `(${selectedResumes.length})`} Resume{selectedResumes.length === 1 ? '' : 's'}
@@ -495,6 +574,16 @@ export default function ResumeSelectionModal({
           </div>
         </div>
       </div>
+
+      {/* Version Selection Modal */}
+      {showVersionSelection && resumesForVersionSelection.length > 0 && (
+        <ScoringVersionSelectionModal
+          resumes={resumesForVersionSelection}
+          jobTitle={jobTitle}
+          onClose={() => setShowVersionSelection(false)}
+          onConfirm={handleVersionSelectionConfirm}
+        />
+      )}
     </div>
   );
 }

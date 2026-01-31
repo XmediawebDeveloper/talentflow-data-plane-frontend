@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import ResumeTable from '@/components/ResumeTable';
@@ -71,6 +71,7 @@ const formatDateTimeIST = (dateString: string | null | undefined): string => {
 
 export default function MyResumesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -114,6 +115,10 @@ export default function MyResumesPage() {
   const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
 
+  // Assessment modal state
+  const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
+  const [selectedJobForAssessment, setSelectedJobForAssessment] = useState<string | null>(null);
+
   // Delete folder confirmation state
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<{
     isOpen: boolean;
@@ -126,6 +131,37 @@ export default function MyResumesPage() {
     fetchData();
     fetchUploadHistory();
   }, []);
+
+  // Handle deep link from notifications
+  useEffect(() => {
+    const resumeIdFromUrl = searchParams.get('resume_id');
+    const batchIdFromUrl = searchParams.get('batch_id');
+
+    if (resumeIdFromUrl) {
+      // Open specific resume in quick view
+      const openResume = async () => {
+        try {
+          const resume = await resumeService.getById(resumeIdFromUrl);
+          if (resume) {
+            setQuickViewResume(resume as unknown as Resume);
+          }
+          // Clear the query parameter
+          router.replace('/recruitment/my-resumes', { scroll: false });
+        } catch (error) {
+          console.error('Error fetching resume from URL:', error);
+          toast.error('Could not find the requested resume');
+        }
+      };
+      openResume();
+    }
+
+    if (batchIdFromUrl) {
+      // Show upload history filtered by batch
+      setIsUploadHistoryModalOpen(true);
+      // Clear the query parameter
+      router.replace('/recruitment/my-resumes', { scroll: false });
+    }
+  }, [searchParams, router]);
 
   const fetchUploadHistory = async () => {
     try {
@@ -247,6 +283,9 @@ export default function MyResumesPage() {
         // Version info
         version: r.version || 1,
         versionCount: r.version_count || 1,
+        // Archive status
+        isArchived: r.is_archived || false,
+        archivedAt: r.archived_at,
       }));
 
       // Convert API Folder to component Folder type
@@ -257,7 +296,24 @@ export default function MyResumesPage() {
         parentId: f.parent_id,
         children: f.children?.map(convertApiFolder),
       });
-      const apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+      let apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+
+      // Ensure "Archived Resumes" folder always exists
+      const hasArchivedFolder = apiFolders.some(f => f.name === 'Archived Resumes' && !f.parentId);
+      if (!hasArchivedFolder) {
+        try {
+          const newArchivedFolder = await folderService.create('Archived Resumes');
+          const archivedFolderConverted: FolderType = {
+            id: newArchivedFolder.id,
+            name: newArchivedFolder.name,
+            count: 0,
+            parentId: newArchivedFolder.parent_id,
+          };
+          apiFolders = [...apiFolders, archivedFolderConverted];
+        } catch (error) {
+          console.error('Failed to create Archived Resumes folder:', error);
+        }
+      }
 
       // Add "All Resumes" virtual folder at the top
       const allResumesFolder: FolderType = {
@@ -318,6 +374,55 @@ export default function MyResumesPage() {
       toast.success(`${resumeIds.length} resume(s) moved`);
     } catch (error) {
       toast.error('Failed to move resumes');
+    }
+  };
+
+  // Handle archive resumes - sets is_archived AND moves to Archived Resumes folder
+  const handleArchiveResumes = async (resumeIds: string[]) => {
+    try {
+      // Find the "Archived Resumes" folder
+      const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+      if (!archivedFolder) {
+        toast.error('Archived Resumes folder not found');
+        return;
+      }
+
+      // Get old folder IDs for count update
+      const oldFolderIds = resumeIds.map(id => {
+        const resume = resumes.find(r => r.id === id);
+        return resume?.folderId;
+      }).filter(Boolean);
+
+      // Archive and move each resume
+      await Promise.all(resumeIds.map(async (id) => {
+        await resumeService.archive(id, true);
+        await resumeService.move(id, archivedFolder.id);
+      }));
+
+      // Update local state - set archived flag AND move to archived folder
+      setResumes(prev => prev.map(r =>
+        resumeIds.includes(r.id)
+          ? { ...r, isArchived: true, archivedAt: new Date().toISOString(), folderId: archivedFolder.id }
+          : r
+      ));
+
+      // Update folder counts
+      setFolders(prev => prev.map(f => {
+        if (f.id === archivedFolder.id) {
+          return { ...f, count: f.count + resumeIds.length };
+        }
+        // Decrease count from old folders
+        const decreaseCount = oldFolderIds.filter(fid => fid === f.id).length;
+        if (decreaseCount > 0) {
+          return { ...f, count: Math.max(0, f.count - decreaseCount) };
+        }
+        return f;
+      }));
+
+      setSelectedResumes([]);
+      toast.success(`${resumeIds.length} resume(s) archived`);
+    } catch (error) {
+      toast.error('Failed to archive resumes');
     }
   };
 
@@ -406,6 +511,19 @@ export default function MyResumesPage() {
     } finally {
       setIsDownloadingZip(false);
     }
+  };
+
+  // Handle Assessment button click
+  const handleAssessment = async () => {
+    if (selectedResumes.length === 0) {
+      toast.error('Please select at least one resume');
+      return;
+    }
+    // Fetch published jobs if not already loaded
+    if (publishedJobs.length === 0) {
+      await fetchPublishedJobs();
+    }
+    setIsAssessmentModalOpen(true);
   };
 
   // Fetch published jobs for the Apply to Job modal
@@ -563,12 +681,22 @@ export default function MyResumesPage() {
       // Start async bulk scoring via Celery (resumeIds already have correct version IDs)
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
-      // Store batch info for the resume-scoring page to poll
+      // Get candidate names for the selected resumes
+      const resumeItems = resumeIds.map(id => {
+        const resume = resumes.find(r => r.id === id);
+        return {
+          resumeId: id,
+          candidateName: resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown',
+        };
+      });
+
+      // Store batch info for the resume-scoring page to poll (including resume items for fallback)
       const scoringData = {
         batchId: response.batch_id,
         jobId: response.jd_id,
         jobTitle: response.jd_title,
         totalResumes: response.total_resumes,
+        resumeItems: resumeItems,
       };
       sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
 
@@ -583,6 +711,31 @@ export default function MyResumesPage() {
 
   const handleCreateFolder = async (name: string, parentId?: string) => {
     try {
+      // Helper to get all folders including nested children
+      const getAllFolders = (folderList: FolderType[]): FolderType[] => {
+        const result: FolderType[] = [];
+        const traverse = (list: FolderType[]) => {
+          for (const f of list) {
+            result.push(f);
+            if (f.children) traverse(f.children);
+          }
+        };
+        traverse(folderList);
+        return result;
+      };
+
+      // Check if folder with same name already exists ANYWHERE (globally unique)
+      const allFolders = getAllFolders(folders);
+      const existingFolder = allFolders.find(f =>
+        f.name.toLowerCase() === name.toLowerCase() &&
+        f.id !== 'all'
+      );
+
+      if (existingFolder) {
+        toast.error(`Folder "${name}" already exists`);
+        return;
+      }
+
       console.log('[DEBUG] Creating folder:', { name, parentId });
       const newFolder = await folderService.create(name, parentId);
       console.log('[DEBUG] Folder created:', newFolder);
@@ -616,6 +769,39 @@ export default function MyResumesPage() {
 
   const handleRenameFolder = async (id: string, name: string) => {
     try {
+      // Prevent renaming "Archived Resumes" folder
+      const folderToRename = folders.find(f => f.id === id);
+      if (folderToRename && folderToRename.name === 'Archived Resumes' && !folderToRename.parentId) {
+        toast.error('Archived Resumes folder cannot be renamed');
+        return;
+      }
+
+      // Helper to get all folders including nested children
+      const getAllFolders = (folderList: FolderType[]): FolderType[] => {
+        const result: FolderType[] = [];
+        const traverse = (list: FolderType[]) => {
+          for (const f of list) {
+            result.push(f);
+            if (f.children) traverse(f.children);
+          }
+        };
+        traverse(folderList);
+        return result;
+      };
+
+      // Check if folder with same name already exists ANYWHERE (globally unique)
+      const allFolders = getAllFolders(folders);
+      const existingFolder = allFolders.find(f =>
+        f.name.toLowerCase() === name.toLowerCase() &&
+        f.id !== id &&
+        f.id !== 'all'
+      );
+
+      if (existingFolder) {
+        toast.error(`Folder "${name}" already exists`);
+        return;
+      }
+
       await folderService.update(id, { name });
       setFolders(prev => prev.map(f => f.id === id ? { ...f, name } : f));
       toast.success('Folder renamed');
@@ -625,12 +811,18 @@ export default function MyResumesPage() {
   };
 
   const handleDeleteFolder = (id: string) => {
-    // Find the folder to check if it's the root folder
+    // Find the folder to check if it's a system folder
     const folderToDelete = folders.find(f => f.id === id);
 
     // Prevent deletion of root folder
     if (folderToDelete && folderToDelete.name.toLowerCase() === 'root' && !folderToDelete.parentId) {
       toast.error('Root folder cannot be deleted');
+      return;
+    }
+
+    // Prevent deletion of "Archived Resumes" folder
+    if (folderToDelete && folderToDelete.name === 'Archived Resumes' && !folderToDelete.parentId) {
+      toast.error('Archived Resumes folder cannot be deleted');
       return;
     }
 
@@ -697,6 +889,30 @@ export default function MyResumesPage() {
     } catch (error: any) {
       console.error('Failed to create root folder:', error);
       throw error;
+    }
+  };
+
+  // Helper function to find or create "Archived Resumes" folder
+  const getOrCreateArchivedFolder = async (existingFolders: FolderType[]): Promise<FolderType | null> => {
+    // Check if "Archived Resumes" folder already exists
+    const existingArchived = existingFolders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+    if (existingArchived) {
+      return existingArchived;
+    }
+
+    // Create "Archived Resumes" folder
+    try {
+      const newFolder = await folderService.create('Archived Resumes');
+      const converted: FolderType = {
+        id: newFolder.id,
+        name: newFolder.name,
+        count: 0,
+        parentId: newFolder.parent_id,
+      };
+      return converted;
+    } catch (error: any) {
+      console.error('Failed to create Archived Resumes folder:', error);
+      return null;
     }
   };
 
@@ -1168,6 +1384,8 @@ export default function MyResumesPage() {
             onDownload={handleBulkDownload}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
+            onAssessment={handleAssessment}
+            onArchive={() => handleArchiveResumes(selectedResumes)}
           />
         )}
 
@@ -1267,6 +1485,7 @@ export default function MyResumesPage() {
               folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
               onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
               highlightQuery={appliedSearchQuery}
+              onArchive={(resumeId) => handleArchiveResumes([resumeId])}
             />
           </div>
         ) : (
@@ -1275,7 +1494,10 @@ export default function MyResumesPage() {
             {cardViewFolder === null ? (
               // Show Folder Cards
               (() => {
-                const realFolders = folders.filter(f => f.id !== 'all');
+                // Filter out 'all' and 'root' folders - root is a system folder for unorganized resumes
+                const realFolders = folders.filter(f =>
+                  f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId)
+                );
 
                 // Group resumes by folder to get counts
                 const resumesByFolder = new Map<string, Resume[]>();
@@ -1437,10 +1659,7 @@ export default function MyResumesPage() {
                               />
                             </div>
                             {/* Candidate Name */}
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-medium text-xs flex-shrink-0">
-                                {resume.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
-                              </div>
+                            <div className="flex items-center min-w-0">
                               <span className="font-medium text-gray-900 text-sm truncate">{resume.name}</span>
                             </div>
                             {/* Email */}
@@ -2092,6 +2311,135 @@ export default function MyResumesPage() {
           item={selectedHistoryItem}
           onClose={() => setSelectedHistoryItem(null)}
         />
+      )}
+
+      {/* Assessment Modal - Select Job First */}
+      {isAssessmentModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200"
+            onClick={() => setIsAssessmentModalOpen(false)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="flex items-center gap-4 p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+                <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center">
+                  <ClipboardCheck className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900">Invite to Assessment</h3>
+                  <p className="text-sm text-gray-500">
+                    {selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsAssessmentModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 overflow-y-auto max-h-[calc(80vh-200px)]">
+                {/* Selected Candidates Preview */}
+                <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Selected Candidates</h4>
+                  <div className="space-y-1">
+                    {resumes.filter(r => selectedResumes.includes(r.id)).slice(0, 5).map(resume => (
+                      <div key={resume.id} className="flex items-center gap-2 text-sm text-gray-600">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <span>{resume.name}</span>
+                        <span className="text-gray-400">- {resume.email || 'No email'}</span>
+                      </div>
+                    ))}
+                    {selectedResumes.length > 5 && (
+                      <p className="text-sm text-gray-500 italic">+{selectedResumes.length - 5} more</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Job Selection */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Select a Job for Assessment</h4>
+                  {loadingJobs ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                    </div>
+                  ) : publishedJobs.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p>No published jobs found</p>
+                      <p className="text-sm">Create and publish a job first to send assessment invitations</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {publishedJobs.map(job => (
+                        <button
+                          key={job.id}
+                          onClick={() => setSelectedJobForAssessment(job.id)}
+                          className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                            selectedJobForAssessment === job.id
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h5 className="font-medium text-gray-900">{job.title}</h5>
+                              <p className="text-sm text-gray-500">{job.location || 'No location'}</p>
+                            </div>
+                            {selectedJobForAssessment === job.id && (
+                              <CheckCircle className="w-5 h-5 text-blue-500" />
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <button
+                  onClick={() => setIsAssessmentModalOpen(false)}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (!selectedJobForAssessment) {
+                      toast.error('Please select a job first');
+                      return;
+                    }
+                    // Navigate to assessment page with job and candidates
+                    const selectedJob = publishedJobs.find(j => j.id === selectedJobForAssessment);
+                    if (selectedJob) {
+                      // Store selected candidates in session storage for the assessment page
+                      const candidateData = resumes
+                        .filter(r => selectedResumes.includes(r.id))
+                        .map(r => ({
+                          name: r.name,
+                          email: r.email,
+                          resumeId: r.id
+                        }));
+                      sessionStorage.setItem('assessmentCandidates', JSON.stringify(candidateData));
+                      router.push(`/recruitment/assessments?job_id=${selectedJobForAssessment}&invite=true`);
+                    }
+                  }}
+                  disabled={!selectedJobForAssessment}
+                  className="flex items-center gap-2 px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Continue to Assessment
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Delete Folder Confirmation Dialog */}

@@ -33,7 +33,6 @@ export default function BulkScoringProgressModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
 
   // Handle retry for a failed item
@@ -52,18 +51,9 @@ export default function BulkScoringProgressModal({
     }
   };
 
-  // Real-time update simulation - updates every second
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
   // Get the job title if filtering by specific job
-  const filteredJobTitle = filterByJobId 
-    ? progressData.find(item => item.jobId === filterByJobId)?.jobTitle 
+  const filteredJobTitle = filterByJobId
+    ? progressData.find(item => item.jobId === filterByJobId)?.jobTitle
     : null;
 
   // Calculate summary stats
@@ -73,47 +63,27 @@ export default function BulkScoringProgressModal({
   const completedCount = progressData.filter(item => item.status === 'Scored successfully').length;
   const failedCount = progressData.filter(item => item.status === 'Failed').length;
 
-  // Calculate estimated time remaining
-  const remainingResumes = queuedCount + inProgressCount;
-  const avgTimePerResume = 20; // seconds (average LLM processing time)
-  const estimatedSecondsRemaining = remainingResumes * avgTimePerResume;
-  const estimatedMinutesRemaining = Math.ceil(estimatedSecondsRemaining / 60);
-  
-  const getEstimatedTimeDisplay = () => {
-    if (remainingResumes === 0) {
-      return 'All scoring operations completed';
-    }
-    
-    if (estimatedMinutesRemaining < 1) {
-      return `Approx. ${estimatedSecondsRemaining} seconds remaining`;
-    } else if (estimatedMinutesRemaining === 1) {
-      return 'Approx. 1 minute remaining';
-    } else if (estimatedMinutesRemaining <= 5) {
-      return `Approx. ${estimatedMinutesRemaining} minutes remaining`;
-    } else {
-      const minRange = estimatedMinutesRemaining;
-      const maxRange = estimatedMinutesRemaining + 2;
-      return `Approx. ${minRange}–${maxRange} minutes remaining`;
-    }
-  };
+  // Calculate progress percentage
+  const progressPercentage = totalResumes > 0 ? Math.round(((completedCount + failedCount) / totalResumes) * 100) : 0;
+  const isAllComplete = queuedCount === 0 && inProgressCount === 0 && totalResumes > 0;
 
   // Filter data
   const filteredData = progressData.filter(item => {
-    const matchesSearch = searchQuery === '' || 
+    const matchesSearch = searchQuery === '' ||
       item.candidateName.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || 
+
+    const matchesStatus = statusFilter === 'all' ||
       (statusFilter === 'queued' && item.status === 'Queued') ||
       (statusFilter === 'in-progress' && item.status === 'Scoring in progress') ||
       (statusFilter === 'completed' && item.status === 'Scored successfully') ||
       (statusFilter === 'failed' && item.status === 'Failed');
-    
-    const matchesSource = sourceFilter === 'all' || 
+
+    const matchesSource = sourceFilter === 'all' ||
       (sourceFilter === 'internal-db' && item.source === 'Internal DB') ||
       (sourceFilter === 'my-resumes' && item.source === 'My Resumes');
-    
+
     const matchesJobId = !filterByJobId || item.jobId === filterByJobId;
-    
+
     return matchesSearch && matchesStatus && matchesSource && matchesJobId;
   });
 
@@ -149,10 +119,10 @@ export default function BulkScoringProgressModal({
 
   const getMatchResultBadge = (result?: string, score?: number) => {
     if (!result) return null;
-    
+
     let badgeClass = '';
     let icon = null;
-    
+
     switch (result) {
       case 'Exact Match':
         badgeClass = 'bg-green-100 text-green-700 border-green-300';
@@ -167,7 +137,7 @@ export default function BulkScoringProgressModal({
         icon = <XCircle className="w-3 h-3" />;
         break;
     }
-    
+
     return (
       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${badgeClass}`}>
         {icon}
@@ -178,143 +148,111 @@ export default function BulkScoringProgressModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-50">
+        {/* Header with Overall Progress */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gradient-to-r from-gray-900 to-gray-800 rounded-t-2xl">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md">
-              <Target className="w-6 h-6 text-white" />
+            <div className="w-11 h-11 bg-white/10 rounded-xl flex items-center justify-center">
+              <Target className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl text-gray-900">
-                {filterByJobId && filteredJobTitle ? `Scoring Progress - ${filteredJobTitle}` : 'Bulk Scoring Progress'}
+              <h2 className="text-xl font-bold text-white">
+                {filterByJobId && filteredJobTitle ? filteredJobTitle : 'Bulk Scoring Progress'}
               </h2>
-              <p className="text-sm text-gray-600 mt-0.5">
-                {filterByJobId 
-                  ? 'Track real-time progress for this specific job'
-                  : 'Track real-time progress of all scoring operations'}
+              <p className="text-sm text-gray-300">
+                {completedCount + failedCount}/{totalResumes} resumes processed
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white/80 rounded-lg transition-colors"
-            aria-label="Close modal"
-          >
-            <X className="w-6 h-6 text-gray-600" />
-          </button>
+
+          {/* Progress indicator */}
+          <div className="flex items-center gap-4">
+            {/* Progress bar */}
+            <div className="flex items-center gap-3">
+              <div className="w-32 h-2.5 bg-gray-700 rounded-full overflow-hidden">
+                <div className="h-full flex">
+                  <div
+                    className="bg-green-500 transition-all duration-500"
+                    style={{ width: `${totalResumes > 0 ? (completedCount / totalResumes) * 100 : 0}%` }}
+                  />
+                  <div
+                    className="bg-red-500 transition-all duration-500"
+                    style={{ width: `${totalResumes > 0 ? (failedCount / totalResumes) * 100 : 0}%` }}
+                  />
+                  <div
+                    className="bg-blue-500 animate-pulse transition-all duration-500"
+                    style={{ width: `${totalResumes > 0 ? (inProgressCount / totalResumes) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+              <span className="text-sm font-bold text-white min-w-[3rem]">{progressPercentage}%</span>
+            </div>
+
+            {isAllComplete && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-medium">
+                <CheckCircle2 className="w-4 h-4" />
+                Complete
+              </div>
+            )}
+
+            <button
+              onClick={onClose}
+              className="w-9 h-9 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              aria-label="Close modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Summary Stats */}
-        <div className="p-6 border-b border-gray-200 bg-gray-50">
-          <div className="grid grid-cols-5 gap-4">
-            <div className="bg-white rounded-xl border-2 border-gray-300 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-600">Total</span>
-                <Target className="w-5 h-5 text-gray-500" />
-              </div>
-              <div className="text-3xl font-bold text-gray-900">{totalResumes}</div>
-              <div className="text-xs text-gray-500 mt-1">Selected</div>
-            </div>
+        {/* Stats Row */}
+        <div className="flex flex-wrap items-center gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-600">Queue: <span className="font-semibold text-gray-900">{queuedCount}</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Loader className={`w-4 h-4 text-blue-500 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />
+            <span className="text-sm text-gray-600">Processing: <span className="font-semibold text-blue-600">{inProgressCount}</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-green-500" />
+            <span className="text-sm text-gray-600">Done: <span className="font-semibold text-green-600">{completedCount}</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <XCircle className="w-4 h-4 text-red-500" />
+            <span className="text-sm text-gray-600">Failed: <span className="font-semibold text-red-600">{failedCount}</span></span>
+          </div>
+        </div>
 
-            <div className="bg-white rounded-xl border-2 border-gray-300 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-600">In Queue</span>
-                <Clock className="w-5 h-5 text-gray-500" />
+        {/* Preparing State - Show when all are queued and nothing started */}
+        {totalResumes > 0 && queuedCount === totalResumes && inProgressCount === 0 && completedCount === 0 && (
+          <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <div className="flex items-center justify-center gap-4">
+              <div className="relative">
+                <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center">
+                  <Loader className="w-7 h-7 text-blue-600 animate-spin" />
+                </div>
+                <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center animate-pulse">
+                  <span className="text-white text-xs font-bold">{totalResumes}</span>
+                </div>
               </div>
-              <div className="text-3xl font-bold text-gray-700">{queuedCount}</div>
-              <div className="text-xs text-gray-500 mt-1">Waiting</div>
-            </div>
-
-            <div className="bg-white rounded-xl border-2 border-gray-300 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-900">In Progress</span>
-                <Loader className="w-5 h-5 text-gray-800 animate-spin" />
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900">Preparing Resumes for Scoring...</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Setting up {totalResumes} {totalResumes === 1 ? 'resume' : 'resumes'} for AI analysis
+                </p>
               </div>
-              <div className="text-3xl font-bold text-gray-900">{inProgressCount}</div>
-              <div className="text-xs text-gray-800 mt-1">Processing</div>
-            </div>
-
-            <div className="bg-white rounded-xl border-2 border-green-300 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-green-700">Completed</span>
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
-              </div>
-              <div className="text-3xl font-bold text-green-700">{completedCount}</div>
-              <div className="text-xs text-green-600 mt-1">Success</div>
-            </div>
-
-            <div className="bg-white rounded-xl border-2 border-red-300 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-red-700">Failed</span>
-                <XCircle className="w-5 h-5 text-red-600" />
-              </div>
-              <div className="text-3xl font-bold text-red-700">{failedCount}</div>
-              <div className="text-xs text-red-600 mt-1">Errors</div>
             </div>
           </div>
-
-          {/* Progress Bar */}
-          {totalResumes > 0 && (
-            <div className="mt-5">
-              <div className="flex items-center justify-between mb-2 text-sm">
-                <span className="text-gray-700 font-medium">Overall Progress</span>
-                <span className="text-gray-600">
-                  {completedCount + failedCount} of {totalResumes} completed ({Math.round(((completedCount + failedCount) / totalResumes) * 100)}%)
-                </span>
-              </div>
-              <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full flex">
-                  <div 
-                    className="bg-green-500" 
-                    style={{ width: `${(completedCount / totalResumes) * 100}%` }}
-                  />
-                  <div 
-                    className="bg-red-500" 
-                    style={{ width: `${(failedCount / totalResumes) * 100}%` }}
-                  />
-                  <div 
-                    className="bg-gray-700 animate-pulse" 
-                    style={{ width: `${(inProgressCount / totalResumes) * 100}%` }}
-                  />
-                </div>
-              </div>
-              
-              {/* Estimated Time Remaining */}
-              {remainingResumes > 0 && (
-                <div className="mt-3 flex items-center justify-center gap-2 text-sm bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5">
-                  <Clock className="w-4 h-4 text-gray-800 animate-pulse" />
-                  <span className="text-gray-800 font-medium">
-                    {getEstimatedTimeDisplay()}
-                  </span>
-                  <span className="text-gray-800 text-xs">
-                    ({remainingResumes} {remainingResumes === 1 ? 'resume' : 'resumes'} remaining • ~{avgTimePerResume}s per resume)
-                  </span>
-                </div>
-              )}
-              
-              {/* Completion Message */}
-              {remainingResumes === 0 && completedCount + failedCount === totalResumes && (
-                <div className="mt-3 flex items-center justify-center gap-2 text-sm bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  <span className="text-green-900 font-medium">
-                    All scoring operations completed successfully!
-                  </span>
-                  <span className="text-green-600 text-xs">
-                    {completedCount} successful • {failedCount} failed
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Filters */}
-        <div className="p-6 border-b border-gray-200 bg-white">
+        <div className="p-5 border-b border-gray-200 bg-white">
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Search Candidate
               </label>
               <input
@@ -322,18 +260,18 @@ export default function BulkScoringProgressModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Status
               </label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
               >
                 <option value="all">All Status</option>
                 <option value="queued">Queued</option>
@@ -344,13 +282,13 @@ export default function BulkScoringProgressModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Source
               </label>
               <select
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
               >
                 <option value="all">All Sources</option>
                 <option value="internal-db">Internal DB</option>
@@ -359,7 +297,7 @@ export default function BulkScoringProgressModal({
             </div>
           </div>
 
-          <div className="mt-3 flex items-center justify-between text-sm">
+          <div className="mt-2 flex items-center justify-between text-sm">
             <span className="text-gray-600">
               Showing <span className="font-medium text-gray-900">{filteredData.length}</span> of <span className="font-medium text-gray-900">{totalResumes}</span> records
             </span>
@@ -379,7 +317,7 @@ export default function BulkScoringProgressModal({
         </div>
 
         {/* Table */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto p-5">
           {filteredData.length > 0 ? (
             <table className="w-full">
               <thead>
@@ -395,27 +333,27 @@ export default function BulkScoringProgressModal({
               </thead>
               <tbody>
                 {filteredData.map((item, index) => (
-                  <tr 
-                    key={item.id} 
+                  <tr
+                    key={item.id}
                     className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     }`}
                   >
-                    <td className="py-4 px-4">
+                    <td className="py-3 px-4">
                       <div className="font-medium text-gray-900">{item.candidateName}</div>
                     </td>
                     {(showJobTitleColumn && !filterByJobId) && (
-                      <td className="py-4 px-4">
+                      <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Target className="w-4 h-4 text-gray-800" />
                           <span className="text-sm text-gray-900 font-medium">{item.jobTitle}</span>
                         </div>
                       </td>
                     )}
-                    <td className="py-4 px-4">
+                    <td className="py-3 px-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${
-                        item.source === 'Internal DB' 
-                          ? 'bg-gray-50 text-gray-900 border-gray-200' 
+                        item.source === 'Internal DB'
+                          ? 'bg-gray-50 text-gray-900 border-gray-200'
                           : 'bg-gray-50 text-gray-900 border-gray-200'
                       }`}>
                         {item.source === 'Internal DB' ? (
@@ -426,7 +364,7 @@ export default function BulkScoringProgressModal({
                         {item.source}
                       </span>
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="py-3 px-4">
                       <div className="flex flex-col gap-1">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border w-fit ${getStatusBadgeClass(item.status)}`}>
                           {getStatusIcon(item.status)}
@@ -440,7 +378,7 @@ export default function BulkScoringProgressModal({
                         )}
                       </div>
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="py-3 px-4">
                       {item.scoredDateTime ? (
                         <div className="text-sm text-gray-700">
                           <div className="font-medium">
@@ -461,7 +399,7 @@ export default function BulkScoringProgressModal({
                         <span className="text-sm text-gray-400">-</span>
                       )}
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="py-3 px-4">
                       {item.matchResult ? (
                         getMatchResultBadge(item.matchResult, item.score)
                       ) : (
@@ -469,7 +407,7 @@ export default function BulkScoringProgressModal({
                       )}
                     </td>
                     {onRetryFailed && (
-                      <td className="py-4 px-4">
+                      <td className="py-3 px-4">
                         {item.status === 'Failed' && (
                           <button
                             onClick={() => handleRetry(item)}
@@ -501,9 +439,9 @@ export default function BulkScoringProgressModal({
               </tbody>
             </table>
           ) : (
-            <div className="text-center py-16">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                <Target className="w-8 h-8 text-gray-400" />
+            <div className="text-center py-12">
+              <div className="w-14 h-14 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                <Target className="w-7 h-7 text-gray-400" />
               </div>
               <h3 className="text-lg text-gray-900 mb-2">No Records Found</h3>
               <p className="text-gray-600">
@@ -516,7 +454,7 @@ export default function BulkScoringProgressModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
           <button
             onClick={onClose}
             className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"

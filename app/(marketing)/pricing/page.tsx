@@ -98,6 +98,8 @@ interface DisplayPlan {
   monthlyPlanId?: number;
   annualPlanId?: number;
   planSlug: string;
+  // Tier from API for badge display
+  planTier?: string;
 }
 
 const getBillingPeriodLabel = (period: string): string => {
@@ -199,6 +201,7 @@ export default function PricingPage() {
   const [addonsError, setAddonsError] = useState<string | null>(null);
   const [freeTrial, setFreeTrial] = useState<FreeTrialData | null>(null);
   const [planSettings, setPlanSettings] = useState<PlanSettingsData | null>(null);
+  const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
 
   // Get discount percentage (default to 10 if not loaded)
   const yearlyDiscountPercent = planSettings?.yearlyDiscountPercentage ?? 10;
@@ -328,6 +331,8 @@ export default function PricingPage() {
               monthlyPlanId: monthly?.id,
               annualPlanId: annual?.id,
               planSlug: groupedPlan.plan_slug,
+              // Tier from API for badge
+              planTier: groupedPlan.plan_tier,
             };
           })
           .filter((plan): plan is DisplayPlan => plan !== null)
@@ -509,7 +514,7 @@ export default function PricingPage() {
           </span>
         </div>
 
-        {/* Pricing Cards - Including Trial Plans */}
+        {/* Pricing Cards - Interactive Hover Design */}
         {(() => {
           // Create a free trial plan card if freeTrial config exists
           const freeTrialCard: DisplayPlan | null = freeTrial ? {
@@ -523,7 +528,7 @@ export default function PricingPage() {
             billingPeriod: 'TRIAL',
             currency: 'INR',
             icon: Sparkles,
-            gradient: 'from-gray-600 to-gray-700',
+            gradient: 'from-emerald-500 to-teal-600',
             popular: false,
             features: freeTrial.trial_includes || [],
             trialDays: freeTrial.trial_days,
@@ -534,273 +539,271 @@ export default function PricingPage() {
               AIU: freeTrial.features.AI_INTERVIEW,
               RS: freeTrial.features.RESUME_SCORING,
               RU: freeTrial.features.RESUME_STORAGE,
-            }
+            },
+            planSlug: 'free-trial',
           } : null;
 
           // Combine free trial card with other plans
-          const allPlans = freeTrialCard ? [freeTrialCard, ...plans] : plans;
+          const allPlans = freeTrialCard ? [...plans, freeTrialCard] : plans;
 
-          // Sort plans: trial/free first, then by display order
+          // Sort plans: descending order (highest price first, free trial last)
           const sortedPlans = [...allPlans].sort((a, b) => {
-            const aIsTrial = a.id === 'free-trial' || a.name.toLowerCase().includes('trial') || a.name.toLowerCase().includes('free');
-            const bIsTrial = b.id === 'free-trial' || b.name.toLowerCase().includes('trial') || b.name.toLowerCase().includes('free');
-            if (aIsTrial && !bIsTrial) return -1;
-            if (!aIsTrial && bIsTrial) return 1;
-            if (a.popular && !b.popular) return -1;
-            if (!a.popular && b.popular) return 1;
-            return 0;
+            const aIsTrial = a.id === 'free-trial';
+            const bIsTrial = b.id === 'free-trial';
+            if (aIsTrial) return 1; // Trial goes last
+            if (bIsTrial) return -1; // Trial goes last
+            // Sort by price descending (highest first)
+            const priceA = a.yearlyPrice || a.monthlyPrice || 0;
+            const priceB = b.yearlyPrice || b.monthlyPrice || 0;
+            return priceB - priceA;
           });
 
+          // Simple gray color scheme for all cards
+          const getTierStyle = () => {
+            return {
+              bg: 'bg-gray-700',
+              text: 'text-gray-600',
+              button: 'bg-gray-700 hover:bg-gray-800',
+            };
+          };
+
           return (
-            <div className={`grid gap-8 max-w-6xl mx-auto ${
-              sortedPlans.length === 1 ? 'md:grid-cols-1 max-w-md' :
-              sortedPlans.length === 2 ? 'md:grid-cols-2 max-w-3xl' :
-              sortedPlans.length <= 3 ? 'md:grid-cols-3' :
-              'md:grid-cols-2 lg:grid-cols-3'
-            }`} style={{ gridAutoRows: '1fr' }}>
-          {sortedPlans.map((plan) => {
-            const Icon = plan.icon;
-            const isTrialPlan = plan.id === 'free-trial' || plan.name.toLowerCase().includes('trial') || plan.name.toLowerCase().includes('free');
-            return (
-              <div key={plan.id} className="flex">
-              <Card
-                className={`relative p-8 flex flex-col w-full ${
-                  plan.popular || isTrialPlan
-                    ? "border-2 border-gray-800 shadow-xl"
-                    : "border border-gray-200 dark:border-gray-700"
-                }`}
-              >
-                {isTrialPlan && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-gray-800 text-white px-4 py-1">
-                      Free Trial
-                    </Badge>
-                  </div>
-                )}
-                {plan.popular && !isTrialPlan && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-gray-800 text-white px-4 py-1">
-                      Most Popular
-                    </Badge>
-                  </div>
-                )}
-
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${plan.gradient} flex items-center justify-center mb-6`}>
-                  <Icon className="w-7 h-7 text-white" />
-                </div>
-
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                  {plan.name}
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-6 min-h-[48px]">
-                  {plan.description}
-                </p>
-
-                <div className="mb-6">
-                  {isTrialPlan && (!plan.monthlyPrice || plan.monthlyPrice === 0) ? (
-                    <div className="text-4xl font-bold text-gray-900 dark:text-white">
-                      Free
-                    </div>
-                  ) : (plan.monthlyPrice || plan.yearlyPrice) ? (
-                    <>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                          {/* Show price based on toggle, with fallback to available price */}
-                          {formatCurrency(
-                            isYearly
-                              ? (plan.yearlyPrice ?? plan.monthlyPrice)
-                              : (plan.monthlyPrice ?? plan.yearlyPrice),
-                            plan.currency
-                          )}
-                        </span>
-                        <span className="text-gray-500 dark:text-gray-400 text-sm">
-                          {/* Show correct billing period based on what's available */}
-                          {isYearly
-                            ? (plan.yearlyPrice ? '/year' : '/month')
-                            : (plan.monthlyPrice ? '/month' : '/year')}
-                        </span>
-                      </div>
-                      {/* Show strikethrough price and discount badge when viewing yearly and both prices exist */}
-                      {isYearly && plan.monthlyPrice && plan.yearlyPrice && (plan.monthlyPrice * 12) > plan.yearlyPrice && (
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-sm text-gray-400 dark:text-gray-500 line-through">
-                            {formatCurrency(plan.monthlyPrice * 12, plan.currency)}
-                          </span>
-                          {plan.discountPercentage && plan.discountPercentage > 0 && (
-                            <span className="inline-block px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full">
-                              Save {Math.round(plan.discountPercentage)}%
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {/* Show note when yearly is selected but only monthly is available */}
-                      {isYearly && !plan.yearlyPrice && plan.monthlyPrice && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                          Billed monthly (yearly not available)
-                        </p>
-                      )}
-                      {/* Show note when monthly is selected but only yearly is available */}
-                      {!isYearly && !plan.monthlyPrice && plan.yearlyPrice && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                          Billed annually (monthly not available)
-                        </p>
-                      )}
-                      {/* Show yearly option hint when viewing monthly and both exist */}
-                      {!isYearly && plan.yearlyPrice && plan.monthlyPrice && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          or {formatCurrency(plan.yearlyPrice, plan.currency)}/year
-                          {plan.discountPercentage && plan.discountPercentage > 0 && (
-                            <span className="text-green-600 dark:text-green-400"> (Save {Math.round(plan.discountPercentage)}%)</span>
-                          )}
-                        </p>
-                      )}
-                      {/* Show monthly equivalent hint when viewing yearly and both prices exist */}
-                      {isYearly && plan.monthlyPrice && plan.yearlyPrice && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {formatCurrency(plan.monthlyPrice, plan.currency)}/month if billed monthly
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-4xl font-bold text-gray-900 dark:text-white">
-                      Contact Sales
-                    </div>
-                  )}
-                </div>
-
-                {/* Quotas Section - Use API values directly based on billing toggle */}
-                {(() => {
-                  // Use correct quotas based on billing toggle - all values from API directly
-                  const displayQuotas = isTrialPlan
-                    ? plan.quotas
-                    : (isYearly ? (plan.annualQuotas || plan.quotas) : (plan.monthlyQuotas || plan.quotas));
-
-                  if (!displayQuotas) return null;
+            <div
+              className="relative max-w-6xl mx-auto"
+              onMouseLeave={() => setHoveredPlan(null)}
+            >
+              <div className="relative flex flex-col lg:flex-row gap-6 items-stretch justify-center">
+                {sortedPlans.map((plan) => {
+                  const isTrialPlan = plan.id === 'free-trial';
+                  const isHovered = hoveredPlan === plan.id;
+                  const hasHoveredPlan = hoveredPlan !== null;
+                  const tierStyle = getTierStyle();
+                  const badgeText = isTrialPlan ? 'Free Trial' : (plan.planTier || plan.name);
 
                   return (
-                    <div className="mb-6">
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        {displayQuotas.max_seats !== undefined && displayQuotas.max_seats >= 1 && (
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              {displayQuotas.max_seats.toLocaleString()}
-                            </span>
-                            <span className="text-gray-600 dark:text-gray-400">Max Users</span>
+                    <div
+                      key={plan.id}
+                      className="relative flex-1"
+                      onMouseEnter={() => setHoveredPlan(plan.id)}
+                      style={{
+                        minWidth: '280px',
+                        maxWidth: '380px',
+                        transition: 'all 0.3s ease-out',
+                        opacity: hasHoveredPlan && !isHovered ? 0.5 : 1,
+                        transform: isHovered ? 'translateY(-8px)' : 'translateY(0)',
+                      }}
+                    >
+                      <Card
+                        className={`
+                          relative h-full p-8 flex flex-col bg-white dark:bg-gray-900 rounded-2xl
+                          border-2 transition-all duration-300 ease-out
+                          ${isHovered
+                            ? 'border-gray-400 shadow-xl'
+                            : 'border-gray-200 dark:border-gray-700 shadow-sm'}
+                        `}
+                      >
+                        {/* Badge */}
+                        <div className="absolute -top-3 left-6">
+                          <span className={`
+                            inline-flex items-center px-3 py-1 rounded-full text-sm font-medium text-white
+                            ${tierStyle.bg}
+                          `}>
+                            {badgeText}
+                          </span>
+                        </div>
+
+                        {/* Plan Name */}
+                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mt-4 mb-2">
+                          {plan.name}
+                        </h3>
+
+                        {/* Description */}
+                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-5 min-h-[40px]">
+                          {plan.description}
+                        </p>
+
+                        {/* Price */}
+                        <div className="mb-6">
+                          {isTrialPlan ? (
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-3xl font-bold text-gray-900 dark:text-white">Free</span>
+                              <span className="text-gray-500 text-sm">for {plan.trialDays} days</span>
+                            </div>
+                          ) : (plan.monthlyPrice || plan.yearlyPrice) ? (
+                            <>
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-3xl font-bold text-gray-900 dark:text-white">
+                                  {formatCurrency(
+                                    isYearly ? (plan.yearlyPrice ?? plan.monthlyPrice) : (plan.monthlyPrice ?? plan.yearlyPrice),
+                                    plan.currency
+                                  )}
+                                </span>
+                                <span className="text-gray-500 dark:text-gray-400 text-sm">
+                                  {isYearly ? (plan.yearlyPrice ? '/year' : '/month') : (plan.monthlyPrice ? '/month' : '/year')}
+                                </span>
+                              </div>
+                              {isYearly && plan.monthlyPrice && plan.yearlyPrice && (plan.monthlyPrice * 12) > plan.yearlyPrice && (
+                                <div className="flex items-center gap-2 mt-1.5">
+                                  <span className="text-sm text-gray-400 line-through">
+                                    {formatCurrency(plan.monthlyPrice * 12, plan.currency)}
+                                  </span>
+                                  {plan.discountPercentage && plan.discountPercentage > 0 && (
+                                    <span className="px-2 py-0.5 text-xs font-medium bg-green-50 text-green-600 rounded">
+                                      Save {Math.round(plan.discountPercentage)}%
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-2xl font-bold text-gray-900 dark:text-white">Contact Sales</div>
+                          )}
+                        </div>
+
+                        {/* Quotas - Single column layout for clarity */}
+                        {(() => {
+                          const displayQuotas = isTrialPlan
+                            ? plan.quotas
+                            : (isYearly ? (plan.annualQuotas || plan.quotas) : (plan.monthlyQuotas || plan.quotas));
+
+                          if (!displayQuotas) return null;
+
+                          return (
+                            <div className="mb-6 py-4 border-t border-b border-gray-100 dark:border-gray-800">
+                              <div className="space-y-2 text-sm">
+                                {displayQuotas.max_seats !== undefined && displayQuotas.max_seats >= 1 && (
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-gray-500">Max Users</span>
+                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                      {displayQuotas.max_seats.toLocaleString()}
+                                    </span>
+                                  </div>
+                                )}
+                                {displayQuotas.max_jobs !== undefined && displayQuotas.max_jobs >= 1 && (
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-gray-500">Max Jobs</span>
+                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                      {isTrialPlan ? displayQuotas.max_jobs.toLocaleString() : 'Unlimited'}
+                                    </span>
+                                  </div>
+                                )}
+                                {displayQuotas.RU !== undefined && displayQuotas.RU >= 1 && (
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-gray-500">Resume Storage</span>
+                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                      {displayQuotas.RU.toLocaleString()}
+                                    </span>
+                                  </div>
+                                )}
+                                {displayQuotas.RS !== undefined && displayQuotas.RS >= 1 && (
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-gray-500">Resume Scores</span>
+                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                      {displayQuotas.RS.toLocaleString()}
+                                    </span>
+                                  </div>
+                                )}
+                                {displayQuotas.AS !== undefined && displayQuotas.AS >= 1 && (
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-gray-500">Assessments</span>
+                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                      {displayQuotas.AS.toLocaleString()}
+                                    </span>
+                                  </div>
+                                )}
+                                {displayQuotas.AIU !== undefined && displayQuotas.AIU >= 1 && (
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-gray-500">AI Interviews</span>
+                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                      {displayQuotas.AIU.toLocaleString()}
+                                    </span>
+                                  </div>
+                                )}
+                                {displayQuotas.total_resume_storage !== undefined && displayQuotas.total_resume_storage >= 1 && (
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-gray-500">Total Storage</span>
+                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                      {displayQuotas.total_resume_storage.toLocaleString()}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Features - Expand on hover to show all */}
+                        {plan.features.length > 0 && (
+                          <div className="mb-6">
+                            <ul className="space-y-2.5">
+                              {plan.features.slice(0, isHovered ? undefined : 4).map((feature, idx) => (
+                                <li
+                                  key={idx}
+                                  className="flex items-start gap-2.5"
+                                  style={{
+                                    opacity: idx >= 4 && isHovered ? 1 : undefined,
+                                    transition: 'opacity 0.3s ease-out',
+                                  }}
+                                >
+                                  <Check className={`w-4 h-4 flex-shrink-0 mt-0.5 ${tierStyle.text}`} />
+                                  <span className="text-gray-600 dark:text-gray-300 text-sm">{feature}</span>
+                                </li>
+                              ))}
+                            </ul>
+                            {!isHovered && plan.features.length > 4 && (
+                              <p className="text-gray-400 text-sm mt-2 pl-6">
+                                +{plan.features.length - 4} more features
+                              </p>
+                            )}
                           </div>
                         )}
-                        {displayQuotas.max_jobs !== undefined && displayQuotas.max_jobs >= 1 && (
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              {isTrialPlan ? displayQuotas.max_jobs.toLocaleString() : 'Unlimited'}
-                            </span>
-                            <span className="text-gray-600 dark:text-gray-400">Max Jobs</span>
-                          </div>
-                        )}
-                        {displayQuotas.RU !== undefined && displayQuotas.RU >= 1 && (
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              {displayQuotas.RU.toLocaleString()}
-                            </span>
-                            <span className="text-gray-600 dark:text-gray-400">Resume Storage</span>
-                          </div>
-                        )}
-                        {displayQuotas.RS !== undefined && displayQuotas.RS >= 1 && (
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              {displayQuotas.RS.toLocaleString()}
-                            </span>
-                            <span className="text-gray-600 dark:text-gray-400">Resume Scores</span>
-                          </div>
-                        )}
-                        {displayQuotas.AS !== undefined && displayQuotas.AS >= 1 && (
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              {displayQuotas.AS.toLocaleString()}
-                            </span>
-                            <span className="text-gray-600 dark:text-gray-400">Assessments</span>
-                          </div>
-                        )}
-                        {displayQuotas.AIU !== undefined && displayQuotas.AIU >= 1 && (
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              {displayQuotas.AIU.toLocaleString()}
-                            </span>
-                            <span className="text-gray-600 dark:text-gray-400">AI Interviews</span>
-                          </div>
-                        )}
-                        {displayQuotas.total_resume_storage !== undefined && displayQuotas.total_resume_storage >= 1 && (
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              {displayQuotas.total_resume_storage.toLocaleString()}
-                            </span>
-                            <span className="text-gray-600 dark:text-gray-400">Resume Storage</span>
-                          </div>
-                        )}
-                      </div>
+
+                        {/* Spacer */}
+                        <div className="flex-grow" />
+
+                        {/* CTA Button */}
+                        <Link
+                          href={isTrialPlan
+                            ? "/signup"
+                            : ((plan.monthlyPrice || plan.yearlyPrice)
+                                ? (() => {
+                                    const hasAnnual = !!plan.annualPlanId;
+                                    const hasMonthly = !!plan.monthlyPlanId;
+                                    let actualPlanId: string;
+                                    let actualBilling: string;
+
+                                    if (isYearly && hasAnnual) {
+                                      actualPlanId = String(plan.annualPlanId);
+                                      actualBilling = 'ANNUAL';
+                                    } else if (!isYearly && hasMonthly) {
+                                      actualPlanId = String(plan.monthlyPlanId);
+                                      actualBilling = 'MONTHLY';
+                                    } else if (hasAnnual) {
+                                      actualPlanId = String(plan.annualPlanId);
+                                      actualBilling = 'ANNUAL';
+                                    } else if (hasMonthly) {
+                                      actualPlanId = String(plan.monthlyPlanId);
+                                      actualBilling = 'MONTHLY';
+                                    } else {
+                                      actualPlanId = plan.id;
+                                      actualBilling = isYearly ? 'ANNUAL' : 'MONTHLY';
+                                    }
+                                    return `/signup?plan=${encodePlanId(actualPlanId)}&billing=${actualBilling}`;
+                                  })()
+                                : "/contact")}
+                          className={`
+                            block w-full py-3 rounded-lg font-medium text-center text-white
+                            transition-all duration-300 ease-out
+                            ${tierStyle.button}
+                          `}
+                        >
+                          {isTrialPlan ? 'Start Free Trial' : (plan.basePrice ? 'Get Started' : 'Contact Sales')}
+                        </Link>
+                      </Card>
                     </div>
                   );
-                })()}
-
-                {/* Features Section */}
-                {plan.features.length > 0 && (
-                  <ul className="space-y-3 mb-6">
-                    {plan.features.map((feature, idx) => (
-                      <li key={idx} className="flex items-start gap-3">
-                        <Check className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-700 dark:text-gray-300 text-sm">
-                          {feature}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {/* Spacer to push button to bottom */}
-                <div className="flex-grow"></div>
-
-                {/* Button - Fixed at bottom */}
-                <Link
-                  href={isTrialPlan
-                    ? "/signup"
-                    : ((plan.monthlyPrice || plan.yearlyPrice)
-                        ? (() => {
-                            // Determine actual plan ID and billing based on availability
-                            const hasAnnual = !!plan.annualPlanId;
-                            const hasMonthly = !!plan.monthlyPlanId;
-                            let actualPlanId: string;
-                            let actualBilling: string;
-
-                            if (isYearly && hasAnnual) {
-                              actualPlanId = String(plan.annualPlanId);
-                              actualBilling = 'ANNUAL';
-                            } else if (!isYearly && hasMonthly) {
-                              actualPlanId = String(plan.monthlyPlanId);
-                              actualBilling = 'MONTHLY';
-                            } else if (hasAnnual) {
-                              actualPlanId = String(plan.annualPlanId);
-                              actualBilling = 'ANNUAL';
-                            } else if (hasMonthly) {
-                              actualPlanId = String(plan.monthlyPlanId);
-                              actualBilling = 'MONTHLY';
-                            } else {
-                              actualPlanId = plan.id;
-                              actualBilling = isYearly ? 'ANNUAL' : 'MONTHLY';
-                            }
-                            return `/signup?plan=${encodePlanId(actualPlanId)}&billing=${actualBilling}`;
-                          })()
-                        : "/contact")}
-                  className={`block w-full h-12 rounded-lg font-medium text-center leading-[48px] transition-all ${
-                    plan.popular || isTrialPlan
-                      ? "bg-gray-800 text-white hover:bg-gray-700"
-                      : "border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  {isTrialPlan ? "Start with Trial Plan" : (plan.basePrice ? "Choose Plan" : "Contact Sales")}
-                </Link>
-              </Card>
+                })}
               </div>
-            );
-          })}
             </div>
           );
         })()}
@@ -855,13 +858,13 @@ export default function PricingPage() {
                     </span>
                   </div>
 
-                  {/* Credit & Pricing */}
+                  {/* Units & Pricing */}
                   <div className="flex items-center gap-8">
                     <div className="text-right">
                       <span className="text-2xl font-bold text-gray-900 dark:text-white">
                         {addon.credit_amount ?? addon.min_quantity ?? 0}
                       </span>
-                      <span className="ml-1 text-sm text-gray-500 dark:text-gray-400">credits</span>
+                      <span className="ml-1 text-sm text-gray-500 dark:text-gray-400">Units</span>
                     </div>
                     <div className="text-right">
                       <span className="text-2xl font-bold text-gray-800 dark:text-gray-200">
