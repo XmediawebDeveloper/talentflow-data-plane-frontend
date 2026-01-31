@@ -1252,66 +1252,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (hasProceededToReview && originalStage1Values) {
       if (!hasStage1FieldsChanged()) {
         // No fields modified - skip extraction, go directly to Stage 2
-        console.log('[TalentFlow] No Stage 1 fields modified after review, checking extracted data...');
-
-        // Safety check: If extractedData is empty (no skills), reload from database
-        if (editingId && (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0)) {
-          console.log('[TalentFlow] Extracted data is empty after review, reloading from database...');
-          try {
-            const jd = await jdService.get(editingId);
-
-            // Map experience from database
-            const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
-              if (min === null || min === undefined) return '';
-              if (min >= 10) return 'senior';
-              if (min >= 7) return 'senior';
-              if (min >= 5) return 'mid';
-              if (min >= 2) return 'junior';
-              return 'entry';
-            };
-
-            const experienceValue = mapExpToLevel(jd.experience_min, jd.experience_max);
-            const educationValue = jd.education_requirements?.degree || '';
-            const industryValue = jd.industry_type || '';
-
-            setExtractedData({
-              mustHaveSkills: jd.must_have_skills || [],
-              niceToHaveSkills: jd.nice_to_have_skills || [],
-              mustHaveComments: jd.must_have_comments || [],
-              niceToHaveComments: jd.nice_to_have_comments || [],
-              education: educationValue,
-              educationRequired: false,
-              experience: experienceValue,
-              experienceRequired: false,
-              industryType: industryValue,
-              industryTypeRequired: false,
-              department: jd.department || '',
-              salaryFrom: jd.salary_min?.toString() || '',
-              salaryTo: jd.salary_max?.toString() || '',
-              compensationType: (jd.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
-              assessmentGuidance: jd.assessment_guidance || '',
-              internalRecruiterComments: jd.internal_comments ? jd.internal_comments.split('\n').filter(c => c.trim()) : [],
-              certifications: jd.certifications || [],
-              domainKeywords: jd.domain_keywords || [],
-              allowOverqualified: jd.allow_overqualified ?? false,
-              employmentType: (jd.employment_type as ExtractedData['employmentType']) || 'full_time',
-              workModel: (jd.remote_type as ExtractedData['workModel']) || 'onsite',
-              locations: jd.locations?.map(loc => ({
-                city: loc.state ? `${loc.city}, ${loc.state}` : loc.city,
-                radius: loc.radius_km?.toString() || '50',
-              })) || [],
-              locationsRequired: jd.locations?.some(loc => loc.is_required) || false,
-              codingRequired: jd.coding_required || false,
-              suggestedLanguages: jd.supported_languages || [],
-            });
-
-            console.log('[TalentFlow] Extracted data reloaded successfully after review');
-          } catch (error) {
-            console.error('[TalentFlow] Failed to reload extracted data after review:', error);
-          }
-        }
-
-        console.log('[TalentFlow] Skipping extraction after review');
+        // Keep current extractedData as-is (user may have deleted items)
+        console.log('[TalentFlow] No Stage 1 fields modified after review, keeping current extractedData');
         setHasProceededToExtract(true);
         setStep('extract');
         return;
@@ -1321,74 +1263,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         setHasProceededToReview(false); // Reset so Stage 2 becomes editable again
       }
     } else if (lastExtractedJD && jdText.trim() === lastExtractedJD.trim()) {
-      // Normal flow: Check if JD has changed since last extraction
-      console.log('[TalentFlow] JD unchanged, checking if extracted data exists...');
-
-      // Safety check: If extractedData is empty (no skills), reload from database
-      if (editingId && (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0)) {
-        console.log('[TalentFlow] Extracted data is empty, reloading from database...');
-        try {
-          const jd = await jdService.get(editingId);
-
-          // Map experience from database
-          const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
-            if (min === null || min === undefined) return '';
-            if (min >= 10) return 'senior';
-            if (min >= 7) return 'senior';
-            if (min >= 5) return 'mid';
-            if (min >= 2) return 'junior';
-            return 'entry';
-          };
-
-          const experienceValue = mapExpToLevel(jd.experience_min, jd.experience_max);
-          const educationValue = jd.education_requirements?.degree || '';
-          const industryValue = jd.industry_type || '';
-
-          console.log('[TalentFlow] Reloading extracted data from database:', {
-            mustHaveSkills: jd.must_have_skills,
-            niceToHaveSkills: jd.nice_to_have_skills,
-            mustHaveComments: jd.must_have_comments,
-            niceToHaveComments: jd.nice_to_have_comments,
-          });
-
-          setExtractedData({
-            mustHaveSkills: jd.must_have_skills || [],
-            niceToHaveSkills: jd.nice_to_have_skills || [],
-            mustHaveComments: jd.must_have_comments || [],
-            niceToHaveComments: jd.nice_to_have_comments || [],
-            education: educationValue,
-            educationRequired: false,
-            experience: experienceValue,
-            experienceRequired: false,
-            industryType: industryValue,
-            industryTypeRequired: false,
-            department: jd.department || '',
-            salaryFrom: jd.salary_min?.toString() || '',
-            salaryTo: jd.salary_max?.toString() || '',
-            compensationType: (jd.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
-            assessmentGuidance: jd.assessment_guidance || '',
-            internalRecruiterComments: jd.internal_comments ? jd.internal_comments.split('\n').filter(c => c.trim()) : [],
-            certifications: jd.certifications || [],
-            domainKeywords: jd.domain_keywords || [],
-            allowOverqualified: jd.allow_overqualified ?? false,
-            employmentType: (jd.employment_type as ExtractedData['employmentType']) || 'full_time',
-            workModel: (jd.remote_type as ExtractedData['workModel']) || 'onsite',
-            locations: jd.locations?.map(loc => ({
-              city: loc.state ? `${loc.city}, ${loc.state}` : loc.city,
-              radius: loc.radius_km?.toString() || '50',
-            })) || [],
-            locationsRequired: jd.locations?.some(loc => loc.is_required) || false,
-            codingRequired: jd.coding_required || false,
-            suggestedLanguages: jd.supported_languages || [],
-          });
-
-          console.log('[TalentFlow] Extracted data reloaded successfully');
-        } catch (error) {
-          console.error('[TalentFlow] Failed to reload extracted data:', error);
-        }
-      }
-
-      console.log('[TalentFlow] Skipping extraction and going directly to step 2');
+      // Normal flow: JD unchanged since last extraction - keep current extractedData
+      // Don't reload from DB (user may have deleted items)
+      console.log('[TalentFlow] JD unchanged, keeping current extractedData and going to step 2');
       setHasProceededToExtract(true);
       setStep('extract');
       return;
@@ -1758,6 +1635,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         niceToHaveComments: extraction.niceToHaveComments
       });
       setExtractedData(extraction);
+      setExtractedDataModified(false);  // Reset after fresh extraction - no user modifications yet
       setLastExtractedJD(jdText);  // Track JD text to skip extraction if unchanged on next "Next" click
 
       // Save original Stage 1 values to detect modifications if user returns from review
@@ -1897,6 +1775,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       [category]: extractedData[category].filter((_, i) => i !== index),
     };
     setExtractedData(updatedData);
+    setExtractedDataModified(true);  // Mark as modified to prevent reload from DB
 
     // Save to DB immediately
     if (editingId) {
@@ -1942,6 +1821,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       ...prev,
       mustHaveComments: updatedComments,
     }));
+    setExtractedDataModified(true);  // Mark as modified to prevent reload from DB
 
     // Save to DB immediately
     if (editingId) {
@@ -2023,6 +1903,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       ...prev,
       niceToHaveComments: updatedComments,
     }));
+    setExtractedDataModified(true);  // Mark as modified to prevent reload from DB
 
     // Save to DB immediately
     if (editingId) {
@@ -2143,6 +2024,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       ...prev,
       [category]: updatedComments,
     }));
+    setExtractedDataModified(true);  // Mark as modified to prevent reload from DB
 
     // Save to DB immediately
     if (editingId) {
@@ -2415,7 +2297,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setStep('review');
     setHasProceededToReview(true);  // Mark that user has proceeded to review (makes Stage 2 fields read-only)
     setHasFormattedForReview(true);  // Mark as formatted so we can skip on next "Next" click
-    setExtractedDataModified(false);  // Reset modified flag after formatting
+    // NOTE: Don't reset extractedDataModified here - it should persist to prevent reloading
+    // user's deleted items from DB when navigating back to Stage 1/2
     setValidationErrors({});  // Clear validation errors since all validations passed
 
     // Save JD with creation_stage: 'review' so refresh preserves the stage

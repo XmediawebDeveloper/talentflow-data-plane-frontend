@@ -696,9 +696,10 @@ export default function ResumeScoringPage({
       };
 
       // Use matchStatus from API if available, otherwise calculate from score (70+ = Exact Match)
-      const matchStatus = resume.matchStatus || (
-        resume.matchScore >= 70 ? 'Exact Match' :
-        resume.matchScore >= 50 ? 'Partial Match' : 'No Match'
+      const scoreValue = resume.overall_score || resume.scorePercentage || 0;
+      const matchStatus = resume.matchStatus || resume.match_status || (
+        scoreValue >= 70 ? 'Exact Match' :
+        scoreValue >= 50 ? 'Partial Match' : 'No Match'
       );
 
       return {
@@ -709,7 +710,7 @@ export default function ResumeScoringPage({
         email: resume.candidateEmail || resume.email || 'N/A',
         phone: resume.phone || 'N/A',
         matchStatus: matchStatus,
-        scorePercentage: resume.matchScore || resume.scorePercentage || 0,
+        scorePercentage: Math.round(scoreValue),
         scoredDate: new Date(scoredData.scoredAt).toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'short',
@@ -985,11 +986,11 @@ export default function ResumeScoringPage({
                         errorReason: undefined,
                         scoredDateTime: new Date(),
                         matchResult: scoredResume
-                          ? (scoredResume.match_score >= 85 ? 'Exact Match'
-                             : scoredResume.match_score >= 70 ? 'Partial Match'
+                          ? (scoredResume.overall_score >= 85 ? 'Exact Match'
+                             : scoredResume.overall_score >= 70 ? 'Partial Match'
                              : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
                           : undefined,
-                        score: scoredResume?.match_score
+                        score: scoredResume?.overall_score
                       }
                     : p
                 ));
@@ -1044,7 +1045,7 @@ export default function ResumeScoringPage({
                 completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
                 items: job.items?.map(item =>
                   item.resumeId === resumeId
-                    ? { ...item, status: 'completed' as const, score: result?.match_score }
+                    ? { ...item, status: 'completed' as const, score: result?.overall_score }
                     : item
                 )
               })));
@@ -1098,7 +1099,7 @@ export default function ResumeScoringPage({
       const matchesCandidates = item.totalScored >= historyMinCandidates;
 
       const avgScore = item.scoredResumes.length > 0
-        ? item.scoredResumes.reduce((sum, r) => sum + r.matchScore, 0) / item.scoredResumes.length
+        ? item.scoredResumes.reduce((sum, r) => sum + (r.overall_score || r.scorePercentage || 0), 0) / item.scoredResumes.length
         : 0;
       const matchesAvgScore = avgScore >= historyAvgScoreMin;
 
@@ -1170,9 +1171,9 @@ export default function ResumeScoringPage({
                       source: item.source === 'my-resumes' ? 'My Resumes' : 'Internal DB' as 'My Resumes' | 'Internal DB',
                       status: 'Scored successfully' as const,
                       scoredDateTime: new Date(item.scoredAt),
-                      matchResult: resume.matchScore >= 85 ? 'Exact Match' :
-                                   resume.matchScore >= 70 ? 'Partial Match' : 'No Match' as 'Exact Match' | 'Partial Match' | 'No Match',
-                      score: resume.matchScore,
+                      matchResult: (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match' :
+                                   (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match' : 'No Match' as 'Exact Match' | 'Partial Match' | 'No Match',
+                      score: resume.overall_score || resume.scorePercentage || 0,
                     }))
                   );
                   setProgressData(allProgressData);
@@ -1456,12 +1457,12 @@ export default function ResumeScoringPage({
           <div className={historyViewMode === 'grid' ? 'grid gap-5' : 'space-y-3'}>
             {filteredHistory.map((item) => {
               const avgScore = item.scoredResumes.length > 0
-                ? Math.round(item.scoredResumes.reduce((sum, r) => sum + r.matchScore, 0) / item.scoredResumes.length)
+                ? Math.round(item.scoredResumes.reduce((sum, r) => sum + (r.overall_score || r.scorePercentage || 0), 0) / item.scoredResumes.length)
                 : 0;
 
-              const excellentCount = item.scoredResumes.filter(r => r.matchScore >= 85).length;
-              const goodCount = item.scoredResumes.filter(r => r.matchScore >= 70 && r.matchScore < 85).length;
-              const moderateCount = item.scoredResumes.filter(r => r.matchScore < 70).length;
+              const excellentCount = item.scoredResumes.filter(r => (r.overall_score || r.scorePercentage || 0) >= 85).length;
+              const goodCount = item.scoredResumes.filter(r => (r.overall_score || r.scorePercentage || 0) >= 70 && (r.overall_score || r.scorePercentage || 0) < 85).length;
+              const moderateCount = item.scoredResumes.filter(r => (r.overall_score || r.scorePercentage || 0) < 70).length;
               const isSelected = selectedHistoryItems.has(item.id);
 
               const jobDetails = jobs.find(j => j.id === item.jobId);
@@ -1559,7 +1560,7 @@ export default function ResumeScoringPage({
                                 resumeId: resume.resumeId || resume.id || '',
                                 candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
                                 status: (resume.status === 'failed' || resume.errorReason) ? 'failed' as const : 'completed' as const,
-                                score: resume.matchScore || resume.scorePercentage || resume.score,
+                                score: resume.overall_score || resume.scorePercentage || resume.score,
                                 errorMessage: resume.errorReason || resume.error_reason,
                               })),
                             }];
@@ -1748,7 +1749,7 @@ export default function ResumeScoringPage({
                                 resumeId: resume.resumeId || resume.id || '',
                                 candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
                                 status: (resume.status === 'failed' || resume.errorReason) ? 'failed' as const : 'completed' as const,
-                                score: resume.matchScore || resume.scorePercentage || resume.score,
+                                score: resume.overall_score || resume.scorePercentage || resume.score,
                                 errorMessage: resume.errorReason || resume.error_reason,
                               })),
                             }];
@@ -1883,11 +1884,11 @@ export default function ResumeScoringPage({
                         errorReason: undefined,
                         scoredDateTime: new Date(),
                         matchResult: scoredResume
-                          ? (scoredResume.match_score >= 85 ? 'Exact Match'
-                             : scoredResume.match_score >= 70 ? 'Partial Match'
+                          ? (scoredResume.overall_score >= 85 ? 'Exact Match'
+                             : scoredResume.overall_score >= 70 ? 'Partial Match'
                              : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
                           : undefined,
-                        score: scoredResume?.match_score
+                        score: scoredResume?.overall_score
                       }
                     : p
                 ));
@@ -1937,7 +1938,7 @@ export default function ResumeScoringPage({
                 completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
                 items: job.items?.map(item =>
                   item.resumeId === resumeId
-                    ? { ...item, status: 'completed' as const, score: result?.match_score }
+                    ? { ...item, status: 'completed' as const, score: result?.overall_score }
                     : item
                 )
               })));
@@ -2330,7 +2331,7 @@ export default function ResumeScoringPage({
               completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
               items: job.items?.map(item =>
                 item.resumeId === resumeId
-                  ? { ...item, status: 'completed' as const, score: result?.overall_score || result?.match_score }
+                  ? { ...item, status: 'completed' as const, score: result?.overall_score }
                   : item
               )
             })));

@@ -305,6 +305,7 @@ export default function ResumeScoringRoute() {
           candidateEmail: item.email || item.candidate_email || '',
           email: item.email || item.candidate_email || '',
           phone: item.phone || '',
+          overall_score: matchScore,  // Use overall_score as primary field
           matchScore: matchScore,
           matchStatus: matchStatus,
           scorePercentage: matchScore,
