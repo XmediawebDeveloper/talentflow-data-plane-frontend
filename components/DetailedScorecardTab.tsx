@@ -38,12 +38,13 @@ interface ScoredResumeDetail {
 interface DetailedScorecardTabProps {
   resume: ScoredResumeDetail;
   jobTitle: string;
+  aiReasoning?: string;
   getScoreColor: (score: number) => string;
   getScoreBgColor: (score: number) => string;
   getProgressBarColor: (score: number) => string;
 }
 
-export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, getScoreBgColor, getProgressBarColor }: DetailedScorecardTabProps) {
+export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, getScoreColor, getScoreBgColor, getProgressBarColor }: DetailedScorecardTabProps) {
   // Convert percentage scores to rating out of 10
   const convertToRating = (percentage: number): number => {
     return Math.round((percentage / 100) * 10);
@@ -299,83 +300,34 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
   };
 
   return (
-    <div className="space-y-6">
-      {/* Comprehensive Scorecard Header */}
-      <div className="bg-gradient-to-r from-gray-50 to-gray-50 border-2 border-gray-200 rounded-lg p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-gray-900">Comprehensive Scorecard</h3>
-              <p className="text-sm text-gray-600">Detailed evaluation across all criteria</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-3xl font-bold text-gray-800">{resume.scorePercentage}%</div>
-            <div className="text-xs text-gray-600">Overall Score</div>
-          </div>
-        </div>
-        
-        {/* Timestamp Information */}
-        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-gray-800" />
-            <div>
-              <div className="text-xs text-gray-600">Scored On</div>
-              <div className="text-sm font-medium text-gray-900">
-                {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
-                  ? new Date(resume.scoredDate).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    })
-                  : 'N/A'}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-gray-800" />
-            <div>
-              <div className="text-xs text-gray-600">Time</div>
-              <div className="text-sm font-medium text-gray-900">
-                {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
-                  ? (() => {
-                      // Add 5 hours 30 minutes (IST offset) to server time
-                      const serverDate = new Date(resume.scoredDate);
-                      const istDate = new Date(serverDate.getTime() + (5 * 60 + 30) * 60 * 1000);
-                      return istDate.toLocaleTimeString('en-US', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      });
-                    })()
-                  : 'N/A'}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <User className="w-4 h-4 text-green-600" />
-            <div>
-              <div className="text-xs text-gray-600">Scored By</div>
-              <div className="text-sm font-medium text-gray-900">{resume.scoredBy || 'System'}</div>
-            </div>
-          </div>
-        </div>
+    <div className="space-y-4">
+      {/* Score Summary Header - Compact */}
+      <div className="flex items-center gap-4 text-sm">
+        <span className="text-gray-700">Overall Score:</span>
+        <span className={`text-2xl font-bold ${resume.scorePercentage >= 70 ? 'text-green-600' : resume.scorePercentage >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
+          {resume.scorePercentage}%
+        </span>
+        <span className="text-gray-400">|</span>
+        {summaryData && (
+          <>
+            <span className="text-gray-700">Required: <span className="font-semibold text-gray-900">{summaryData.requiredPercentage.toFixed(0)}%</span></span>
+            <span className="text-gray-700">Preferred: <span className="font-semibold text-gray-900">{summaryData.preferredPercentage.toFixed(0)}%</span></span>
+            <span className="text-gray-600">|</span>
+          </>
+        )}
+        <span className="text-gray-600">
+          {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
+            ? new Date(resume.scoredDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : 'N/A'}
+        </span>
+        <span className="text-gray-600">by {resume.scoredBy || 'System'}</span>
       </div>
 
-      {/* Score Summary - Large Display */}
-      {summaryData && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg px-6 py-4 flex items-center justify-center gap-8">
-          <div className="flex items-center gap-3">
-            <span className="text-base text-gray-600">Required:</span>
-            <span className="text-2xl font-bold text-red-600">{summaryData.requiredPercentage.toFixed(0)}%</span>
-          </div>
-          <span className="text-gray-300 text-2xl">|</span>
-          <div className="flex items-center gap-3">
-            <span className="text-base text-gray-600">Preferred:</span>
-            <span className="text-2xl font-bold text-blue-600">{summaryData.preferredPercentage.toFixed(0)}%</span>
-          </div>
+      {/* AI Analysis */}
+      {aiReasoning && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-2">AI Analysis</h4>
+          <p className="text-gray-900 text-sm leading-relaxed">{aiReasoning}</p>
         </div>
       )}
 
@@ -453,7 +405,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-sm text-gray-600 leading-relaxed">{criteria.aiReasoning}</p>
+                        <p className="text-sm text-gray-800 leading-relaxed">{criteria.aiReasoning}</p>
                       </td>
                     </tr>
                   );
@@ -471,25 +423,25 @@ export default function DetailedScorecardTab({ resume, jobTitle, getScoreColor, 
             <div className="text-2xl font-bold text-green-700">
               {criteriaScores.filter(c => c.rating >= 7).length}
             </div>
-            <div className="text-sm text-gray-700 mt-1">Eligible Criteria</div>
+            <div className="text-sm font-medium text-gray-800 mt-1">Eligible Criteria</div>
           </div>
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="text-2xl font-bold text-red-700">
               {criteriaScores.filter(c => c.rating < 7).length}
             </div>
-            <div className="text-sm text-gray-700 mt-1">Not Eligible Criteria</div>
+            <div className="text-sm font-medium text-gray-800 mt-1">Not Eligible Criteria</div>
           </div>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <div className="text-2xl font-bold text-gray-900">
               {criteriaScores.filter(c => c.criteriaType === 'Required').length}
             </div>
-            <div className="text-sm text-gray-700 mt-1">Required Criteria</div>
+            <div className="text-sm font-medium text-gray-800 mt-1">Required Criteria</div>
           </div>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <div className="text-2xl font-bold text-gray-900">
               {(criteriaScores.reduce((sum, c) => sum + c.rating, 0) / criteriaScores.length).toFixed(1)}
             </div>
-            <div className="text-sm text-gray-700 mt-1">Average Rating</div>
+            <div className="text-sm font-medium text-gray-800 mt-1">Average Rating</div>
           </div>
         </div>
       )}

@@ -298,6 +298,23 @@ export default function MyResumesPage() {
       });
       let apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
 
+      // Ensure "root" folder always exists (default folder for uploads)
+      const hasRootFolder = apiFolders.some(f => f.name.toLowerCase() === 'root' && !f.parentId);
+      if (!hasRootFolder) {
+        try {
+          const newRootFolder = await folderService.create('root');
+          const rootFolderConverted: FolderType = {
+            id: newRootFolder.id,
+            name: newRootFolder.name,
+            count: 0,
+            parentId: newRootFolder.parent_id,
+          };
+          apiFolders = [rootFolderConverted, ...apiFolders];
+        } catch (error) {
+          console.error('Failed to create root folder:', error);
+        }
+      }
+
       // Ensure "Archived Resumes" folder always exists
       const hasArchivedFolder = apiFolders.some(f => f.name === 'Archived Resumes' && !f.parentId);
       if (!hasArchivedFolder) {
@@ -1337,7 +1354,12 @@ export default function MyResumesPage() {
     <main className="flex-1 p-8 bg-gray-50">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 mb-2">My Resume Database</h1>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-2xl font-semibold text-gray-900">My Resume Database</h1>
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">
+              {resumes.length} Resumes
+            </span>
+          </div>
           <p className="text-sm text-gray-600">Resumes uploaded by you</p>
         </div>
         <div className="flex gap-3">
@@ -1366,14 +1388,7 @@ export default function MyResumesPage() {
         </div>
       </div>
 
-      <StatsCards
-        cards={[
-          { type: 'total', value: totalResumes },
-          { type: 'applied', value: appliedResumes }
-        ]}
-      />
-
-      <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {/* Bulk Actions Bar - Shows at TOP when resumes selected */}
         {selectedResumes.length > 0 && (
           <BulkActionsBar
@@ -1494,10 +1509,8 @@ export default function MyResumesPage() {
             {cardViewFolder === null ? (
               // Show Folder Cards
               (() => {
-                // Filter out 'all' and 'root' folders - root is a system folder for unorganized resumes
-                const realFolders = folders.filter(f =>
-                  f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId)
-                );
+                // Filter out only 'all' virtual folder - show root and Archived Resumes
+                const realFolders = folders.filter(f => f.id !== 'all');
 
                 // Group resumes by folder to get counts
                 const resumesByFolder = new Map<string, Resume[]>();
@@ -1515,18 +1528,39 @@ export default function MyResumesPage() {
                 const folderCards = realFolders.map((folder) => {
                   const folderResumes = resumesByFolder.get(folder.id) || [];
 
+                  const isArchived = folder.name === 'Archived Resumes' && !folder.parentId;
+                  const isRoot = folder.name.toLowerCase() === 'root' && !folder.parentId;
+
                   return (
                     <div
                       key={folder.id}
-                      className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-blue-300 transition-all"
+                      className={`bg-white border rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all ${
+                        isArchived
+                          ? 'border-amber-200 hover:border-amber-400'
+                          : isRoot
+                            ? 'border-green-200 hover:border-green-400'
+                            : 'border-gray-200 hover:border-blue-300'
+                      }`}
                       onClick={() => setCardViewFolder(folder.id)}
                     >
                       <div className="flex items-center gap-3 p-4">
-                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <Folder className="w-6 h-6 text-blue-600" />
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                          isArchived
+                            ? 'bg-amber-100'
+                            : isRoot
+                              ? 'bg-green-100'
+                              : 'bg-blue-100'
+                        }`}>
+                          {isArchived ? (
+                            <Archive className="w-6 h-6 text-amber-600" />
+                          ) : (
+                            <Folder className={`w-6 h-6 ${isRoot ? 'text-green-600' : 'text-blue-600'}`} />
+                          )}
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900">{folder.name}</h3>
+                          <h3 className="font-semibold text-gray-900">
+                            {isRoot ? 'Root (Default)' : folder.name}
+                          </h3>
                           <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
                         </div>
                         <ChevronRight className="w-5 h-5 text-gray-400" />
@@ -1772,7 +1806,7 @@ export default function MyResumesPage() {
 
       {isUploadModalOpen && (
         <UploadModal
-          folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
+          folders={folders.filter(f => f.id !== 'all' && !(f.name === 'Archived Resumes' && !f.parentId))}
           tenant={null}
           targetFolder={selectedFolder !== 'all' ? selectedFolder || undefined : undefined}
           onClose={() => setIsUploadModalOpen(false)}

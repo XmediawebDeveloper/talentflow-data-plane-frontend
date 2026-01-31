@@ -2,12 +2,15 @@
 
 import { X, Download, Clock, User, FileText, History, Briefcase } from 'lucide-react';
 import { ResumeVersion } from '@/lib/types/types';
+import { resumeService } from '@/lib/services/resumeService';
+import { toast } from 'sonner';
 
 interface VersionHistoryModalProps {
   candidateName?: string;
   versions?: ResumeVersion[];
   onClose: () => void;
   onApplyToJob?: (versionId: string) => void;
+  onDownload?: (versionId: string) => void;
   // Job-specific props
   isOpen?: boolean;
   jobTitle?: string;
@@ -19,6 +22,7 @@ export default function VersionHistoryModal({
   versions,
   onClose,
   onApplyToJob,
+  onDownload,
   isOpen,
   jobTitle,
   versionHistory
@@ -148,10 +152,14 @@ export default function VersionHistoryModal({
                             <div className="flex items-center gap-3 text-xs text-gray-600">
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
-                                {getRelativeTime(version.uploadDate || version.date || version.timestamp)}
+                                {formatDate(version.uploadDate || version.date || version.timestamp)}
                               </span>
-                              <span>•</span>
-                              <span>{version.size}</span>
+                              {version.size && (
+                                <>
+                                  <span>•</span>
+                                  <span>{version.size}</span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -170,6 +178,28 @@ export default function VersionHistoryModal({
                             </button>
                           )}
                           <button
+                            onClick={async () => {
+                              if (onDownload) {
+                                onDownload(version.id);
+                              } else {
+                                // Fallback: download directly
+                                try {
+                                  toast.loading('Downloading...', { id: 'version-download' });
+                                  const blob = await resumeService.download(version.id);
+                                  const url = window.URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = version.name || 'resume';
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  window.URL.revokeObjectURL(url);
+                                  document.body.removeChild(a);
+                                  toast.success('Downloaded', { id: 'version-download' });
+                                } catch (error) {
+                                  toast.error('Download failed', { id: 'version-download' });
+                                }
+                              }
+                            }}
                             className={`p-2 rounded-md transition-colors flex-shrink-0 ${
                               index === 0
                                 ? 'text-blue-600 hover:bg-blue-100'
