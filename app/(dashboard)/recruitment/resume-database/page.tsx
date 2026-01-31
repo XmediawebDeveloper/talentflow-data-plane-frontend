@@ -662,30 +662,15 @@ export default function ResumeDatabasePage() {
     <main className="flex-1 p-8 bg-gray-50">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 mb-2">Internal Resume Database</h1>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-2xl font-semibold text-gray-900">Internal Resume Database</h1>
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">
+              {resumes.length.toLocaleString()} Resumes
+            </span>
+          </div>
           <p className="text-sm text-gray-600">
-            Search across {totalResumes.toLocaleString()} resumes in your organization
+            Search and filter resumes from your organization's database
           </p>
-        </div>
-      </div>
-
-      {/* Search Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="text-3xl font-bold text-gray-900">{resumes.length.toLocaleString()}</div>
-          <div className="text-sm text-gray-600">Total Resumes</div>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="text-3xl font-bold text-blue-600">{filteredAndSortedResumes.length}</div>
-          <div className="text-sm text-gray-600">Matching Results</div>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="text-3xl font-bold text-green-600">{activeFilterCount + (appliedSearchQuery ? 1 : 0)}</div>
-          <div className="text-sm text-gray-600">Active Filters</div>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="text-3xl font-bold text-purple-600">{currentPage}/{calculatedTotalPages}</div>
-          <div className="text-sm text-gray-600">Page</div>
         </div>
       </div>
 

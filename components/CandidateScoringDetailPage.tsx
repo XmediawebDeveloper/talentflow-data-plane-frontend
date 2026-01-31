@@ -58,7 +58,7 @@ interface CandidateScoringDetailPageProps {
 }
 
 export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onBack }: CandidateScoringDetailPageProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'comparison' | 'scoretable' | 'personalinfo'>('overview');
+  const [activeTab, setActiveTab] = useState<'scoretable' | 'personalinfo'>('scoretable');
   const [isDataReady, setIsDataReady] = useState(false);
   const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
   const [fullResumeLoaded, setFullResumeLoaded] = useState(false);
@@ -365,12 +365,8 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
       <div className="px-8 py-6">
         <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-6">
           <div className="flex items-start justify-between mb-6">
-            <div className="flex items-center gap-4 flex-1">
-              <div className="w-20 h-20 bg-gradient-to-br from-gray-700 to-gray-800 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg">
-                <Target className="w-10 h-10 text-white" />
-              </div>
-              <div className="flex-1">
-                <h1 className="text-3xl text-gray-900 font-bold mb-2">{resume.candidateName}</h1>
+            <div className="flex-1">
+              <h1 className="text-2xl text-gray-900 font-bold mb-2">{resume.candidateName}</h1>
                 <p className="text-lg text-gray-700 mb-3 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
                 <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
                   <span className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
@@ -388,7 +384,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                     </span>
                   )}
                 </div>
-              </div>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -401,26 +396,20 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
             </div>
           </div>
 
-          {/* Score Display */}
-          <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-6 border-2 border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-gray-600 mb-2 font-medium">Overall Match Score</div>
-                <div className="flex items-center gap-4">
-                  <div className={`text-6xl font-bold ${getScoreColor(resume.scorePercentage)}`}>{resume.scorePercentage}%</div>
-                  <span className={`px-5 py-2.5 rounded-lg text-sm font-medium border-2 ${getMatchStatusColor(resume.matchStatus)}`}>
-                    {resume.matchStatus}
-                  </span>
-                </div>
-              </div>
-              <div className="text-right bg-white px-6 py-4 rounded-xl border border-gray-200 shadow-sm">
-                <div className="text-sm text-gray-600 mb-1 font-medium">Position</div>
-                <div className="text-xl font-bold text-gray-900">{jobTitle}</div>
-                <div className="text-xs text-gray-600 mt-2 flex items-center gap-1.5 justify-end">
-                  <Clock className="w-3.5 h-3.5" />
-                  Scored on {resume.scoredDate}
-                </div>
-              </div>
+          {/* Score Display - Compact */}
+          <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3 border border-gray-200">
+            <div className="flex items-center gap-4">
+              <div className={`text-3xl font-bold ${getScoreColor(resume.scorePercentage)}`}>{resume.scorePercentage}%</div>
+              <span className={`px-3 py-1 rounded-md text-sm font-medium border ${getMatchStatusColor(resume.matchStatus)}`}>
+                {resume.matchStatus}
+              </span>
+              <span className="text-gray-400">|</span>
+              <span className="text-sm text-gray-700">{jobTitle}</span>
+            </div>
+            <div className="text-sm text-gray-600">
+              {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
+                ? new Date(resume.scoredDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : resume.scoredDate}
             </div>
           </div>
         </div>
@@ -431,8 +420,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
         <div className="bg-white rounded-t-xl border-x-2 border-t-2 border-gray-200">
           <div className="flex gap-1 px-6 pt-2">
             {[
-              { id: 'overview', label: 'Overview' },
-              // { id: 'comparison', label: 'JD Comparison' },
               { id: 'scoretable', label: 'Score Table' },
               { id: 'personalinfo', label: 'Personal Info' },
             ].map((tab) => (
@@ -455,100 +442,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
       {/* Content */}
       <div className="px-8 pb-8">
         <div className="bg-white rounded-b-xl border-x-2 border-b-2 border-gray-200 p-8">
-          {activeTab === 'overview' && (
-            <div className="space-y-8">
-              {/* AI Analysis */}
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-2 border-gray-200 rounded-xl p-8">
-                <div className="flex items-start gap-5">
-                  <div className="w-16 h-16 bg-gray-800 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Zap className="w-8 h-8 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-semibold text-gray-900 mb-3">AI Match Analysis</h3>
-                    <p className="text-base text-gray-700 leading-relaxed">{aiReasoning}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Skills Match */}
-              {matchedSkills.length > 0 && (
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-8">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
-                    <CheckCircle className="w-6 h-6 text-green-600" />
-                    Matched Skills ({matchedSkills.length})
-                  </h3>
-                  <div className="flex flex-wrap gap-3">
-                    {matchedSkills.map((skill, idx) => (
-                      <span
-                        key={idx}
-                        className="px-5 py-2.5 bg-green-100 text-green-700 border border-green-300 rounded-lg text-base font-medium flex items-center gap-2"
-                      >
-                        <CheckCircle className="w-5 h-5" />
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Missing Skills */}
-              {missingSkills.length > 0 && (
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-8">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
-                    <AlertCircle className="w-6 h-6 text-red-600" />
-                    Skills Gap ({missingSkills.length})
-                  </h3>
-                  <div className="flex flex-wrap gap-3">
-                    {missingSkills.map((skill, idx) => (
-                      <span
-                        key={idx}
-                        className="px-5 py-2.5 bg-red-100 text-red-700 border border-red-300 rounded-lg text-base font-medium flex items-center gap-2"
-                      >
-                        <XCircle className="w-5 h-5" />
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Key Strengths */}
-              <div className="bg-white border-2 border-gray-200 rounded-xl p-8">
-                <h3 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
-                  <Star className="w-6 h-6 text-yellow-600" />
-                  Key Strengths
-                </h3>
-                <ul className="space-y-4">
-                  {keyStrengths.map((strength, idx) => (
-                    <li key={idx} className="flex items-start gap-4 text-base text-gray-700">
-                      <CheckCircle className="w-6 h-6 text-green-600 mt-0.5 flex-shrink-0" />
-                      <span>{strength}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Improvement Areas */}
-              {improvementAreas.length > 0 && (
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-8">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
-                    <TrendingUp className="w-6 h-6 text-orange-600" />
-                    Areas for Development
-                  </h3>
-                  <ul className="space-y-4">
-                    {improvementAreas.map((area, idx) => (
-                      <li key={idx} className="flex items-start gap-4 text-base text-gray-700">
-                        <AlertCircle className="w-6 h-6 text-orange-600 mt-0.5 flex-shrink-0" />
-                        <span>{area}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-            </div>
-          )}
-
           {/* {activeTab === 'comparison' && (
             <div className="space-y-6">
               <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
@@ -665,6 +558,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                 criteriaScores: fullResumeData.criteriaScores,
               }}
               jobTitle={jobTitle}
+              aiReasoning={aiReasoning}
               getScoreColor={getScoreColor}
               getScoreBgColor={getScoreBgColor}
               getProgressBarColor={getProgressBarColor}
@@ -692,11 +586,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
               {/* Personal Info Card - Same as Resume View */}
               <div className="bg-gray-50 border border-gray-300 rounded-xl p-6 shadow-sm">
-                <div className="flex items-start gap-6">
-                  <div className="w-24 h-24 rounded-full bg-gray-400 flex items-center justify-center text-white text-3xl flex-shrink-0">
-                    {(fullResumeData.candidateName || 'U').split(' ').map(n => n[0]).join('').substring(0, 2)}
-                  </div>
-                  <div className="flex-1">
+                <div>
                     <div className="mb-4">
                       <h2 className="text-2xl font-bold text-gray-900 mb-2">{fullResumeData.candidateName || resume.candidateName}</h2>
                       <p className="text-lg text-gray-700 mb-3">{fullResumeData.title || resume.title || 'Candidate'}</p>
@@ -748,7 +638,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                         ))}
                       </div>
                     )}
-                  </div>
                 </div>
               </div>
 

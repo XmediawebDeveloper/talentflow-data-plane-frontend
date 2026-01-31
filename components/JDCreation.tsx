@@ -1890,12 +1890,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleRemoveSkill = (category: 'mustHaveSkills' | 'niceToHaveSkills', index: number) => {
-    setExtractedData(prev => ({
-      ...prev,
-      [category]: prev[category].filter((_, i) => i !== index),
-    }));
-    setExtractedDataModified(true);
+  const handleRemoveSkill = async (category: 'mustHaveSkills' | 'niceToHaveSkills', index: number) => {
+    // Update local state immediately
+    const updatedData = {
+      ...extractedData,
+      [category]: extractedData[category].filter((_, i) => i !== index),
+    };
+    setExtractedData(updatedData);
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          must_have_skills: category === 'mustHaveSkills' ? updatedData.mustHaveSkills : extractedData.mustHaveSkills,
+          nice_to_have_skills: category === 'niceToHaveSkills' ? updatedData.niceToHaveSkills : extractedData.niceToHaveSkills,
+        });
+        console.log('[Delete] Skill deleted and saved to DB');
+      } catch (error) {
+        console.error('[Delete] Failed to save skill deletion:', error);
+      }
+    }
   };
 
   const handleMoveSkill = (skill: string, from: 'mustHaveSkills' | 'niceToHaveSkills', to: 'mustHaveSkills' | 'niceToHaveSkills') => {
@@ -1921,12 +1935,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleRemoveComment = (index: number) => {
+  const handleRemoveComment = async (index: number) => {
+    // Update local state immediately
+    const updatedComments = extractedData.mustHaveComments.filter((_, i) => i !== index);
     setExtractedData(prev => ({
       ...prev,
-      mustHaveComments: prev.mustHaveComments.filter((_, i) => i !== index),
+      mustHaveComments: updatedComments,
     }));
-    setExtractedDataModified(true); // Mark as modified for regeneration
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          must_have_comments: updatedComments,
+        });
+        console.log('[Delete] Comment deleted and saved to DB');
+      } catch (error) {
+        console.error('[Delete] Failed to save comment deletion:', error);
+      }
+    }
   };
 
   // Inline editing handlers
@@ -1990,12 +2017,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleRemoveNiceComment = (index: number) => {
+  const handleRemoveNiceComment = async (index: number) => {
+    const updatedComments = (extractedData.niceToHaveComments || []).filter((_, i) => i !== index);
     setExtractedData(prev => ({
       ...prev,
-      niceToHaveComments: (prev.niceToHaveComments || []).filter((_, i) => i !== index),
+      niceToHaveComments: updatedComments,
     }));
-    setExtractedDataModified(true); // Mark as modified for regeneration
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          nice_to_have_comments: updatedComments,
+        });
+        console.log('[Delete] Nice comment deleted and saved to DB');
+      } catch (error) {
+        console.error('[Delete] Failed to save nice comment deletion:', error);
+      }
+    }
   };
 
   const handleStartEditNiceComment = (index: number, value: string) => {
@@ -2033,11 +2072,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleRemoveRecruiterComment = (index: number) => {
+  const handleRemoveRecruiterComment = async (index: number) => {
+    const updatedComments = extractedData.internalRecruiterComments.filter((_, i) => i !== index);
     setExtractedData(prev => ({
       ...prev,
-      internalRecruiterComments: prev.internalRecruiterComments.filter((_, i) => i !== index),
+      internalRecruiterComments: updatedComments,
     }));
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          internal_comments: updatedComments.join('\n') || undefined,
+        });
+        console.log('[Delete] Recruiter comment deleted and saved to DB');
+      } catch (error) {
+        console.error('[Delete] Failed to save recruiter comment deletion:', error);
+      }
+    }
   };
 
   const handleStartEditRecruiterComment = (index: number, value: string) => {
@@ -2085,12 +2137,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleRemoveCommentByCategory = (category: 'mustHaveComments' | 'niceToHaveComments', index: number) => {
+  const handleRemoveCommentByCategory = async (category: 'mustHaveComments' | 'niceToHaveComments', index: number) => {
+    const updatedComments = (extractedData[category] || []).filter((_, i) => i !== index);
     setExtractedData(prev => ({
       ...prev,
-      [category]: (prev[category] || []).filter((_, i) => i !== index),
+      [category]: updatedComments,
     }));
-    setExtractedDataModified(true);
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        const updateData = category === 'mustHaveComments'
+          ? { must_have_comments: updatedComments }
+          : { nice_to_have_comments: updatedComments };
+        await jdService.update(editingId, updateData);
+        console.log(`[Delete] ${category} deleted and saved to DB`);
+      } catch (error) {
+        console.error(`[Delete] Failed to save ${category} deletion:`, error);
+      }
+    }
   };
 
   const handleStartEditCommentByCategory = (category: 'mustHaveComments' | 'niceToHaveComments', index: number, value: string) => {
@@ -2117,11 +2182,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleRemoveLocation = (index: number) => {
+  const handleRemoveLocation = async (index: number) => {
+    const updatedLocations = extractedData.locations.filter((_, i) => i !== index);
     setExtractedData(prev => ({
       ...prev,
-      locations: prev.locations.filter((_, i) => i !== index),
+      locations: updatedLocations,
     }));
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          locations: updatedLocations.map(loc => ({
+            city: loc.city,
+            radius_km: loc.radiusKm,
+            is_required: loc.isRequired,
+          })),
+        });
+        console.log('[Delete] Location deleted and saved to DB');
+      } catch (error) {
+        console.error('[Delete] Failed to save location deletion:', error);
+      }
+    }
   };
 
   const handlePublish = async () => {
