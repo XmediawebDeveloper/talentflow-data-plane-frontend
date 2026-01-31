@@ -53,16 +53,29 @@ interface PermissionGroup {
 const MODULE_DISPLAY_NAMES: Record<string, string> = {
   jd: 'Job Descriptions',
   resumes: 'Resumes',
+  my_resumes: 'My Resumes',
   internal_db: 'Internal Database',
   assessments: 'Assessments',
+  candidates: 'Candidates',
   analytics: 'Analytics',
+  reports: 'Reports',
+  notifications: 'Notifications',
+  email_templates: 'Email Templates',
+  files: 'File Management',
   settings: 'Settings',
   users: 'Users',
   roles: 'Roles',
-  // RBAC03: Billing Manager modules
   billing: 'Billing & Subscriptions',
   invoices: 'Invoices & Payments',
   usage: 'Usage & Quotas',
+  audit: 'Audit Logs',
+  activity: 'Activity Logs',
+  api: 'API Access',
+  webhooks: 'Webhooks',
+  tags: 'Tags & Labels',
+  comments: 'Comments & Notes',
+  import: 'Data Import',
+  export: 'Data Export',
 };
 
 // Group permissions by module
@@ -88,8 +101,34 @@ const groupPermissionsByModule = (permissions: Permission[]): PermissionGroup[] 
     });
   });
 
-  // Return groups in a specific order
-  const moduleOrder = ['jd', 'resumes', 'internal_db', 'assessments', 'analytics', 'billing', 'invoices', 'usage', 'settings', 'users', 'roles'];
+  // Return groups in a specific order (core features first, admin features last)
+  const moduleOrder = [
+    'jd',
+    'resumes',
+    'my_resumes',
+    'internal_db',
+    'assessments',
+    'candidates',
+    'analytics',
+    'reports',
+    'notifications',
+    'email_templates',
+    'files',
+    'tags',
+    'comments',
+    'import',
+    'export',
+    'billing',
+    'invoices',
+    'usage',
+    'settings',
+    'users',
+    'roles',
+    'audit',
+    'activity',
+    'api',
+    'webhooks'
+  ];
   return moduleOrder
     .filter(mod => groups[mod])
     .map(mod => groups[mod]);
