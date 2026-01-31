@@ -1,5 +1,6 @@
-import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User } from 'lucide-react';
+import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
 
 interface AssessmentDetailsViewProps {
@@ -31,10 +32,13 @@ export default function AssessmentDetailsView({
   onViewResults,
   onRefresh
 }: AssessmentDetailsViewProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity'>('overview');
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions'>('overview');
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [versionHistory, setVersionHistory] = useState<any[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
 
   // Fetch recent activity when assessment changes
   useEffect(() => {
@@ -60,6 +64,23 @@ export default function AssessmentDetailsView({
     };
     fetchActivity();
   }, [assessment?.id]);
+
+  // Fetch version history when versions tab is active
+  useEffect(() => {
+    const fetchVersions = async () => {
+      if (!assessment?.id || activeTab !== 'versions') return;
+      setVersionsLoading(true);
+      try {
+        const response = await assessmentService.getVersionHistory(assessment.id);
+        setVersionHistory(response.items || []);
+      } catch (error) {
+        console.error('Failed to fetch version history:', error);
+      } finally {
+        setVersionsLoading(false);
+      }
+    };
+    fetchVersions();
+  }, [assessment?.id, activeTab]);
 
   // Construct sections array from individual assessment fields
   const sections = useMemo<Section[]>(() => {
@@ -127,9 +148,12 @@ export default function AssessmentDetailsView({
 
   const analyticsData = {
     totalInvites: assessment.candidates || assessment.invitations_count || 0,
+    sent: recentActivity.filter((a: any) => a.status === 'sent').length,
+    failed: recentActivity.filter((a: any) => a.status === 'failed').length,
+    started: recentActivity.filter((a: any) => a.status === 'in_progress' || a.status === 'started').length,
     completed: assessment.completed_count || 0,
-    inProgress: 0,  // Not tracked currently
-    notStarted: (assessment.candidates || assessment.invitations_count || 0) - (assessment.completed_count || 0),
+    inProgress: assessment.in_progress_count || 0,
+    notStarted: assessment.pending_count || 0,
     averageScore: assessment.average_score as number | null,
     averageTime: formatTime(assessment.average_time_seconds),
     passRate: assessment.pass_rate !== null && assessment.pass_rate !== undefined
@@ -162,6 +186,10 @@ export default function AssessmentDetailsView({
               <div>
                 <div className="flex items-center gap-3 mb-1">
                   <h1 className="text-2xl text-white">{assessment.title}</h1>
+                  {/* Version Badge */}
+                  <span className="px-2 py-1 bg-blue-500/20 backdrop-blur-sm text-blue-100 rounded text-xs font-medium border border-blue-400/30">
+                    V{assessment.version || 1}
+                  </span>
                   {sections.length > 0 && (
                     <span className="px-2 py-1 bg-gray-700/30 backdrop-blur-sm text-white rounded text-xs flex items-center gap-1 border border-white/20">
                       <Sparkles className="w-3 h-3" />
@@ -283,6 +311,16 @@ export default function AssessmentDetailsView({
             >
               Recent Activity
             </button>
+            <button
+              onClick={() => setActiveTab('versions')}
+              className={`py-4 text-sm border-b-2 transition-colors ${
+                activeTab === 'versions'
+                  ? 'border-gray-800 text-gray-800'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Version History
+            </button>
           </div>
         </div>
       </div>
@@ -292,102 +330,301 @@ export default function AssessmentDetailsView({
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            {/* Quick Stats */}
-            <div className="grid grid-cols-4 gap-6">
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                    <Users className="w-5 h-5 text-gray-800" />
-                  </div>
-                  <span className="text-sm text-gray-600">Total Invites</span>
-                </div>
-                <div className="text-3xl text-gray-900 mb-1">{analyticsData.totalInvites}</div>
-                <div className="text-xs text-gray-500">All time</div>
+            {/* Assessment Details Section */}
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-base font-medium text-gray-900 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-gray-600" />
+                  Assessment Details
+                </h3>
               </div>
 
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
+              <div className="p-6">
+                {/* Total Duration Card */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                      <Clock className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-600 mb-1">Total Duration</div>
+                      <div className="text-xl font-semibold text-gray-900">{formattedDuration}</div>
+                    </div>
                   </div>
-                  <span className="text-sm text-gray-600">Completed</span>
+                  <span className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg">
+                    100%
+                  </span>
                 </div>
-                <div className="text-3xl text-gray-900 mb-1">{analyticsData.completed}</div>
-                <div className="text-xs text-gray-500">
-                  {analyticsData.totalInvites > 0
-                    ? `${Math.round((analyticsData.completed / analyticsData.totalInvites) * 100)}% completion rate`
-                    : 'No invites yet'
-                  }
-                </div>
-              </div>
 
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-gray-800" />
-                  </div>
-                  <span className="text-sm text-gray-600">Avg. Score</span>
-                </div>
-                <div className="text-3xl text-gray-900 mb-1">
-                  {analyticsData.averageScore != null ? `${analyticsData.averageScore.toFixed(1)}%` : 'N/A'}
-                </div>
-                <div className="text-xs text-gray-500">Mean performance</div>
-              </div>
+                {/* Assessment Rounds */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium text-gray-700">Assessment Rounds</h4>
 
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
-                    <Award className="w-5 h-5 text-yellow-600" />
-                  </div>
-                  <span className="text-sm text-gray-600">Pass Rate</span>
+                  {assessment.hr_enabled && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-3 py-1 bg-blue-500 text-white text-sm font-medium rounded">
+                          HR Round
+                        </span>
+                        <span className="px-3 py-1 bg-blue-500 text-white text-sm font-medium rounded-lg">
+                          {assessment.hr_percentage}%
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-xs font-medium text-gray-700 mb-2">Topics Covered:</div>
+                        <div className="flex flex-wrap gap-2">
+                          {(assessment.hr_topics || []).length > 0 ? (
+                            (assessment.hr_topics || []).map((topic: string, idx: number) => (
+                              <span key={idx} className="px-2 py-1 bg-white border border-blue-200 text-blue-700 rounded text-xs">
+                                {topic}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="px-2 py-1 bg-white border border-blue-200 text-blue-700 rounded text-xs">
+                              N/A
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {assessment.technical_enabled && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-3 py-1 bg-purple-500 text-white text-sm font-medium rounded">
+                          Technical Round
+                        </span>
+                        <span className="px-3 py-1 bg-purple-500 text-white text-sm font-medium rounded-lg">
+                          {assessment.technical_percentage}%
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-xs font-medium text-gray-700 mb-2">Topics Covered:</div>
+                        <div className="flex flex-wrap gap-2">
+                          {(assessment.technical_topics || []).length > 0 ? (
+                            (assessment.technical_topics || []).map((topic: string, idx: number) => (
+                              <span key={idx} className="px-2 py-1 bg-white border border-purple-200 text-purple-700 rounded text-xs">
+                                {topic}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="px-2 py-1 bg-white border border-purple-200 text-purple-700 rounded text-xs">
+                              N/A
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {assessment.coding_enabled && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-3 py-1 bg-green-500 text-white text-sm font-medium rounded">
+                          Coding Round
+                        </span>
+                        <span className="px-3 py-1 bg-green-500 text-white text-sm font-medium rounded-lg">
+                          {assessment.coding_percentage}%
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-xs font-medium text-gray-700 mb-2">Topics Covered:</div>
+                        <div className="flex flex-wrap gap-2">
+                          {(assessment.coding_topics || []).length > 0 ? (
+                            (assessment.coding_topics || []).map((topic: string, idx: number) => (
+                              <span key={idx} className="px-2 py-1 bg-white border border-green-200 text-green-700 rounded text-xs">
+                                {topic}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="px-2 py-1 bg-white border border-green-200 text-green-700 rounded text-xs">
+                              N/A
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="text-3xl text-gray-900 mb-1">{analyticsData.passRate}</div>
-                <div className="text-xs text-gray-500">70% threshold</div>
               </div>
             </div>
 
-            {/* Assessment Details */}
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-              <h3 className="text-lg text-gray-900 mb-4 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-gray-800" />
-                Assessment Details
-              </h3>
-              
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <div className="text-sm text-gray-600 mb-1">Assessment Type</div>
-                  <div className="text-gray-900">
-                    {sections.map(s => s.name).join(' + ') || 'General'}
+            {/* Invitation Status Section */}
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-base font-medium text-gray-900 flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-gray-600" />
+                  Invitation Status
+                </h3>
+                <button
+                  onClick={() => setActiveTab('activity')}
+                  className="px-4 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  View Full Tracking
+                </button>
+              </div>
+
+              <div className="p-6">
+                {/* Quick Stats */}
+                <div className="grid grid-cols-5 gap-4 mb-6">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-gray-600 text-xs mb-2">
+                      <Users className="w-4 h-4" />
+                      <span>Total</span>
+                    </div>
+                    <div className="text-2xl font-semibold text-gray-900">{analyticsData.totalInvites}</div>
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-blue-600 text-xs mb-2">
+                      <Mail className="w-4 h-4" />
+                      <span>Sent</span>
+                    </div>
+                    <div className="text-2xl font-semibold text-gray-900">{analyticsData.sent || 0}</div>
+                  </div>
+
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-red-600 text-xs mb-2">
+                      <XCircle className="w-4 h-4" />
+                      <span>Failed</span>
+                    </div>
+                    <div className="text-2xl font-semibold text-gray-900">{analyticsData.failed || 0}</div>
+                  </div>
+
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-yellow-600 text-xs mb-2">
+                      <Play className="w-4 h-4" />
+                      <span>Started</span>
+                    </div>
+                    <div className="text-2xl font-semibold text-gray-900">{analyticsData.started || 0}</div>
+                  </div>
+
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-green-600 text-xs mb-2">
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Completed</span>
+                    </div>
+                    <div className="text-2xl font-semibold text-gray-900">{analyticsData.completed}</div>
                   </div>
                 </div>
+
+                {/* Recent Invitations */}
                 <div>
-                  <div className="text-sm text-gray-600 mb-1">Duration</div>
-                  <div className="text-gray-900">{formattedDuration}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600 mb-1">Sections</div>
-                  <div className="text-gray-900">{sections.length} section{sections.length !== 1 ? 's' : ''}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600 mb-1">Passing Score</div>
-                  <div className="text-gray-900">70%</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600 mb-1">Proctoring</div>
-                  <div className="text-gray-900">{assessment.proctoring_enabled ? 'Enabled' : 'Disabled'}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600 mb-1">Created On</div>
-                  <div className="text-gray-900">{assessment.created}</div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Recent Invitations</h4>
+                  {activityLoading ? (
+                    <div className="py-12 text-center">
+                      <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
+                      <p className="text-gray-600">Loading invitations...</p>
+                    </div>
+                  ) : recentActivity.length === 0 ? (
+                    <div className="py-12 text-center border-2 border-dashed border-gray-200 rounded-lg">
+                      <Mail className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-600 mb-1">No invitations sent yet</p>
+                      <p className="text-sm text-gray-500">Invite candidates to start tracking their progress</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {recentActivity.slice(0, 5).map((activity: any) => {
+                        const getStatusBadge = () => {
+                          if (activity.status === 'completed') {
+                            return { color: 'bg-green-100 text-green-700', label: 'Completed' };
+                          } else if (activity.status === 'in_progress') {
+                            return { color: 'bg-yellow-100 text-yellow-700', label: 'In Progress' };
+                          } else if (activity.status === 'sent') {
+                            return { color: 'bg-blue-100 text-blue-700', label: 'Sent' };
+                          } else if (activity.status === 'failed') {
+                            return { color: 'bg-red-100 text-red-700', label: 'Failed' };
+                          }
+                          return { color: 'bg-gray-100 text-gray-700', label: 'Pending' };
+                        };
+
+                        const statusBadge = getStatusBadge();
+                        const activityDate = activity.sent_at || activity.created_at;
+                        const formattedDate = activityDate ? new Date(activityDate).toLocaleString('en-IN', {
+                          timeZone: 'Asia/Kolkata',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true
+                        }) : 'N/A';
+
+                        return (
+                          <div key={activity.id} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
+                                {activity.candidate_name?.charAt(0).toUpperCase() || 'U'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-gray-900">{activity.candidate_name || 'Unknown'}</span>
+                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadge.color}`}>
+                                      {statusBadge.label}
+                                    </span>
+                                  </div>
+                                  {activity.status === 'completed' && (
+                                    <div className="flex items-center gap-3">
+                                      {/* Show Tech Score if technical section is enabled */}
+                                      {assessment.technical_enabled && activity.technical_score != null && (
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-xs text-gray-600">Tech</span>
+                                          <span className="font-semibold text-gray-900">{Math.round(activity.technical_score)}%</span>
+                                        </div>
+                                      )}
+                                      {/* Show Coding Score if coding section is enabled */}
+                                      {assessment.coding_enabled && activity.coding_score != null && (
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-xs text-gray-600">Coding</span>
+                                          <span className="font-semibold text-gray-900">{Math.round(activity.coding_score)}%</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-gray-600">
+                                  <span className="flex items-center gap-1">
+                                    <Mail className="w-3 h-3" />
+                                    {activity.candidate_email}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" />
+                                    Sent: {formattedDate}
+                                  </span>
+                                </div>
+                                {activity.status === 'in_progress' && activity.progress != null && (
+                                  <div className="mt-2">
+                                    <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                                      <span>{activity.progress}% Complete</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                      <div
+                                        className="bg-yellow-500 h-2 rounded-full transition-all"
+                                        style={{ width: `${activity.progress}%` }}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Quick Actions */}
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-              <h3 className="text-lg text-gray-900 mb-4">Quick Actions</h3>
-              
-              <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-base font-medium text-gray-900">Quick Actions</h3>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-3 gap-4">
                 <button
                   onClick={async () => {
                     if (assessment.status === 'Draft') {
@@ -548,6 +785,7 @@ export default function AssessmentDetailsView({
               </div>
             </div>
           </div>
+        </div>
         )}
 
         {/* Sections Tab */}
@@ -649,120 +887,294 @@ export default function AssessmentDetailsView({
         {/* Analytics Tab */}
         {activeTab === 'analytics' && (
           <div className="space-y-6">
-            {/* Candidate Status */}
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-              <h3 className="text-lg text-gray-900 mb-4">Candidate Status</h3>
-              
-              <div className="grid grid-cols-4 gap-4">
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                    <span className="text-sm text-gray-600">Completed</span>
-                  </div>
-                  <div className="text-2xl text-gray-900">{analyticsData.completed}</div>
-                </div>
-
-                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="w-5 h-5 text-yellow-600" />
-                    <span className="text-sm text-gray-600">In Progress</span>
-                  </div>
-                  <div className="text-2xl text-gray-900">{analyticsData.inProgress}</div>
-                </div>
-
-                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="w-5 h-5 text-gray-600" />
-                    <span className="text-sm text-gray-600">Not Started</span>
-                  </div>
-                  <div className="text-2xl text-gray-900">{analyticsData.notStarted}</div>
-                </div>
-
-                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp className="w-5 h-5 text-gray-800" />
-                    <span className="text-sm text-gray-600">Avg. Time</span>
-                  </div>
-                  <div className="text-2xl text-gray-900">{analyticsData.averageTime}</div>
-                </div>
-              </div>
-            </div>
-
             {/* Performance Breakdown */}
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-              <h3 className="text-lg text-gray-900 mb-4">Performance Breakdown</h3>
+              <h3 className="text-base font-medium text-gray-900 mb-6">Performance Breakdown</h3>
 
-              {analyticsData.totalInvites === 0 ? (
-                <div className="text-center py-8">
+              {analyticsData.completed === 0 ? (
+                <div className="text-center py-12">
                   <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                   <p className="text-gray-600 mb-1">No performance data available yet</p>
                   <p className="text-sm text-gray-500">Data will appear after candidates complete the assessment</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className={`grid grid-cols-1 ${assessment.technical_enabled && assessment.coding_enabled ? 'md:grid-cols-2' : ''} gap-8`}>
+                  {/* Technical Performance */}
+                  {assessment.technical_enabled && (
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-gray-700">Passed (≥70%)</span>
-                      <span className="text-sm font-medium text-gray-500">View Results for details</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
-                      <div className="bg-gray-300 h-3 rounded-full" style={{ width: '0%' }}></div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-4">Technical Performance</h4>
+                    <div className="space-y-4">
+                      {/* Passed (≥70%) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm text-gray-700">Passed (≥70%)</span>
+                          <span className="text-sm font-semibold text-green-600">
+                            {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 70).length / analyticsData.completed) * 100) || 0}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-3">
+                          <div
+                            className="bg-green-500 h-3 rounded-full transition-all"
+                            style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 70).length / analyticsData.completed) * 100 || 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      {/* Average (50-69%) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm text-gray-700">Average (50-69%)</span>
+                          <span className="text-sm font-semibold text-yellow-600">
+                            {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 50 && (a.technical_score || 0) < 70).length / analyticsData.completed) * 100) || 0}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-3">
+                          <div
+                            className="bg-yellow-500 h-3 rounded-full transition-all"
+                            style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 50 && (a.technical_score || 0) < 70).length / analyticsData.completed) * 100 || 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      {/* Below Average (<50%) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
+                          <span className="text-sm font-semibold text-red-600">
+                            {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) < 50).length / analyticsData.completed) * 100) || 0}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-3">
+                          <div
+                            className="bg-red-500 h-3 rounded-full transition-all"
+                            style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) < 50).length / analyticsData.completed) * 100 || 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                  )}
+
+                  {/* Coding Performance */}
+                  {assessment.coding_enabled && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-4">Coding Performance</h4>
+                    <div className="space-y-4">
+                      {/* Passed (≥70%) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm text-gray-700">Passed (≥70%)</span>
+                          <span className="text-sm font-semibold text-green-600">
+                            {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 70).length / analyticsData.completed) * 100) || 0}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-3">
+                          <div
+                            className="bg-green-500 h-3 rounded-full transition-all"
+                            style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 70).length / analyticsData.completed) * 100 || 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      {/* Average (50-69%) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm text-gray-700">Average (50-69%)</span>
+                          <span className="text-sm font-semibold text-yellow-600">
+                            {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 50 && (a.coding_score || 0) < 70).length / analyticsData.completed) * 100) || 0}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-3">
+                          <div
+                            className="bg-yellow-500 h-3 rounded-full transition-all"
+                            style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 50 && (a.coding_score || 0) < 70).length / analyticsData.completed) * 100 || 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      {/* Below Average (<50%) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
+                          <span className="text-sm font-semibold text-red-600">
+                            {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) < 50).length / analyticsData.completed) * 100) || 0}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-3">
+                          <div
+                            className="bg-red-500 h-3 rounded-full transition-all"
+                            style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) < 50).length / analyticsData.completed) * 100 || 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Section Performance */}
-            {sections.length > 0 && (
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                <h3 className="text-lg text-gray-900 mb-4">Section Performance</h3>
-
-                {analyticsData.totalInvites === 0 ? (
-                  <div className="text-center py-8">
-                    <BarChart className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-600 mb-1">No section data available yet</p>
-                    <p className="text-sm text-gray-500">Data will appear after candidates complete the assessment</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {sections.map((section, index) => {
-                      const SectionIcon = section.icon;
-                      // Get section-specific score from assessment data
-                      const sectionScore = section.type === 'hr' ? assessment.hr_score
-                        : section.type === 'technical' ? assessment.technical_score
-                        : section.type === 'coding' ? assessment.coding_score
-                        : null;
-                      const scoreDisplay = sectionScore != null ? `${sectionScore}%` : 'N/A';
-                      const scoreWidth = sectionScore != null ? `${sectionScore}%` : '0%';
-
-                      return (
-                        <div key={section.type} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center text-white">
-                              <SectionIcon className="w-4 h-4" />
-                            </div>
-                            <span className="text-sm text-gray-900">{section.name}</span>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <div className="text-sm font-medium text-gray-700">{scoreDisplay}</div>
-                              <div className="text-xs text-gray-500">Avg. Score</div>
-                            </div>
-                            <div className="w-24 bg-gray-200 rounded-full h-2">
-                              <div
-                                className={`h-2 rounded-full ${sectionScore != null && sectionScore >= 70 ? 'bg-green-500' : 'bg-gray-400'}`}
-                                style={{ width: scoreWidth }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+            {/* All Candidates */}
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-base font-medium text-gray-900">All Candidates</h3>
+                <button
+                  onClick={() => setActiveTab('activity')}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                >
+                  View Full Tracking
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
-            )}
+
+              {activityLoading ? (
+                <div className="px-6 py-12 text-center">
+                  <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
+                  <p className="text-gray-600">Loading candidates...</p>
+                </div>
+              ) : recentActivity.length === 0 ? (
+                <div className="px-6 py-12 text-center">
+                  <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-600 mb-1">No candidates yet</p>
+                  <p className="text-sm text-gray-500">Candidates will appear here after being invited</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Candidate</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                        {assessment.technical_enabled && (
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tech Score</th>
+                        )}
+                        {assessment.coding_enabled && (
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Coding Score</th>
+                        )}
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completed</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {recentActivity.map((candidate: any) => {
+                        const completedDate = candidate.completed_at ? new Date(candidate.completed_at).toLocaleString('en-IN', {
+                          timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit'
+                        }) : '-';
+
+                        // Calculate duration from start and end times if available
+                        let durationDisplay = '-';
+                        if (candidate.started_at && candidate.completed_at) {
+                          const startTime = new Date(candidate.started_at).getTime();
+                          const endTime = new Date(candidate.completed_at).getTime();
+                          const durationMs = endTime - startTime;
+                          const durationMin = Math.round(durationMs / (1000 * 60));
+                          durationDisplay = `${durationMin} min`;
+                        } else if (candidate.time_taken_minutes) {
+                          durationDisplay = `${candidate.time_taken_minutes} min`;
+                        } else if (candidate.duration_minutes) {
+                          durationDisplay = `${candidate.duration_minutes} min`;
+                        }
+
+                        // Determine status badge
+                        const getStatusBadge = () => {
+                          const status = candidate.status?.toLowerCase();
+                          const techScore = candidate.technical_score || 0;
+                          const codingScore = candidate.coding_score || 0;
+                          const avgScore = (techScore + codingScore) / 2;
+
+                          if (status === 'completed') {
+                            if (avgScore >= 70) {
+                              return <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded">Passed</span>;
+                            } else if (avgScore >= 50) {
+                              return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-medium rounded">Average</span>;
+                            } else {
+                              return <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded">Failed</span>;
+                            }
+                          } else if (status === 'in_progress' || status === 'started') {
+                            return <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">In Progress</span>;
+                          } else if (status === 'invited' || status === 'pending') {
+                            return <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded">Invited</span>;
+                          } else if (status === 'expired') {
+                            return <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded">Expired</span>;
+                          } else {
+                            return <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded">{status || 'Pending'}</span>;
+                          }
+                        };
+
+                        return (
+                          <tr key={candidate.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
+                                  {candidate.candidate_name?.charAt(0).toUpperCase() || 'U'}
+                                </div>
+                                <span className="text-sm font-medium text-gray-900">{candidate.candidate_name || 'Unknown'}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm text-gray-900">{candidate.candidate_email}</div>
+                              <div className="text-xs text-gray-500">{candidate.candidate_phone || '+1 (555) 123-4567'}</div>
+                            </td>
+                            {assessment.technical_enabled && (
+                            <td className="px-6 py-4">
+                              {candidate.status === 'completed' && candidate.technical_score != null ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-semibold text-gray-900">{Math.round(candidate.technical_score)}%</span>
+                                  <div className="w-24 bg-gray-200 rounded-full h-2">
+                                    <div className={`h-2 rounded-full ${candidate.technical_score >= 70 ? 'bg-green-500' : candidate.technical_score >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                      style={{ width: `${candidate.technical_score}%` }}></div>
+                                  </div>
+                                </div>
+                              ) : <span className="text-sm text-gray-500">-</span>}
+                            </td>
+                            )}
+                            {assessment.coding_enabled && (
+                            <td className="px-6 py-4">
+                              {candidate.status === 'completed' && candidate.coding_score != null ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-semibold text-gray-900">{Math.round(candidate.coding_score)}%</span>
+                                  <div className="w-24 bg-gray-200 rounded-full h-2">
+                                    <div className={`h-2 rounded-full ${candidate.coding_score >= 70 ? 'bg-green-500' : candidate.coding_score >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                      style={{ width: `${candidate.coding_score}%` }}></div>
+                                  </div>
+                                </div>
+                              ) : <span className="text-sm text-gray-500">-</span>}
+                            </td>
+                            )}
+                            <td className="px-6 py-4">
+                              {getStatusBadge()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{completedDate}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center gap-1 text-sm text-gray-900">
+                                <Clock className="w-4 h-4 text-gray-400" />{durationDisplay}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {candidate.status === 'completed' ? (
+                                <button
+                                  onClick={() => router.push(`/recruitment/assessments/${assessment.id}/results`)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  View
+                                </button>
+                              ) : (
+                                <span className="text-xs text-gray-400">-</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -820,16 +1232,141 @@ export default function AssessmentDetailsView({
                             <span className="text-sm text-gray-500">{formattedDate}</span>
                           </div>
                           <p className="text-sm text-gray-600 mt-0.5">{activity.candidate_email}</p>
-                          {activity.status === 'completed' && activity.overall_score != null && (
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className={`text-sm font-medium ${activity.passed ? 'text-green-600' : 'text-red-600'}`}>
-                                Score: {Math.round(activity.overall_score)}%
-                              </span>
-                              <span className={`px-2 py-0.5 rounded text-xs ${activity.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                {activity.passed ? 'Passed' : 'Failed'}
-                              </span>
+                          {activity.status === 'completed' && (
+                            <div className="flex items-center gap-3 mt-2">
+                              {/* Show Tech Score if technical section is enabled */}
+                              {assessment.technical_enabled && activity.technical_score != null && (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs text-gray-600">Tech:</span>
+                                  <span className="text-sm font-semibold text-gray-900">{Math.round(activity.technical_score)}%</span>
+                                </div>
+                              )}
+                              {/* Show Coding Score if coding section is enabled */}
+                              {assessment.coding_enabled && activity.coding_score != null && (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs text-gray-600">Coding:</span>
+                                  <span className="text-sm font-semibold text-gray-900">{Math.round(activity.coding_score)}%</span>
+                                </div>
+                              )}
+                              {/* Show Passed/Failed badge */}
+                              {activity.passed != null && (
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${activity.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                  {activity.passed ? 'Passed' : 'Failed'}
+                                </span>
+                              )}
                             </div>
                           )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Version History Tab */}
+        {activeTab === 'versions' && (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center gap-2 mb-1">
+                <Clock className="w-5 h-5 text-gray-600" />
+                <h3 className="text-base font-medium text-gray-900">Version History</h3>
+              </div>
+              <p className="text-sm text-gray-600">Complete timeline of all changes made to this assessment</p>
+            </div>
+
+            {versionsLoading ? (
+              <div className="px-6 py-12 text-center">
+                <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
+                <p className="text-gray-600">Loading version history...</p>
+              </div>
+            ) : versionHistory.length === 0 ? (
+              <div className="px-6 py-12 text-center">
+                <Clock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-600 mb-1">No version history available</p>
+                <p className="text-sm text-gray-500">Version history will appear when the assessment is edited</p>
+              </div>
+            ) : (
+              <div className="p-6 space-y-6">
+                {versionHistory.map((version: any, idx: number) => {
+                  const isCurrentVersion = idx === 0;
+                  const versionDate = new Date(version.created_at).toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  });
+
+                  return (
+                    <div key={version.id} className="space-y-4">
+                      {/* Version Header */}
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 bg-teal-500 rounded-full flex items-center justify-center flex-shrink-0">
+                          <span className="text-white font-bold text-sm">V{version.version}</span>
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-base font-semibold text-gray-900">
+                              Version {version.version} {version.version === 1 ? 'Published' : 'Updated'}
+                            </h4>
+                            {isCurrentVersion && (
+                              <span className="px-2.5 py-1 bg-green-100 text-green-700 text-xs font-medium rounded">
+                                Current Version
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-blue-600 mb-3">
+                            {version.version === 1 ? 'Initial assessment created and published' : (version.change_summary || 'Assessment configuration updated')}
+                          </p>
+
+                          {/* User & Date Info */}
+                          <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
+                            <Users className="w-4 h-4 text-gray-500" />
+                            <span className="font-medium">{version.changed_by_name || 'Unknown User'}</span>
+                            <span className="text-gray-400">•</span>
+                            <span className="text-gray-600">Lead Recruiter</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
+                            <Calendar className="w-4 h-4 text-gray-500" />
+                            <span>Published on {versionDate} IST</span>
+                          </div>
+
+                          {/* Configuration Details */}
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-900 mb-3">
+                              {version.version === 1 ? 'Initial Configuration:' : 'Updated Configuration:'}
+                            </div>
+                            <ul className="space-y-2">
+                              <li className="text-sm text-gray-700 flex items-start gap-2">
+                                <span className="text-green-600 mt-0.5">•</span>
+                                <span>Assessment type: {[
+                                  version.hr_enabled && 'HR',
+                                  version.technical_enabled && 'Technical',
+                                  version.coding_enabled && 'Coding'
+                                ].filter(Boolean).join(', ')}</span>
+                              </li>
+                              <li className="text-sm text-gray-700 flex items-start gap-2">
+                                <span className="text-green-600 mt-0.5">•</span>
+                                <span>Duration set to {assessment.duration_minutes || 60} min</span>
+                              </li>
+                              {assessment.title && (
+                                <li className="text-sm text-gray-700 flex items-start gap-2">
+                                  <span className="text-green-600 mt-0.5">•</span>
+                                  <span>Linked to job posting: {assessment.title}</span>
+                                </li>
+                              )}
+                              <li className="text-sm text-gray-700 flex items-start gap-2">
+                                <span className="text-green-600 mt-0.5">•</span>
+                                <span>Proctoring {assessment.proctoring_enabled ? 'enabled' : 'disabled'} with AI monitoring</span>
+                              </li>
+                            </ul>
+                          </div>
                         </div>
                       </div>
                     </div>

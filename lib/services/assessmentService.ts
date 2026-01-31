@@ -475,9 +475,18 @@ export const assessmentService = {
     candidates: InvitationCreate[]
   ): Promise<InvitationResponse[]> {
     try {
+      // Get current frontend URL (localhost, IP, or domain)
+      // Priority: 1) window.location.origin (current URL), 2) NEXT_PUBLIC_APP_URL from env, 3) empty string
+      const frontendUrl = typeof window !== 'undefined'
+        ? window.location.origin
+        : process.env.NEXT_PUBLIC_APP_URL || '';
+
       const response = await api.post<InvitationResponse[]>(
         `/assessments/${assessmentId}/invite/bulk`,
-        { candidates }
+        {
+          candidates,
+          frontend_url: frontendUrl
+        }
       );
       // Dispatch event to refresh header quota display
       dispatchUnitsConsumed();
@@ -552,6 +561,30 @@ export const assessmentService = {
   async deleteResult(assessmentId: string, resultId: string): Promise<void> {
     try {
       await api.delete(`/assessments/${assessmentId}/results/${resultId}`);
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Generate AI-powered candidate insights
+   * Analyzes Tech and Coding rounds only (excludes HR)
+   */
+  async generateCandidateInsights(assessmentId: string, resultId: string): Promise<{
+    success: boolean;
+    message: string;
+    insights: {
+      interview_strength: string;
+      interview_weakness: string;
+      interview_training_modules: string;
+      interview_training_suggestion: string;
+    };
+  }> {
+    try {
+      const response = await api.post(
+        `/assessments/${assessmentId}/results/${resultId}/generate-insights`
+      );
+      return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -724,6 +757,18 @@ export const assessmentService = {
       throw new Error(handleApiError(error));
     }
   },
+
+  /**
+   * Get version history for an assessment
+   */
+  async getVersionHistory(assessmentId: string) {
+    try {
+      const response = await api.get(`/assessments/${assessmentId}/version-history`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
 };
 
 // Candidate-facing services (public)
@@ -782,5 +827,3 @@ export const candidateAssessmentService = {
     }
   },
 };
-
-export default assessmentService;
