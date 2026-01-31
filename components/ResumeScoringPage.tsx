@@ -202,7 +202,8 @@ export default function ResumeScoringPage({
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
 
   // Available units from quota API
-  const [availableUnits, setAvailableUnits] = useState<number | null>(null);
+  const [availableUnits, setAvailableUnits] = useState<number | null>(null);  // RS quota for scoring
+  const [availableASUnits, setAvailableASUnits] = useState<number | null>(null);  // AS quota for invites
 
   // Global view state (view all scored resumes across all JDs)
   const [isGlobalView, setIsGlobalView] = useState(false);
@@ -371,6 +372,10 @@ export default function ResumeScoringPage({
         const quotas = response.data?.data?.quotas;
         if (quotas?.RS) {
           setAvailableUnits(quotas.RS.total_remaining || 0);
+        }
+        // FIX: Use AS (Assessment) quota for invite button, not RS
+        if (quotas?.AS) {
+          setAvailableASUnits(quotas.AS.total_remaining || 0);
         }
       } catch (error) {
         console.log('[ResumeScoringPage] Failed to load quota:', error);
@@ -919,7 +924,7 @@ export default function ResumeScoringPage({
           resumes={scoredResumesData}
           jobTitle={selectedHistoryItem.jobTitle}
           jobId={selectedHistoryItem.jobId}
-          availableUnits={availableUnits || 0}
+          availableUnits={availableASUnits ?? 10}
           onViewCandidate={(resume) => {
             setSelectedCandidateForView(resume);
             setViewMode('candidateView');
@@ -1239,7 +1244,7 @@ export default function ResumeScoringPage({
                 resumes={globalScoredResumes}
                 jobTitle="All Jobs"
                 jobId="global"
-                availableUnits={availableUnits || 0}
+                availableUnits={availableASUnits ?? 10}
                 onViewCandidate={(resume) => {
                   setSelectedCandidateForView(resume);
                   setViewMode('candidateView');
