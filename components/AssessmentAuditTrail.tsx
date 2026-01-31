@@ -145,8 +145,8 @@ export default function AssessmentAuditTrail() {
     if (diffHours < 24) return `${diffHours} hours ago`;
     if (diffDays < 7) return `${diffDays} days ago`;
 
-    return date.toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
+    return date.toLocaleString('en-US', {
+      timeZone: 'UTC',
       month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
@@ -459,7 +459,7 @@ export default function AssessmentAuditTrail() {
                           <div>
                             <span className="text-gray-500">Timestamp:</span>
                             <span className="ml-2 text-gray-900">
-                              {new Date(activity.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}
+                              {new Date(activity.timestamp).toLocaleString('en-US', { timeZone: 'UTC', hour12: true })}
                             </span>
                           </div>
                           {activity.assessment_id && (

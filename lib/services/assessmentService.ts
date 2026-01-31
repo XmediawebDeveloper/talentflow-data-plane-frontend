@@ -80,6 +80,9 @@ export interface InvitationCreate {
   candidate_name: string;
   candidate_email: string;
   resume_id?: string;
+  custom_message?: string;
+  expiry_days?: number;
+  frontend_url?: string;  // Auto-detected from window.location.origin
 }
 
 export interface InvitationResponse {
@@ -455,9 +458,18 @@ export const assessmentService = {
    */
   async invite(assessmentId: string, data: InvitationCreate): Promise<InvitationResponse> {
     try {
+      // Get current frontend URL (localhost, IP, or domain)
+      // Priority: 1) window.location.origin (current URL), 2) NEXT_PUBLIC_APP_URL from env, 3) empty string
+      const frontendUrl = typeof window !== 'undefined'
+        ? window.location.origin
+        : process.env.NEXT_PUBLIC_APP_URL || '';
+
       const response = await api.post<InvitationResponse>(
         `/assessments/${assessmentId}/invite`,
-        data
+        {
+          ...data,
+          frontend_url: frontendUrl
+        }
       );
       // Dispatch event to refresh header quota display
       dispatchUnitsConsumed();
@@ -472,7 +484,11 @@ export const assessmentService = {
    */
   async bulkInvite(
     assessmentId: string,
-    candidates: InvitationCreate[]
+    data: {
+      candidates: Omit<InvitationCreate, 'custom_message' | 'expiry_days'>[];
+      custom_message?: string;
+      expiry_days?: number;
+    }
   ): Promise<InvitationResponse[]> {
     try {
       // Get current frontend URL (localhost, IP, or domain)
@@ -484,8 +500,10 @@ export const assessmentService = {
       const response = await api.post<InvitationResponse[]>(
         `/assessments/${assessmentId}/invite/bulk`,
         {
-          candidates,
-          frontend_url: frontendUrl
+          candidates: data.candidates,
+          frontend_url: frontendUrl,
+          custom_message: data.custom_message,
+          expiry_days: data.expiry_days || 7,
         }
       );
       // Dispatch event to refresh header quota display

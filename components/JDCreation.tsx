@@ -2696,8 +2696,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             : undefined,
         };
 
+        console.log('[JDCreation] Calling onPublish with job:', newJob);
+
+        // Call onPublish callback immediately (for assessment redirect)
         onPublish(newJob);
 
+        // Show success toast (but don't block navigation)
         toast.success({
           title: isEditingPublished ? 'Job description republished!' : 'Job description published!',
           description: isEditingPublished

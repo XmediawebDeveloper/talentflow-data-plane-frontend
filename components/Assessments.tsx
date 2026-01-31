@@ -16,6 +16,8 @@ import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import VersionBadge from './VersionBadge';
 
 // Helper function to format date/time in UTC timezone
 const formatDateTimeIST = (dateStr: string | null | undefined, options?: { includeTime?: boolean }) => {
@@ -1762,8 +1764,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {assessment.short_id}
                         </span>
                         <h3 className="text-sm font-medium text-gray-900 line-clamp-2">
-                          {assessment.job ? `${assessment.job.title} - Assessment` : assessment.title}
+                          {assessment.job ? `${assessment.job.title} - Assessment` : stripVersionFromTitle(assessment.title)}
                         </h3>
+                        <VersionBadge title={assessment.title} size="sm" variant="secondary" />
                         {assessment.sections && (
                           <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs flex items-center gap-1 flex-shrink-0">
                             <Sparkles className="w-3 h-3" />
@@ -1974,8 +1977,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               {assessment.short_id}
                             </span>
                             <h3 className="text-sm font-medium text-gray-900 truncate">
-                              {assessment.job ? `${assessment.job.title} - Assessment` : assessment.title}
+                              {assessment.job ? `${assessment.job.title} - Assessment` : stripVersionFromTitle(assessment.title)}
                             </h3>
+                            <VersionBadge title={assessment.title} size="sm" variant="secondary" />
                             {assessment.sections && (
                               <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs flex items-center gap-1 flex-shrink-0">
                                 <Sparkles className="w-3 h-3" />

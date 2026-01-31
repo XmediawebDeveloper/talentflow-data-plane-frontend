@@ -1051,7 +1051,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
       setGeneratedAssessment(assessmentDefinition);
       setIsGenerating(false);
-      setStep('preview');
+
+      // If published (not draft), redirect to assessments list
+      if (!saveAsDraft) {
+        console.log('[AssessmentCreation] Assessment published, redirecting to assessments list');
+        router.push('/recruitment/assessments');
+      } else {
+        // If saved as draft, show preview
+        setStep('preview');
+      }
     } catch (error) {
       console.error('Failed to create/update assessment:', error);
       setIsGenerating(false);
@@ -1222,7 +1230,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             <div>
               <div className="text-sm text-gray-800 mb-1">AI-Powered Assessment Generation</div>
               <div className="text-sm text-gray-900">
-                Our LLM will automatically generate questions based on the JD, adjusting difficulty, topics, and time allocation based on your configuration. <strong>Each candidate receives a unique, freshly generated question set</strong> to ensure fairness and prevent question sharing.
+                Automatically generate questions based on the JD, adjusting difficulty, topics, and time allocation based on your configuration. <strong>Each candidate receives a unique, freshly generated question set</strong> to ensure fairness and prevent question sharing.
               </div>
             </div>
           </div>

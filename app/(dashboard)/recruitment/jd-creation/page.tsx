@@ -175,6 +175,14 @@ function JDCreationContent() {
   const searchParams = useSearchParams();
   const jdId = searchParams.get('id');
   const stageFromUrl = searchParams.get('stage') as 'create' | 'extract' | 'review' | null;
+  const fromAssessment = searchParams.get('from') === 'assessment'; // Check if coming from assessment page
+
+  console.log('[JD-CREATION-PAGE] URL params:', {
+    from: searchParams.get('from'),
+    fromAssessment,
+    jdId,
+    stage: stageFromUrl
+  });
 
   const [editingJD, setEditingJD] = useState<JDResponse | null>(null);
   const [loading, setLoading] = useState(true); // Start with loading true for access check
@@ -267,6 +275,19 @@ function JDCreationContent() {
     router.push('/recruitment/job-openings');
   };
 
+  // Handle successful JD publish - redirect to assessment creation if coming from assessments
+  const handleJDPublish = (publishedJD: any) => {
+    console.log('[JD-CREATION] onPublish callback triggered:', { fromAssessment, publishedJD });
+
+    if (fromAssessment && publishedJD?.id) {
+      console.log('[JD-CREATION] Redirecting to assessment creation with JD:', publishedJD.id);
+      // Redirect to assessment creation with the new JD pre-selected
+      router.push(`/recruitment/assessments/create?jd_id=${publishedJD.id}&jd_title=${encodeURIComponent(publishedJD.title || 'New Job')}`);
+    } else {
+      console.log('[JD-CREATION] Not redirecting - fromAssessment:', fromAssessment, 'hasId:', !!publishedJD?.id);
+    }
+  };
+
   // Memoize editingJD to prevent unnecessary re-renders and state resets in JDCreation
   const memoizedEditingJD = useMemo(() => {
     if (!editingJD) return null;
@@ -328,6 +349,7 @@ function JDCreationContent() {
       <div className="h-[calc(100vh-64px)] overflow-hidden">
         <JDCreation
           onBack={handleViewAllJobs}
+          onPublish={handleJDPublish}
           editingJD={memoizedEditingJD}
           isJDInUse={isJDInUse}
           jdUsageMessage={jdUsageMessage}

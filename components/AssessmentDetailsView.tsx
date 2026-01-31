@@ -2,6 +2,8 @@ import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
+import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import VersionBadge from './VersionBadge';
 
 interface AssessmentDetailsViewProps {
   assessment: any;
@@ -185,11 +187,9 @@ export default function AssessmentDetailsView({
               </div>
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  <h1 className="text-2xl text-white">{assessment.title}</h1>
-                  {/* Version Badge */}
-                  <span className="px-2 py-1 bg-blue-500/20 backdrop-blur-sm text-blue-100 rounded text-xs font-medium border border-blue-400/30">
-                    V{assessment.version || 1}
-                  </span>
+                  <h1 className="text-2xl text-white">{stripVersionFromTitle(assessment.title)}</h1>
+                  {/* Version Badge - using custom styling for dark background */}
+                  <VersionBadge title={assessment.title} size="md" variant="primary" />
                   {sections.length > 0 && (
                     <span className="px-2 py-1 bg-gray-700/30 backdrop-blur-sm text-white rounded text-xs flex items-center gap-1 border border-white/20">
                       <Sparkles className="w-3 h-3" />
@@ -240,7 +240,7 @@ export default function AssessmentDetailsView({
                   <span className="flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
                     Created {assessment.created_at
-                      ? `${new Date(assessment.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' })} at ${new Date(assessment.created_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}`
+                      ? `${new Date(assessment.created_at).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })} at ${new Date(assessment.created_at).toLocaleTimeString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: true })} UTC`
                       : assessment.created}
                   </span>
                   {assessment.created_by_name && (
@@ -542,8 +542,8 @@ export default function AssessmentDetailsView({
 
                         const statusBadge = getStatusBadge();
                         const activityDate = activity.sent_at || activity.created_at;
-                        const formattedDate = activityDate ? new Date(activityDate).toLocaleString('en-IN', {
-                          timeZone: 'Asia/Kolkata',
+                        const formattedDate = activityDate ? new Date(activityDate).toLocaleString('en-US', {
+                          timeZone: 'UTC',
                           month: 'short',
                           day: 'numeric',
                           hour: '2-digit',
@@ -1061,8 +1061,8 @@ export default function AssessmentDetailsView({
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {recentActivity.map((candidate: any) => {
-                        const completedDate = candidate.completed_at ? new Date(candidate.completed_at).toLocaleString('en-IN', {
-                          timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit'
+                        const completedDate = candidate.completed_at ? new Date(candidate.completed_at).toLocaleString('en-US', {
+                          timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'
                         }) : '-';
 
                         // Calculate duration from start and end times if available
@@ -1213,8 +1213,8 @@ export default function AssessmentDetailsView({
                   const info = getActivityInfo();
                   const ActivityIcon = info.icon;
                   const activityDate = activity.completed_at || activity.started_at || activity.created_at;
-                  const formattedDate = activityDate ? new Date(activityDate).toLocaleString('en-IN', {
-                    timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
+                  const formattedDate = activityDate ? new Date(activityDate).toLocaleString('en-US', {
+                    timeZone: 'UTC', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
                   }) : 'N/A';
 
                   return (
@@ -1292,8 +1292,8 @@ export default function AssessmentDetailsView({
               <div className="p-6 space-y-6">
                 {versionHistory.map((version: any, idx: number) => {
                   const isCurrentVersion = idx === 0;
-                  const versionDate = new Date(version.created_at).toLocaleString('en-IN', {
-                    timeZone: 'Asia/Kolkata',
+                  const versionDate = new Date(version.created_at).toLocaleString('en-US', {
+                    timeZone: 'UTC',
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',
