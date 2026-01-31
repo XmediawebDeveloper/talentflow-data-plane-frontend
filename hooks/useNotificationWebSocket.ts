@@ -1,0 +1,213 @@
+/**
+ * WebSocket Hook for Real-Time Notifications
+ *
+ * Connects to the backend WebSocket for instant notification updates.
+ * Falls back to polling if WebSocket connection fails.
+ */
+import { useEffect, useRef, useState, useCallback } from 'react';
+
+interface WebSocketMessage {
+  type: 'new_notification' | 'notification_count' | 'connected' | 'pong';
+  data?: any;
+}
+
+interface UseNotificationWebSocketProps {
+  token: string | null;
+  onNewNotification?: (notification: any) => void;
+  onCountUpdate?: (count: number) => void;
+  enabled?: boolean;
+}
+
+interface UseNotificationWebSocketReturn {
+  isConnected: boolean;
+  connectionError: string | null;
+  reconnect: () => void;
+}
+
+const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8001';
+const RECONNECT_DELAY = 3000; // 3 seconds
+const PING_INTERVAL = 30000; // 30 seconds
+const MAX_RECONNECT_ATTEMPTS = 5;
+
+export function useNotificationWebSocket({
+  token,
+  onNewNotification,
+  onCountUpdate,
+  enabled = true,
+}: UseNotificationWebSocketProps): UseNotificationWebSocketReturn {
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+
+  const wsRef = useRef<WebSocket | null>(null);
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const isConnectingRef = useRef(false);
+  const isCleaningUpRef = useRef(false);
+
+  // Store callbacks in refs to avoid dependency issues
+  const onNewNotificationRef = useRef(onNewNotification);
+  const onCountUpdateRef = useRef(onCountUpdate);
+
+  useEffect(() => {
+    onNewNotificationRef.current = onNewNotification;
+  }, [onNewNotification]);
+
+  useEffect(() => {
+    onCountUpdateRef.current = onCountUpdate;
+  }, [onCountUpdate]);
+
+  const reconnect = useCallback(() => {
+    reconnectAttemptsRef.current = 0;
+    setConnectionError(null);
+    isConnectingRef.current = false;
+    // Will trigger reconnection via the main effect
+  }, []);
+
+  // Main connection effect
+  useEffect(() => {
+    if (!token || !enabled) {
+      return;
+    }
+
+    // Prevent multiple simultaneous connection attempts
+    if (isConnectingRef.current || wsRef.current?.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    isConnectingRef.current = true;
+    isCleaningUpRef.current = false;
+
+    const connect = () => {
+      if (isCleaningUpRef.current) {
+        return;
+      }
+
+      try {
+        const wsUrl = `${WS_BASE_URL}/ws/notifications?token=${encodeURIComponent(token)}`;
+        console.log('[WebSocket] Connecting to:', wsUrl.replace(token, '***'));
+
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          if (isCleaningUpRef.current) {
+            ws.close();
+            return;
+          }
+          console.log('[WebSocket] Connected');
+          setIsConnected(true);
+          setConnectionError(null);
+          reconnectAttemptsRef.current = 0;
+          isConnectingRef.current = false;
+
+          // Start ping/pong for keepalive
+          pingIntervalRef.current = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'ping' }));
+            }
+          }, PING_INTERVAL);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const message: WebSocketMessage = JSON.parse(event.data);
+            console.log('[WebSocket] Received:', message.type);
+
+            switch (message.type) {
+              case 'new_notification':
+                if (onNewNotificationRef.current && message.data) {
+                  onNewNotificationRef.current(message.data);
+                }
+                break;
+
+              case 'notification_count':
+                if (onCountUpdateRef.current && message.data?.unread_count !== undefined) {
+                  onCountUpdateRef.current(message.data.unread_count);
+                }
+                break;
+
+              case 'connected':
+                console.log('[WebSocket] Connection confirmed:', message.data?.message);
+                break;
+
+              case 'pong':
+                // Keepalive response, no action needed
+                break;
+            }
+          } catch (e) {
+            console.error('[WebSocket] Error parsing message:', e);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('[WebSocket] Error:', error);
+          setConnectionError('WebSocket connection error');
+        };
+
+        ws.onclose = (event) => {
+          console.log('[WebSocket] Closed:', event.code, event.reason);
+          setIsConnected(false);
+          isConnectingRef.current = false;
+
+          // Clean up ping interval
+          if (pingIntervalRef.current) {
+            clearInterval(pingIntervalRef.current);
+            pingIntervalRef.current = null;
+          }
+
+          // Don't reconnect if we're cleaning up
+          if (isCleaningUpRef.current) {
+            return;
+          }
+
+          // Attempt reconnection if not intentionally closed
+          if (event.code !== 1000 && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttemptsRef.current++;
+            console.log(`[WebSocket] Reconnecting in ${RECONNECT_DELAY}ms (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
+
+            reconnectTimeoutRef.current = setTimeout(() => {
+              connect();
+            }, RECONNECT_DELAY);
+          } else if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+            setConnectionError('Max reconnection attempts reached. Falling back to polling.');
+          }
+        };
+      } catch (error) {
+        console.error('[WebSocket] Failed to create connection:', error);
+        setConnectionError('Failed to create WebSocket connection');
+        isConnectingRef.current = false;
+      }
+    };
+
+    connect();
+
+    // Cleanup function
+    return () => {
+      console.log('[WebSocket] Cleanup triggered');
+      isCleaningUpRef.current = true;
+
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (wsRef.current) {
+        wsRef.current.close(1000, 'Component unmounting');
+        wsRef.current = null;
+      }
+      isConnectingRef.current = false;
+    };
+  }, [token, enabled]); // Only depend on token and enabled
+
+  return {
+    isConnected,
+    connectionError,
+    reconnect,
+  };
+}
+
+export default useNotificationWebSocket;

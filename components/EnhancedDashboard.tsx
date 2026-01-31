@@ -764,57 +764,59 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <Card className="border-gray-200">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">Quick Actions</CardTitle>
-          <CardDescription className="text-gray-600">Common tasks to get you started</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-4">
-            {canCreateJD && (
-              <Button
-                variant="outline"
-                className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
-                onClick={() => router.push('/recruitment/jd-creation')}
-              >
-                <Briefcase className="h-6 w-6 text-gray-600" />
-                <span className="text-sm text-gray-900">Create Job</span>
-              </Button>
-            )}
-            {canUploadResumes && (
-              <Button
-                variant="outline"
-                className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
-                onClick={() => router.push('/recruitment/my-resumes')}
-              >
-                <FileText className="h-6 w-6 text-gray-600" />
-                <span className="text-sm text-gray-900">Upload Resumes</span>
-              </Button>
-            )}
-            {canViewResumes && (
-              <Button
-                variant="outline"
-                className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
-                onClick={() => router.push('/recruitment/resume-scoring')}
-              >
-                <Target className="h-6 w-6 text-gray-600" />
-                <span className="text-sm text-gray-900">Score Resumes</span>
-              </Button>
-            )}
-            {canViewResumes && (
-              <Button
-                variant="outline"
-                className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
-                onClick={() => router.push('/recruitment/ai-talent-match')}
-              >
-                <Sparkles className="h-6 w-6 text-gray-600" />
-                <span className="text-sm text-gray-900">AI Talent Match</span>
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Quick Actions - only show if user has at least one permission */}
+      {(canCreateJD || canUploadResumes || canViewResumes) && (
+        <Card className="border-gray-200">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-gray-900">Quick Actions</CardTitle>
+            <CardDescription className="text-gray-600">Common tasks to get you started</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-4">
+              {canCreateJD && (
+                <Button
+                  variant="outline"
+                  className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
+                  onClick={() => router.push('/recruitment/jd-creation')}
+                >
+                  <Briefcase className="h-6 w-6 text-gray-600" />
+                  <span className="text-sm text-gray-900">Create Job</span>
+                </Button>
+              )}
+              {canUploadResumes && (
+                <Button
+                  variant="outline"
+                  className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
+                  onClick={() => router.push('/recruitment/my-resumes')}
+                >
+                  <FileText className="h-6 w-6 text-gray-600" />
+                  <span className="text-sm text-gray-900">Upload Resumes</span>
+                </Button>
+              )}
+              {canViewResumes && (
+                <Button
+                  variant="outline"
+                  className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
+                  onClick={() => router.push('/recruitment/resume-scoring')}
+                >
+                  <Target className="h-6 w-6 text-gray-600" />
+                  <span className="text-sm text-gray-900">Score Resumes</span>
+                </Button>
+              )}
+              {canViewResumes && (
+                <Button
+                  variant="outline"
+                  className="h-auto flex-col gap-2 py-4 border-gray-200 hover:border-gray-300"
+                  onClick={() => router.push('/recruitment/ai-talent-match')}
+                >
+                  <Sparkles className="h-6 w-6 text-gray-600" />
+                  <span className="text-sm text-gray-900">AI Talent Match</span>
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

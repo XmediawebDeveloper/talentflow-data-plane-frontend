@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -71,6 +71,7 @@ const formatDateTimeIST = (dateString: string | null | undefined): string => {
 
 export default function MyResumesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -130,6 +131,37 @@ export default function MyResumesPage() {
     fetchData();
     fetchUploadHistory();
   }, []);
+
+  // Handle deep link from notifications
+  useEffect(() => {
+    const resumeIdFromUrl = searchParams.get('resume_id');
+    const batchIdFromUrl = searchParams.get('batch_id');
+
+    if (resumeIdFromUrl) {
+      // Open specific resume in quick view
+      const openResume = async () => {
+        try {
+          const resume = await resumeService.getById(resumeIdFromUrl);
+          if (resume) {
+            setQuickViewResume(resume as unknown as Resume);
+          }
+          // Clear the query parameter
+          router.replace('/recruitment/my-resumes', { scroll: false });
+        } catch (error) {
+          console.error('Error fetching resume from URL:', error);
+          toast.error('Could not find the requested resume');
+        }
+      };
+      openResume();
+    }
+
+    if (batchIdFromUrl) {
+      // Show upload history filtered by batch
+      setIsUploadHistoryModalOpen(true);
+      // Clear the query parameter
+      router.replace('/recruitment/my-resumes', { scroll: false });
+    }
+  }, [searchParams, router]);
 
   const fetchUploadHistory = async () => {
     try {
