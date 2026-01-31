@@ -1141,7 +1141,7 @@ export default function UserManagement() {
 
         {/* RBAC01: User Limits - always visible */}
         <div className="mt-6 space-y-4">
-          <UserLimits compact onAddSeatsClick={() => {}} />
+          <UserLimits compact onAddSeatsClick={() => {}} refreshTrigger={seatQuotaRefreshTrigger} />
           {/* Addon card - only shows when quota exhausted */}
           <SeatQuotaCard
             onRefresh={() => { loadUsers(); refreshLimits(); }}

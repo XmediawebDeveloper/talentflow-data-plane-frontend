@@ -34,7 +34,10 @@ import {
   Clock,
   Factory,
   History,
-  ScrollText
+  ScrollText,
+  MessageCircle,
+  Headphones,
+  Inbox
 } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -55,6 +58,7 @@ interface NavItem {
   permission?: string;           // Single permission check (legacy)
   permissions?: string[];        // Multiple permissions check (show if ANY match)
   adminOnly?: boolean;
+  internalUserOnly?: boolean;    // Show only to non-admin users (for internal help desk)
 }
 
 interface NavSection {
@@ -68,7 +72,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
   const pathname = usePathname();
   const [expandedSections, setExpandedSections] = useState<string[]>([
     'administration', 'recruitment', 'resume-management', 'evaluation',
-    'organization', 'masters', 'subscription', 'settings', 'reports', 'audits'
+    'organization', 'user-management-section', 'masters', 'subscription', 'settings', 'reports', 'audits'
   ]);
 
   const roleLabels = {
@@ -175,9 +179,19 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       label: 'ORGANIZATION',
       items: [
         { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', permission: 'canManageSettings' },
-        { id: 'team-management', label: 'Team Management', icon: Users, href: '/organization/team-management', permission: 'canManageUsers' },
-        { id: 'user-management', label: 'User Management', icon: UserCog, href: '/organization/user-management', permission: 'canManageUsers' },
-        { id: 'role-management', label: 'Role Management', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
+      ]
+    },
+
+    // USER MANAGEMENT
+    {
+      id: 'user-management-section',
+      label: 'USER MANAGEMENT',
+      items: [
+        { id: 'user-management', label: 'Users', icon: Users, href: '/organization/user-management', permission: 'canManageUsers' },
+        { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
+        { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canManageUsers' },
+        { id: 'team-chat', label: 'Team Chat', icon: MessageCircle, href: '/organization/team-chat' },  // Available to all users
+        { id: 'internal-tickets', label: 'Team Support Tickets', icon: Inbox, href: '/organization/internal-tickets', adminOnly: true },
       ]
     },
 
@@ -245,7 +259,8 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       id: 'support',
       label: 'SUPPORT',
       items: [
-        { id: 'support-tickets', label: 'Support Tickets', icon: HelpCircle, href: '/support-tickets' },
+        { id: 'support-tickets', label: 'Support Tickets', icon: HelpCircle, href: '/support-tickets', adminOnly: true },
+        { id: 'help-desk', label: 'Help Desk', icon: Headphones, href: '/help-desk', internalUserOnly: true },
       ]
     },
   ];
@@ -255,7 +270,12 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
     return sections.map(section => {
       // Filter items within section
       const filteredItems = section.items.filter(item => {
+        // adminOnly items - only show to tenant_admin
         if (item.adminOnly && !isTenantAdmin) return false;
+
+        // internalUserOnly items - show to everyone EXCEPT tenant_admin
+        // This is for internal help desk where users raise tickets to their admin
+        if (item.internalUserOnly && isTenantAdmin) return false;
 
         // Check permissions array (granular - show if ANY match)
         if (item.permissions && item.permissions.length > 0) {

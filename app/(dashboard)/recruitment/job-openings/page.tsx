@@ -45,6 +45,15 @@ export default function JobOpeningsPage() {
     }
   }, [searchParams]);
 
+  // Handle deep link to specific JD from notifications
+  useEffect(() => {
+    const jdIdFromUrl = searchParams.get('jd_id');
+    if (jdIdFromUrl) {
+      // Navigate to the job details page
+      router.replace(`/recruitment/job-details?id=${jdIdFromUrl}`);
+    }
+  }, [searchParams, router]);
+
   // Re-fetch jobs and quota when user changes
   useEffect(() => {
     if (user) {
