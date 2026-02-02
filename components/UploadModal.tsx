@@ -59,13 +59,9 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
 
   // Initialize with targetFolder, or root folder if available
-  const [selectedFolder, setSelectedFolder] = useState<string>(() => {
-    if (targetFolder) return targetFolder;
-    if (rootFolder?.id) return rootFolder.id;
-    return '';
-  });
+  const [selectedFolder, setSelectedFolder] = useState<string>(targetFolder || '');
 
-  // Auto-select root folder when folders are loaded (in case folders weren't available on mount)
+  // Auto-select root folder when folders are loaded
   useEffect(() => {
     if (!targetFolder && rootFolder?.id) {
       setSelectedFolder(rootFolder.id);
@@ -770,19 +766,24 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
             {!showCreateFolder ? (
               <div className="space-y-3">
                 <select
-                  value={selectedFolder}
+                  value={selectedFolder || rootFolder?.id || ''}
                   onChange={(e) => setSelectedFolder(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                 >
-                  <option value="">Choose folder...</option>
-                  {/* Show Root folder first */}
+                  {/* Show Root folder first as default */}
                   {rootFolder && (
                     <option key={rootFolder.id} value={rootFolder.id}>
                       Root (Default)
                     </option>
                   )}
-                  {/* Then show other folders excluding 'all' and root */}
-                  {folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId)).map(folder => (
+                  {/* Only show "Choose folder" if no root folder exists */}
+                  {!rootFolder && <option value="">Choose folder...</option>}
+                  {/* Then show other folders excluding 'all', root, and Archived Resumes */}
+                  {folders.filter(f =>
+                    f.id !== 'all' &&
+                    !(f.name.toLowerCase() === 'root' && !f.parentId) &&
+                    !(f.name === 'Archived Resumes' && !f.parentId)
+                  ).map(folder => (
                     <option key={folder.id} value={folder.id}>
                       {folder.name}
                     </option>

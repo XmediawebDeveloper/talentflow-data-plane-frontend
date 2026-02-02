@@ -63,6 +63,7 @@ function JobDetailsContent() {
       // Convert JDResponse to Job type
       const convertedJob: ExtendedJob = {
         id: data.id,
+        job_id: data.job_id,  // Human-readable ID like JD-076
         title: data.title || 'Untitled',
         status: mapStatus(data.status),
         location: data.location || (data.locations && data.locations.length > 0 ? data.locations.map(l => l.city).join(', ') : ''),

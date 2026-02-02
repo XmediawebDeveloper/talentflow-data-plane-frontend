@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2 } from 'lucide-react';
+import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -277,6 +277,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Store JD-extracted languages separately so we can restore them when re-enabling coding
   const [jdExtractedLanguages, setJdExtractedLanguages] = useState<string[]>([]);
+
+  // Collapsible sections state
+  const [isAIGenerationExpanded, setIsAIGenerationExpanded] = useState(false);
+  const [isScoringRulesExpanded, setIsScoringRulesExpanded] = useState(false);
 
   // Available programming languages for selection
   const programmingLanguages = [
@@ -1029,6 +1033,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       const assessmentDefinition = {
         id: resultAssessment.id,
         title: resultAssessment.title,
+        version: resultAssessment.version || 1,
         job: selectedJob,
         duration: resultAssessment.duration_minutes,
         sections: sections.filter(s => s.enabled).map(section => ({
@@ -1046,7 +1051,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
       setGeneratedAssessment(assessmentDefinition);
       setIsGenerating(false);
-      setStep('preview');
+
+      // If published (not draft), redirect to assessments list
+      if (!saveAsDraft) {
+        console.log('[AssessmentCreation] Assessment published, redirecting to assessments list');
+        router.push('/recruitment/assessments');
+      } else {
+        // If saved as draft, show preview
+        setStep('preview');
+      }
     } catch (error) {
       console.error('Failed to create/update assessment:', error);
       setIsGenerating(false);
@@ -1217,7 +1230,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             <div>
               <div className="text-sm text-gray-800 mb-1">AI-Powered Assessment Generation</div>
               <div className="text-sm text-gray-900">
-                Our LLM will automatically generate questions based on the JD, adjusting difficulty, topics, and time allocation based on your configuration. <strong>Each candidate receives a unique, freshly generated question set</strong> to ensure fairness and prevent question sharing.
+                Automatically generate questions based on the JD, adjusting difficulty, topics, and time allocation based on your configuration. <strong>Each candidate receives a unique, freshly generated question set</strong> to ensure fairness and prevent question sharing.
               </div>
             </div>
           </div>
@@ -1830,26 +1843,50 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             <div className="w-80 flex-shrink-0 space-y-4">
               {/* AI Assessment Generation Info */}
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className="w-5 h-5 text-gray-700" />
-                  <h4 className="font-medium text-gray-900 text-sm">AI Assessment Generation</h4>
+                <div
+                  className="flex items-center justify-between cursor-pointer"
+                  onClick={() => setIsAIGenerationExpanded(!isAIGenerationExpanded)}
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-gray-700" />
+                    <h4 className="font-medium text-gray-900 text-sm">AI Assessment Generation</h4>
+                  </div>
+                  {isAIGenerationExpanded ? (
+                    <ChevronUp className="w-5 h-5 text-gray-600" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-gray-600" />
+                  )}
                 </div>
-                <div className="text-xs text-gray-600 space-y-2">
-                  <p>• <strong>Unique Question Sets:</strong> Each candidate receives freshly generated questions for fairness</p>
-                  <p>• LLM will analyze the JD and generate questions dynamically per candidate</p>
-                  <p>• Question difficulty adjusted based on experience level</p>
-                  <p>• Number of questions and time allocation calculated automatically</p>
-                  <p>• Topics you provide will guide the question generation process</p>
-                </div>
+                {isAIGenerationExpanded && (
+                  <div className="text-xs text-gray-600 space-y-2 mt-3">
+                    <p>• <strong>Unique Question Sets:</strong> Each candidate receives freshly generated questions for fairness</p>
+                    <p>• LLM will analyze the JD and generate questions dynamically per candidate</p>
+                    <p>• Question difficulty adjusted based on experience level</p>
+                    <p>• Number of questions and time allocation calculated automatically</p>
+                    <p>• Topics you provide will guide the question generation process</p>
+                  </div>
+                )}
               </div>
 
               {/* Assessment Scoring Rules */}
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <BarChart className="w-5 h-5 text-gray-700" />
-                  <h4 className="font-medium text-gray-900 text-sm">Assessment Scoring Rules</h4>
+                <div
+                  className="flex items-center justify-between cursor-pointer"
+                  onClick={() => setIsScoringRulesExpanded(!isScoringRulesExpanded)}
+                >
+                  <div className="flex items-center gap-2">
+                    <BarChart className="w-5 h-5 text-gray-700" />
+                    <h4 className="font-medium text-gray-900 text-sm">Assessment Scoring Rules</h4>
+                  </div>
+                  {isScoringRulesExpanded ? (
+                    <ChevronUp className="w-5 h-5 text-gray-600" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-gray-600" />
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 mb-3">Understanding how candidates are evaluated for PASS/FAIL determination</p>
+                {isScoringRulesExpanded && (
+                  <>
+                    <p className="text-xs text-gray-500 mb-3 mt-3">Understanding how candidates are evaluated for PASS/FAIL determination</p>
 
                 {/* HR Section */}
                 <div className="mb-3 pb-3 border-b border-gray-100">
@@ -1914,6 +1951,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     <p>❌ Fail: Only 6 questions score ≥7 AND average &lt;7</p>
                   </div>
                 </div>
+                  </>
+                )}
               </div>
 
               {/* Summary */}
@@ -2156,7 +2195,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
           {/* Assessment Summary */}
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
-            <h2 className="text-gray-900 mb-4">{generatedAssessment?.title}</h2>
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-gray-900">{generatedAssessment?.title}</h2>
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold flex-shrink-0">
+                V{generatedAssessment?.version || 1}
+              </span>
+            </div>
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="p-4 bg-gray-50 rounded-lg">
                 <div className="text-sm text-gray-800 mb-1">Total Duration</div>

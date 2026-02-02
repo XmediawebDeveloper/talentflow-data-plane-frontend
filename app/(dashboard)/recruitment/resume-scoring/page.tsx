@@ -42,6 +42,7 @@ export default function ResumeScoringRoute() {
   const [scoredHistory, setScoredHistory] = useState<ScoredResumeData[]>([]);
   const [loading, setLoading] = useState(true);
   const [initialJdId, setInitialJdId] = useState<string | null>(null);
+  const [initialScoreId, setInitialScoreId] = useState<string | null>(null);
   const [showProgress, setShowProgress] = useState(false);
   const [pendingScoringData, setPendingScoringData] = useState<{
     jobId: string;
@@ -70,6 +71,7 @@ export default function ResumeScoringRoute() {
   useEffect(() => {
     // Check if there's a jd_id in URL params
     const jdId = searchParams.get('jd_id');
+    const scoreId = searchParams.get('score_id');
     const showProgressParam = searchParams.get('show_progress');
     const startScoringParam = searchParams.get('start_scoring');
     const batchIdParam = searchParams.get('batch_id');
@@ -77,6 +79,10 @@ export default function ResumeScoringRoute() {
     if (jdId) {
       console.log('[ResumeScoringRoute] Found jd_id in URL:', jdId);
       setInitialJdId(jdId);
+    }
+    if (scoreId) {
+      console.log('[ResumeScoringRoute] Found score_id in URL:', scoreId);
+      setInitialScoreId(scoreId);
     }
     if (showProgressParam === 'true') {
       console.log('[ResumeScoringRoute] Show progress requested');
@@ -245,19 +251,18 @@ export default function ResumeScoringRoute() {
           clearInterval(pollInterval);
           setPendingBatchId(null);
 
-          // Reload scored history to show new results, then redirect
-          // NOTE: Don't clear sessionStorage until redirect to keep items available for display
+          // Reload scored history to show new results
           setTimeout(async () => {
             await loadScoredHistory();
-            // Clear sessionStorage just before redirect
+            // Clear sessionStorage after loading history
             try {
               sessionStorage.removeItem('pendingScoringBatch');
               console.log('[ResumeScoringRoute] Cleared pendingScoringBatch from sessionStorage');
             } catch (e) {
               console.error('[ResumeScoringRoute] Error clearing pendingScoringBatch:', e);
             }
-            // Redirect to show the scored results after history is loaded
-            window.location.href = `/recruitment/resume-scoring?jd_id=${status.jd_id}`;
+            // Update URL without full page reload to preserve state
+            router.push(`/recruitment/resume-scoring?jd_id=${status.jd_id}`);
           }, 2000);
         }
       } catch (e) {
@@ -299,6 +304,7 @@ export default function ResumeScoringRoute() {
           candidateEmail: item.email || item.candidate_email || '',
           email: item.email || item.candidate_email || '',
           phone: item.phone || '',
+          overall_score: matchScore,  // Use overall_score as primary field
           matchScore: matchScore,
           matchStatus: matchStatus,
           scorePercentage: matchScore,
@@ -476,6 +482,7 @@ export default function ResumeScoringRoute() {
       scoredHistory={scoredHistory}
       onSaveScores={saveScoredHistory}
       initialJdId={initialJdId}
+      initialScoreId={initialScoreId}
       initialShowProgress={showProgress}
       pendingScoringData={pendingScoringData}
       batchProgress={batchProgress}
