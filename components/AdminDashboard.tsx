@@ -74,6 +74,20 @@ export default function AdminDashboard({
 
   const canManageUsers = user?.permissions?.canManageUsers;
 
+  // Filter activities to only show those from the last 24 hours
+  const filterLast24Hours = <T extends { created_at: string }>(activities: T[]): T[] => {
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    return activities.filter((activity) => {
+      const activityDate = new Date(activity.created_at);
+      return activityDate >= twentyFourHoursAgo;
+    });
+  };
+
+  // Get filtered activities (last 24 hours only, max 10 items)
+  const filteredRecentActivity = filterLast24Hours(recentActivity).slice(0, 10);
+  const filteredJdRecentActivity = filterLast24Hours(jdRecentActivity).slice(0, 10);
+
   const getActivityIcon = (action: string) => {
     if (action.includes('resume')) return <FileText className="w-4 h-4 text-blue-600" />;
     if (action.includes('jd') || action.includes('job')) return <Briefcase className="w-4 h-4 text-purple-600" />;
@@ -392,8 +406,8 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {/* JD02A: JD Recent Activity */}
-      {jdRecentActivity.length > 0 && (
+      {/* JD02A: JD Recent Activity - Last 24 hours only, max 10 items */}
+      {filteredJdRecentActivity.length > 0 && (
         <div className="mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
@@ -401,7 +415,7 @@ export default function AdminDashboard({
               <Briefcase className="w-5 h-5 text-gray-400" />
             </div>
             <div className="space-y-3">
-              {jdRecentActivity.slice(0, 10).map((activity) => (
+              {filteredJdRecentActivity.map((activity) => (
                 <div
                   key={activity.id}
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
@@ -474,40 +488,116 @@ export default function AdminDashboard({
           </div>
         </div>
 
-        {/* Recent Activity */}
+        {/* Recent Activity - Last 24 hours only, max 10 items - Table View */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
             <Activity className="w-5 h-5 text-gray-400" />
           </div>
-          <div className="space-y-4">
-            {recentActivity.length > 0 ? (
-              recentActivity.slice(0, 10).map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center border border-gray-200">
-                      {getActivityIcon(activity.action)}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{activity.action_display}</p>
-                      <p className="text-xs text-gray-500">
-                        {activity.user_name || 'System'}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-gray-400">{activity.time_ago}</span>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <Activity className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p className="text-sm">No recent activity</p>
-              </div>
-            )}
-          </div>
+          {filteredRecentActivity.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Details</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
+                    <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredRecentActivity.map((activity) => {
+                    // Build details display based on activity type
+                    const getDetailsDisplay = () => {
+                      const details = activity.details;
+                      if (!details) return '-';
+
+                      // JD activities (JD_CREATED, JD_PUBLISHED, etc.)
+                      if (activity.action?.includes('JD_') || activity.action?.includes('job')) {
+                        const jdNum = details.jd_number || details.job_number;
+                        const title = details.title || details.jd_title;
+                        if (jdNum && title) return `${jdNum} - ${title}`;
+                        return jdNum || title || '-';
+                      }
+
+                      // Assessment activities
+                      if (activity.action?.includes('ASSESSMENT_')) {
+                        const assNum = details.assessment_number;
+                        const title = details.title || details.assessment_title;
+                        const jdNum = details.jd_number;
+                        if (assNum && title) return `${assNum} - ${title}`;
+                        if (jdNum && title) return `${jdNum} - ${title}`;
+                        return title || details.candidate_email || '-';
+                      }
+
+                      // Resume scoring
+                      if (activity.action?.includes('RESUME_SCORED')) {
+                        const candidate = details.candidate_name;
+                        const jdNum = details.jd_number;
+                        const jdTitle = details.jd_title;
+                        const score = details.score;
+                        if (jdNum && candidate && score !== undefined) {
+                          return `${jdNum} - ${candidate} (${score}%)`;
+                        }
+                        if (candidate && score !== undefined) {
+                          return `${candidate} - Score: ${score}%`;
+                        }
+                        return candidate || jdTitle || '-';
+                      }
+
+                      // Resume upload/delete
+                      if (activity.action?.includes('RESUME_')) {
+                        const candidate = details.candidate_name || details.title;
+                        const fileName = details.file_name;
+                        if (candidate && fileName) return `${candidate} (${fileName})`;
+                        return candidate || fileName || '-';
+                      }
+
+                      // User activities
+                      if (activity.action?.includes('USER_')) {
+                        const email = details.user_email || details.title;
+                        const role = details.role;
+                        if (email && role) return `${email} (${role})`;
+                        return email || '-';
+                      }
+
+                      // Default fallback
+                      return details.title || details.name || '-';
+                    };
+
+                    const detailsDisplay = getDetailsDisplay();
+
+                    return (
+                      <tr key={activity.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center">
+                              {getActivityIcon(activity.action)}
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">{activity.action_display}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-sm text-gray-700">{detailsDisplay}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-sm text-gray-600">{activity.user_name || 'System'}</span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="text-xs text-gray-400">{activity.time_ago}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <Activity className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p className="text-sm">No recent activity</p>
+            </div>
+          )}
         </div>
       </div>
 
