@@ -1252,66 +1252,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (hasProceededToReview && originalStage1Values) {
       if (!hasStage1FieldsChanged()) {
         // No fields modified - skip extraction, go directly to Stage 2
-        console.log('[TalentFlow] No Stage 1 fields modified after review, checking extracted data...');
-
-        // Safety check: If extractedData is empty (no skills), reload from database
-        if (editingId && (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0)) {
-          console.log('[TalentFlow] Extracted data is empty after review, reloading from database...');
-          try {
-            const jd = await jdService.get(editingId);
-
-            // Map experience from database
-            const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
-              if (min === null || min === undefined) return '';
-              if (min >= 10) return 'senior';
-              if (min >= 7) return 'senior';
-              if (min >= 5) return 'mid';
-              if (min >= 2) return 'junior';
-              return 'entry';
-            };
-
-            const experienceValue = mapExpToLevel(jd.experience_min, jd.experience_max);
-            const educationValue = jd.education_requirements?.degree || '';
-            const industryValue = jd.industry_type || '';
-
-            setExtractedData({
-              mustHaveSkills: jd.must_have_skills || [],
-              niceToHaveSkills: jd.nice_to_have_skills || [],
-              mustHaveComments: jd.must_have_comments || [],
-              niceToHaveComments: jd.nice_to_have_comments || [],
-              education: educationValue,
-              educationRequired: false,
-              experience: experienceValue,
-              experienceRequired: false,
-              industryType: industryValue,
-              industryTypeRequired: false,
-              department: jd.department || '',
-              salaryFrom: jd.salary_min?.toString() || '',
-              salaryTo: jd.salary_max?.toString() || '',
-              compensationType: (jd.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
-              assessmentGuidance: jd.assessment_guidance || '',
-              internalRecruiterComments: jd.internal_comments ? jd.internal_comments.split('\n').filter(c => c.trim()) : [],
-              certifications: jd.certifications || [],
-              domainKeywords: jd.domain_keywords || [],
-              allowOverqualified: jd.allow_overqualified ?? false,
-              employmentType: (jd.employment_type as ExtractedData['employmentType']) || 'full_time',
-              workModel: (jd.remote_type as ExtractedData['workModel']) || 'onsite',
-              locations: jd.locations?.map(loc => ({
-                city: loc.state ? `${loc.city}, ${loc.state}` : loc.city,
-                radius: loc.radius_km?.toString() || '50',
-              })) || [],
-              locationsRequired: jd.locations?.some(loc => loc.is_required) || false,
-              codingRequired: jd.coding_required || false,
-              suggestedLanguages: jd.supported_languages || [],
-            });
-
-            console.log('[TalentFlow] Extracted data reloaded successfully after review');
-          } catch (error) {
-            console.error('[TalentFlow] Failed to reload extracted data after review:', error);
-          }
-        }
-
-        console.log('[TalentFlow] Skipping extraction after review');
+        // Keep current extractedData as-is (user may have deleted items)
+        console.log('[TalentFlow] No Stage 1 fields modified after review, keeping current extractedData');
         setHasProceededToExtract(true);
         setStep('extract');
         return;
@@ -1321,74 +1263,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         setHasProceededToReview(false); // Reset so Stage 2 becomes editable again
       }
     } else if (lastExtractedJD && jdText.trim() === lastExtractedJD.trim()) {
-      // Normal flow: Check if JD has changed since last extraction
-      console.log('[TalentFlow] JD unchanged, checking if extracted data exists...');
-
-      // Safety check: If extractedData is empty (no skills), reload from database
-      if (editingId && (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0)) {
-        console.log('[TalentFlow] Extracted data is empty, reloading from database...');
-        try {
-          const jd = await jdService.get(editingId);
-
-          // Map experience from database
-          const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
-            if (min === null || min === undefined) return '';
-            if (min >= 10) return 'senior';
-            if (min >= 7) return 'senior';
-            if (min >= 5) return 'mid';
-            if (min >= 2) return 'junior';
-            return 'entry';
-          };
-
-          const experienceValue = mapExpToLevel(jd.experience_min, jd.experience_max);
-          const educationValue = jd.education_requirements?.degree || '';
-          const industryValue = jd.industry_type || '';
-
-          console.log('[TalentFlow] Reloading extracted data from database:', {
-            mustHaveSkills: jd.must_have_skills,
-            niceToHaveSkills: jd.nice_to_have_skills,
-            mustHaveComments: jd.must_have_comments,
-            niceToHaveComments: jd.nice_to_have_comments,
-          });
-
-          setExtractedData({
-            mustHaveSkills: jd.must_have_skills || [],
-            niceToHaveSkills: jd.nice_to_have_skills || [],
-            mustHaveComments: jd.must_have_comments || [],
-            niceToHaveComments: jd.nice_to_have_comments || [],
-            education: educationValue,
-            educationRequired: false,
-            experience: experienceValue,
-            experienceRequired: false,
-            industryType: industryValue,
-            industryTypeRequired: false,
-            department: jd.department || '',
-            salaryFrom: jd.salary_min?.toString() || '',
-            salaryTo: jd.salary_max?.toString() || '',
-            compensationType: (jd.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
-            assessmentGuidance: jd.assessment_guidance || '',
-            internalRecruiterComments: jd.internal_comments ? jd.internal_comments.split('\n').filter(c => c.trim()) : [],
-            certifications: jd.certifications || [],
-            domainKeywords: jd.domain_keywords || [],
-            allowOverqualified: jd.allow_overqualified ?? false,
-            employmentType: (jd.employment_type as ExtractedData['employmentType']) || 'full_time',
-            workModel: (jd.remote_type as ExtractedData['workModel']) || 'onsite',
-            locations: jd.locations?.map(loc => ({
-              city: loc.state ? `${loc.city}, ${loc.state}` : loc.city,
-              radius: loc.radius_km?.toString() || '50',
-            })) || [],
-            locationsRequired: jd.locations?.some(loc => loc.is_required) || false,
-            codingRequired: jd.coding_required || false,
-            suggestedLanguages: jd.supported_languages || [],
-          });
-
-          console.log('[TalentFlow] Extracted data reloaded successfully');
-        } catch (error) {
-          console.error('[TalentFlow] Failed to reload extracted data:', error);
-        }
-      }
-
-      console.log('[TalentFlow] Skipping extraction and going directly to step 2');
+      // Normal flow: JD unchanged since last extraction - keep current extractedData
+      // Don't reload from DB (user may have deleted items)
+      console.log('[TalentFlow] JD unchanged, keeping current extractedData and going to step 2');
       setHasProceededToExtract(true);
       setStep('extract');
       return;
@@ -1697,11 +1574,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // This prevents losing manually edited comments/skills when re-extracting
       const isEditMode = !!editingId;
 
+      // FIX: If user has modified extracted data (deleted/edited skills/comments), preserve their changes
+      // Don't let AI extraction overwrite user's manual edits
+      const preserveUserEdits = isEditMode && extractedDataModified;
+
       const extraction: ExtractedData = {
-        mustHaveSkills: params.must_have_skills?.length > 0 ? params.must_have_skills : (isEditMode ? extractedData.mustHaveSkills : []),
-        mustHaveComments: params.must_have_comments?.length > 0 ? params.must_have_comments : (isEditMode ? extractedData.mustHaveComments : []),
-        niceToHaveSkills: params.nice_to_have_skills?.length > 0 ? params.nice_to_have_skills : (isEditMode ? extractedData.niceToHaveSkills : []),
-        niceToHaveComments: params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : (isEditMode ? extractedData.niceToHaveComments : []),
+        mustHaveSkills: preserveUserEdits ? extractedData.mustHaveSkills : (params.must_have_skills?.length > 0 ? params.must_have_skills : (isEditMode ? extractedData.mustHaveSkills || [] : [])),
+        mustHaveComments: preserveUserEdits ? extractedData.mustHaveComments : (params.must_have_comments?.length > 0 ? params.must_have_comments : (isEditMode ? extractedData.mustHaveComments || [] : [])),
+        niceToHaveSkills: preserveUserEdits ? extractedData.niceToHaveSkills : (params.nice_to_have_skills?.length > 0 ? params.nice_to_have_skills : (isEditMode ? extractedData.niceToHaveSkills || [] : [])),
+        niceToHaveComments: preserveUserEdits ? extractedData.niceToHaveComments : (params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : (isEditMode ? extractedData.niceToHaveComments || [] : [])),
         education: educationValue || (isEditMode ? extractedData.education : ''),
         // Use API's mandatory flag for education
         educationRequired: params.education_mandatory || false,
@@ -1739,10 +1620,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         educationRequired: extraction.educationRequired,
         industryType: extraction.industryType,
         industryTypeRequired: extraction.industryTypeRequired,
-        mustHaveSkills: extraction.mustHaveSkills.length + ' skills',
-        mustHaveComments: extraction.mustHaveComments.length + ' comments',
-        niceToHaveSkills: extraction.niceToHaveSkills.length + ' skills',
-        niceToHaveComments: extraction.niceToHaveComments.length + ' comments',
+        mustHaveSkills: (extraction.mustHaveSkills?.length || 0) + ' skills',
+        mustHaveComments: (extraction.mustHaveComments?.length || 0) + ' comments',
+        niceToHaveSkills: (extraction.niceToHaveSkills?.length || 0) + ' skills',
+        niceToHaveComments: (extraction.niceToHaveComments?.length || 0) + ' comments',
         employmentType: extraction.employmentType,
         workModel: extraction.workModel,
         salaryRange: `${extraction.salaryFrom}-${extraction.salaryTo}`,
@@ -1758,6 +1639,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         niceToHaveComments: extraction.niceToHaveComments
       });
       setExtractedData(extraction);
+      setExtractedDataModified(false);  // Reset after fresh extraction - no user modifications yet
       setLastExtractedJD(jdText);  // Track JD text to skip extraction if unchanged on next "Next" click
 
       // Save original Stage 1 values to detect modifications if user returns from review
@@ -1797,7 +1679,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Coding assessment fields
         coding_required: extraction.codingRequired,
         supported_languages: extraction.suggestedLanguages,
-        locations: extraction.locations.map(loc => ({
+        locations: (extraction.locations || []).map(loc => ({
           city: loc.city,
           radius_km: parseInt(loc.radius) || 50,
           is_required: extraction.locationsRequired,
@@ -1890,12 +1772,27 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleRemoveSkill = (category: 'mustHaveSkills' | 'niceToHaveSkills', index: number) => {
-    setExtractedData(prev => ({
-      ...prev,
-      [category]: prev[category].filter((_, i) => i !== index),
-    }));
-    setExtractedDataModified(true);
+  const handleRemoveSkill = async (category: 'mustHaveSkills' | 'niceToHaveSkills', index: number) => {
+    // Update local state immediately
+    const updatedData = {
+      ...extractedData,
+      [category]: extractedData[category].filter((_, i) => i !== index),
+    };
+    setExtractedData(updatedData);
+    setExtractedDataModified(true);  // Mark as modified to prevent reload from DB
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          must_have_skills: category === 'mustHaveSkills' ? updatedData.mustHaveSkills : extractedData.mustHaveSkills,
+          nice_to_have_skills: category === 'niceToHaveSkills' ? updatedData.niceToHaveSkills : extractedData.niceToHaveSkills,
+        });
+        console.log('[Delete] Skill deleted and saved to DB');
+      } catch (error) {
+        console.error('[Delete] Failed to save skill deletion:', error);
+      }
+    }
   };
 
   const handleMoveSkill = (skill: string, from: 'mustHaveSkills' | 'niceToHaveSkills', to: 'mustHaveSkills' | 'niceToHaveSkills') => {
@@ -1915,16 +1812,32 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }));
       setNewComment('');
       setEditingCategory(null);
+      setExtractedDataModified(true); // Mark as modified for regeneration
       // Clear validation error when comment is added
       setValidationErrors(prev => ({ ...prev, mustHaveComments: undefined }));
     }
   };
 
-  const handleRemoveComment = (index: number) => {
+  const handleRemoveComment = async (index: number) => {
+    // Update local state immediately
+    const updatedComments = extractedData.mustHaveComments.filter((_, i) => i !== index);
     setExtractedData(prev => ({
       ...prev,
-      mustHaveComments: prev.mustHaveComments.filter((_, i) => i !== index),
+      mustHaveComments: updatedComments,
     }));
+    setExtractedDataModified(true);  // Mark as modified to prevent reload from DB
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          must_have_comments: updatedComments,
+        });
+        console.log('[Delete] Comment deleted and saved to DB');
+      } catch (error) {
+        console.error('[Delete] Failed to save comment deletion:', error);
+      }
+    }
   };
 
   // Inline editing handlers
@@ -1960,10 +1873,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (editingCommentIndex !== null && editingCommentValue.trim()) {
       setExtractedData(prev => ({
         ...prev,
-        mustHaveComments: prev.mustHaveComments.map((comment, i) => 
+        mustHaveComments: prev.mustHaveComments.map((comment, i) =>
           i === editingCommentIndex ? editingCommentValue.trim() : comment
         ),
       }));
+      setExtractedDataModified(true); // Mark as modified for regeneration
     }
     setEditingCommentIndex(null);
     setEditingCommentValue('');
@@ -1987,12 +1901,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleRemoveNiceComment = (index: number) => {
+  const handleRemoveNiceComment = async (index: number) => {
+    const updatedComments = (extractedData.niceToHaveComments || []).filter((_, i) => i !== index);
     setExtractedData(prev => ({
       ...prev,
-      niceToHaveComments: (prev.niceToHaveComments || []).filter((_, i) => i !== index),
+      niceToHaveComments: updatedComments,
     }));
-    setExtractedDataModified(true); // Mark as modified for regeneration
+    setExtractedDataModified(true);  // Mark as modified to prevent reload from DB
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          nice_to_have_comments: updatedComments,
+        });
+        console.log('[Delete] Nice comment deleted and saved to DB');
+      } catch (error) {
+        console.error('[Delete] Failed to save nice comment deletion:', error);
+      }
+    }
   };
 
   const handleStartEditNiceComment = (index: number, value: string) => {
@@ -2030,11 +1957,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleRemoveRecruiterComment = (index: number) => {
+  const handleRemoveRecruiterComment = async (index: number) => {
+    const updatedComments = extractedData.internalRecruiterComments.filter((_, i) => i !== index);
     setExtractedData(prev => ({
       ...prev,
-      internalRecruiterComments: prev.internalRecruiterComments.filter((_, i) => i !== index),
+      internalRecruiterComments: updatedComments,
     }));
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          internal_comments: updatedComments.join('\n') || undefined,
+        });
+        console.log('[Delete] Recruiter comment deleted and saved to DB');
+      } catch (error) {
+        console.error('[Delete] Failed to save recruiter comment deletion:', error);
+      }
+    }
   };
 
   const handleStartEditRecruiterComment = (index: number, value: string) => {
@@ -2082,12 +2022,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleRemoveCommentByCategory = (category: 'mustHaveComments' | 'niceToHaveComments', index: number) => {
+  const handleRemoveCommentByCategory = async (category: 'mustHaveComments' | 'niceToHaveComments', index: number) => {
+    const updatedComments = (extractedData[category] || []).filter((_, i) => i !== index);
     setExtractedData(prev => ({
       ...prev,
-      [category]: (prev[category] || []).filter((_, i) => i !== index),
+      [category]: updatedComments,
     }));
-    setExtractedDataModified(true);
+    setExtractedDataModified(true);  // Mark as modified to prevent reload from DB
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        const updateData = category === 'mustHaveComments'
+          ? { must_have_comments: updatedComments }
+          : { nice_to_have_comments: updatedComments };
+        await jdService.update(editingId, updateData);
+        console.log(`[Delete] ${category} deleted and saved to DB`);
+      } catch (error) {
+        console.error(`[Delete] Failed to save ${category} deletion:`, error);
+      }
+    }
   };
 
   const handleStartEditCommentByCategory = (category: 'mustHaveComments' | 'niceToHaveComments', index: number, value: string) => {
@@ -2114,11 +2068,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleRemoveLocation = (index: number) => {
+  const handleRemoveLocation = async (index: number) => {
+    const updatedLocations = extractedData.locations.filter((_, i) => i !== index);
     setExtractedData(prev => ({
       ...prev,
-      locations: prev.locations.filter((_, i) => i !== index),
+      locations: updatedLocations,
     }));
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          locations: updatedLocations.map(loc => ({
+            city: loc.city,
+            radius_km: loc.radiusKm,
+            is_required: loc.isRequired,
+          })),
+        });
+        console.log('[Delete] Location deleted and saved to DB');
+      } catch (error) {
+        console.error('[Delete] Failed to save location deletion:', error);
+      }
+    }
   };
 
   const handlePublish = async () => {
@@ -2160,7 +2131,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     } = {};
 
     // Must have at least one must-have skill
-    if (extractedData.mustHaveSkills.length === 0) {
+    if (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0) {
       missingFields.push('At least one Must-Have Skill');
       errors.mustHaveSkills = 'At least one Must-Have Skill is required';
     }
@@ -2186,7 +2157,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
 
     // Location validation - if location is marked as required but no locations added, show error
-    if (extractedData.locationsRequired && extractedData.locations.length === 0) {
+    if (extractedData.locationsRequired && (!extractedData.locations || extractedData.locations.length === 0)) {
       missingFields.push('At least one Location');
       errors.locations = 'Location is marked as required but no locations added';
     }
@@ -2205,15 +2176,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // BEFORE going to review, reformat the JD description using AI (Odoo-style)
     // If user has modified extracted data (skills/comments), regenerate JD with those changes
     // For published JDs being edited, ALWAYS reformat to ensure latest changes are included
-    // Skip formatting only if already formatted and no changes were made AND not editing a published JD
+    // ALWAYS reformat to ensure skills/comments are properly included in JD
     // NOTE: Validation above runs BEFORE this check, so required fields are always validated
-    if (hasFormattedForReview && !extractedDataModified && !isEditingPublished) {
-      console.log('[DEBUG] Skipping reformat - already formatted and no changes made');
-      console.log('[DEBUG] Experience value at skip:', extractedData.experience);
-      setStep('review');
-      setHasProceededToReview(true);  // Mark that user has proceeded to review (makes Stage 2 fields read-only)
-      return;
-    }
 
     console.log('[DEBUG] Reformatting JD description with extracted parameters...');
     console.log('[DEBUG] extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview);
@@ -2238,7 +2202,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       if (shouldReformat) {
         console.log('[DEBUG] Calling reformat API with parameters...');
         console.log('[DEBUG] Mode:', mode, 'extractedDataModified:', extractedDataModified, 'hasParameters:', hasParameters, 'isEditingPublished:', isEditingPublished);
-        console.log('[DEBUG] Skills to include - mustHave:', extractedData.mustHaveSkills.length, 'niceToHave:', extractedData.niceToHaveSkills.length);
+        console.log('[DEBUG] Skills to include - mustHave:', extractedData.mustHaveSkills?.length || 0, 'niceToHave:', extractedData.niceToHaveSkills?.length || 0);
         console.log('[DEBUG] Comments to include - mustHave:', mustHaveComments.length, 'niceToHave:', niceToHaveComments.length);
 
         if (editingId) {
@@ -2337,7 +2301,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setStep('review');
     setHasProceededToReview(true);  // Mark that user has proceeded to review (makes Stage 2 fields read-only)
     setHasFormattedForReview(true);  // Mark as formatted so we can skip on next "Next" click
-    setExtractedDataModified(false);  // Reset modified flag after formatting
+    // NOTE: Don't reset extractedDataModified here - it should persist to prevent reloading
+    // user's deleted items from DB when navigating back to Stage 1/2
     setValidationErrors({});  // Clear validation errors since all validations passed
 
     // Save JD with creation_stage: 'review' so refresh preserves the stage
@@ -2389,7 +2354,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Coding assessment fields
         coding_required: extractedData.codingRequired,
         supported_languages: extractedData.suggestedLanguages,
-        locations: extractedData.locations.map(loc => ({
+        locations: (extractedData.locations || []).map(loc => ({
           city: loc.city,
           radius_km: parseInt(loc.radius) || 50,
           is_required: extractedData.locationsRequired,
@@ -2469,7 +2434,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const getValidationStatus = () => {
     const missingFields: string[] = [];
 
-    if (extractedData.mustHaveSkills.length === 0) {
+    if (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0) {
       missingFields.push('At least one Must-Have Skill');
     }
 
@@ -2686,8 +2651,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             : undefined,
         };
 
+        console.log('[JDCreation] Calling onPublish with job:', newJob);
+
+        // Call onPublish callback immediately (for assessment redirect)
         onPublish(newJob);
 
+        // Show success toast (but don't block navigation)
         toast.success({
           title: isEditingPublished ? 'Job description republished!' : 'Job description published!',
           description: isEditingPublished
@@ -4069,6 +4038,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     value={extractedData.experience}
                     onChange={(e) => {
                       setExtractedData(prev => ({ ...prev, experience: e.target.value }));
+                      setExtractedDataModified(true);
                       // Clear validation error when user makes a selection
                       if (e.target.value) {
                         setValidationErrors(prev => ({ ...prev, experience: undefined }));
@@ -4094,7 +4064,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <input
                       type="checkbox"
                       checked={Boolean(extractedData.experienceRequired)}
-                      onChange={(e) => setExtractedData(prev => ({ ...prev, experienceRequired: e.target.checked }))}
+                      onChange={(e) => { setExtractedData(prev => ({ ...prev, experienceRequired: e.target.checked })); setExtractedDataModified(true); }}
                       className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
                       disabled={isRegenerating}
                     />
@@ -4109,6 +4079,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     value={extractedData.education}
                     onChange={(e) => {
                       setExtractedData(prev => ({ ...prev, education: e.target.value }));
+                      setExtractedDataModified(true);
                       // Clear validation error when user makes a selection
                       if (e.target.value) {
                         setValidationErrors(prev => ({ ...prev, education: undefined }));
@@ -4134,7 +4105,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <input
                       type="checkbox"
                       checked={Boolean(extractedData.educationRequired)}
-                      onChange={(e) => setExtractedData(prev => ({ ...prev, educationRequired: e.target.checked }))}
+                      onChange={(e) => { setExtractedData(prev => ({ ...prev, educationRequired: e.target.checked })); setExtractedDataModified(true); }}
                       className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
                       disabled={isRegenerating}
                     />
@@ -4149,6 +4120,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     value={extractedData.industryType}
                     onChange={(e) => {
                       setExtractedData(prev => ({ ...prev, industryType: e.target.value }));
+                      setExtractedDataModified(true);
                       // Clear validation error when user makes a selection
                       if (e.target.value) {
                         setValidationErrors(prev => ({ ...prev, industryType: undefined }));
@@ -4174,7 +4146,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <input
                       type="checkbox"
                       checked={Boolean(extractedData.industryTypeRequired)}
-                      onChange={(e) => setExtractedData(prev => ({ ...prev, industryTypeRequired: e.target.checked }))}
+                      onChange={(e) => { setExtractedData(prev => ({ ...prev, industryTypeRequired: e.target.checked })); setExtractedDataModified(true); }}
                       className="w-4 h-4 text-gray-800 border-gray-300 rounded focus:ring-gray-600"
                       disabled={isRegenerating}
                     />
@@ -4195,6 +4167,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => {
                           const newValue = e.target.value;
                           setExtractedData(prev => ({ ...prev, salaryFrom: newValue }));
+                          setExtractedDataModified(true);
                           // Validate salary range
                           const error = validateSalaryRange(newValue, extractedData.salaryTo || '');
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
@@ -4216,6 +4189,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => {
                           const newValue = e.target.value;
                           setExtractedData(prev => ({ ...prev, salaryTo: newValue }));
+                          setExtractedDataModified(true);
                           // Validate salary range
                           const error = validateSalaryRange(extractedData.salaryFrom || '', newValue);
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
@@ -4230,7 +4204,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </div>
                     <select
                       value={extractedData.compensationType}
-                      onChange={(e) => setExtractedData(prev => ({ ...prev, compensationType: e.target.value as 'hourly' | 'daily' | 'monthly' | 'yearly' }))}
+                      onChange={(e) => { setExtractedData(prev => ({ ...prev, compensationType: e.target.value as 'hourly' | 'daily' | 'monthly' | 'yearly' })); setExtractedDataModified(true); }}
                       className={`px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                       disabled={isRegenerating}
                     >
@@ -4257,7 +4231,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <input
                       type="checkbox"
                       checked={extractedData.locationsRequired}
-                      onChange={(e) => setExtractedData(prev => ({ ...prev, locationsRequired: e.target.checked }))}
+                      onChange={(e) => { setExtractedData(prev => ({ ...prev, locationsRequired: e.target.checked })); setExtractedDataModified(true); }}
                       className="w-4 h-4 text-gray-600 border-gray-300 rounded focus:ring-gray-500"
                       disabled={isRegenerating}
                     />
@@ -4461,10 +4435,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   <h3 className="text-gray-900 mb-2">Employment Type</h3>
                   <select
                     value={extractedData.employmentType}
-                    onChange={(e) => setExtractedData(prev => ({
+                    onChange={(e) => { setExtractedData(prev => ({
                       ...prev,
                       employmentType: e.target.value as ExtractedData['employmentType']
-                    }))}
+                    })); setExtractedDataModified(true); }}
                     className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={isRegenerating}
                   >
@@ -4481,10 +4455,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   <h3 className="text-gray-900 mb-2">Work Mode</h3>
                   <select
                     value={extractedData.workModel}
-                    onChange={(e) => setExtractedData(prev => ({
+                    onChange={(e) => { setExtractedData(prev => ({
                       ...prev,
                       workModel: e.target.value as ExtractedData['workModel']
-                    }))}
+                    })); setExtractedDataModified(true); }}
                     className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={isRegenerating}
                   >
@@ -4507,7 +4481,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <input
                       type="checkbox"
                       checked={Boolean(extractedData.allowOverqualified)}
-                      onChange={(e) => setExtractedData(prev => ({ ...prev, allowOverqualified: e.target.checked }))}
+                      onChange={(e) => { setExtractedData(prev => ({ ...prev, allowOverqualified: e.target.checked })); setExtractedDataModified(true); }}
                       className="sr-only peer"
                       disabled={isRegenerating}
                     />
@@ -4529,7 +4503,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </p>
                   <textarea
                     value={extractedData.assessmentGuidance}
-                    onChange={(e) => setExtractedData(prev => ({ ...prev, assessmentGuidance: e.target.value.slice(0, 500) }))}
+                    onChange={(e) => { setExtractedData(prev => ({ ...prev, assessmentGuidance: e.target.value.slice(0, 500) })); setExtractedDataModified(true); }}
                     placeholder="e.g., Focus on system design, coding best practices, problem-solving approach..."
                     className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     rows={4}
@@ -4552,10 +4526,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </p>
                   <textarea
                     value={extractedData.internalRecruiterComments.join('\n')}
-                    onChange={(e) => setExtractedData(prev => ({
+                    onChange={(e) => { setExtractedData(prev => ({
                       ...prev,
                       internalRecruiterComments: e.target.value.split('\n').filter(c => c.trim())
-                    }))}
+                    })); setExtractedDataModified(true); }}
                     placeholder="Add internal notes for recruiters..."
                     className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     rows={4}
@@ -4631,37 +4605,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         {/* Step 3: Review & Publish */}
         {step === 'review' && !isPublished && (
           <div className="space-y-6">
-            {/* Guard: If Step 2 validation fails, redirect back to Step 2 */}
-            {!validationStatus.isValid ? (
-              <div className="bg-red-50 border-2 border-red-300 rounded-xl p-8">
-                <div className="flex items-start gap-4">
-                  <AlertCircle className="w-8 h-8 text-red-600 flex-shrink-0 mt-1" />
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-red-900 mb-3">Cannot Proceed to Review</h3>
-                    <p className="text-red-800 mb-4 text-lg">
-                      Please go back to <strong>Step 2</strong> and complete the following required fields:
-                    </p>
-                    <ul className="text-red-800 mb-6 list-disc list-inside space-y-2 text-base">
-                      {validationStatus.missingFields.map((field, index) => (
-                        <li key={index} className="font-semibold">{field}</li>
-                      ))}
-                    </ul>
-                    <button
-                      onClick={() => {
-                        setStep('extract');
-                        setValidationErrors({});
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold flex items-center gap-2 text-base"
-                    >
-                      <ArrowLeft className="w-5 h-5" />
-                      Return to Step 2 (Extract Parameters)
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
                 {/* Header */}
                 <div className="bg-gradient-to-r from-gray-800 to-gray-800 rounded-lg p-6 text-white">
                   <h2 className="text-2xl mb-2">Review & Publish</h2>
@@ -5121,8 +5064,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </button>
               </div>
             </div>
-              </>
-            )}
           </div>
         )}
 

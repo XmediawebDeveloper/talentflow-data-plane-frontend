@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -71,6 +71,7 @@ const formatDateTimeIST = (dateString: string | null | undefined): string => {
 
 export default function MyResumesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -130,6 +131,37 @@ export default function MyResumesPage() {
     fetchData();
     fetchUploadHistory();
   }, []);
+
+  // Handle deep link from notifications
+  useEffect(() => {
+    const resumeIdFromUrl = searchParams.get('resume_id');
+    const batchIdFromUrl = searchParams.get('batch_id');
+
+    if (resumeIdFromUrl) {
+      // Open specific resume in quick view
+      const openResume = async () => {
+        try {
+          const resume = await resumeService.getById(resumeIdFromUrl);
+          if (resume) {
+            setQuickViewResume(resume as unknown as Resume);
+          }
+          // Clear the query parameter
+          router.replace('/recruitment/my-resumes', { scroll: false });
+        } catch (error) {
+          console.error('Error fetching resume from URL:', error);
+          toast.error('Could not find the requested resume');
+        }
+      };
+      openResume();
+    }
+
+    if (batchIdFromUrl) {
+      // Show upload history filtered by batch
+      setIsUploadHistoryModalOpen(true);
+      // Clear the query parameter
+      router.replace('/recruitment/my-resumes', { scroll: false });
+    }
+  }, [searchParams, router]);
 
   const fetchUploadHistory = async () => {
     try {
@@ -251,6 +283,9 @@ export default function MyResumesPage() {
         // Version info
         version: r.version || 1,
         versionCount: r.version_count || 1,
+        // Archive status
+        isArchived: r.is_archived || false,
+        archivedAt: r.archived_at,
       }));
 
       // Convert API Folder to component Folder type
@@ -261,7 +296,41 @@ export default function MyResumesPage() {
         parentId: f.parent_id,
         children: f.children?.map(convertApiFolder),
       });
-      const apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+      let apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+
+      // Ensure "root" folder always exists (default folder for uploads)
+      const hasRootFolder = apiFolders.some(f => f.name.toLowerCase() === 'root' && !f.parentId);
+      if (!hasRootFolder) {
+        try {
+          const newRootFolder = await folderService.create('root');
+          const rootFolderConverted: FolderType = {
+            id: newRootFolder.id,
+            name: newRootFolder.name,
+            count: 0,
+            parentId: newRootFolder.parent_id,
+          };
+          apiFolders = [rootFolderConverted, ...apiFolders];
+        } catch (error) {
+          console.error('Failed to create root folder:', error);
+        }
+      }
+
+      // Ensure "Archived Resumes" folder always exists
+      const hasArchivedFolder = apiFolders.some(f => f.name === 'Archived Resumes' && !f.parentId);
+      if (!hasArchivedFolder) {
+        try {
+          const newArchivedFolder = await folderService.create('Archived Resumes');
+          const archivedFolderConverted: FolderType = {
+            id: newArchivedFolder.id,
+            name: newArchivedFolder.name,
+            count: 0,
+            parentId: newArchivedFolder.parent_id,
+          };
+          apiFolders = [...apiFolders, archivedFolderConverted];
+        } catch (error) {
+          console.error('Failed to create Archived Resumes folder:', error);
+        }
+      }
 
       // Add "All Resumes" virtual folder at the top
       const allResumesFolder: FolderType = {
@@ -322,6 +391,55 @@ export default function MyResumesPage() {
       toast.success(`${resumeIds.length} resume(s) moved`);
     } catch (error) {
       toast.error('Failed to move resumes');
+    }
+  };
+
+  // Handle archive resumes - sets is_archived AND moves to Archived Resumes folder
+  const handleArchiveResumes = async (resumeIds: string[]) => {
+    try {
+      // Find the "Archived Resumes" folder
+      const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+      if (!archivedFolder) {
+        toast.error('Archived Resumes folder not found');
+        return;
+      }
+
+      // Get old folder IDs for count update
+      const oldFolderIds = resumeIds.map(id => {
+        const resume = resumes.find(r => r.id === id);
+        return resume?.folderId;
+      }).filter(Boolean);
+
+      // Archive and move each resume
+      await Promise.all(resumeIds.map(async (id) => {
+        await resumeService.archive(id, true);
+        await resumeService.move(id, archivedFolder.id);
+      }));
+
+      // Update local state - set archived flag AND move to archived folder
+      setResumes(prev => prev.map(r =>
+        resumeIds.includes(r.id)
+          ? { ...r, isArchived: true, archivedAt: new Date().toISOString(), folderId: archivedFolder.id }
+          : r
+      ));
+
+      // Update folder counts
+      setFolders(prev => prev.map(f => {
+        if (f.id === archivedFolder.id) {
+          return { ...f, count: f.count + resumeIds.length };
+        }
+        // Decrease count from old folders
+        const decreaseCount = oldFolderIds.filter(fid => fid === f.id).length;
+        if (decreaseCount > 0) {
+          return { ...f, count: Math.max(0, f.count - decreaseCount) };
+        }
+        return f;
+      }));
+
+      setSelectedResumes([]);
+      toast.success(`${resumeIds.length} resume(s) archived`);
+    } catch (error) {
+      toast.error('Failed to archive resumes');
     }
   };
 
@@ -580,12 +698,22 @@ export default function MyResumesPage() {
       // Start async bulk scoring via Celery (resumeIds already have correct version IDs)
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
-      // Store batch info for the resume-scoring page to poll
+      // Get candidate names for the selected resumes
+      const resumeItems = resumeIds.map(id => {
+        const resume = resumes.find(r => r.id === id);
+        return {
+          resumeId: id,
+          candidateName: resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown',
+        };
+      });
+
+      // Store batch info for the resume-scoring page to poll (including resume items for fallback)
       const scoringData = {
         batchId: response.batch_id,
         jobId: response.jd_id,
         jobTitle: response.jd_title,
         totalResumes: response.total_resumes,
+        resumeItems: resumeItems,
       };
       sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
 
@@ -600,6 +728,31 @@ export default function MyResumesPage() {
 
   const handleCreateFolder = async (name: string, parentId?: string) => {
     try {
+      // Helper to get all folders including nested children
+      const getAllFolders = (folderList: FolderType[]): FolderType[] => {
+        const result: FolderType[] = [];
+        const traverse = (list: FolderType[]) => {
+          for (const f of list) {
+            result.push(f);
+            if (f.children) traverse(f.children);
+          }
+        };
+        traverse(folderList);
+        return result;
+      };
+
+      // Check if folder with same name already exists ANYWHERE (globally unique)
+      const allFolders = getAllFolders(folders);
+      const existingFolder = allFolders.find(f =>
+        f.name.toLowerCase() === name.toLowerCase() &&
+        f.id !== 'all'
+      );
+
+      if (existingFolder) {
+        toast.error(`Folder "${name}" already exists`);
+        return;
+      }
+
       console.log('[DEBUG] Creating folder:', { name, parentId });
       const newFolder = await folderService.create(name, parentId);
       console.log('[DEBUG] Folder created:', newFolder);
@@ -633,6 +786,39 @@ export default function MyResumesPage() {
 
   const handleRenameFolder = async (id: string, name: string) => {
     try {
+      // Prevent renaming "Archived Resumes" folder
+      const folderToRename = folders.find(f => f.id === id);
+      if (folderToRename && folderToRename.name === 'Archived Resumes' && !folderToRename.parentId) {
+        toast.error('Archived Resumes folder cannot be renamed');
+        return;
+      }
+
+      // Helper to get all folders including nested children
+      const getAllFolders = (folderList: FolderType[]): FolderType[] => {
+        const result: FolderType[] = [];
+        const traverse = (list: FolderType[]) => {
+          for (const f of list) {
+            result.push(f);
+            if (f.children) traverse(f.children);
+          }
+        };
+        traverse(folderList);
+        return result;
+      };
+
+      // Check if folder with same name already exists ANYWHERE (globally unique)
+      const allFolders = getAllFolders(folders);
+      const existingFolder = allFolders.find(f =>
+        f.name.toLowerCase() === name.toLowerCase() &&
+        f.id !== id &&
+        f.id !== 'all'
+      );
+
+      if (existingFolder) {
+        toast.error(`Folder "${name}" already exists`);
+        return;
+      }
+
       await folderService.update(id, { name });
       setFolders(prev => prev.map(f => f.id === id ? { ...f, name } : f));
       toast.success('Folder renamed');
@@ -642,12 +828,18 @@ export default function MyResumesPage() {
   };
 
   const handleDeleteFolder = (id: string) => {
-    // Find the folder to check if it's the root folder
+    // Find the folder to check if it's a system folder
     const folderToDelete = folders.find(f => f.id === id);
 
     // Prevent deletion of root folder
     if (folderToDelete && folderToDelete.name.toLowerCase() === 'root' && !folderToDelete.parentId) {
       toast.error('Root folder cannot be deleted');
+      return;
+    }
+
+    // Prevent deletion of "Archived Resumes" folder
+    if (folderToDelete && folderToDelete.name === 'Archived Resumes' && !folderToDelete.parentId) {
+      toast.error('Archived Resumes folder cannot be deleted');
       return;
     }
 
@@ -714,6 +906,30 @@ export default function MyResumesPage() {
     } catch (error: any) {
       console.error('Failed to create root folder:', error);
       throw error;
+    }
+  };
+
+  // Helper function to find or create "Archived Resumes" folder
+  const getOrCreateArchivedFolder = async (existingFolders: FolderType[]): Promise<FolderType | null> => {
+    // Check if "Archived Resumes" folder already exists
+    const existingArchived = existingFolders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+    if (existingArchived) {
+      return existingArchived;
+    }
+
+    // Create "Archived Resumes" folder
+    try {
+      const newFolder = await folderService.create('Archived Resumes');
+      const converted: FolderType = {
+        id: newFolder.id,
+        name: newFolder.name,
+        count: 0,
+        parentId: newFolder.parent_id,
+      };
+      return converted;
+    } catch (error: any) {
+      console.error('Failed to create Archived Resumes folder:', error);
+      return null;
     }
   };
 
@@ -1138,7 +1354,12 @@ export default function MyResumesPage() {
     <main className="flex-1 p-8 bg-gray-50">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 mb-2">My Resume Database</h1>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-2xl font-semibold text-gray-900">My Resume Database</h1>
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">
+              {resumes.length} Resumes
+            </span>
+          </div>
           <p className="text-sm text-gray-600">Resumes uploaded by you</p>
         </div>
         <div className="flex gap-3">
@@ -1167,14 +1388,7 @@ export default function MyResumesPage() {
         </div>
       </div>
 
-      <StatsCards
-        cards={[
-          { type: 'total', value: totalResumes },
-          { type: 'applied', value: appliedResumes }
-        ]}
-      />
-
-      <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {/* Bulk Actions Bar - Shows at TOP when resumes selected */}
         {selectedResumes.length > 0 && (
           <BulkActionsBar
@@ -1186,6 +1400,7 @@ export default function MyResumesPage() {
             onDelete={() => handleDeleteResumes(selectedResumes)}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
             onAssessment={handleAssessment}
+            onArchive={() => handleArchiveResumes(selectedResumes)}
           />
         )}
 
@@ -1285,6 +1500,7 @@ export default function MyResumesPage() {
               folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
               onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
               highlightQuery={appliedSearchQuery}
+              onArchive={(resumeId) => handleArchiveResumes([resumeId])}
             />
           </div>
         ) : (
@@ -1293,6 +1509,7 @@ export default function MyResumesPage() {
             {cardViewFolder === null ? (
               // Show Folder Cards
               (() => {
+                // Filter out only 'all' virtual folder - show root and Archived Resumes
                 const realFolders = folders.filter(f => f.id !== 'all');
 
                 // Group resumes by folder to get counts
@@ -1311,18 +1528,39 @@ export default function MyResumesPage() {
                 const folderCards = realFolders.map((folder) => {
                   const folderResumes = resumesByFolder.get(folder.id) || [];
 
+                  const isArchived = folder.name === 'Archived Resumes' && !folder.parentId;
+                  const isRoot = folder.name.toLowerCase() === 'root' && !folder.parentId;
+
                   return (
                     <div
                       key={folder.id}
-                      className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-blue-300 transition-all"
+                      className={`bg-white border rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all ${
+                        isArchived
+                          ? 'border-amber-200 hover:border-amber-400'
+                          : isRoot
+                            ? 'border-green-200 hover:border-green-400'
+                            : 'border-gray-200 hover:border-blue-300'
+                      }`}
                       onClick={() => setCardViewFolder(folder.id)}
                     >
                       <div className="flex items-center gap-3 p-4">
-                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <Folder className="w-6 h-6 text-blue-600" />
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                          isArchived
+                            ? 'bg-amber-100'
+                            : isRoot
+                              ? 'bg-green-100'
+                              : 'bg-blue-100'
+                        }`}>
+                          {isArchived ? (
+                            <Archive className="w-6 h-6 text-amber-600" />
+                          ) : (
+                            <Folder className={`w-6 h-6 ${isRoot ? 'text-green-600' : 'text-blue-600'}`} />
+                          )}
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900">{folder.name}</h3>
+                          <h3 className="font-semibold text-gray-900">
+                            {isRoot ? 'Root (Default)' : folder.name}
+                          </h3>
                           <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
                         </div>
                         <ChevronRight className="w-5 h-5 text-gray-400" />
@@ -1568,7 +1806,7 @@ export default function MyResumesPage() {
 
       {isUploadModalOpen && (
         <UploadModal
-          folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
+          folders={folders.filter(f => f.id !== 'all' && !(f.name === 'Archived Resumes' && !f.parentId))}
           tenant={null}
           targetFolder={selectedFolder !== 'all' ? selectedFolder || undefined : undefined}
           onClose={() => setIsUploadModalOpen(false)}

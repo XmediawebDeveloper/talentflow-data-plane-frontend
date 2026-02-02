@@ -150,6 +150,22 @@ export type {
   InitializePoolRequest,
 } from './unitPoolService';
 
+// Internal Support Tickets
+export { internalTicketService } from './internalTicketService';
+export type {
+  InternalTicket,
+  InternalTicketCategory,
+  InternalTicketPriority,
+  InternalTicketStatus,
+  InternalTicketListResponse,
+  InternalTicketStats,
+  InternalTicketAdminStats,
+  InternalTicketResponseItem,
+  CreateInternalTicketRequest,
+  UpdateInternalTicketRequest,
+  InternalTicketFilterParams,
+} from './internalTicketService';
+
 // Candidate Assessment (Public)
 export { candidateService } from './candidateService';
 export type {

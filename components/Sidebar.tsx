@@ -28,7 +28,8 @@ import {
   ChevronRight,
   Briefcase,
   Eye,
-  DollarSign
+  DollarSign,
+  MessageCircle
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { User, Tenant, UserRole, FeatureFlags } from '@/lib/types/tenant';
@@ -53,7 +54,7 @@ interface NavItem {
 }
 
 export default function Sidebar({ activeSection, onSectionChange, user, tenant }: SidebarProps) {
-  const [expandedSections, setExpandedSections] = useState<string[]>(['recruitment-tools', 'organization', 'subscription', 'settings', 'reports']);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['recruitment-tools', 'organization', 'user-management-section', 'subscription', 'settings', 'reports']);
 
   // RBAC01-07: Extended role labels
   const roleLabels: Record<UserRole, string> = {
@@ -139,9 +140,20 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
       adminOnly: true,
       children: [
         { id: 'company-profile', label: 'Company Profile', icon: Building2, adminOnly: true },
-        { id: 'team-management', label: 'Team Management', icon: Users, adminOnly: true },
-        { id: 'user-management', label: 'User Management', icon: UserCog, adminOnly: true },
-        { id: 'role-management', label: 'Role Management', icon: Shield, adminOnly: true },
+      ]
+    },
+
+    // User Management - Admin only
+    {
+      id: 'user-management-section',
+      label: 'User Management',
+      icon: UserCog,
+      adminOnly: true,
+      children: [
+        { id: 'user-management', label: 'Users', icon: Users, adminOnly: true },
+        { id: 'role-management', label: 'Roles & Permissions', icon: Shield, adminOnly: true },
+        { id: 'team-management', label: 'Teams', icon: Users, adminOnly: true },
+        { id: 'team-chat', label: 'Team Chat', icon: MessageCircle, adminOnly: true },
       ]
     },
 

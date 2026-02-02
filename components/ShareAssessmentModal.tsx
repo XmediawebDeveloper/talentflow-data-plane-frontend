@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
 import api from '@/lib/services/api';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
+import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import VersionBadge from './VersionBadge';
 
 // Email validation regex - requires valid format with domain containing a period
 const isValidEmail = (email: string): boolean => {
@@ -43,6 +45,10 @@ interface Resume {
 
 export default function ShareAssessmentModal({ isOpen, onClose, assessment }: ShareAssessmentModalProps) {
   const router = useRouter();
+
+  // Remove "- Version X" from title for email display
+  const assessmentTitleForEmail = stripVersionFromTitle(assessment.title);
+
   const [inputMode, setInputMode] = useState<'manual' | 'database'>('manual');
   const [candidates, setCandidates] = useState<CandidateEmail[]>([
     { id: '1', name: '', email: '', source: 'manual' }
@@ -87,7 +93,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
   };
 
   const [customMessage, setCustomMessage] = useState(
-    `Hi [Candidate Name],\n\nYou have been invited to complete an assessment as part of our recruitment process.\n\nPlease click the link below to access the assessment. The assessment will take approximately ${assessment.duration} and consists of ${assessment.questions} questions.\n\nBest regards,\nTalentFlow Recruitment Team`
+    `You have been invited to take an assessment:\n\nImportant Instructions:\n• Ensure you have a stable internet connection\n• Find a quiet place without distractions\n• Complete the assessment in one sitting\n• Your responses will be automatically saved\n\nGood luck!`
   );
   const [expiryDays, setExpiryDays] = useState(7);
   const [sendCopy, setSendCopy] = useState(true);
@@ -183,6 +189,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
           candidate_name: validCandidates[0].name,
           candidate_email: validCandidates[0].email,
           resume_id: validCandidates[0].resumeId,
+          custom_message: customMessage,
+          expiry_days: expiryDays,
         });
       } else {
         // Bulk invite
@@ -191,7 +199,11 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
           candidate_email: c.email,
           resume_id: c.resumeId,
         }));
-        await assessmentService.bulkInvite(assessment.id, candidateData);
+        await assessmentService.bulkInvite(assessment.id, {
+          candidates: candidateData,
+          custom_message: customMessage,
+          expiry_days: expiryDays,
+        });
       }
 
       setSentCount(validCandidates.length);
@@ -233,7 +245,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
 
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8 text-center">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-10 h-10 text-green-600" />
@@ -250,7 +262,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
   // Duplicate invitation error popup
   if (showDuplicateError) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -298,7 +310,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 flex items-center justify-between">
@@ -308,7 +320,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
             </div>
             <div>
               <h2 className="text-white">Share Assessment via Email</h2>
-              <p className="text-gray-100 text-sm">{assessment.title}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-gray-100 text-sm">{assessmentTitleForEmail}</p>
+                <VersionBadge title={assessment.title} size="sm" variant="success" />
+              </div>
             </div>
           </div>
           <button
@@ -328,7 +343,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                 <FileText className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1">
-                <div className="text-gray-900 mb-1">{assessment.title}</div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-gray-900">{assessmentTitleForEmail}</span>
+                  <VersionBadge title={assessment.title} size="sm" variant="secondary" />
+                </div>
                 <div className="flex items-center gap-4 text-sm text-gray-600">
                   <span className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
@@ -564,15 +582,19 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
 
           {/* Custom Message */}
           <div className="mb-6">
-            <label className="text-gray-900 mb-2 block">Email Message</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-gray-900">Email Message</label>
+              <span className="text-xs text-emerald-600 font-medium">✓ Live preview below</span>
+            </div>
             <textarea
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
-              rows={8}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none"
+              rows={10}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none font-mono"
+              placeholder="Edit the message content here..."
             />
             <p className="text-xs text-gray-500 mt-1">
-              Use [Candidate Name] as a placeholder - it will be replaced with each candidate's name
+              ✏️ Use <code className="bg-gray-100 px-1 rounded">[Candidate Name]</code> as a placeholder - it will be replaced with each candidate's name. Your changes appear in the preview below.
             </p>
           </div>
 
@@ -606,25 +628,60 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
             </div>
           </div>
 
-          {/* Email Preview */}
-          <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Mail className="w-5 h-5 text-gray-600" />
-              <h3 className="text-gray-900">Email Preview</h3>
+          {/* Email Preview - Exact match of actual email */}
+          <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-emerald-300 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Mail className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-gray-900 font-semibold">Email Preview</h3>
+              </div>
+              <span className="text-xs text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full font-medium">
+                Exact email format
+              </span>
             </div>
-            <div className="bg-white rounded-lg border border-gray-300 p-4 text-sm">
-              <div className="mb-4 pb-4 border-b border-gray-200">
-                <div className="text-xs text-gray-500 mb-1">Subject:</div>
-                <div className="text-gray-900">Assessment Invitation: {assessment.title}</div>
+            <p className="text-xs text-gray-600 mb-4 bg-white rounded-lg px-3 py-2 border border-emerald-200">
+              📧 This is exactly how the email will appear to candidates. Edit the message above to see live changes.
+            </p>
+
+            {/* Actual Email Template Preview */}
+            <div className="bg-white rounded-lg shadow-md overflow-hidden max-w-xl mx-auto">
+              {/* Green Header */}
+              <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-8 py-8 text-center">
+                <h1 className="text-white text-2xl font-bold mb-2">Assessment Invitation</h1>
+                <p className="text-emerald-100 text-sm">TalentFlow</p>
               </div>
-              <div className="whitespace-pre-wrap text-gray-700 mb-4">
-                {customMessage.replace('[Candidate Name]', candidates[0].name || '[Candidate Name]')}
+
+              {/* Email Body */}
+              <div className="p-8">
+                {/* Greeting and Message */}
+                <div className="mb-6 text-gray-700 text-base leading-relaxed whitespace-pre-line">
+                  {customMessage.replace('[Candidate Name]', candidates[0].name || '[Candidate Name]')}
+                </div>
+
+                {/* Assessment Title Box */}
+                <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 border-2 border-emerald-500 rounded-xl p-5 text-center mb-6">
+                  <div className="text-xl font-bold text-emerald-900">
+                    {assessmentTitleForEmail}
+                  </div>
+                </div>
+
+                {/* CTA Button */}
+                <div className="text-center mb-6">
+                  <div className="inline-block bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-8 py-3 rounded-lg font-semibold">
+                    Start Assessment
+                  </div>
+                </div>
+
+                {/* Expiry Info */}
+                <p className="text-center text-gray-600 text-sm mb-6">
+                  This invitation expires on: <strong>{expiryDays > 0 ? `${expiryDays} day${expiryDays > 1 ? 's' : ''}` : 'No expiry'}</strong>
+                </p>
               </div>
-              <div className="bg-gray-800 text-white px-6 py-3 rounded-lg text-center inline-block">
-                Start Assessment
-              </div>
-              <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500">
-                This link will expire in {expiryDays > 0 ? `${expiryDays} day${expiryDays > 1 ? 's' : ''}` : 'never'}
+
+              {/* Footer */}
+              <div className="bg-gray-50 px-8 py-6 text-center border-t border-gray-200">
+                <p className="text-gray-500 text-xs mb-2">© 2025 TalentFlow. All rights reserved.</p>
+                <p className="text-gray-400 text-xs">If you did not expect this email, please ignore it.</p>
               </div>
             </div>
           </div>

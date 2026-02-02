@@ -1,7 +1,7 @@
 'use client';
 
-import { AlertTriangle, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, MessageSquare, RefreshCw, Shield } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { AlertTriangle, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, MessageSquare, RefreshCw, Shield, Filter, Calendar } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -54,6 +54,16 @@ interface DisputeStats {
   resolved_count: number;
 }
 
+const STATUS_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'open', label: 'Open' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'under_review', label: 'Under Review' },
+  { value: 'won', label: 'Won' },
+  { value: 'lost', label: 'Lost' },
+  { value: 'resolved', label: 'Resolved' },
+];
+
 export default function DisputeHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -61,6 +71,11 @@ export default function DisputeHistoryPage() {
   const [stats, setStats] = useState<DisputeStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedDispute, setSelectedDispute] = useState<DisputeInvoice | null>(null);
+
+  // New filter states
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
   useEffect(() => {
     fetchDisputeData();
@@ -117,11 +132,41 @@ export default function DisputeHistoryPage() {
     }
   };
 
-  const filteredDisputes = disputes.filter(inv =>
-    inv.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (inv.metadata?.original_invoice_number && inv.metadata.original_invoice_number.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (inv.line_items?.[0]?.description && inv.line_items[0].description.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Filter disputes based on search, status, and date range
+  const filteredDisputes = useMemo(() => {
+    return disputes.filter(inv => {
+      // Search filter
+      const matchesSearch = searchQuery === '' ||
+        inv.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (inv.metadata?.original_invoice_number && inv.metadata.original_invoice_number.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (inv.line_items?.[0]?.description && inv.line_items[0].description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      // Status filter
+      const disputeStatus = (inv.metadata?.dispute_status || inv.dispute_status || inv.status || '').toLowerCase();
+      const matchesStatus = statusFilter === 'all' ||
+        disputeStatus === statusFilter.toLowerCase() ||
+        (statusFilter === 'open' && ['open', 'pending', 'under_review'].includes(disputeStatus)) ||
+        (statusFilter === 'resolved' && ['won', 'lost', 'resolved', 'rejected'].includes(disputeStatus));
+
+      // Date filter
+      let matchesDate = true;
+      if (inv.issue_date) {
+        const itemDate = new Date(inv.issue_date);
+        if (startDate) {
+          const start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          if (itemDate < start) matchesDate = false;
+        }
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          if (itemDate > end) matchesDate = false;
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+  }, [disputes, searchQuery, statusFilter, startDate, endDate]);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
@@ -205,6 +250,47 @@ Please contact support for assistance.
     URL.revokeObjectURL(url);
   };
 
+  // Export filtered data to CSV
+  const handleExportCSV = () => {
+    const csvHeaders = ['Dispute #', 'Date', 'Deadline', 'Original Invoice', 'Reason', 'Customer Claim', 'Amount', 'Status', 'Bank Reference'];
+    const csvRows = filteredDisputes.map(d => [
+      d.invoice_number || '',
+      formatDate(d.issue_date),
+      formatDate(d.metadata?.deadline || d.deadline || null),
+      d.metadata?.original_invoice_number || '',
+      d.metadata?.reason || d.reason || d.line_items?.[0]?.description || '',
+      d.metadata?.customer_claim || d.customer_claim || '',
+      (d.total_amount_inr || 0).toFixed(2),
+      d.metadata?.dispute_status || d.dispute_status || d.status || '',
+      d.metadata?.bank_reference || '',
+    ]);
+
+    const csvContent = [
+      csvHeaders.join(','),
+      ...csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().split('T')[0];
+    link.href = url;
+    link.download = `dispute-history-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setStartDate('');
+    setEndDate('');
+  };
+
+  const hasActiveFilters = searchQuery || statusFilter !== 'all' || startDate || endDate;
+
   return (
     <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
       <div className="max-w-6xl mx-auto">
@@ -220,14 +306,24 @@ Please contact support for assistance.
                 <p className="text-sm text-gray-600">View and manage payment disputes</p>
               </div>
             </div>
-            <button
-              onClick={fetchDisputeData}
-              disabled={loading}
-              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportCSV}
+                disabled={loading || filteredDisputes.length === 0}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                Export CSV
+              </button>
+              <button
+                onClick={fetchDisputeData}
+                disabled={loading}
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
         </div>
 
@@ -252,17 +348,69 @@ Please contact support for assistance.
           </div>
         )}
 
-        {/* Search */}
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by dispute number, plan name, or reason..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-            />
+        {/* Filters Section */}
+        <div className="mb-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <Filter className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Filters</span>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="ml-auto text-xs text-blue-600 hover:text-blue-800"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search disputes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+              />
+            </div>
+
+            {/* Status Filter */}
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500 appearance-none bg-white"
+              >
+                {STATUS_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Start Date */}
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                placeholder="From date"
+              />
+            </div>
+
+            {/* End Date */}
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                placeholder="To date"
+              />
+            </div>
           </div>
         </div>
 
@@ -290,24 +438,35 @@ Please contact support for assistance.
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Disputes</h3>
             <p className="text-gray-600 max-w-md mx-auto">
-              {searchQuery
-                ? 'No disputes match your search criteria.'
+              {hasActiveFilters
+                ? 'No disputes match your filter criteria. Try adjusting your filters.'
                 : 'Great news! You have no payment disputes. Disputes will appear here if any payment issues are raised.'}
             </p>
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg max-w-md mx-auto">
-              <p className="text-sm text-blue-700">
-                <strong>Need help?</strong> If you have concerns about a payment, please contact our support team.
-              </p>
-            </div>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="mt-4 text-sm text-blue-600 hover:text-blue-800"
+              >
+                Clear all filters
+              </button>
+            )}
+            {!hasActiveFilters && (
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg max-w-md mx-auto">
+                <p className="text-sm text-blue-700">
+                  <strong>Need help?</strong> If you have concerns about a payment, please contact our support team.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
         {/* Disputes Table */}
         {!loading && !error && filteredDisputes.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
               <p className="text-sm text-gray-600">
                 Showing {filteredDisputes.length} dispute{filteredDisputes.length !== 1 ? 's' : ''}
+                {hasActiveFilters && ` (filtered from ${disputes.length})`}
               </p>
             </div>
             <div className="overflow-x-auto">

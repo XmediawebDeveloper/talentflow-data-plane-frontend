@@ -75,6 +75,7 @@ interface ResumeTableProps {
   showTeamMemberBadge?: boolean;
   onVersion?: (resume: Resume) => void;
   highlightQuery?: string;
+  onArchive?: (resumeId: string) => void;
 }
 
 // Helper function to highlight matching text
@@ -120,6 +121,7 @@ export default function ResumeTable({
   showTeamMemberBadge = false,
   onVersion,
   highlightQuery,
+  onArchive,
 }: ResumeTableProps) {
   const router = useRouter();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -369,18 +371,26 @@ export default function ResumeTable({
               <td className="px-4 py-4">
                 <div className="flex items-center">
                   <div>
-                    {onViewDetails ? (
-                      <button
-                        onClick={() => onViewDetails(resume)}
-                        className="text-sm text-gray-900 hover:text-blue-600 hover:underline text-left transition-colors"
-                      >
-                        {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
-                      </button>
-                    ) : (
-                      <div className="text-sm text-gray-900">
-                        {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {onViewDetails ? (
+                        <button
+                          onClick={() => onViewDetails(resume)}
+                          className="text-sm text-gray-900 hover:text-blue-600 hover:underline text-left transition-colors"
+                        >
+                          {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
+                        </button>
+                      ) : (
+                        <div className="text-sm text-gray-900">
+                          {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
+                        </div>
+                      )}
+                      {resume.isArchived && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 border border-amber-200">
+                          <Archive className="w-3 h-3" />
+                          Archived
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-gray-500">
                       {highlightQuery ? highlightText(resume.title, highlightQuery) : resume.title}
                     </div>
@@ -636,7 +646,14 @@ export default function ResumeTable({
                 />
               )}
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900 truncate">{resume.name}</div>
+                <div className="flex items-center gap-2">
+                  <div className="font-medium text-gray-900 truncate">{resume.name}</div>
+                  {resume.isArchived && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 border border-amber-200 flex-shrink-0">
+                      <Archive className="w-3 h-3" />
+                    </span>
+                  )}
+                </div>
                 <div className="text-sm text-gray-500 truncate">{resume.title}</div>
               </div>
             </div>
@@ -1049,12 +1066,22 @@ export default function ResumeTable({
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    toast.success('Resume archived successfully');
+                  onClick={async () => {
+                    if (onArchive) {
+                      onArchive(selectedResumeForAction.id);
+                    } else {
+                      // Fallback: call API directly
+                      try {
+                        await resumeService.archive(selectedResumeForAction.id, true);
+                        toast.success('Resume archived successfully');
+                      } catch (error) {
+                        toast.error('Failed to archive resume');
+                      }
+                    }
                     setShowArchiveModal(false);
                     setSelectedResumeForAction(null);
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center justify-center gap-2"
                 >
                   <Archive className="w-4 h-4" />
                   Archive

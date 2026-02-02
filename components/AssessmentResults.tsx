@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
@@ -27,12 +27,24 @@ interface CandidateResult {
   score: number;
   totalScore: number;
   percentage: number;
-  status: 'Passed' | 'Failed' | 'Under Review' | 'In Progress' | 'Pending';
+  tech_score?: number;  // Technical round score percentage
+  coding_score?: number; // Coding round score percentage
+  hr_score?: number; // HR round score percentage
+  status: 'Completed' | 'In Progress' | 'Pending';
   completedDate: string;
   duration: string;
   sections: SectionResult[];
   round: number; // Added round tracking
   roundName?: string; // Optional round name
+}
+
+interface AssessmentDetails {
+  hr_enabled: boolean;
+  technical_enabled: boolean;
+  coding_enabled: boolean;
+  hr_percentage?: number;
+  technical_percentage?: number;
+  coding_percentage?: number;
 }
 
 interface SectionResult {
@@ -56,10 +68,9 @@ interface QuestionResult {
 export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle }: AssessmentResultsProps) {
   const router = useRouter();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
-  const [selectedRound, setSelectedRound] = useState<number | 'all'>('all'); // Round filter
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [apiStats, setApiStats] = useState<{ completed_count: number; passed_count: number; failed_count: number; in_progress_count: number; pending_count: number; average_score: number | null }>({ completed_count: 0, passed_count: 0, failed_count: 0, in_progress_count: 0, pending_count: 0, average_score: null });
+  const [apiStats, setApiStats] = useState<{ completed_count: number; in_progress_count: number; pending_count: number; average_score: number | null }>({ completed_count: 0, in_progress_count: 0, pending_count: 0, average_score: null });
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
@@ -75,7 +86,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Passed' | 'Failed' | 'Under Review' | 'In Progress' | 'Pending'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Completed' | 'In Progress' | 'Pending'>('all');
+
+  // Assessment details (which rounds are enabled)
+  const [assessmentDetails, setAssessmentDetails] = useState<AssessmentDetails | null>(null);
+
+  // Round-based filtering with dropdown options (HR removed - only Tech and Coding)
+  const [roundFilters, setRoundFilters] = useState<{
+    technical?: 'all' | '70' | '90';
+    coding?: 'all' | '70' | '90';
+  }>({});
 
   // AS-24: Column customization
   const COLUMN_PREFERENCES_KEY = 'assessment_results_columns_v2';
@@ -87,34 +107,58 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     enabled: boolean;
   }
 
-  const defaultColumns: ColumnConfig[] = [
-    { id: 'candidate', label: 'Candidate', enabled: true },
-    { id: 'email', label: 'Email', enabled: true },
-    { id: 'jdTitle', label: 'JD Title', enabled: true },
-    { id: 'phone', label: 'Phone', enabled: true },
-    { id: 'inviteSource', label: 'Invite Source', enabled: true },
-    { id: 'score', label: 'Score %', enabled: true },
-    { id: 'status', label: 'Status', enabled: true },
-    { id: 'completed', label: 'Completed', enabled: true },
-    { id: 'duration', label: 'Duration', enabled: true },
-  ];
+  // Dynamic columns based on assessment details
+  const getDefaultColumns = (): ColumnConfig[] => {
+    const baseColumns: ColumnConfig[] = [
+      { id: 'candidate', label: 'Candidate', enabled: true },
+      { id: 'email', label: 'Email', enabled: true },
+      { id: 'jdTitle', label: 'JD Title', enabled: true },
+      { id: 'phone', label: 'Phone', enabled: true },
+      { id: 'inviteSource', label: 'Invite Source', enabled: true },
+    ];
 
-  const [columns, setColumns] = useState<ColumnConfig[]>(() => {
-    if (typeof window === 'undefined') return defaultColumns;
-    try {
-      const saved = localStorage.getItem(COLUMN_PREFERENCES_KEY);
-      if (saved) {
-        const savedColumns = JSON.parse(saved) as ColumnConfig[];
-        return defaultColumns.map(defaultCol => {
-          const savedCol = savedColumns.find(sc => sc.id === defaultCol.id);
-          return savedCol ? { ...defaultCol, enabled: savedCol.enabled } : defaultCol;
-        });
-      }
-    } catch (error) {
-      console.error('Failed to load column preferences:', error);
+    // Add score columns only if those rounds are enabled for this assessment
+    if (assessmentDetails?.technical_enabled) {
+      baseColumns.push({ id: 'techScore', label: 'Tech Score', enabled: true });
     }
-    return defaultColumns;
-  });
+    if (assessmentDetails?.coding_enabled) {
+      baseColumns.push({ id: 'codingScore', label: 'Coding Score', enabled: true });
+    }
+
+    baseColumns.push(
+      { id: 'status', label: 'Status', enabled: true },
+      { id: 'completed', label: 'Completed', enabled: true },
+      { id: 'duration', label: 'Duration', enabled: true }
+    );
+
+    return baseColumns;
+  };
+
+  const [columns, setColumns] = useState<ColumnConfig[]>([]);
+
+  // Update columns when assessmentDetails changes
+  useEffect(() => {
+    const newDefaultColumns = getDefaultColumns();
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(COLUMN_PREFERENCES_KEY);
+        if (saved) {
+          const savedColumns = JSON.parse(saved) as ColumnConfig[];
+          setColumns(newDefaultColumns.map(defaultCol => {
+            const savedCol = savedColumns.find(sc => sc.id === defaultCol.id);
+            return savedCol ? { ...defaultCol, enabled: savedCol.enabled } : defaultCol;
+          }));
+        } else {
+          setColumns(newDefaultColumns);
+        }
+      } catch (error) {
+        console.error('Failed to load column preferences:', error);
+        setColumns(newDefaultColumns);
+      }
+    } else {
+      setColumns(newDefaultColumns);
+    }
+  }, [assessmentDetails]);
 
   // AS-24: Save column preferences to localStorage
   useEffect(() => {
@@ -138,6 +182,26 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   const enabledColumnsCount = columns.filter(c => c.enabled).length;
 
+  // Fetch assessment details to determine enabled rounds
+  useEffect(() => {
+    const fetchAssessmentDetails = async () => {
+      try {
+        const details = await assessmentService.get(assessmentId);
+        setAssessmentDetails({
+          hr_enabled: details.hr_enabled || false,
+          technical_enabled: details.technical_enabled || false,
+          coding_enabled: details.coding_enabled || false,
+          hr_percentage: details.hr_percentage,
+          technical_percentage: details.technical_percentage,
+          coding_percentage: details.coding_percentage,
+        });
+      } catch (error) {
+        console.error('Failed to fetch assessment details:', error);
+      }
+    };
+    fetchAssessmentDetails();
+  }, [assessmentId]);
+
   // Fetch results from API
   useEffect(() => {
     const fetchResults = async () => {
@@ -147,18 +211,36 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         if (response?.items) {
           // Map API response to component format
           const mapped: CandidateResult[] = response.items.map((item: any, index: number) => {
-            // Determine status
-            let status: 'Passed' | 'Failed' | 'Under Review' | 'In Progress' | 'Pending' = 'Under Review';
+            // Determine status - mark as "In Progress" or "Completed"
+            let status: 'Completed' | 'In Progress' | 'Pending' = 'Completed';
             if (item.status === 'pending') {
               status = 'Pending';
-            } else if (item.status === 'completed') {
-              status = item.passed === true ? 'Passed' : item.passed === false ? 'Failed' : 'Under Review';
             } else if (item.status === 'in_progress') {
               status = 'In Progress';
-            } else if (item.passed === true) {
-              status = 'Passed';
-            } else if (item.passed === false) {
-              status = 'Failed';
+            } else if (item.status === 'completed') {
+              status = 'Completed';
+            }
+
+            // Calculate scores using the formula: (total_marks_in_round / total_marks_of_round) * 100
+            // The API returns scores as percentages already, so we use them directly
+            const tech_score = item.technical_score != null ? Math.round(Number(item.technical_score)) : undefined;
+            const coding_score = item.coding_score != null ? Math.round(Number(item.coding_score)) : undefined;
+            const hr_score = item.hr_score != null ? Math.round(Number(item.hr_score)) : undefined;
+
+            // Format duration properly
+            let duration = '-';
+            if (item.time_spent_seconds && item.time_spent_seconds > 0) {
+              const minutes = Math.floor(item.time_spent_seconds / 60);
+              const seconds = item.time_spent_seconds % 60;
+              if (minutes > 0) {
+                duration = `${minutes}m ${seconds}s`;
+              } else {
+                duration = `${seconds}s`;
+              }
+            } else if (status === 'Pending') {
+              duration = '-';
+            } else if (status === 'In Progress') {
+              duration = 'In Progress';
             }
 
             return {
@@ -171,32 +253,28 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               score: Math.round(Number(item.overall_score) || 0),
               totalScore: 100,
               percentage: Math.round(Number(item.overall_score) || 0),
+              tech_score,
+              coding_score,
+              hr_score,
               status,
               completedDate: item.completed_at?.split('T')[0] || (item.started_at?.split('T')[0] || (status === 'Pending' ? 'Not started' : 'N/A')),
-              duration: item.time_spent_seconds ? `${Math.round(item.time_spent_seconds / 60)} min` : (status === 'Pending' ? '-' : 'N/A'),
+              duration,
               sections: [
-                {
-                  name: 'HR Section',
-                  score: Math.round(Number(item.hr_score) || 0),
-                  totalScore: 100,
-                  percentage: Math.round(Number(item.hr_score) || 0),
-                  questions: []
-                },
-                {
+                assessmentDetails?.technical_enabled && tech_score != null && {
                   name: 'Technical Section',
-                  score: Math.round(Number(item.technical_score) || 0),
+                  score: tech_score,
                   totalScore: 100,
-                  percentage: Math.round(Number(item.technical_score) || 0),
+                  percentage: tech_score,
                   questions: []
                 },
-                {
+                assessmentDetails?.coding_enabled && coding_score != null && {
                   name: 'Coding Section',
-                  score: Math.round(Number(item.coding_score) || 0),
+                  score: coding_score,
                   totalScore: 100,
-                  percentage: Math.round(Number(item.coding_score) || 0),
+                  percentage: coding_score,
                   questions: []
                 }
-              ].filter(s => s.score > 0 || s.percentage > 0),
+              ].filter(Boolean) as SectionResult[],
               round: 1,
               roundName: 'Round 1'
             };
@@ -205,9 +283,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
           // Set stats from API
           setApiStats({
-            completed_count: response.completed_count || mapped.filter((c: CandidateResult) => c.status === 'Passed' || c.status === 'Failed' || c.status === 'Under Review').length,
-            passed_count: response.passed_count || mapped.filter((c: CandidateResult) => c.status === 'Passed').length,
-            failed_count: response.failed_count || mapped.filter((c: CandidateResult) => c.status === 'Failed').length,
+            completed_count: response.completed_count || mapped.filter((c: CandidateResult) => c.status === 'Completed').length,
             in_progress_count: response.in_progress_count || mapped.filter((c: CandidateResult) => c.status === 'In Progress').length,
             pending_count: response.pending_count || mapped.filter((c: CandidateResult) => c.status === 'Pending').length,
             average_score: response.average_score ? Math.round(Number(response.average_score)) : null
@@ -227,10 +303,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Passed': return 'bg-green-100 text-green-800 border-green-200';
-      case 'Failed': return 'bg-red-100 text-red-800 border-red-200';
       case 'Pending': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'Under Review': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'Completed': return 'bg-green-100 text-green-800 border-green-200';
       case 'In Progress': return 'bg-blue-100 text-blue-800 border-blue-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
@@ -251,10 +325,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       if (deletedCandidate) {
         setApiStats(prev => ({
           ...prev,
-          completed_count: Math.max(0, prev.completed_count - (deletedCandidate.status !== 'In Progress' ? 1 : 0)),
-          passed_count: Math.max(0, prev.passed_count - (deletedCandidate.status === 'Passed' ? 1 : 0)),
-          failed_count: Math.max(0, prev.failed_count - (deletedCandidate.status === 'Failed' ? 1 : 0)),
+          completed_count: Math.max(0, prev.completed_count - (deletedCandidate.status === 'Completed' ? 1 : 0)),
           in_progress_count: Math.max(0, prev.in_progress_count - (deletedCandidate.status === 'In Progress' ? 1 : 0)),
+          pending_count: Math.max(0, prev.pending_count - (deletedCandidate.status === 'Pending' ? 1 : 0)),
         }));
       }
     } catch (error) {
@@ -366,27 +439,49 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     setCurrentPage(1); // Reset to first page on sort change
   };
 
-  // AS-23: Filter candidates by round, search, and status
+  // AS-23: Filter candidates by round type, search, and status
   let filteredCandidates = displayResults;
 
-  // Round filter
-  if (selectedRound !== 'all') {
-    filteredCandidates = filteredCandidates.filter(c => c.round === selectedRound);
+  // Round-based filtering with percentage thresholds
+  if (Object.keys(roundFilters).length > 0) {
+    filteredCandidates = filteredCandidates.filter(candidate => {
+      // Check if candidate meets ALL specified round filters (HR removed - only Tech and Coding)
+      let meetsAllFilters = true;
+
+      // Check Technical round filter
+      if (roundFilters.technical !== undefined && roundFilters.technical !== 'all') {
+        const threshold = Number(roundFilters.technical);
+        if (candidate.tech_score === undefined || candidate.tech_score < threshold) {
+          meetsAllFilters = false;
+        }
+      }
+
+      // Check Coding round filter
+      if (roundFilters.coding !== undefined && roundFilters.coding !== 'all') {
+        const threshold = Number(roundFilters.coding);
+        if (candidate.coding_score === undefined || candidate.coding_score < threshold) {
+          meetsAllFilters = false;
+        }
+      }
+
+      return meetsAllFilters;
+    });
   }
 
-  // Status filter
-  if (statusFilter !== 'all') {
-    filteredCandidates = filteredCandidates.filter(c => c.status === statusFilter);
-  }
-
-  // Search filter (name, email, or phone)
+  // Search filter (name, email, phone, or JD title)
   if (searchQuery.trim()) {
     const query = searchQuery.toLowerCase().trim();
     filteredCandidates = filteredCandidates.filter(c =>
       c.name.toLowerCase().includes(query) ||
       c.email.toLowerCase().includes(query) ||
-      (c.phone && c.phone.toLowerCase().includes(query))
+      (c.phone && c.phone.toLowerCase().includes(query)) ||
+      (jdTitle && jdTitle.toLowerCase().includes(query))
     );
+  }
+
+  // Status filter (All, Completed, In Progress, Pending)
+  if (statusFilter !== 'all') {
+    filteredCandidates = filteredCandidates.filter(c => c.status === statusFilter);
   }
 
   // AS-23: Sort candidates
@@ -416,12 +511,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const endIndex = startIndex + pageSize;
   const paginatedCandidates = filteredCandidates.slice(startIndex, endIndex);
 
-  // Get unique rounds for filter
-  const availableRounds = Array.from(new Set(displayResults.map(c => c.round))).sort();
-
   // Use API stats if available, otherwise calculate from data
-  const passedCount = candidateResults.length > 0 ? apiStats.passed_count : filteredCandidates.filter(c => c.status === 'Passed').length;
-  const failedCount = candidateResults.length > 0 ? apiStats.failed_count : filteredCandidates.filter(c => c.status === 'Failed').length;
+  const completedCount = candidateResults.length > 0 ? apiStats.completed_count : filteredCandidates.filter(c => c.status === 'Completed').length;
   const inProgressCount = candidateResults.length > 0 ? apiStats.in_progress_count : filteredCandidates.filter(c => c.status === 'In Progress').length;
   const pendingCount = candidateResults.length > 0 ? apiStats.pending_count : filteredCandidates.filter(c => c.status === 'Pending').length;
 
@@ -494,72 +585,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
       {/* Statistics Cards */}
       <div className="px-8 py-6">
-        {/* Round Filter */}
-        {availableRounds.length > 1 && (
-          <div className="bg-gradient-to-r from-gray-50 to-gray-50 border-2 border-gray-300 rounded-lg p-6 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
-                  <Layers className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-gray-900 mb-1">View Results by Round</h3>
-                  <p className="text-sm text-gray-600">
-                    {selectedRound === 'all'
-                      ? `Showing all ${filteredCandidates.length} candidates across ${availableRounds.length} rounds`
-                      : `Showing ${filteredCandidates.length} candidate(s) from Round ${selectedRound}`
-                    }
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setSelectedRound('all')}
-                  className={`px-6 py-3 rounded-lg transition-all flex items-center gap-2 ${
-                    selectedRound === 'all'
-                      ? 'bg-gray-800 text-white shadow-lg'
-                      : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-400 hover:bg-gray-50'
-                  }`}
-                >
-                  <Layers className="w-4 h-4" />
-                  <span>All Rounds</span>
-                  <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
-                    selectedRound === 'all'
-                      ? 'bg-gray-500 text-white'
-                      : 'bg-gray-200 text-gray-600'
-                  }`}>
-                    {displayResults.length}
-                  </span>
-                </button>
-                {availableRounds.map(round => {
-                  const roundCount = displayResults.filter(c => c.round === round).length;
-                  return (
-                    <button
-                      key={round}
-                      onClick={() => setSelectedRound(round)}
-                      className={`px-6 py-3 rounded-lg transition-all flex items-center gap-2 ${
-                        selectedRound === round
-                          ? 'bg-gray-800 text-white shadow-lg'
-                          : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-400 hover:bg-gray-50'
-                      }`}
-                    >
-                      <span>Round {round}</span>
-                      <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
-                        selectedRound === round
-                          ? 'bg-gray-500 text-white'
-                          : 'bg-gray-200 text-gray-600'
-                      }`}>
-                        {roundCount}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
 
-        <div className="grid grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -575,23 +602,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-600 text-sm mb-1">Passed</div>
-                <div className="text-2xl text-green-600">{passedCount}</div>
+                <div className="text-gray-600 text-sm mb-1">Completed</div>
+                <div className="text-2xl text-green-600">{completedCount}</div>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                 <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-gray-600 text-sm mb-1">Failed</div>
-                <div className="text-2xl text-red-600">{failedCount}</div>
-              </div>
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                <XCircle className="w-6 h-6 text-red-600" />
               </div>
             </div>
           </div>
@@ -629,7 +644,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search by name, email, or phone..."
+                placeholder="Search by name, email, phone, or JD title..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -641,28 +656,76 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
             {/* Status Filter */}
             <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
               <select
                 value={statusFilter}
                 onChange={(e) => {
-                  setStatusFilter(e.target.value as 'all' | 'Passed' | 'Failed' | 'Under Review' | 'In Progress' | 'Pending');
+                  setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
                   setCurrentPage(1);
                 }}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
               >
-                <option value="all">Assessment Status</option>
-                <option value="Passed">Passed</option>
-                <option value="Failed">Failed</option>
+                <option value="all">All</option>
+                <option value="Completed">Completed</option>
                 <option value="In Progress">In Progress</option>
-                <option value="Under Review">Under Review</option>
                 <option value="Pending">Pending</option>
               </select>
             </div>
 
-            {/* Advanced Filters Button */}
-            <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm text-gray-700">
-              <SlidersHorizontal className="w-4 h-4" />
-              Advanced Filters
-            </button>
+            {/* Round-based Filters */}
+            {assessmentDetails?.technical_enabled && (
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600 whitespace-nowrap">Tech:</label>
+                <select
+                  value={roundFilters.technical || 'all'}
+                  onChange={(e) => {
+                    const value = e.target.value as 'all' | '70' | '90';
+                    setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
+                    setCurrentPage(1);
+                  }}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
+                >
+                  <option value="all">All</option>
+                  <option value="70">More than 70%</option>
+                  <option value="90">More than 90%</option>
+                </select>
+              </div>
+            )}
+
+            {assessmentDetails?.coding_enabled && (
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600 whitespace-nowrap">Coding:</label>
+                <select
+                  value={roundFilters.coding || 'all'}
+                  onChange={(e) => {
+                    const value = e.target.value as 'all' | '70' | '90';
+                    setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
+                    setCurrentPage(1);
+                  }}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
+                >
+                  <option value="all">All</option>
+                  <option value="70">More than 70%</option>
+                  <option value="90">More than 90%</option>
+                </select>
+              </div>
+            )}
+
+            {/* Clear Filters Button */}
+            {(Object.keys(roundFilters).length > 0 || searchQuery || statusFilter !== 'all') && (
+              <button
+                onClick={() => {
+                  setRoundFilters({});
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                  setCurrentPage(1);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+              >
+                <X className="w-4 h-4" />
+                Clear
+              </button>
+            )}
 
             {/* AS-24: Customize Columns Button */}
             <div className="relative">
@@ -766,13 +829,24 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   {isColumnEnabled('inviteSource') && (
                     <th className="text-left px-4 py-3 text-xs text-gray-600">Invite Source</th>
                   )}
-                  {isColumnEnabled('score') && (
+                  {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
                     <th
                       className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
                       onClick={() => handleSort('score')}
                     >
                       <div className="flex items-center justify-center gap-1">
-                        Score %
+                        Tech Score
+                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-gray-800' : 'text-gray-400'}`} />
+                      </div>
+                    </th>
+                  )}
+                  {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
+                    <th
+                      className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('score')}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        Coding Score
                         <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-gray-800' : 'text-gray-400'}`} />
                       </div>
                     </th>
@@ -811,7 +885,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <td colSpan={enabledColumnsCount + 2} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center">
                         <Users className="w-12 h-12 text-gray-300 mb-3" />
-                        {searchQuery || statusFilter !== 'all' ? (
+                        {searchQuery || Object.keys(roundFilters).length > 0 || statusFilter !== 'all' ? (
                           <>
                             <p className="text-gray-600 mb-1">No candidates match your search criteria</p>
                             <p className="text-sm text-gray-500">Try adjusting your filters or search query</p>
@@ -870,10 +944,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </span>
                         </td>
                       )}
-                      {isColumnEnabled('score') && (
+                      {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
                         <td className="px-4 py-4 text-center">
-                          <span className={`text-lg font-semibold ${getScoreColor(candidate.percentage)}`}>
-                            {candidate.status === 'In Progress' ? '-' : `${candidate.percentage}%`}
+                          <span className={`text-lg font-semibold ${candidate.tech_score !== undefined ? getScoreColor(candidate.tech_score) : 'text-gray-400'}`}>
+                            {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
+                          </span>
+                        </td>
+                      )}
+                      {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
+                        <td className="px-4 py-4 text-center">
+                          <span className={`text-lg font-semibold ${candidate.coding_score !== undefined ? getScoreColor(candidate.coding_score) : 'text-gray-400'}`}>
+                            {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
                           </span>
                         </td>
                       )}
@@ -911,7 +992,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             View Details
                           </button>
                           {/* AS-25: PDF Download Button */}
-                          {candidate.status === 'Passed' || candidate.status === 'Failed' ? (
+                          {candidate.status === 'Completed' ? (
                             <button
                               onClick={() => handleDownloadPDF(candidate.id)}
                               disabled={downloadingPDF === candidate.id}

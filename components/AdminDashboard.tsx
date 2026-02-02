@@ -430,54 +430,65 @@ export default function AdminDashboard({
       {/* Quick Actions & Recent Activity */}
       <div className="grid grid-cols-3 gap-6">
         {/* Quick Actions */}
-        {canManageUsers && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-            <div className="space-y-3">
-              <button
-                onClick={onNavigateToTenants}
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-200 transition-colors"
-              >
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <Building2 className="w-5 h-5 text-gray-800" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-medium text-gray-900">Manage Team</p>
-                  <p className="text-xs text-gray-500">Add or edit team members</p>
-                </div>
-              </button>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+          <div className="space-y-3">
+            <button
+              onClick={() => router.push('/recruitment/jd-creation')}
+              className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+            >
+              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Briefcase className="w-5 h-5 text-gray-800" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-medium text-gray-900">Create New Job</p>
+                <p className="text-xs text-gray-500">Post a new job opening</p>
+              </div>
+            </button>
 
-              <button
-                onClick={onNavigateToUsers}
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-200 transition-colors"
-              >
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <Users className="w-5 h-5 text-gray-800" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-medium text-gray-900">Manage Users</p>
-                  <p className="text-xs text-gray-500">Add users & permissions</p>
-                </div>
-              </button>
+            <button
+              onClick={onNavigateToTenants}
+              className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-200 transition-colors"
+            >
+              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Building2 className="w-5 h-5 text-gray-800" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-medium text-gray-900">Manage Team</p>
+                <p className="text-xs text-gray-500">Add or edit team members</p>
+              </div>
+            </button>
 
-              <button
-                onClick={onNavigateToSettings}
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors"
-              >
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <Settings className="w-5 h-5 text-gray-600" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-medium text-gray-900">Settings</p>
-                  <p className="text-xs text-gray-500">System configuration</p>
-                </div>
-              </button>
-            </div>
+            <button
+              onClick={onNavigateToUsers}
+              className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-200 transition-colors"
+            >
+              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Users className="w-5 h-5 text-gray-800" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-medium text-gray-900">Manage Users</p>
+                <p className="text-xs text-gray-500">Add users & permissions</p>
+              </div>
+            </button>
+
+            <button
+              onClick={onNavigateToSettings}
+              className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+            >
+              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Settings className="w-5 h-5 text-gray-600" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-medium text-gray-900">Settings</p>
+                <p className="text-xs text-gray-500">System configuration</p>
+              </div>
+            </button>
           </div>
-        )}
+        </div>
 
         {/* Recent Activity */}
-        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 ${canManageUsers ? 'col-span-2' : 'col-span-3'}`}>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
             <Activity className="w-5 h-5 text-gray-400" />
@@ -513,22 +524,6 @@ export default function AdminDashboard({
         </div>
       </div>
 
-      {/* Role-based Message for non-admins */}
-      {!canManageUsers && (
-        <div className="mt-8 bg-gray-50 border border-gray-200 rounded-xl p-6">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Activity className="w-5 h-5 text-gray-800" />
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-800">Your Dashboard</h3>
-              <p className="text-sm text-gray-900 mt-1">
-                View your activity and stats. Contact your administrator for additional permissions.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

@@ -24,6 +24,8 @@ export interface Resume {
   fileName?: string; // Original file name
   fileType?: string; // File type (pdf, doc, docx)
   fileSizeKb?: number; // File size in KB
+  isArchived?: boolean; // Whether resume is archived
+  archivedAt?: string; // When resume was archived
 
   // Extended fields for detailed view
   professionalSummary?: string;

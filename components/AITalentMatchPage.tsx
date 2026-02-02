@@ -10,6 +10,7 @@ import { recordUsage } from '@/lib/services/usageTrackingService';
 import { MatchedCandidate } from '@/lib/services/aiMatchService';
 import api from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
+import { resumeService } from '@/lib/services/resumeService';
 
 interface Job {
   id: string;
@@ -83,9 +84,21 @@ export default function AITalentMatchPage({
 
   // Helper to update URL params - use shallow routing to prevent full page reload
   const updateUrlParams = (params: { jdId?: string; view?: string }) => {
-    // Don't update URL - just let state handle the view changes
-    // This prevents flickering and navigation issues
-    return;
+    const url = new URL(window.location.href);
+
+    if (params.jdId) {
+      url.searchParams.set('jdId', params.jdId);
+    } else {
+      url.searchParams.delete('jdId');
+    }
+
+    if (params.view) {
+      url.searchParams.set('view', params.view);
+    } else {
+      url.searchParams.delete('view');
+    }
+
+    router.push(url.pathname + url.search, { scroll: false });
   };
   
   // History filters
@@ -101,9 +114,69 @@ export default function AITalentMatchPage({
   
   // Versions modal
   const [selectedVersionsCandidate, setSelectedVersionsCandidate] = useState<MatchedCandidateWithVersions | null>(null);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [realVersionsData, setRealVersionsData] = useState<any[]>([]);
+
+  // Version selection for scoring (single candidate)
+  const [showVersionSelectForScoring, setShowVersionSelectForScoring] = useState(false);
+  const [scoringCandidate, setScoringCandidate] = useState<MatchedCandidateWithVersions | null>(null);
+  const [scoringVersions, setScoringVersions] = useState<any[]>([]);
 
   // Available units from quota API
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
+
+  // Handle attachments click - fetch real versions
+  const handleAttachmentsClick = async (candidate: MatchedCandidateWithVersions) => {
+    if (!candidate.resumeId) {
+      alert('Resume ID not found');
+      return;
+    }
+
+    // Show modal with loading state
+    setSelectedVersionsCandidate(candidate);
+    setLoadingVersions(true);
+    setRealVersionsData([]);
+
+    try {
+      console.log('[Attachments] Fetching versions for resume:', candidate.resumeId);
+      const response = await resumeService.getVersions(candidate.resumeId);
+      console.log('[Attachments] API Response:', response);
+
+      // API returns array directly from response.data (resumeService already extracts .data)
+      let versions = Array.isArray(response) ? response : [];
+
+      // If no versions returned, create a default version from the candidate info
+      if (versions.length === 0) {
+        versions = [{
+          id: candidate.resumeId,
+          version: 1,
+          file_name: `${candidate.name.replace(/\s+/g, '_')}_Resume.pdf`,
+          created_at: candidate.uploadDate || new Date().toISOString(),
+          uploaded_by_name: candidate.uploadedByName || 'System',
+          file_size_kb: null,
+        }];
+      } else {
+        // Sort by version descending so latest is first
+        versions.sort((a: any, b: any) => (b.version || 0) - (a.version || 0));
+      }
+
+      console.log('[Attachments] Versions:', versions);
+      setRealVersionsData(versions);
+    } catch (error) {
+      console.error('[Attachments] Failed to fetch resume versions:', error);
+      // On error, show the candidate's resume as version 1
+      setRealVersionsData([{
+        id: candidate.resumeId,
+        version: 1,
+        file_name: `${candidate.name.replace(/\s+/g, '_')}_Resume.pdf`,
+        created_at: candidate.uploadDate || new Date().toISOString(),
+        uploaded_by_name: candidate.uploadedByName || 'System',
+        file_size_kb: null,
+      }]);
+    } finally {
+      setLoadingVersions(false);
+    }
+  };
 
   // Handle URL params and sessionStorage for job selection
   useEffect(() => {
@@ -229,6 +302,9 @@ export default function AITalentMatchPage({
       setSelectedJob(jobId);
     }
 
+    // Update URL to show matching in progress
+    updateUrlParams({ jdId: jobToMatch, view: 'matching' });
+
     // Show matching progress panel
     setShowMatchingPanel(true);
   };
@@ -309,7 +385,6 @@ export default function AITalentMatchPage({
 
     // Get selected candidates data
     const selected = currentCandidates.filter(c => selectedCandidates.includes(c.id));
-    const resumeIds = selected.map(c => c.resumeId);
 
     // Get the job ID and title
     const jobId = selectedJob || selectedHistoryItem?.jobId;
@@ -320,16 +395,51 @@ export default function AITalentMatchPage({
       return;
     }
 
+    // SINGLE CANDIDATE: Show version selection popup
+    if (selected.length === 1) {
+      const candidate = selected[0];
+      if (!candidate.resumeId) {
+        alert('Resume ID not found for this candidate');
+        return;
+      }
+
+      // Fetch versions and show selection modal
+      setScoringCandidate(candidate);
+      setLoadingVersions(true);
+      setShowVersionSelectForScoring(true);
+
+      try {
+        const versions = await resumeService.getVersions(candidate.resumeId);
+        setScoringVersions(versions.data || versions || []);
+      } catch (error) {
+        console.error('Failed to fetch versions:', error);
+        setScoringVersions([]);
+      } finally {
+        setLoadingVersions(false);
+      }
+      return;
+    }
+
+    // MULTIPLE CANDIDATES: Use latest resume (resumeId) directly
+    const resumeIds = selected.map(c => c.resumeId);
+
     try {
       // Start async bulk scoring via Celery (background processing)
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
-      // Store batch info for the resume-scoring page to poll
+      // Get candidate names for fallback display
+      const resumeItems = selected.map(c => ({
+        resumeId: c.resumeId,
+        candidateName: c.name || 'Unknown',
+      }));
+
+      // Store batch info for the resume-scoring page to poll (including resume items for fallback)
       const scoringData = {
         batchId: response.batch_id,
         jobId: response.jd_id,
         jobTitle: response.jd_title,
         totalResumes: response.total_resumes,
+        resumeItems: resumeItems,
       };
       sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
 
@@ -422,8 +532,9 @@ export default function AITalentMatchPage({
                     onClick={() => {
                       setViewMode('history');
                       setSelectedHistoryItem(null);
+                      setSelectedJob('');
                       setSelectedCandidates([]);
-                      updateUrlParams({}); // Clear URL params
+                      router.push('/recruitment/ai-talent-match', { scroll: false });
                     }}
                     className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors"
                   >
@@ -652,7 +763,7 @@ export default function AITalentMatchPage({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedVersionsCandidate(candidate);
+                        handleAttachmentsClick(candidate);
                       }}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 text-xs font-medium"
                     >
@@ -671,7 +782,52 @@ export default function AITalentMatchPage({
       {selectedVersionsCandidate && (
         <ResumeVersionsModal
           candidate={selectedVersionsCandidate}
-          onClose={() => setSelectedVersionsCandidate(null)}
+          versions={realVersionsData}
+          loading={loadingVersions}
+          onClose={() => {
+            setSelectedVersionsCandidate(null);
+            setRealVersionsData([]);
+          }}
+        />
+      )}
+
+      {/* Version Selection Modal for Scoring (single candidate) */}
+      {showVersionSelectForScoring && scoringCandidate && (
+        <ResumeVersionsModal
+          candidate={scoringCandidate}
+          versions={scoringVersions}
+          loading={loadingVersions}
+          selectionMode={true}
+          onClose={() => {
+            setShowVersionSelectForScoring(false);
+            setScoringCandidate(null);
+            setScoringVersions([]);
+          }}
+          onSelectVersion={async (version) => {
+            // Score with selected version
+            const jobId = selectedJob || selectedHistoryItem?.jobId;
+            if (!jobId || !scoringCandidate) return;
+
+            try {
+              const response = await scoringService.startBulkScoringAsync(jobId, [version.id]);
+              const scoringData = {
+                batchId: response.batch_id,
+                jobId: response.jd_id,
+                jobTitle: response.jd_title,
+                totalResumes: response.total_resumes,
+                resumeItems: [{ resumeId: version.id, candidateName: scoringCandidate.name }],
+              };
+              sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
+              router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
+            } catch (error: any) {
+              console.error('Failed to start scoring:', error);
+              alert(error.message || 'Failed to start scoring');
+            }
+
+            setShowVersionSelectForScoring(false);
+            setScoringCandidate(null);
+            setScoringVersions([]);
+          }}
         />
       )}
 
@@ -739,6 +895,7 @@ export default function AITalentMatchPage({
                 setViewMode('new');
                 setSelectedJob('');
                 setSelectedCandidates([]);
+                router.push('/recruitment/ai-talent-match', { scroll: false });
               }}
               className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
             >
@@ -857,7 +1014,9 @@ export default function AITalentMatchPage({
                   onClick={() => {
                     userChangedView.current = true; // Prevent useEffect from resetting view
                     setSelectedHistoryItem(item);
+                    setSelectedJob(item.jobId);
                     setViewMode('details');
+                    updateUrlParams({ jdId: item.jobId, view: 'details' });
                   }}
                   className="bg-white rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all p-6 cursor-pointer group"
                   role="button"
@@ -896,7 +1055,9 @@ export default function AITalentMatchPage({
                         e.stopPropagation();
                         userChangedView.current = true; // Prevent useEffect from resetting view
                         setSelectedHistoryItem(item);
+                        setSelectedJob(item.jobId);
                         setViewMode('details');
+                        updateUrlParams({ jdId: item.jobId, view: 'details' });
                       }}
                       className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 font-medium"
                     >
@@ -923,6 +1084,7 @@ export default function AITalentMatchPage({
                 onClick={() => {
                   setViewMode('new');
                   setSelectedJob('');
+                  router.push('/recruitment/ai-talent-match', { scroll: false });
                 }}
                 className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium shadow-sm hover:shadow-md inline-flex items-center gap-2"
               >
@@ -1285,7 +1447,52 @@ export default function AITalentMatchPage({
       {selectedVersionsCandidate && (
         <ResumeVersionsModal
           candidate={selectedVersionsCandidate}
-          onClose={() => setSelectedVersionsCandidate(null)}
+          versions={realVersionsData}
+          loading={loadingVersions}
+          onClose={() => {
+            setSelectedVersionsCandidate(null);
+            setRealVersionsData([]);
+          }}
+        />
+      )}
+
+      {/* Version Selection Modal for Scoring (single candidate) */}
+      {showVersionSelectForScoring && scoringCandidate && (
+        <ResumeVersionsModal
+          candidate={scoringCandidate}
+          versions={scoringVersions}
+          loading={loadingVersions}
+          selectionMode={true}
+          onClose={() => {
+            setShowVersionSelectForScoring(false);
+            setScoringCandidate(null);
+            setScoringVersions([]);
+          }}
+          onSelectVersion={async (version) => {
+            // Score with selected version
+            const jobId = selectedJob || selectedHistoryItem?.jobId;
+            if (!jobId || !scoringCandidate) return;
+
+            try {
+              const response = await scoringService.startBulkScoringAsync(jobId, [version.id]);
+              const scoringData = {
+                batchId: response.batch_id,
+                jobId: response.jd_id,
+                jobTitle: response.jd_title,
+                totalResumes: response.total_resumes,
+                resumeItems: [{ resumeId: version.id, candidateName: scoringCandidate.name }],
+              };
+              sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
+              router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
+            } catch (error: any) {
+              console.error('Failed to start scoring:', error);
+              alert(error.message || 'Failed to start scoring');
+            }
+
+            setShowVersionSelectForScoring(false);
+            setScoringCandidate(null);
+            setScoringVersions([]);
+          }}
         />
       )}
     </>

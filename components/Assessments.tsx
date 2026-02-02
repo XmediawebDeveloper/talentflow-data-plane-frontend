@@ -16,6 +16,8 @@ import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import VersionBadge from './VersionBadge';
 
 // Helper function to format date/time in UTC timezone
 const formatDateTimeIST = (dateStr: string | null | undefined, options?: { includeTime?: boolean }) => {
@@ -140,7 +142,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     active_assessments: 0,
     draft_assessments: 0,
     archived_assessments: 0,
-    total_candidates_tested: 0,
+    total_candidates_completed: 0,
     average_pass_rate: null as number | null,
     average_score: null as number | null,
     units_consumed: 0,
@@ -237,7 +239,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           active_assessments: response.active_assessments,
           draft_assessments: response.draft_assessments || 0,
           archived_assessments: response.archived_assessments || 0,
-          total_candidates_tested: response.total_candidates_tested,
+          total_candidates_completed: response.total_candidates_completed || 0,
           average_pass_rate: response.average_pass_rate,
           average_score: response.average_score,
           units_consumed: response.units_consumed || 0,
@@ -469,7 +471,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         active_assessments: statsResponse.active_assessments,
         draft_assessments: statsResponse.draft_assessments || 0,
         archived_assessments: statsResponse.archived_assessments || 0,
-        total_candidates_tested: statsResponse.total_candidates_tested,
+        total_candidates_completed: statsResponse.total_candidates_completed || 0,
         average_pass_rate: statsResponse.average_pass_rate,
         average_score: statsResponse.average_score,
         units_consumed: statsResponse.units_consumed || 0,
@@ -1008,7 +1010,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             </div>
           </div> */}
 
-          {/* Row 2: Current State Metrics (Total Assessments, Active, Candidates Tested, Avg. Score) */}
+          {/* Row 2: Current State Metrics (Total Assessments, Active, Candidates Tested) */}
           <div className="grid grid-cols-4 gap-4">
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
               <div className="flex items-center gap-2 mb-2">
@@ -1039,22 +1041,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <div className="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center">
                   <Users className="w-3.5 h-3.5 text-blue-600" />
                 </div>
-                <span className="text-xs text-gray-500">Candidates Tested</span>
+                <span className="text-xs text-gray-500">Candidates Assessed</span>
               </div>
               <div className="text-xl font-semibold text-gray-900">
-                {isLoadingStats ? '...' : stats.total_candidates_tested.toLocaleString()}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <TrendingUp className="w-3.5 h-3.5 text-purple-600" />
-                </div>
-                <span className="text-xs text-gray-500">Avg. Score</span>
-              </div>
-              <div className="text-xl font-semibold text-gray-900">
-                {isLoadingStats ? '...' : (stats.average_score !== null ? `${stats.average_score}%` : 'N/A')}
+                {isLoadingStats ? '...' : stats.total_candidates_completed.toLocaleString()}
               </div>
             </div>
           </div>
@@ -1774,15 +1764,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {assessment.short_id}
                         </span>
                         <h3 className="text-sm font-medium text-gray-900 line-clamp-2">
-                          {assessment.job ? `${assessment.job.title} - Assessment` : assessment.title}
+                          {assessment.job ? `${assessment.job.title} - Assessment` : stripVersionFromTitle(assessment.title)}
                         </h3>
+                        <VersionBadge title={assessment.title} size="sm" variant="secondary" />
                         {assessment.sections && (
                           <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs flex items-center gap-1 flex-shrink-0">
                             <Sparkles className="w-3 h-3" />
                             AI
                           </span>
                         )}
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium flex-shrink-0">
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold flex-shrink-0">
                           V{assessment.version || 1}
                         </span>
                       </div>
@@ -1986,15 +1977,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               {assessment.short_id}
                             </span>
                             <h3 className="text-sm font-medium text-gray-900 truncate">
-                              {assessment.job ? `${assessment.job.title} - Assessment` : assessment.title}
+                              {assessment.job ? `${assessment.job.title} - Assessment` : stripVersionFromTitle(assessment.title)}
                             </h3>
+                            <VersionBadge title={assessment.title} size="sm" variant="secondary" />
                             {assessment.sections && (
                               <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs flex items-center gap-1 flex-shrink-0">
                                 <Sparkles className="w-3 h-3" />
                                 AI
                               </span>
                             )}
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium flex-shrink-0">
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold flex-shrink-0">
                               V{assessment.version || 1}
                             </span>
                           </div>
@@ -2292,7 +2284,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
       {/* Track Invites Modal */}
       {showTrackInvitesModal && selectedAssessmentForTracking && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
