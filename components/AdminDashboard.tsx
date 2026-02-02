@@ -525,8 +525,11 @@ export default function AdminDashboard({
                       const details = activity.details;
                       if (!details) return '-';
 
-                      // JD activities (JD_CREATED, JD_PUBLISHED, etc.)
-                      if (activity.action?.includes('JD_') || activity.action?.includes('job')) {
+                      // Normalize action to lowercase for comparison
+                      const actionLower = activity.action?.toLowerCase() || '';
+
+                      // JD activities (jd_create, jd_publish, etc.)
+                      if (actionLower.includes('jd_') || actionLower.includes('job')) {
                         const jdNum = details.jd_number || details.job_number;
                         const title = details.title || details.jd_title;
                         if (jdNum && title) return `${jdNum} - ${title}`;
@@ -534,7 +537,7 @@ export default function AdminDashboard({
                       }
 
                       // Assessment activities
-                      if (activity.action?.includes('ASSESSMENT_')) {
+                      if (actionLower.includes('assessment_')) {
                         const assNum = details.assessment_number;
                         const title = details.title || details.assessment_title;
                         const jdNum = details.jd_number;
@@ -544,11 +547,11 @@ export default function AdminDashboard({
                       }
 
                       // Resume scoring
-                      if (activity.action?.includes('RESUME_SCORED')) {
+                      if (actionLower.includes('scoring')) {
                         const candidate = details.candidate_name;
                         const jdNum = details.jd_number;
                         const jdTitle = details.jd_title;
-                        const score = details.score;
+                        const score = details.score || details.overall_score;
                         if (jdNum && candidate && score !== undefined) {
                           return `${jdNum} - ${candidate} (${score}%)`;
                         }
@@ -558,24 +561,25 @@ export default function AdminDashboard({
                         return candidate || jdTitle || '-';
                       }
 
-                      // Resume upload/delete
-                      if (activity.action?.includes('RESUME_')) {
+                      // Resume upload/delete/move
+                      if (actionLower.includes('resume_')) {
                         const candidate = details.candidate_name || details.title;
                         const fileName = details.file_name;
-                        if (candidate && fileName) return `${candidate} (${fileName})`;
-                        return candidate || fileName || '-';
+                        if (candidate && candidate !== 'Unknown' && fileName) return `${candidate} (${fileName})`;
+                        if (candidate && candidate !== 'Unknown') return candidate;
+                        return fileName || '-';
                       }
 
                       // User activities
-                      if (activity.action?.includes('USER_')) {
-                        const email = details.user_email || details.title;
+                      if (actionLower.includes('user_')) {
+                        const email = details.user_email || details.email || details.title;
                         const role = details.role;
                         if (email && role) return `${email} (${role})`;
                         return email || '-';
                       }
 
                       // Default fallback
-                      return details.title || details.name || '-';
+                      return details.title || details.name || details.candidate_name || '-';
                     };
 
                     const detailsDisplay = getDetailsDisplay();
