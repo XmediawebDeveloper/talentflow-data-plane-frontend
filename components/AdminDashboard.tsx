@@ -434,6 +434,19 @@ export default function AdminDashboard({
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
           <div className="space-y-3">
             <button
+              onClick={() => router.push('/recruitment/jd-creation')}
+              className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+            >
+              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Briefcase className="w-5 h-5 text-gray-800" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-medium text-gray-900">Create New Job</p>
+                <p className="text-xs text-gray-500">Post a new job opening</p>
+              </div>
+            </button>
+
+            <button
               onClick={onNavigateToTenants}
               className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-200 transition-colors"
             >

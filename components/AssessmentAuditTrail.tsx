@@ -145,8 +145,8 @@ export default function AssessmentAuditTrail() {
     if (diffHours < 24) return `${diffHours} hours ago`;
     if (diffDays < 7) return `${diffDays} days ago`;
 
-    return date.toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
+    return date.toLocaleString('en-US', {
+      timeZone: 'UTC',
       month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
@@ -211,7 +211,7 @@ export default function AssessmentAuditTrail() {
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Audit Trail</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Activity Log</h2>
               <p className="text-sm text-gray-600 mt-1">
                 Complete activity log for assessments and candidates
               </p>
@@ -341,12 +341,12 @@ export default function AssessmentAuditTrail() {
           {isLoading ? (
             <div className="text-center py-12">
               <div className="animate-spin w-8 h-8 border-2 border-gray-300 border-t-gray-600 rounded-full mx-auto mb-4"></div>
-              <p className="text-sm text-gray-500">Loading audit trail...</p>
+              <p className="text-sm text-gray-500">Loading activity log...</p>
             </div>
           ) : activities.length === 0 ? (
             <div className="text-center py-12">
               <Activity className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p className="text-sm text-gray-500">No audit activities found</p>
+              <p className="text-sm text-gray-500">No activities found</p>
               {(searchTerm || filterDateFrom || filterDateTo) && (
                 <p className="text-xs text-gray-400 mt-1">Try adjusting your filters</p>
               )}
@@ -459,7 +459,7 @@ export default function AssessmentAuditTrail() {
                           <div>
                             <span className="text-gray-500">Timestamp:</span>
                             <span className="ml-2 text-gray-900">
-                              {new Date(activity.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}
+                              {new Date(activity.timestamp).toLocaleString('en-US', { timeZone: 'UTC', hour12: true })}
                             </span>
                           </div>
                           {activity.assessment_id && (
@@ -481,7 +481,7 @@ export default function AssessmentAuditTrail() {
         {/* Footer with Pagination */}
         <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
           <div className="text-sm text-gray-600">
-            Showing {activities.length} of {total} audit entries
+            Showing {activities.length} of {total} activity entries
           </div>
           {total > pageSize && (
             <div className="flex items-center gap-2">

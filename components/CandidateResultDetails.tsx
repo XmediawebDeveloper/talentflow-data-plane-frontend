@@ -19,7 +19,7 @@ interface CandidateBasicInfo {
   completedDate: string;
   duration: string;
   percentage: number;
-  status: 'Passed' | 'Failed' | 'Under Review' | 'In Progress' | 'Pending';
+  status: 'Completed' | 'In Progress' | 'Pending';
   sections: {
     name: string;
     score: number;
@@ -40,6 +40,7 @@ export default function CandidateResultDetails({
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('technical-knowledge');
   const [candidateData, setCandidateData] = useState<CandidateBasicInfo | null>(null);
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
 
   // Fetch detailed results
   useEffect(() => {
@@ -73,11 +74,13 @@ export default function CandidateResultDetails({
         }
 
         // Map to candidate data
-        let status: 'Passed' | 'Failed' | 'Under Review' | 'In Progress' | 'Pending' = 'Under Review';
+        let status: 'Completed' | 'In Progress' | 'Pending' = 'In Progress';
         if (details.scoring_status === 'completed') {
-          status = details.passed === true ? 'Passed' : details.passed === false ? 'Failed' : 'Under Review';
+          status = 'Completed';
         } else if (details.scoring_status === 'processing') {
-          status = 'Under Review';
+          status = 'In Progress';
+        } else if (details.scoring_status === 'pending') {
+          status = 'Pending';
         }
 
         // Map section scores - RoundScore only has percentages, not points
@@ -131,16 +134,42 @@ export default function CandidateResultDetails({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Passed':
+      case 'Completed':
         return 'bg-green-50 text-green-700 border-green-300';
-      case 'Failed':
-        return 'bg-red-50 text-red-700 border-red-300';
       case 'In Progress':
         return 'bg-blue-50 text-blue-700 border-blue-300';
       case 'Pending':
         return 'bg-gray-50 text-gray-700 border-gray-300';
       default:
         return 'bg-yellow-50 text-yellow-700 border-yellow-300';
+    }
+  };
+
+  const handleGenerateInsights = async () => {
+    if (!detailedResult) return;
+
+    setIsGeneratingInsights(true);
+    try {
+      const response = await assessmentService.generateCandidateInsights(
+        assessmentId,
+        candidateId
+      );
+
+      if (response.success && response.insights) {
+        // Update detailedResult with new insights
+        setDetailedResult(prev => prev ? {
+          ...prev,
+          candidate_insights: {
+            ...prev.candidate_insights,
+            ...response.insights
+          }
+        } : null);
+      }
+    } catch (error) {
+      console.error('Failed to generate insights:', error);
+      alert('Failed to generate AI insights. Please try again.');
+    } finally {
+      setIsGeneratingInsights(false);
     }
   };
 
@@ -240,21 +269,15 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="text-right">
-                <div className="text-sm text-gray-600">Overall Score</div>
-                <div className={`text-3xl ${getScoreColor(
-                  detailedResult?.overall_score ?? candidateData?.percentage ?? 0
-                )}`}>
-                  {detailedResult?.overall_score ?? candidateData?.percentage}%
-                </div>
-              </div>
               {/* Status Badge */}
               {(() => {
-                let displayStatus = candidateData?.status || 'Under Review';
+                let displayStatus = candidateData?.status || 'In Progress';
                 if (detailedResult && detailedResult.scoring_status === 'completed') {
-                  displayStatus = detailedResult.passed === true ? 'Passed' : detailedResult.passed === false ? 'Failed' : 'Under Review';
+                  displayStatus = 'Completed';
                 } else if (detailedResult && detailedResult.scoring_status === 'processing') {
-                  displayStatus = 'Under Review';
+                  displayStatus = 'In Progress';
+                } else if (detailedResult && detailedResult.scoring_status === 'pending') {
+                  displayStatus = 'Pending';
                 }
                 return (
                   <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm border ${getStatusColor(displayStatus)}`}>
@@ -316,7 +339,7 @@ export default function CandidateResultDetails({
                   <div className="flex-1">
                     <h3 className="text-sm font-medium text-yellow-900 mb-2">Score Calculation Note</h3>
                     <p className="text-sm text-yellow-800 mb-3">
-                      The overall score ({detailedResult.overall_score}%) is calculated using weighted section scores.
+                      The assessment score is calculated using weighted section scores.
                       Individual section scores may show 0% if questions are not yet scored or if there's a scoring status mismatch.
                     </p>
                     <div className="text-xs text-yellow-700 space-y-1">
@@ -327,10 +350,6 @@ export default function CandidateResultDetails({
                           • <strong className="capitalize">{round.round_type}:</strong> {round.raw_score}% raw score × {round.weightage_percent}% weight = <strong>{round.weighted_score}% contribution</strong>
                         </div>
                       ))}
-                      <div className="mt-2 pt-2 border-t border-yellow-400">
-                        <strong>Overall Score:</strong> {detailedResult.round_scores.reduce((sum, r) => sum + (r.weighted_score || 0), 0).toFixed(1)}%
-                        (API reports: {detailedResult.overall_score}%)
-                      </div>
                       <div className="mt-2 text-yellow-800 bg-yellow-100 rounded p-2">
                         <strong>Note:</strong> Individual questions show 0 points because the backend hasn't populated the question-level scores,
                         but section scores ({detailedResult.round_scores.map(r => r.raw_score).join('%, ')}%) are calculated correctly.
@@ -348,7 +367,7 @@ export default function CandidateResultDetails({
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <h2 className="text-gray-900 mb-4">Section-wise Performance</h2>
           <div className="space-y-4">
-            {candidateData?.sections.map((section, idx) => (
+            {candidateData?.sections.filter(section => !section.name.toLowerCase().includes('hr')).map((section, idx) => (
               <div key={idx} className={`border rounded-lg p-4 ${
                 section.name.toLowerCase().includes('hr')
                   ? 'border-gray-200 bg-gray-50/30'
@@ -503,78 +522,115 @@ export default function CandidateResultDetails({
         </div>
 
         {/* Candidate Insights - AI Generated Analysis */}
-        {detailedResult && detailedResult.candidate_insights && detailedResult.scoring_status === 'completed' && (
+        {detailedResult && detailedResult.scoring_status === 'completed' && (
           <div className="bg-white rounded-lg border-2 border-blue-200 overflow-hidden shadow-lg mb-6">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
-              <h2 className="text-white flex items-center gap-2">
-                <Award className="w-5 h-5" />
-                AI-Generated Candidate Insights
-              </h2>
-              <p className="text-blue-100 text-sm mt-1">Summary of candidate performance and recommendations</p>
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-white flex items-center gap-2">
+                  <Award className="w-5 h-5" />
+                  AI-Generated Candidate Insights
+                </h2>
+                <p className="text-blue-100 text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
+              </div>
+              {(!detailedResult.candidate_insights?.interview_strength) && (
+                <button
+                  onClick={handleGenerateInsights}
+                  disabled={isGeneratingInsights}
+                  className="px-4 py-2 bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isGeneratingInsights ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Award className="w-4 h-4" />
+                      Generate Insights
+                    </>
+                  )}
+                </button>
+              )}
             </div>
             <div className="p-6">
-              {/* Summary */}
-              {detailedResult.candidate_insights.summary && (
-                <div className="mb-6">
-                  <h3 className="text-gray-900 font-medium mb-2">Summary</h3>
-                  <p className="text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    {detailedResult.candidate_insights.summary}
-                  </p>
-                </div>
-              )}
-
+              {detailedResult.candidate_insights?.interview_strength ? (
               <div className="grid grid-cols-2 gap-6">
-                {/* Strengths */}
-                {detailedResult.candidate_insights.strengths && detailedResult.candidate_insights.strengths.length > 0 && (
+                {/* Interview Strength */}
+                {detailedResult.candidate_insights.interview_strength && (
                   <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                     <h3 className="text-green-800 font-medium mb-3 flex items-center gap-2">
                       <CheckCircle className="w-4 h-4" />
-                      Strengths
+                      Interview Strength
                     </h3>
-                    <ul className="space-y-2">
-                      {detailedResult.candidate_insights.strengths.map((s: string, i: number) => (
-                        <li key={i} className="text-sm text-green-700 flex items-start gap-2">
-                          <span className="text-green-500 mt-1">•</span>
-                          <span>{s}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <p className="text-sm text-green-700">
+                      {detailedResult.candidate_insights.interview_strength}
+                    </p>
                   </div>
                 )}
 
-                {/* Areas for Improvement / Weaknesses */}
-                {(detailedResult.candidate_insights.improvement_areas || detailedResult.candidate_insights.weaknesses) &&
-                 (detailedResult.candidate_insights.improvement_areas?.length > 0 || detailedResult.candidate_insights.weaknesses?.length > 0) && (
+                {/* Interview Weakness */}
+                {detailedResult.candidate_insights.interview_weakness && (
                   <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
                     <h3 className="text-orange-800 font-medium mb-3 flex items-center gap-2">
                       <AlertCircle className="w-4 h-4" />
-                      Areas for Improvement
+                      Interview Weakness
                     </h3>
-                    <ul className="space-y-2">
-                      {(detailedResult.candidate_insights.improvement_areas || detailedResult.candidate_insights.weaknesses || []).map((a: string, i: number) => (
-                        <li key={i} className="text-sm text-orange-700 flex items-start gap-2">
-                          <span className="text-orange-500 mt-1">•</span>
-                          <span>{a}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <p className="text-sm text-orange-700">
+                      {detailedResult.candidate_insights.interview_weakness}
+                    </p>
+                  </div>
+                )}
+
+                {/* Interview Training Modules */}
+                {detailedResult.candidate_insights.interview_training_modules && (
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                    <h3 className="text-blue-800 font-medium mb-3 flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Interview Training Modules
+                    </h3>
+                    <p className="text-sm text-blue-700">
+                      {detailedResult.candidate_insights.interview_training_modules}
+                    </p>
+                  </div>
+                )}
+
+                {/* Interview Training Suggestion */}
+                {detailedResult.candidate_insights.interview_training_suggestion && (
+                  <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                    <h3 className="text-purple-800 font-medium mb-3 flex items-center gap-2">
+                      <Briefcase className="w-4 h-4" />
+                      Interview Training Suggestion
+                    </h3>
+                    <p className="text-sm text-purple-700">
+                      {detailedResult.candidate_insights.interview_training_suggestion}
+                    </p>
                   </div>
                 )}
               </div>
-
-              {/* Hiring Recommendation */}
-              {detailedResult.hiring_recommendation && (
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <h3 className="text-gray-900 font-medium mb-2">Hiring Recommendation</h3>
-                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${
-                    detailedResult.hiring_recommendation === 'strong_yes' || detailedResult.hiring_recommendation === 'yes'
-                      ? 'bg-green-100 text-green-800 border border-green-200'
-                      : detailedResult.hiring_recommendation === 'maybe'
-                      ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                      : 'bg-red-100 text-red-800 border border-red-200'
-                  }`}>
-                    <span className="font-medium capitalize">{detailedResult.hiring_recommendation.replace('_', ' ')}</span>
-                  </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Award className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg text-gray-700 mb-2">No AI Insights Generated Yet</h3>
+                  <p className="text-gray-600 mb-4">
+                    Click &quot;Generate Insights&quot; to analyze this candidate&apos;s Technical and Coding performance
+                  </p>
+                  <button
+                    onClick={handleGenerateInsights}
+                    disabled={isGeneratingInsights}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isGeneratingInsights ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Generating AI Insights...
+                      </>
+                    ) : (
+                      <>
+                        <Award className="w-5 h-5" />
+                        Generate AI Insights
+                      </>
+                    )}
+                  </button>
                 </div>
               )}
             </div>
@@ -614,7 +670,7 @@ export default function CandidateResultDetails({
                   )}
                   <span className="text-sm font-medium">
                     {detailedResult.scoring_status === 'completed' && 'Scoring Complete'}
-                    {detailedResult.scoring_status === 'processing' && 'AI Agent Processing...'}
+                    {detailedResult.scoring_status === 'processing' && 'Processing...'}
                     {detailedResult.scoring_status === 'pending' && 'Scoring Pending'}
                     {detailedResult.scoring_status === 'error' && 'Scoring Failed - Needs Retry'}
                   </span>
@@ -630,9 +686,9 @@ export default function CandidateResultDetails({
                 <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Loader2 className="w-10 h-10 text-yellow-600 animate-spin" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">AI Agent Processing Results</h3>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">Processing Results</h3>
                 <p className="text-gray-600 mb-4">
-                  Our AI scoring agent is analyzing the candidate's responses. This typically takes 1-2 minutes.
+                  We're analyzing the candidate's responses. This usually takes 1–2 minutes.
                 </p>
                 <div className="flex items-center justify-center gap-2 text-sm text-yellow-700">
                   <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
@@ -719,12 +775,14 @@ export default function CandidateResultDetails({
                             <span className="ml-1">{round.questions_correct}/{round.questions_total} correct</span>
                           </p>
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm text-gray-600 mb-1">Section Score</div>
-                          <div className={`text-3xl ${getScoreColor(Math.min(round.raw_score, 100))}`}>
-                            {Math.min(Math.round(round.raw_score), 100)}%
+                        {round.round_type.toLowerCase() !== 'hr' && (
+                          <div className="text-right">
+                            <div className="text-sm text-gray-600 mb-1">Section Score</div>
+                            <div className={`text-3xl ${getScoreColor(Math.min(round.raw_score, 100))}`}>
+                              {Math.min(Math.round(round.raw_score), 100)}%
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
 
                       {/* Questions */}
