@@ -366,8 +366,19 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     }
   };
 
-  const handleSystemCheckComplete = async () => {
+  const handleSystemCheckComplete = async (existingStream?: MediaStream) => {
     console.log('[DEBUG] handleSystemCheckComplete started');
+
+    // If SystemCheck passed us a stream, keep it alive for assessment
+    if (existingStream) {
+      console.log('[PORTAL] Received camera stream from SystemCheck - keeping it alive');
+      streamRef.current = existingStream;
+      setCameraStream(existingStream);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = existingStream;
+      }
+    }
 
     // Set BOTH flags to prevent ANY interference
     isStartingRef.current = true;
@@ -629,20 +640,33 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   const startProctoring = async () => {
     // Initialize camera stream for video monitoring
     // The useProctoringMonitor hook handles all event detection (copy, paste, tab switch, voice, etc.)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
-      });
-      streamRef.current = stream;
-      setCameraStream(stream);
+
+    // Check if we already have a stream from SystemCheck (prevents black screen gap)
+    if (streamRef.current && streamRef.current.active) {
+      console.log('[PROCTORING] Reusing existing camera stream from SystemCheck - no black screen!');
+      setCameraStream(streamRef.current);
 
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+        videoRef.current.srcObject = streamRef.current;
       }
-      console.log('[PROCTORING] Camera stream initialized successfully');
-    } catch (err) {
-      console.error('[PROCTORING] Failed to initialize camera:', err);
+    } else {
+      // No existing stream - request a new one (fallback)
+      console.log('[PROCTORING] No existing stream - requesting new camera access');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+        streamRef.current = stream;
+        setCameraStream(stream);
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        console.log('[PROCTORING] Camera stream initialized successfully');
+      } catch (err) {
+        console.error('[PROCTORING] Failed to initialize camera:', err);
+      }
     }
 
     // Start heartbeat for session keepalive

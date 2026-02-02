@@ -21,7 +21,7 @@ import { candidateService, SystemCheckResult } from '@/lib/services/candidateSer
 
 interface SystemCheckProps {
   token: string;
-  onComplete: () => void;
+  onComplete: (stream?: MediaStream) => void; // Pass stream to parent to keep it alive
   onBack: () => void;
 }
 
@@ -48,12 +48,80 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     window.scrollTo(0, 0);
 
     return () => {
-      // Cleanup stream on unmount
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
+      // DON'T cleanup stream on unmount - keep it alive for assessment
+      // The parent (CandidateAssessmentPortal) will handle stream cleanup
+      // This prevents the black screen gap between system check and assessment
+      console.log('[SYSTEM CHECK] Component unmounting - keeping stream alive for assessment');
     };
   }, []);
+
+  // Monitor camera and microphone stream - detect if browser/OS stops them
+  useEffect(() => {
+    if (!streamRef.current) return;
+
+    const stream = streamRef.current;
+    const videoTrack = stream.getVideoTracks()[0];
+    const audioTrack = stream.getAudioTracks()[0];
+
+    // Handler for when video track ends (camera disabled)
+    const handleVideoEnded = () => {
+      console.log('[SYSTEM CHECK] Camera track ended - camera was disabled');
+      setCameraCheck({
+        status: 'error',
+        message: 'Camera was disabled. Please re-run checks.'
+      });
+      // Clear video preview to show camera is off
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    };
+
+    // Handler for when audio track ends (microphone disabled)
+    const handleAudioEnded = () => {
+      console.log('[SYSTEM CHECK] Audio track ended - microphone was disabled');
+      setMicCheck({
+        status: 'error',
+        message: 'Microphone was disabled. Please re-run checks.'
+      });
+    };
+
+    // Add event listeners for track ended events
+    if (videoTrack) {
+      videoTrack.addEventListener('ended', handleVideoEnded);
+    }
+    if (audioTrack) {
+      audioTrack.addEventListener('ended', handleAudioEnded);
+    }
+
+    // Periodic check every 2 seconds to detect if tracks are no longer live
+    const monitorInterval = setInterval(() => {
+      if (videoTrack && videoTrack.readyState === 'ended') {
+        console.log('[SYSTEM CHECK] Camera track readyState is ended');
+        setCameraCheck({
+          status: 'error',
+          message: 'Camera stopped working. Please re-run checks.'
+        });
+      }
+      if (audioTrack && audioTrack.readyState === 'ended') {
+        console.log('[SYSTEM CHECK] Microphone track readyState is ended');
+        setMicCheck({
+          status: 'error',
+          message: 'Microphone stopped working. Please re-run checks.'
+        });
+      }
+    }, 2000);
+
+    // Cleanup
+    return () => {
+      clearInterval(monitorInterval);
+      if (videoTrack) {
+        videoTrack.removeEventListener('ended', handleVideoEnded);
+      }
+      if (audioTrack) {
+        audioTrack.removeEventListener('ended', handleAudioEnded);
+      }
+    };
+  }, [streamRef.current]);
 
   useEffect(() => {
     // Check if all checks are successful
@@ -232,11 +300,14 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       };
 
       await candidateService.submitSystemCheck(token, results);
-      onComplete();
+
+      // Pass the stream to parent to keep camera alive (prevents black screen)
+      console.log('[SYSTEM CHECK] Passing stream to parent - keeping camera alive');
+      onComplete(streamRef.current || undefined);
     } catch (err) {
       console.error('Failed to submit system check:', err);
-      // Still proceed even if submission fails
-      onComplete();
+      // Still proceed even if submission fails - pass stream to keep camera alive
+      onComplete(streamRef.current || undefined);
     } finally {
       setIsSubmitting(false);
     }

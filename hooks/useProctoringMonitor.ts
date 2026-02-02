@@ -42,23 +42,23 @@ interface ProctoringState {
   isCameraActive: boolean;
 }
 
-// Backend logging cooldown - shorter, for accurate violation tracking (in milliseconds)
+// Backend logging cooldown - very short for critical violations, accurate tracking (in milliseconds)
 const BACKEND_COOLDOWNS: Record<ProctoringEventType, number> = {
   tab_switch: 2000,
-  copy_attempt: 1000,
-  paste_attempt: 1000,
+  copy_attempt: 500,  // Reduced: log copy attempts more frequently
+  paste_attempt: 500, // Reduced: log paste attempts more frequently
   voice_detected: 10000, // Increased: only log voice every 10 seconds
   multiple_voices: 15000,
-  camera_disabled: 2000,
-  microphone_disabled: 2000,
-  camera_obstructed: 5000,
-  screenshot_attempt: 1000,
-  screen_recording_attempt: 5000,
+  camera_disabled: 1000,     // Reduced: immediate detection
+  microphone_disabled: 1000, // Reduced: immediate detection
+  camera_obstructed: 3000,   // Reduced: faster detection
+  screenshot_attempt: 500,   // Reduced: immediate detection
+  screen_recording_attempt: 2000, // Reduced: faster detection
   window_blur: 2000,
 };
 
-// Frontend warning cooldown - 60 seconds to prevent re-render spam
-const FRONTEND_WARNING_COOLDOWN = 60000; // 60 seconds for all warning pop-ups
+// Frontend warning cooldown - reduced for immediate feedback on violations
+const FRONTEND_WARNING_COOLDOWN = 3000; // 3 seconds for all warning pop-ups (immediate but not spammy)
 
 // Voice detection specific settings (Throttle + Batch optimization)
 const VOICE_CHECK_INTERVAL = 2000; // Check every 2 seconds instead of 100ms
@@ -680,24 +680,117 @@ export function useProctoringMonitor({
   // ==================== COPY/PASTE DETECTION ====================
   const setupCopyPasteDetection = useCallback(() => {
     const handleCopy = (e: ClipboardEvent) => {
+      // CRITICAL: Completely block copy - prevent default and stop all propagation
       e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      // Clear clipboard data
+      if (e.clipboardData) {
+        e.clipboardData.clearData();
+      }
+
+      // Log the violation with selected text info
       logEvent('copy_attempt', {
         selectedText: window.getSelection()?.toString()?.substring(0, 100)
       });
+
+      // Return false for extra safety (legacy support)
+      return false;
     };
 
     const handlePaste = (e: ClipboardEvent) => {
+      // CRITICAL: Completely block paste - prevent default and stop all propagation
       e.preventDefault();
-      logEvent('paste_attempt', {});
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      // Clear clipboard data to ensure nothing gets pasted
+      if (e.clipboardData) {
+        e.clipboardData.clearData();
+      }
+
+      // Log the violation
+      logEvent('paste_attempt', {
+        clipboardDataLength: e.clipboardData?.getData('text')?.length || 0
+      });
+
+      // Return false for extra safety (legacy support)
+      return false;
     };
 
+    const handleCut = (e: ClipboardEvent) => {
+      // Block cut as well (same as copy)
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      logEvent('copy_attempt', { action: 'cut' });
+      return false;
+    };
+
+    // Block context menu (right-click) which can be used for copy/paste
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      console.log('[PROCTORING] Context menu blocked');
+      return false;
+    };
+
+    // Block keyboard shortcuts for copy/paste/cut
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+C or Cmd+C (copy)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('copy_attempt', { method: 'keyboard_shortcut' });
+        return false;
+      }
+
+      // Ctrl+V or Cmd+V (paste)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('paste_attempt', { method: 'keyboard_shortcut' });
+        return false;
+      }
+
+      // Ctrl+X or Cmd+X (cut)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('copy_attempt', { method: 'keyboard_shortcut', action: 'cut' });
+        return false;
+      }
+
+      // Ctrl+A or Cmd+A (select all) - also block to prevent bulk copy
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        console.log('[PROCTORING] Select all blocked');
+        return false;
+      }
+    };
+
+    // Add all event listeners with capture phase (true) for maximum priority
     document.addEventListener('copy', handleCopy, true);
     document.addEventListener('paste', handlePaste, true);
-    console.log('[PROCTORING] Copy/paste detection started');
+    document.addEventListener('cut', handleCut, true);
+    document.addEventListener('contextmenu', handleContextMenu, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+
+    console.log('[PROCTORING] Copy/paste/cut detection started (comprehensive blocking)');
 
     return () => {
       document.removeEventListener('copy', handleCopy, true);
       document.removeEventListener('paste', handlePaste, true);
+      document.removeEventListener('cut', handleCut, true);
+      document.removeEventListener('contextmenu', handleContextMenu, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [logEvent]);
 
