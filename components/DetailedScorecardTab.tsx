@@ -180,12 +180,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
 
       const requiredPct = requiredMax > 0 ? Math.round((requiredTotal / requiredMax) * 100) : 0;
       const preferredPct = preferredMax > 0 ? Math.round((preferredTotal / preferredMax) * 100) : 0;
-      const finalPct = Math.round((requiredPct + preferredPct) / 2);
 
       summaryData = {
         requiredPercentage: requiredPct,
         preferredPercentage: preferredPct,
-        finalPercentage: finalPct || resume.scorePercentage,
+        finalPercentage: resume.scorePercentage, // Always use API's overall_score, don't recalculate
         requiredTotal: requiredTotal,
         requiredMax: requiredMax,
         preferredTotal: preferredTotal,
@@ -243,12 +242,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     const preferredMax = preferredItems.length * 10 || 80; // Dynamic based on actual preferred criteria count
     const requiredPct = requiredMax > 0 ? Math.round((requiredTotal / requiredMax) * 100) : 0;
     const preferredPct = preferredMax > 0 ? Math.round((preferredTotal / preferredMax) * 100) : 0;
-    const finalPct = Math.round((requiredPct + preferredPct) / 2);
 
     summaryData = {
       requiredPercentage: requiredPct,
       preferredPercentage: preferredPct,
-      finalPercentage: finalPct || resume.scorePercentage,
+      finalPercentage: resume.scorePercentage, // Use API's overall_score, don't recalculate
       requiredTotal: requiredTotal,
       requiredMax: requiredMax,
       preferredTotal: preferredTotal,

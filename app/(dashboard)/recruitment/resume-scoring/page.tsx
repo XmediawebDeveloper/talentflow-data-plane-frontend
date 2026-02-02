@@ -251,19 +251,18 @@ export default function ResumeScoringRoute() {
           clearInterval(pollInterval);
           setPendingBatchId(null);
 
-          // Reload scored history to show new results, then redirect
-          // NOTE: Don't clear sessionStorage until redirect to keep items available for display
+          // Reload scored history to show new results
           setTimeout(async () => {
             await loadScoredHistory();
-            // Clear sessionStorage just before redirect
+            // Clear sessionStorage after loading history
             try {
               sessionStorage.removeItem('pendingScoringBatch');
               console.log('[ResumeScoringRoute] Cleared pendingScoringBatch from sessionStorage');
             } catch (e) {
               console.error('[ResumeScoringRoute] Error clearing pendingScoringBatch:', e);
             }
-            // Redirect to show the scored results after history is loaded
-            window.location.href = `/recruitment/resume-scoring?jd_id=${status.jd_id}`;
+            // Update URL without full page reload to preserve state
+            router.push(`/recruitment/resume-scoring?jd_id=${status.jd_id}`);
           }, 2000);
         }
       } catch (e) {
@@ -305,6 +304,7 @@ export default function ResumeScoringRoute() {
           candidateEmail: item.email || item.candidate_email || '',
           email: item.email || item.candidate_email || '',
           phone: item.phone || '',
+          overall_score: matchScore,  // Use overall_score as primary field
           matchScore: matchScore,
           matchStatus: matchStatus,
           scorePercentage: matchScore,

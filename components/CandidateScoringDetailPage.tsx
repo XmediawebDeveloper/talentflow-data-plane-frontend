@@ -235,10 +235,11 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     ? fullResumeData.gaps.filter((gap: string) => !missingSkills.includes(gap))
     : [];
 
+  const normalizedMatchStatus = fullResumeData.matchStatus?.toLowerCase().replace(/[_\s]/g, '') || '';
   const aiReasoning = fullResumeData.aiSummary || fullResumeData.matchReason || (
-    (fullResumeData.matchStatus === 'Exact Match' || fullResumeData.matchStatus === 'Excellent Match')
+    (normalizedMatchStatus === 'exactmatch' || normalizedMatchStatus === 'excellentmatch')
       ? 'Outstanding candidate with exceptional alignment to job requirements. Strong technical skills, relevant experience, and proven track record in similar roles.'
-      : fullResumeData.matchStatus === 'Partial Match'
+      : normalizedMatchStatus === 'partialmatch'
         ? 'Solid candidate with good alignment to most job requirements. Possesses core technical skills and relevant experience with minor gaps in specialized areas.'
         : 'Limited alignment with current job requirements. While the candidate shows promise in certain areas, there are significant gaps in required technical skills and experience.'
   );
@@ -266,9 +267,18 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     return 'bg-red-600';
   };
 
+  // Format match status from API (e.g., "partial_match" -> "Partial Match")
+  const formatMatchStatus = (status: string) => {
+    if (!status) return 'Unknown';
+    return status
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase());
+  };
+
   const getMatchStatusColor = (status: string) => {
-    if (status === 'Exact Match' || status === 'Excellent Match') return 'bg-green-100 text-green-700 border-green-300';
-    if (status === 'Partial Match') return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+    const normalized = status?.toLowerCase().replace(/[_\s]/g, '');
+    if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'bg-green-100 text-green-700 border-green-300';
+    if (normalized === 'partialmatch') return 'bg-yellow-100 text-yellow-700 border-yellow-300';
     return 'bg-red-100 text-red-700 border-red-300';
   };
 
@@ -399,17 +409,17 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
           {/* Score Display - Compact */}
           <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3 border border-gray-200">
             <div className="flex items-center gap-4">
-              <div className={`text-3xl font-bold ${getScoreColor(resume.scorePercentage)}`}>{resume.scorePercentage}%</div>
-              <span className={`px-3 py-1 rounded-md text-sm font-medium border ${getMatchStatusColor(resume.matchStatus)}`}>
-                {resume.matchStatus}
+              <div className={`text-3xl font-bold ${getScoreColor(fullResumeData.scorePercentage)}`}>{fullResumeData.scorePercentage}%</div>
+              <span className={`px-3 py-1 rounded-md text-sm font-medium border ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+                {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
               </span>
               <span className="text-gray-400">|</span>
               <span className="text-sm text-gray-700">{jobTitle}</span>
             </div>
             <div className="text-sm text-gray-600">
-              {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
-                ? new Date(resume.scoredDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                : resume.scoredDate}
+              {fullResumeData.scoredDate && !isNaN(new Date(fullResumeData.scoredDate).getTime())
+                ? new Date(fullResumeData.scoredDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : fullResumeData.scoredDate}
             </div>
           </div>
         </div>

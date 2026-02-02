@@ -1,78 +1,152 @@
 'use client';
 
-import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, Phone, MapPin, Briefcase, Target, Filter, Tag, Calendar, Clock } from 'lucide-react';
-import { useState } from 'react';
+import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, Phone, MapPin, Briefcase, Target, Filter, Calendar, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { userSettingsApi, UserSettings, UserProfile, UserSettingsUpdate, UserProfileUpdate } from '@/lib/services/settingsService';
+import { toast } from 'sonner';
 
 export default function Settings() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Profile Settings
-  const [profileData, setProfileData] = useState({
-    fullName: 'John Recruiter',
-    email: 'john.recruiter@talentflow.com',
-    phone: '+1 (555) 123-4567',
-    jobTitle: 'Senior Recruiter',
-    department: 'Talent Acquisition',
-    location: 'San Francisco, CA',
-    bio: 'Experienced recruiter specializing in technical hiring with 8+ years in the industry.',
-    specialization: 'Technology & Engineering',
+  const [profileData, setProfileData] = useState<UserProfileUpdate & { email?: string }>({
+    full_name: '',
+    phone: '',
+    job_title: '',
+    department: '',
   });
 
-  // Notification Settings
-  const [notifications, setNotifications] = useState({
-    emailNewApplicant: true,
-    emailAssessmentComplete: true,
-    emailInterviewScheduled: true,
-    emailCandidateMessage: false,
-    emailJobExpiring: true,
-    pushNewApplicant: true,
-    pushAssessmentComplete: false,
-    pushInterviewReminder: true,
-    pushCandidateViewed: false,
-    weeklyDigest: true,
-    monthlyReport: true,
-  });
-
-  // Privacy Settings
-  const [privacy, setPrivacy] = useState({
-    profileVisibility: 'team',
-    showEmail: false,
-    showPhone: false,
-    showActivityStatus: true,
-  });
-
-  // Appearance Settings
-  const [appearance, setAppearance] = useState({
+  // User Settings (combined)
+  const [settings, setSettings] = useState<UserSettingsUpdate>({
+    // Notification Settings
+    email_new_applicant: true,
+    email_assessment_complete: true,
+    email_interview_scheduled: true,
+    email_candidate_message: false,
+    email_job_expiring: true,
+    push_new_applicant: true,
+    push_assessment_complete: false,
+    push_interview_reminder: true,
+    push_candidate_viewed: false,
+    weekly_digest: true,
+    monthly_report: true,
+    // Job Preferences
+    auto_save_jd: true,
+    default_job_type: 'Full-time',
+    default_location: 'Remote',
+    require_assessment: false,
+    auto_publish: false,
+    default_expiry_days: 30,
+    // Workflow Preferences
+    auto_screen_resumes: true,
+    ai_assistance: true,
+    bulk_action_confirmation: true,
+    show_advanced_filters: true,
+    default_sort_order: 'latest',
+    // Privacy Settings
+    profile_visibility: 'team',
+    show_email: false,
+    show_phone: false,
+    show_activity_status: true,
+    // Appearance Settings
     theme: 'light',
     language: 'en',
-    dateFormat: 'MM/DD/YYYY',
-    timeFormat: '12h',
-    defaultView: 'dashboard',
+    date_format: 'MM/DD/YYYY',
+    time_format: '12h',
+    default_view: 'dashboard',
   });
 
-  // Job Preferences
-  const [jobPreferences, setJobPreferences] = useState({
-    autoSaveJD: true,
-    defaultJobType: 'Full-time',
-    defaultLocation: 'Remote',
-    requireAssessment: false,
-    autoPublish: false,
-    defaultExpiryDays: 30,
-  });
+  // Load user profile and settings on mount
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        // Load profile
+        const profile = await userSettingsApi.getProfile();
+        setProfileData({
+          full_name: profile.full_name || '',
+          email: profile.email,
+          phone: profile.phone || '',
+          job_title: profile.job_title || '',
+          department: profile.department || '',
+        });
 
-  // Workflow Preferences
-  const [workflowPreferences, setWorkflowPreferences] = useState({
-    autoScreenResumes: true,
-    aiAssistance: true,
-    bulkActionConfirmation: true,
-    showAdvancedFilters: true,
-    defaultSortOrder: 'latest',
-  });
+        // Load settings
+        const userSettings = await userSettingsApi.getSettings();
+        setSettings({
+          email_new_applicant: userSettings.email_new_applicant,
+          email_assessment_complete: userSettings.email_assessment_complete,
+          email_interview_scheduled: userSettings.email_interview_scheduled,
+          email_candidate_message: userSettings.email_candidate_message,
+          email_job_expiring: userSettings.email_job_expiring,
+          push_new_applicant: userSettings.push_new_applicant,
+          push_assessment_complete: userSettings.push_assessment_complete,
+          push_interview_reminder: userSettings.push_interview_reminder,
+          push_candidate_viewed: userSettings.push_candidate_viewed,
+          weekly_digest: userSettings.weekly_digest,
+          monthly_report: userSettings.monthly_report,
+          auto_save_jd: userSettings.auto_save_jd,
+          default_job_type: userSettings.default_job_type,
+          default_location: userSettings.default_location,
+          require_assessment: userSettings.require_assessment,
+          auto_publish: userSettings.auto_publish,
+          default_expiry_days: userSettings.default_expiry_days,
+          auto_screen_resumes: userSettings.auto_screen_resumes,
+          ai_assistance: userSettings.ai_assistance,
+          bulk_action_confirmation: userSettings.bulk_action_confirmation,
+          show_advanced_filters: userSettings.show_advanced_filters,
+          default_sort_order: userSettings.default_sort_order,
+          profile_visibility: userSettings.profile_visibility,
+          show_email: userSettings.show_email,
+          show_phone: userSettings.show_phone,
+          show_activity_status: userSettings.show_activity_status,
+          theme: userSettings.theme,
+          language: userSettings.language,
+          date_format: userSettings.date_format,
+          time_format: userSettings.time_format,
+          default_view: userSettings.default_view,
+        });
+      } catch (error) {
+        console.error('Error loading settings:', error);
+        // Use default values on error
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const handleSave = () => {
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+    loadData();
+  }, []);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      // Save profile if on profile tab
+      if (activeTab === 'profile') {
+        await userSettingsApi.updateProfile({
+          full_name: profileData.full_name,
+          phone: profileData.phone,
+          job_title: profileData.job_title,
+          department: profileData.department,
+        });
+      }
+
+      // Save settings
+      await userSettingsApi.updateSettings(settings);
+
+      setSaveSuccess(true);
+      toast.success('Settings saved successfully');
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast.error('Failed to save settings');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const tabs = [
@@ -83,6 +157,17 @@ export default function Settings() {
     { id: 'privacy', label: 'Privacy & Security', icon: Shield },
     { id: 'appearance', label: 'Appearance', icon: Palette },
   ];
+
+  if (isLoading) {
+    return (
+      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
+          <p className="text-gray-600">Loading settings...</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
@@ -127,8 +212,8 @@ export default function Settings() {
             {/* Role Info */}
             <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div className="text-xs text-gray-800 uppercase tracking-wider mb-1">Role</div>
-              <div className="text-sm text-gray-800 font-medium">Recruiter</div>
-              <div className="text-xs text-gray-900 mt-1">Access Level: Standard</div>
+              <div className="text-sm text-gray-800 font-medium">{user?.role || 'Recruiter'}</div>
+              <div className="text-xs text-gray-900 mt-1">Access Level: {user?.role === 'admin' || user?.role === 'tenant_admin' ? 'Admin' : 'Standard'}</div>
             </div>
           </div>
         </div>
@@ -151,7 +236,7 @@ export default function Settings() {
                   <label className="block text-sm font-medium text-gray-900 mb-3">Profile Picture</label>
                   <div className="flex items-center gap-4">
                     <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center shadow-lg text-2xl">
-                      JR
+                      {profileData.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
                     </div>
                     <div>
                       <button className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm mr-2">
@@ -172,8 +257,8 @@ export default function Settings() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">Full Name</label>
                       <input
                         type="text"
-                        value={profileData.fullName}
-                        onChange={(e) => setProfileData({ ...profileData, fullName: e.target.value })}
+                        value={profileData.full_name || ''}
+                        onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                       />
                     </div>
@@ -181,10 +266,11 @@ export default function Settings() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">Email Address</label>
                       <input
                         type="email"
-                        value={profileData.email}
-                        onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                        value={profileData.email || ''}
+                        disabled
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
                       />
+                      <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
                     </div>
                   </div>
 
@@ -195,7 +281,7 @@ export default function Settings() {
                         <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                           type="tel"
-                          value={profileData.phone}
+                          value={profileData.phone || ''}
                           onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
                           className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                         />
@@ -207,32 +293,8 @@ export default function Settings() {
                         <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                           type="text"
-                          value={profileData.jobTitle}
-                          onChange={(e) => setProfileData({ ...profileData, jobTitle: e.target.value })}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">Department</label>
-                      <input
-                        type="text"
-                        value={profileData.department}
-                        onChange={(e) => setProfileData({ ...profileData, department: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">Location</label>
-                      <div className="relative">
-                        <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input
-                          type="text"
-                          value={profileData.location}
-                          onChange={(e) => setProfileData({ ...profileData, location: e.target.value })}
+                          value={profileData.job_title || ''}
+                          onChange={(e) => setProfileData({ ...profileData, job_title: e.target.value })}
                           className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                         />
                       </div>
@@ -240,29 +302,12 @@ export default function Settings() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Specialization</label>
-                    <select
-                      value={profileData.specialization}
-                      onChange={(e) => setProfileData({ ...profileData, specialization: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white"
-                    >
-                      <option>Technology & Engineering</option>
-                      <option>Sales & Marketing</option>
-                      <option>Finance & Accounting</option>
-                      <option>Healthcare</option>
-                      <option>Executive Search</option>
-                      <option>General Recruitment</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Bio</label>
-                    <textarea
-                      value={profileData.bio}
-                      onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-                      rows={4}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent resize-none"
-                      placeholder="Tell candidates and team members about your recruitment expertise..."
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Department</label>
+                    <input
+                      type="text"
+                      value={profileData.department || ''}
+                      onChange={(e) => setProfileData({ ...profileData, department: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                     />
                   </div>
                 </div>
@@ -288,11 +333,11 @@ export default function Settings() {
                     </h3>
                     <div className="space-y-3">
                       {[
-                        { key: 'emailNewApplicant', label: 'New applicant submitted', desc: 'Get notified when a candidate applies to your job' },
-                        { key: 'emailAssessmentComplete', label: 'Assessment completed', desc: 'Receive alerts when candidates complete assessments' },
-                        { key: 'emailInterviewScheduled', label: 'Interview scheduled', desc: 'Notifications for upcoming interviews' },
-                        { key: 'emailCandidateMessage', label: 'Candidate messages', desc: 'Get emails when candidates send you messages' },
-                        { key: 'emailJobExpiring', label: 'Job expiring soon', desc: 'Reminders when your job postings are about to expire' },
+                        { key: 'email_new_applicant', label: 'New applicant submitted', desc: 'Get notified when a candidate applies to your job' },
+                        { key: 'email_assessment_complete', label: 'Assessment completed', desc: 'Receive alerts when candidates complete assessments' },
+                        { key: 'email_interview_scheduled', label: 'Interview scheduled', desc: 'Notifications for upcoming interviews' },
+                        { key: 'email_candidate_message', label: 'Candidate messages', desc: 'Get emails when candidates send you messages' },
+                        { key: 'email_job_expiring', label: 'Job expiring soon', desc: 'Reminders when your job postings are about to expire' },
                       ].map((item) => (
                         <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                           <div className="flex-1">
@@ -302,8 +347,8 @@ export default function Settings() {
                           <label className="relative inline-flex items-center cursor-pointer ml-4">
                             <input
                               type="checkbox"
-                              checked={notifications[item.key as keyof typeof notifications] as boolean}
-                              onChange={(e) => setNotifications({ ...notifications, [item.key]: e.target.checked })}
+                              checked={settings[item.key as keyof typeof settings] as boolean}
+                              onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
                               className="sr-only peer"
                             />
                             <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
@@ -321,10 +366,10 @@ export default function Settings() {
                     </h3>
                     <div className="space-y-3">
                       {[
-                        { key: 'pushNewApplicant', label: 'New applicant alerts', desc: 'Browser notifications for new applications' },
-                        { key: 'pushAssessmentComplete', label: 'Assessment completion', desc: 'Instant alerts for completed assessments' },
-                        { key: 'pushInterviewReminder', label: 'Interview reminders', desc: 'Get reminded 15 minutes before interviews' },
-                        { key: 'pushCandidateViewed', label: 'Candidate profile views', desc: 'When candidates view your job postings' },
+                        { key: 'push_new_applicant', label: 'New applicant alerts', desc: 'Browser notifications for new applications' },
+                        { key: 'push_assessment_complete', label: 'Assessment completion', desc: 'Instant alerts for completed assessments' },
+                        { key: 'push_interview_reminder', label: 'Interview reminders', desc: 'Get reminded 15 minutes before interviews' },
+                        { key: 'push_candidate_viewed', label: 'Candidate profile views', desc: 'When candidates view your job postings' },
                       ].map((item) => (
                         <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                           <div className="flex-1">
@@ -334,8 +379,8 @@ export default function Settings() {
                           <label className="relative inline-flex items-center cursor-pointer ml-4">
                             <input
                               type="checkbox"
-                              checked={notifications[item.key as keyof typeof notifications] as boolean}
-                              onChange={(e) => setNotifications({ ...notifications, [item.key]: e.target.checked })}
+                              checked={settings[item.key as keyof typeof settings] as boolean}
+                              onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
                               className="sr-only peer"
                             />
                             <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
@@ -353,8 +398,8 @@ export default function Settings() {
                     </h3>
                     <div className="space-y-3">
                       {[
-                        { key: 'weeklyDigest', label: 'Weekly activity digest', desc: 'Summary of weekly recruitment activity' },
-                        { key: 'monthlyReport', label: 'Monthly performance report', desc: 'Detailed monthly analytics and insights' },
+                        { key: 'weekly_digest', label: 'Weekly activity digest', desc: 'Summary of weekly recruitment activity' },
+                        { key: 'monthly_report', label: 'Monthly performance report', desc: 'Detailed monthly analytics and insights' },
                       ].map((item) => (
                         <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                           <div className="flex-1">
@@ -364,8 +409,8 @@ export default function Settings() {
                           <label className="relative inline-flex items-center cursor-pointer ml-4">
                             <input
                               type="checkbox"
-                              checked={notifications[item.key as keyof typeof notifications] as boolean}
-                              onChange={(e) => setNotifications({ ...notifications, [item.key]: e.target.checked })}
+                              checked={settings[item.key as keyof typeof settings] as boolean}
+                              onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
                               className="sr-only peer"
                             />
                             <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
@@ -402,8 +447,8 @@ export default function Settings() {
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Default Job Type</label>
                     <select
-                      value={jobPreferences.defaultJobType}
-                      onChange={(e) => setJobPreferences({ ...jobPreferences, defaultJobType: e.target.value })}
+                      value={settings.default_job_type || 'Full-time'}
+                      onChange={(e) => setSettings({ ...settings, default_job_type: e.target.value })}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                     >
                       <option>Full-time</option>
@@ -417,8 +462,8 @@ export default function Settings() {
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Default Location</label>
                     <select
-                      value={jobPreferences.defaultLocation}
-                      onChange={(e) => setJobPreferences({ ...jobPreferences, defaultLocation: e.target.value })}
+                      value={settings.default_location || 'Remote'}
+                      onChange={(e) => setSettings({ ...settings, default_location: e.target.value })}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                     >
                       <option>Remote</option>
@@ -431,8 +476,8 @@ export default function Settings() {
                     <label className="block text-sm font-medium text-gray-900 mb-2">Default Job Expiry (Days)</label>
                     <input
                       type="number"
-                      value={jobPreferences.defaultExpiryDays}
-                      onChange={(e) => setJobPreferences({ ...jobPreferences, defaultExpiryDays: parseInt(e.target.value) })}
+                      value={settings.default_expiry_days || 30}
+                      onChange={(e) => setSettings({ ...settings, default_expiry_days: parseInt(e.target.value) || 30 })}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
                       min="1"
                       max="90"
@@ -441,53 +486,27 @@ export default function Settings() {
                   </div>
 
                   <div className="space-y-3">
-                    <div className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex-1">
-                        <div className="text-sm text-gray-900 mb-1">Auto-save job drafts</div>
-                        <div className="text-xs text-gray-600">Automatically save your progress when creating jobs</div>
+                    {[
+                      { key: 'auto_save_jd', label: 'Auto-save job drafts', desc: 'Automatically save your progress when creating jobs' },
+                      { key: 'require_assessment', label: 'Require assessment by default', desc: 'Automatically require candidates to complete an assessment' },
+                      { key: 'auto_publish', label: 'Auto-publish jobs', desc: 'Automatically publish jobs after creation (skip draft)' },
+                    ].map((item) => (
+                      <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex-1">
+                          <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                          <div className="text-xs text-gray-600">{item.desc}</div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer ml-4">
+                          <input
+                            type="checkbox"
+                            checked={settings[item.key as keyof typeof settings] as boolean}
+                            onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                        </label>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer ml-4">
-                        <input
-                          type="checkbox"
-                          checked={jobPreferences.autoSaveJD}
-                          onChange={(e) => setJobPreferences({ ...jobPreferences, autoSaveJD: e.target.checked })}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                      </label>
-                    </div>
-
-                    <div className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex-1">
-                        <div className="text-sm text-gray-900 mb-1">Require assessment by default</div>
-                        <div className="text-xs text-gray-600">Automatically require candidates to complete an assessment</div>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer ml-4">
-                        <input
-                          type="checkbox"
-                          checked={jobPreferences.requireAssessment}
-                          onChange={(e) => setJobPreferences({ ...jobPreferences, requireAssessment: e.target.checked })}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                      </label>
-                    </div>
-
-                    <div className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex-1">
-                        <div className="text-sm text-gray-900 mb-1">Auto-publish jobs</div>
-                        <div className="text-xs text-gray-600">Automatically publish jobs after creation (skip draft)</div>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer ml-4">
-                        <input
-                          type="checkbox"
-                          checked={jobPreferences.autoPublish}
-                          onChange={(e) => setJobPreferences({ ...jobPreferences, autoPublish: e.target.checked })}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                      </label>
-                    </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -507,77 +526,36 @@ export default function Settings() {
                   <div>
                     <h3 className="text-base font-medium text-gray-900 mb-4">Resume Management</h3>
                     <div className="space-y-3">
-                      <div className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="flex-1">
-                          <div className="text-sm text-gray-900 mb-1">AI-powered auto-screening</div>
-                          <div className="text-xs text-gray-600">Automatically screen and rank resumes using AI</div>
+                      {[
+                        { key: 'auto_screen_resumes', label: 'AI-powered auto-screening', desc: 'Automatically screen and rank resumes using AI' },
+                        { key: 'ai_assistance', label: 'AI assistance suggestions', desc: 'Get AI-powered suggestions while reviewing candidates' },
+                        { key: 'bulk_action_confirmation', label: 'Confirm bulk actions', desc: 'Show confirmation dialog for bulk operations' },
+                        { key: 'show_advanced_filters', label: 'Show advanced filters by default', desc: 'Display advanced filter options when searching resumes' },
+                      ].map((item) => (
+                        <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div className="flex-1">
+                            <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                            <div className="text-xs text-gray-600">{item.desc}</div>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer ml-4">
+                            <input
+                              type="checkbox"
+                              checked={settings[item.key as keyof typeof settings] as boolean}
+                              onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                          </label>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer ml-4">
-                          <input
-                            type="checkbox"
-                            checked={workflowPreferences.autoScreenResumes}
-                            onChange={(e) => setWorkflowPreferences({ ...workflowPreferences, autoScreenResumes: e.target.checked })}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                        </label>
-                      </div>
-
-                      <div className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="flex-1">
-                          <div className="text-sm text-gray-900 mb-1">AI assistance suggestions</div>
-                          <div className="text-xs text-gray-600">Get AI-powered suggestions while reviewing candidates</div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer ml-4">
-                          <input
-                            type="checkbox"
-                            checked={workflowPreferences.aiAssistance}
-                            onChange={(e) => setWorkflowPreferences({ ...workflowPreferences, aiAssistance: e.target.checked })}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                        </label>
-                      </div>
-
-                      <div className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="flex-1">
-                          <div className="text-sm text-gray-900 mb-1">Confirm bulk actions</div>
-                          <div className="text-xs text-gray-600">Show confirmation dialog for bulk operations</div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer ml-4">
-                          <input
-                            type="checkbox"
-                            checked={workflowPreferences.bulkActionConfirmation}
-                            onChange={(e) => setWorkflowPreferences({ ...workflowPreferences, bulkActionConfirmation: e.target.checked })}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                        </label>
-                      </div>
-
-                      <div className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="flex-1">
-                          <div className="text-sm text-gray-900 mb-1">Show advanced filters by default</div>
-                          <div className="text-xs text-gray-600">Display advanced filter options when searching resumes</div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer ml-4">
-                          <input
-                            type="checkbox"
-                            checked={workflowPreferences.showAdvancedFilters}
-                            onChange={(e) => setWorkflowPreferences({ ...workflowPreferences, showAdvancedFilters: e.target.checked })}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                        </label>
-                      </div>
+                      ))}
                     </div>
                   </div>
 
                   <div>
                     <h3 className="text-base font-medium text-gray-900 mb-4">Default Sort Order</h3>
                     <select
-                      value={workflowPreferences.defaultSortOrder}
-                      onChange={(e) => setWorkflowPreferences({ ...workflowPreferences, defaultSortOrder: e.target.value })}
+                      value={settings.default_sort_order || 'latest'}
+                      onChange={(e) => setSettings({ ...settings, default_sort_order: e.target.value })}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                     >
                       <option value="latest">Latest First</option>
@@ -613,8 +591,8 @@ export default function Settings() {
                       <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                         <label className="block text-sm text-gray-900 mb-2">Profile Visibility</label>
                         <select
-                          value={privacy.profileVisibility}
-                          onChange={(e) => setPrivacy({ ...privacy, profileVisibility: e.target.value })}
+                          value={settings.profile_visibility || 'team'}
+                          onChange={(e) => setSettings({ ...settings, profile_visibility: e.target.value })}
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                         >
                           <option value="team">Team Only - Visible to team members</option>
@@ -624,9 +602,9 @@ export default function Settings() {
                       </div>
 
                       {[
-                        { key: 'showEmail', label: 'Show email in profile', desc: 'Display your email address on your profile' },
-                        { key: 'showPhone', label: 'Show phone number', desc: 'Display your phone number on your profile' },
-                        { key: 'showActivityStatus', label: 'Show activity status', desc: 'Let team members see when you\'re online' },
+                        { key: 'show_email', label: 'Show email in profile', desc: 'Display your email address on your profile' },
+                        { key: 'show_phone', label: 'Show phone number', desc: 'Display your phone number on your profile' },
+                        { key: 'show_activity_status', label: 'Show activity status', desc: "Let team members see when you're online" },
                       ].map((item) => (
                         <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                           <div className="flex-1">
@@ -636,8 +614,8 @@ export default function Settings() {
                           <label className="relative inline-flex items-center cursor-pointer ml-4">
                             <input
                               type="checkbox"
-                              checked={privacy[item.key as keyof typeof privacy] as boolean}
-                              onChange={(e) => setPrivacy({ ...privacy, [item.key]: e.target.checked })}
+                              checked={settings[item.key as keyof typeof settings] as boolean}
+                              onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
                               className="sr-only peer"
                             />
                             <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
@@ -653,53 +631,10 @@ export default function Settings() {
                       <Lock className="w-5 h-5 text-red-600" />
                       Security Settings
                     </h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div>
-                          <div className="text-sm text-gray-900 mb-1">Password</div>
-                          <div className="text-xs text-gray-600">Last changed 3 months ago</div>
-                        </div>
-                        <button className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm">
-                          Change Password
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div>
-                          <div className="text-sm text-gray-900 mb-1">Two-Factor Authentication</div>
-                          <div className="text-xs text-gray-600">Add an extra layer of security</div>
-                        </div>
-                        <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-sm">
-                          Enable 2FA
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div>
-                          <div className="text-sm text-gray-900 mb-1">Active Sessions</div>
-                          <div className="text-xs text-gray-600">2 active sessions across devices</div>
-                        </div>
-                        <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-sm">
-                          Manage Sessions
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Data Management */}
-                  <div className="pt-6 border-t border-gray-200">
-                    <h3 className="text-base font-medium text-gray-900 mb-4">Data Management</h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div>
-                          <div className="text-sm text-gray-900 mb-1">Export Your Data</div>
-                          <div className="text-xs text-gray-600">Download your recruitment activity and data</div>
-                        </div>
-                        <button className="px-4 py-2 border border-gray-300 text-gray-900 rounded-lg hover:bg-gray-100 transition-colors text-sm">
-                          Export Data
-                        </button>
-                      </div>
-                    </div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      For advanced security settings including password change, 2FA, and session management,
+                      please visit the <a href="/settings/security" className="text-blue-600 hover:underline">Security Settings</a> page.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -727,9 +662,9 @@ export default function Settings() {
                       ].map((theme) => (
                         <button
                           key={theme.value}
-                          onClick={() => setAppearance({ ...appearance, theme: theme.value })}
+                          onClick={() => setSettings({ ...settings, theme: theme.value })}
                           className={`p-4 rounded-lg border-2 transition-all ${
-                            appearance.theme === theme.value
+                            settings.theme === theme.value
                               ? 'border-gray-800 bg-gray-50'
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
@@ -750,8 +685,8 @@ export default function Settings() {
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Language</label>
                     <select
-                      value={appearance.language}
-                      onChange={(e) => setAppearance({ ...appearance, language: e.target.value })}
+                      value={settings.language || 'en'}
+                      onChange={(e) => setSettings({ ...settings, language: e.target.value })}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                     >
                       <option value="en">English (US)</option>
@@ -766,8 +701,8 @@ export default function Settings() {
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Date Format</label>
                     <select
-                      value={appearance.dateFormat}
-                      onChange={(e) => setAppearance({ ...appearance, dateFormat: e.target.value })}
+                      value={settings.date_format || 'MM/DD/YYYY'}
+                      onChange={(e) => setSettings({ ...settings, date_format: e.target.value })}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                     >
                       <option value="MM/DD/YYYY">MM/DD/YYYY (12/31/2024)</option>
@@ -780,8 +715,8 @@ export default function Settings() {
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Time Format</label>
                     <select
-                      value={appearance.timeFormat}
-                      onChange={(e) => setAppearance({ ...appearance, timeFormat: e.target.value })}
+                      value={settings.time_format || '12h'}
+                      onChange={(e) => setSettings({ ...settings, time_format: e.target.value })}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                     >
                       <option value="12h">12-hour (3:30 PM)</option>
@@ -793,8 +728,8 @@ export default function Settings() {
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Default Landing Page</label>
                     <select
-                      value={appearance.defaultView}
-                      onChange={(e) => setAppearance({ ...appearance, defaultView: e.target.value })}
+                      value={settings.default_view || 'dashboard'}
+                      onChange={(e) => setSettings({ ...settings, default_view: e.target.value })}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                     >
                       <option value="dashboard">Dashboard</option>
@@ -820,10 +755,20 @@ export default function Settings() {
               </div>
               <button
                 onClick={handleSave}
-                className="px-8 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-lg hover:shadow-xl flex items-center gap-2 font-medium"
+                disabled={isSaving}
+                className="px-8 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-lg hover:shadow-xl flex items-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save className="w-5 h-5" />
-                Save Changes
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    Save Changes
+                  </>
+                )}
               </button>
             </div>
           </div>

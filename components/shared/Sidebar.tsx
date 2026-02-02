@@ -191,7 +191,6 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
         { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
         { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canManageUsers' },
         { id: 'team-chat', label: 'Team Chat', icon: MessageCircle, href: '/organization/team-chat' },  // Available to all users
-        { id: 'internal-tickets', label: 'Team Support Tickets', icon: Inbox, href: '/organization/internal-tickets', adminOnly: true },
       ]
     },
 
