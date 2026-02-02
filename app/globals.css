@@ -157,27 +157,30 @@
 }
 
 .markdown-content code {
-  background-color: #f3f4f6;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-  font-size: 0.875em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  color: #1f2937;
+  background-color: transparent;
+  padding: 0;
+  font-size: inherit;
+  font-family: inherit;
+  color: inherit;
 }
 
 .markdown-content pre {
-  background-color: #1f2937;
-  color: #f9fafb;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  overflow-x: auto;
-  margin: 1rem 0;
+  background-color: transparent;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: inherit;
+  font-size: inherit;
 }
 
 .markdown-content pre code {
   background-color: transparent;
   padding: 0;
   color: inherit;
+  font-family: inherit;
+  font-size: inherit;
 }
 
 .markdown-content hr {

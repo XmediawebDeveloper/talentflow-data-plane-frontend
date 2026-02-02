@@ -61,20 +61,34 @@ export default function ScoringJobProgressModal({
     }
   };
 
-  // Initialize start time when modal opens
+  // Calculate if scoring is still in progress (has queued or processing items)
+  const overallQueued = jobProgressData.reduce((sum, job) => sum + job.queued, 0);
+  const overallInProgress = jobProgressData.reduce((sum, job) => sum + job.inProgress, 0);
+  const isScoringInProgress = overallQueued > 0 || overallInProgress > 0;
+
+  // Initialize start time when modal opens - only for active scoring
+  // Don't reset when closing - timer continues in background
   useEffect(() => {
-    if (isOpen && !startTimeRef.current) {
+    if (isOpen && isScoringInProgress && !startTimeRef.current) {
       startTimeRef.current = new Date();
     }
-    if (!isOpen) {
+    // Only reset when scoring completes (not when modal closes)
+    if (!isScoringInProgress) {
       startTimeRef.current = null;
       setElapsedSeconds(0);
     }
-  }, [isOpen]);
+  }, [isOpen, isScoringInProgress]);
 
-  // Update elapsed time every second
+  // Update elapsed time every second - only for active scoring
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isScoringInProgress) return;
+
+    // Update immediately when modal opens (in case it was closed and reopened)
+    if (startTimeRef.current) {
+      const now = new Date();
+      const diff = Math.floor((now.getTime() - startTimeRef.current.getTime()) / 1000);
+      setElapsedSeconds(diff);
+    }
 
     const interval = setInterval(() => {
       if (startTimeRef.current) {
@@ -85,7 +99,7 @@ export default function ScoringJobProgressModal({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isOpen]);
+  }, [isOpen, isScoringInProgress]);
 
   // Format elapsed time as MM:SS or HH:MM:SS
   const formatElapsedTime = (seconds: number) => {
@@ -100,14 +114,12 @@ export default function ScoringJobProgressModal({
 
   if (!isOpen) return null;
 
-  // Calculate overall totals
+  // Calculate overall totals (overallQueued and overallInProgress already calculated above for useEffect)
   const overallTotal = jobProgressData.reduce((sum, job) => sum + job.total, 0);
-  const overallQueued = jobProgressData.reduce((sum, job) => sum + job.queued, 0);
-  const overallInProgress = jobProgressData.reduce((sum, job) => sum + job.inProgress, 0);
   const overallCompleted = jobProgressData.reduce((sum, job) => sum + job.completed, 0);
   const overallFailed = jobProgressData.reduce((sum, job) => sum + job.failed, 0);
   const overallPercentage = overallTotal > 0 ? Math.round(((overallCompleted + overallFailed) / overallTotal) * 100) : 0;
-  const isAllComplete = overallQueued === 0 && overallInProgress === 0;
+  const isAllComplete = !isScoringInProgress;
 
   // Get all resume items from all jobs
   const allItems: ResumeProgressItem[] = jobProgressData.flatMap(job => job.items || []);
@@ -208,11 +220,13 @@ export default function ScoringJobProgressModal({
 
           {/* Progress indicator and controls */}
           <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-            {/* Elapsed Time */}
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-white/10 rounded-lg">
-              <Timer className="w-3.5 h-3.5 text-gray-300" />
-              <span className="text-xs font-mono text-gray-200">{formatElapsedTime(elapsedSeconds)}</span>
-            </div>
+            {/* Elapsed Time - only show when scoring is in progress */}
+            {isScoringInProgress && (
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-white/10 rounded-lg">
+                <Timer className="w-3.5 h-3.5 text-gray-300" />
+                <span className="text-xs font-mono text-gray-200">{formatElapsedTime(elapsedSeconds)}</span>
+              </div>
+            )}
 
             {/* Progress bar - hidden on mobile */}
             <div className="hidden md:flex items-center gap-2">
@@ -248,11 +262,13 @@ export default function ScoringJobProgressModal({
 
         {/* Stats Row - Responsive */}
         <div className="flex flex-wrap items-center gap-3 sm:gap-4 px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-          {/* Mobile: Show elapsed time here */}
-          <div className="flex sm:hidden items-center gap-1.5 px-2 py-1 bg-gray-200 rounded-md">
-            <Timer className="w-3.5 h-3.5 text-gray-600" />
-            <span className="text-xs font-mono text-gray-700">{formatElapsedTime(elapsedSeconds)}</span>
-          </div>
+          {/* Mobile: Show elapsed time here - only when scoring is in progress */}
+          {isScoringInProgress && (
+            <div className="flex sm:hidden items-center gap-1.5 px-2 py-1 bg-gray-200 rounded-md">
+              <Timer className="w-3.5 h-3.5 text-gray-600" />
+              <span className="text-xs font-mono text-gray-700">{formatElapsedTime(elapsedSeconds)}</span>
+            </div>
+          )}
 
           {/* Mobile: Progress bar */}
           <div className="flex md:hidden items-center gap-2 w-full sm:w-auto">
