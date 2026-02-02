@@ -631,31 +631,36 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         <div className="bg-white rounded-lg shadow-sm border-2 border-blue-200 p-6">
           <div className="flex items-start justify-between">
             <div className="flex-1">
+              {/* Row 1: JD ID + Job Title + Status */}
               <div className="flex items-center gap-3 mb-3">
+                {job.job_id && (
+                  <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-600 rounded-md text-sm font-medium">
+                    {job.job_id}
+                  </span>
+                )}
                 <h1 className="text-gray-900">{job.title}</h1>
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm border ${getStatusBadgeClass(getDisplayStatus(job.status, job.currentVersion))}`}>
                   {getDisplayStatus(job.status, job.currentVersion)}
                 </span>
               </div>
-              {job.location && (
-              <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
-                <div className="flex items-center gap-1">
-                  <MapPin className="w-4 h-4" />
-                  {job.location}
-                </div>
-              </div>
-              )}
 
-              {/* Job Attributes - Experience, Education, Employment Type, Work Mode */}
-              {(job.experience || job.education || job.employmentType || job.workMode) && (
-                <div className="flex flex-wrap items-center gap-2 mb-4">
-                  {job.experience && (
-                    <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                      {job.experience}
-                    </span>
-                  )}
-                  {job.education && (
-                    <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+              {/* Row 2: Location + Education + Employment Type + Work Mode + Posted Date + Posted By + Version */}
+              <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                {/* Location */}
+                {job.location && (
+                  <>
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="w-4 h-4 text-purple-600" />
+                      <span>{job.location}</span>
+                    </div>
+                    <span className="text-gray-300">•</span>
+                  </>
+                )}
+
+                {/* Education */}
+                {job.education && (
+                  <>
+                    <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
                       {job.education === 'bachelors' ? "Bachelor's Degree" :
                        job.education === 'masters' ? "Master's Degree" :
                        job.education === 'doctorate' ? 'Doctorate / PhD' :
@@ -663,9 +668,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                        job.education === 'diploma' ? 'Diploma' :
                        job.education}
                     </span>
-                  )}
-                  {job.employmentType && (
-                    <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                  </>
+                )}
+
+                {/* Employment Type */}
+                {job.employmentType && (
+                  <>
+                    <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
                       {job.employmentType === 'full_time' ? 'Full Time' :
                        job.employmentType === 'part_time' ? 'Part Time' :
                        job.employmentType === 'contract' ? 'Contract' :
@@ -673,58 +682,51 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                        job.employmentType === 'temporary' ? 'Temporary' :
                        job.employmentType}
                     </span>
-                  )}
-                  {job.workMode && (
-                    <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
+                  </>
+                )}
+
+                {/* Work Mode */}
+                {job.workMode && (
+                  <>
+                    <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
                       {job.workMode === 'onsite' ? 'On-site' :
                        job.workMode === 'remote' ? 'Remote' :
                        job.workMode === 'hybrid' ? 'Hybrid' :
                        job.workMode === 'field_based' ? 'Field-based' :
                        job.workMode}
                     </span>
-                  )}
-                </div>
-              )}
+                  </>
+                )}
 
-              {/* Job Meta Information */}
-              <div className="flex items-center gap-6 pt-4 border-t border-gray-200">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Calendar className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500">Posted On</div>
-                    <div className="text-sm text-gray-900">
-                      {job.postedDate ? new Date(new Date(job.postedDate).getTime() + 19800000).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A'}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <User className="w-4 h-4 text-purple-600" />
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500">Posted By</div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-sm text-gray-900">{job.postedBy || 'Unknown'}</div>
-                      <span className="text-gray-400">•</span>
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-gray-500">Version</span>
-                        {job.currentVersion && job.currentVersion > 0 ? (
-                          <button
-                            onClick={() => setShowVersionHistory(true)}
-                            className="text-sm text-blue-600 hover:text-blue-700 hover:underline font-medium"
-                            title="View version history"
-                          >
-                            {job.currentVersion}.0
-                          </button>
-                        ) : (
-                          <span className="text-sm text-gray-900 font-medium">1.0</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                {/* Separator before Posted Info */}
+                {(job.location || job.education || job.employmentType || job.workMode) && (
+                  <span className="text-gray-300">•</span>
+                )}
+
+                {/* Posted Date */}
+                <span>
+                  Posted {job.postedDate ? new Date(new Date(job.postedDate).getTime() + 19800000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+                </span>
+                <span className="text-gray-300">•</span>
+
+                {/* Posted By */}
+                <span>By {job.postedBy || 'Unknown'}</span>
+                <span className="text-gray-300">•</span>
+
+                {/* Version Badge */}
+                {job.currentVersion && job.currentVersion > 0 ? (
+                  <button
+                    onClick={() => setShowVersionHistory(true)}
+                    className="inline-flex items-center px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium hover:bg-purple-700 transition-colors"
+                    title="View version history"
+                  >
+                    v{job.currentVersion}.0
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium">
+                    v1.0
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1072,10 +1074,41 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 )}
 
-                </div>
               </div>
             </div>
           </div>
+
+          {/* Internal Recruiter Notes & Assessment Guidance - Side by Side */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Internal Recruiter Notes */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-gray-900 mb-4">Internal Recruiter Notes</h3>
+              <div className="text-sm text-gray-600 space-y-2">
+                {job.internalRecruiterComments && job.internalRecruiterComments.length > 0 ? (
+                  <ul className="list-disc list-inside space-y-1">
+                    {job.internalRecruiterComments.map((note, index) => (
+                      <li key={index}>{note}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-500 italic">No internal notes added</p>
+                )}
+              </div>
+            </div>
+
+            {/* Assessment Guidance */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-gray-900 mb-4">Assessment Guidance</h3>
+              <div className="text-sm text-gray-600">
+                {job.assessmentGuidance ? (
+                  <p className="whitespace-pre-wrap">{job.assessmentGuidance}</p>
+                ) : (
+                  <p className="text-gray-500 italic">No assessment guidance provided</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Right Column - Actions & Activity */}
         <div className="col-span-2 space-y-6">
@@ -1128,6 +1161,35 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <History className="w-4 h-4" />
                 <span>View JD History</span>
               </button>
+
+              {/* Assessment Status */}
+              <button
+                onClick={() => setActiveTab('assessment-results')}
+                className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white hover:bg-gray-800 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
+              >
+                <Target className="w-4 h-4" />
+                <span>Assessment Status</span>
+              </button>
+
+              {/* Add Applicants */}
+              {job.status !== 'Disabled' ? (
+                <button
+                  onClick={() => setShowSelectSourceModal(true)}
+                  className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white hover:bg-gray-800 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Add Applicants</span>
+                </button>
+              ) : (
+                <button
+                  disabled
+                  className="w-full px-4 py-2.5 text-sm bg-gray-300 text-gray-500 rounded-md cursor-not-allowed shadow-sm text-left flex items-center gap-2"
+                  title="Cannot add applicants to disabled JDs"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Add Applicants</span>
+                </button>
+              )}
 
               {/* {job.status === 'Published' && (
                 <button
@@ -1246,33 +1308,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </div>
           </div>
 
-          {/* Internal Recruiter Notes */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-gray-900 mb-4">Internal Recruiter Notes</h3>
-            <div className="text-sm text-gray-600 space-y-2">
-              {job.internalRecruiterComments && job.internalRecruiterComments.length > 0 ? (
-                <ul className="list-disc list-inside space-y-1">
-                  {job.internalRecruiterComments.map((note, index) => (
-                    <li key={index}>{note}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-500 italic">No internal notes added</p>
-              )}
-            </div>
-          </div>
-
-          {/* Assessment Guidance */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-gray-900 mb-4">Assessment Guidance</h3>
-            <div className="text-sm text-gray-600">
-              {job.assessmentGuidance ? (
-                <p className="whitespace-pre-wrap">{job.assessmentGuidance}</p>
-              ) : (
-                <p className="text-gray-500 italic">No assessment guidance provided</p>
-              )}
-            </div>
-          </div>
         </div>
       </div>
 
