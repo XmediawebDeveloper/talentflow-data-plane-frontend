@@ -694,10 +694,10 @@ function CurrentPlanContent() {
         })
         .filter((plan): plan is DisplayPlan => plan !== null)
         .sort((a, b) => {
-          // Sort by price descending (highest first)
+          // Sort by price ascending (lowest first)
           const orderA = a.monthlyPrice || 0;
           const orderB = b.monthlyPrice || 0;
-          return orderB - orderA;
+          return orderA - orderB;
         });
 
       setPlans(transformedPlans);
@@ -1685,10 +1685,10 @@ function CurrentPlanContent() {
               onMouseLeave={() => setHoveredPlan(null)}
             >
               {[...plans].sort((a, b) => {
-                // Sort by price descending (highest first)
+                // Sort by price ascending (lowest first)
                 const priceA = a.monthlyPrice || a.annualPrice || 0;
                 const priceB = b.monthlyPrice || b.annualPrice || 0;
-                return priceB - priceA;
+                return priceA - priceB;
               }).map((plan) => {
                 const Icon = plan.icon;
                 const isSelectedPending = isPendingPayment && companySettings?.selected_plan_id === plan.numericId;
