@@ -1697,11 +1697,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // This prevents losing manually edited comments/skills when re-extracting
       const isEditMode = !!editingId;
 
+      // FIX: If user has modified extracted data (deleted/edited skills/comments), preserve their changes
+      // Don't let AI extraction overwrite user's manual edits
+      const preserveUserEdits = isEditMode && extractedDataModified;
+
       const extraction: ExtractedData = {
-        mustHaveSkills: params.must_have_skills?.length > 0 ? params.must_have_skills : (isEditMode ? extractedData.mustHaveSkills || [] : []),
-        mustHaveComments: params.must_have_comments?.length > 0 ? params.must_have_comments : (isEditMode ? extractedData.mustHaveComments || [] : []),
-        niceToHaveSkills: params.nice_to_have_skills?.length > 0 ? params.nice_to_have_skills : (isEditMode ? extractedData.niceToHaveSkills || [] : []),
-        niceToHaveComments: params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : (isEditMode ? extractedData.niceToHaveComments || [] : []),
+        mustHaveSkills: preserveUserEdits ? extractedData.mustHaveSkills : (params.must_have_skills?.length > 0 ? params.must_have_skills : (isEditMode ? extractedData.mustHaveSkills || [] : [])),
+        mustHaveComments: preserveUserEdits ? extractedData.mustHaveComments : (params.must_have_comments?.length > 0 ? params.must_have_comments : (isEditMode ? extractedData.mustHaveComments || [] : [])),
+        niceToHaveSkills: preserveUserEdits ? extractedData.niceToHaveSkills : (params.nice_to_have_skills?.length > 0 ? params.nice_to_have_skills : (isEditMode ? extractedData.niceToHaveSkills || [] : [])),
+        niceToHaveComments: preserveUserEdits ? extractedData.niceToHaveComments : (params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : (isEditMode ? extractedData.niceToHaveComments || [] : [])),
         education: educationValue || (isEditMode ? extractedData.education : ''),
         // Use API's mandatory flag for education
         educationRequired: params.education_mandatory || false,
