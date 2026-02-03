@@ -226,52 +226,104 @@ export default function ResumeViewPage() {
   // Version changes visibility state
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
 
-  // Helper function to get version content summary
-  const getVersionContent = (version: any) => {
-    const content: { category: string; items: string[] }[] = [];
+  // Helper function to get version differences compared to previous version
+  const getVersionChanges = (currentVersion: any, previousVersion: any | null) => {
+    const changes: { category: string; added: string[]; removed: string[]; changed?: { from: string; to: string } }[] = [];
 
-    // Skills
-    if (version.skills && version.skills.length > 0) {
-      content.push({ category: 'Skills', items: version.skills.slice(0, 10) });
+    // Helper to compare arrays
+    const compareArrays = (current: string[] = [], previous: string[] = []) => {
+      const added = current.filter(item => !previous.includes(item));
+      const removed = previous.filter(item => !current.includes(item));
+      return { added, removed };
+    };
+
+    // Helper to compare single values
+    const compareSingle = (category: string, current: string | undefined, previous: string | undefined) => {
+      if (current !== previous) {
+        if (current && previous) {
+          changes.push({ category, added: [], removed: [], changed: { from: previous, to: current } });
+        } else if (current && !previous) {
+          changes.push({ category, added: [current], removed: [] });
+        } else if (!current && previous) {
+          changes.push({ category, added: [], removed: [previous] });
+        }
+      }
+    };
+
+    // If no previous version, this is the first version - show as "Initial"
+    if (!previousVersion) {
+      return [{ category: 'Initial Version', added: ['First upload - no changes to compare'], removed: [] }];
     }
 
-    // Technical Skills
-    if (version.technicalSkills && version.technicalSkills.length > 0) {
-      content.push({ category: 'Technical Skills', items: version.technicalSkills.slice(0, 10) });
+    // Compare Skills
+    const skillsChanges = compareArrays(
+      currentVersion.skills || [],
+      previousVersion.skills || []
+    );
+    if (skillsChanges.added.length > 0 || skillsChanges.removed.length > 0) {
+      changes.push({ category: 'Skills', ...skillsChanges });
     }
 
-    // Job Title
-    if (version.currentTitle) {
-      content.push({ category: 'Job Title', items: [version.currentTitle] });
+    // Compare Technical Skills
+    const techSkillsChanges = compareArrays(
+      currentVersion.technicalSkills || [],
+      previousVersion.technicalSkills || []
+    );
+    if (techSkillsChanges.added.length > 0 || techSkillsChanges.removed.length > 0) {
+      changes.push({ category: 'Technical Skills', ...techSkillsChanges });
     }
 
-    // Company
-    if (version.currentCompany) {
-      content.push({ category: 'Company', items: [version.currentCompany] });
+    // Compare Job Title
+    compareSingle('Job Title', currentVersion.currentTitle, previousVersion.currentTitle);
+
+    // Compare Company
+    compareSingle('Company', currentVersion.currentCompany, previousVersion.currentCompany);
+
+    // Compare Location
+    compareSingle('Location', currentVersion.location, previousVersion.location);
+
+    // Compare Experience count
+    const currExpCount = currentVersion.experience?.length || 0;
+    const prevExpCount = previousVersion.experience?.length || 0;
+    if (currExpCount !== prevExpCount) {
+      changes.push({
+        category: 'Experience',
+        added: currExpCount > prevExpCount ? [`+${currExpCount - prevExpCount} position(s)`] : [],
+        removed: currExpCount < prevExpCount ? [`-${prevExpCount - currExpCount} position(s)`] : [],
+      });
     }
 
-    // Location
-    if (version.location) {
-      content.push({ category: 'Location', items: [version.location] });
+    // Compare Education count
+    const currEduCount = currentVersion.education?.length || 0;
+    const prevEduCount = previousVersion.education?.length || 0;
+    if (currEduCount !== prevEduCount) {
+      changes.push({
+        category: 'Education',
+        added: currEduCount > prevEduCount ? [`+${currEduCount - prevEduCount} entry(ies)`] : [],
+        removed: currEduCount < prevEduCount ? [`-${prevEduCount - currEduCount} entry(ies)`] : [],
+      });
     }
 
-    // Experience count
-    if (version.experience && version.experience.length > 0) {
-      content.push({ category: 'Experience', items: [`${version.experience.length} position(s)`] });
+    // Compare Certifications
+    const currCerts = (currentVersion.certifications || []).map((c: any) => c.name || c);
+    const prevCerts = (previousVersion.certifications || []).map((c: any) => c.name || c);
+    const certsChanges = compareArrays(currCerts, prevCerts);
+    if (certsChanges.added.length > 0 || certsChanges.removed.length > 0) {
+      changes.push({ category: 'Certifications', ...certsChanges });
     }
 
-    // Education count
-    if (version.education && version.education.length > 0) {
-      content.push({ category: 'Education', items: [`${version.education.length} entry(ies)`] });
+    // Compare Professional Summary
+    if (currentVersion.professionalSummary !== previousVersion.professionalSummary) {
+      if (currentVersion.professionalSummary && previousVersion.professionalSummary) {
+        changes.push({ category: 'Summary', added: ['Updated'], removed: [] });
+      } else if (currentVersion.professionalSummary) {
+        changes.push({ category: 'Summary', added: ['Added'], removed: [] });
+      } else {
+        changes.push({ category: 'Summary', added: [], removed: ['Removed'] });
+      }
     }
 
-    // Certifications
-    if (version.certifications && version.certifications.length > 0) {
-      const certNames = version.certifications.map((c: any) => c.name || c).slice(0, 5);
-      content.push({ category: 'Certifications', items: certNames });
-    }
-
-    return content.length > 0 ? content : null;
+    return changes.length > 0 ? changes : null;
   };
 
   useEffect(() => {
@@ -723,14 +775,6 @@ Best regards`);
                   )}
                 </div>
 
-                {/* Tags */}
-                <div className="flex flex-wrap gap-2">
-                  {resume.skills?.slice(0, 8).map((skill, index) => (
-                    <span key={index} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs border border-gray-300">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
               </div>
             </div>
           </div>
@@ -1145,7 +1189,9 @@ Best regards`);
                   return sortedVersions.map((version, index) => {
                     const isLatest = index === 0;
                     const versionNumber = version.version || (resume.versions.length - index);
-                    const content = getVersionContent(version);
+                    // Get previous version for comparison (next in sorted array since sorted newest first)
+                    const previousVersion = index < sortedVersions.length - 1 ? sortedVersions[index + 1] : null;
+                    const changes = getVersionChanges(version, previousVersion);
                     const isExpanded = expandedVersionId === version.id;
 
                     return (
@@ -1209,7 +1255,7 @@ Best regards`);
                                 }`}
                               >
                                 {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                {isExpanded ? 'Hide' : 'View'} Content
+                                {isExpanded ? 'Hide' : 'View'} Changes
                               </button>
                               <button
                                 onClick={async () => {
@@ -1240,28 +1286,39 @@ Best regards`);
                           </div>
                         </div>
 
-                        {/* Version Content - Expanded */}
+                        {/* Version Changes - Expanded */}
                         {isExpanded && (
                           <div className={`px-4 pb-4 pt-2 border-t ${isLatest ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-gray-50/50'}`}>
                             <div className="text-xs font-medium text-gray-700 mb-3 flex items-center gap-1">
-                              <FileText className="w-3 h-3" />
-                              Content in Version {versionNumber}
+                              <History className="w-3 h-3" />
+                              Changes in Version {versionNumber}
                             </div>
-                            {content && content.length > 0 ? (
+                            {changes && changes.length > 0 ? (
                               <div className="space-y-2">
-                                {content.map((item, idx) => (
+                                {changes.map((change, idx) => (
                                   <div key={idx} className="flex items-start gap-2">
-                                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-200 text-gray-700 min-w-[80px] text-center">
-                                      {item.category}
+                                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-200 text-gray-700 min-w-[90px] text-center flex-shrink-0">
+                                      {change.category}
                                     </span>
                                     <div className="flex-1 flex flex-wrap gap-1">
-                                      {item.items.map((val, i) => (
-                                        <span key={i} className={`text-xs px-2 py-0.5 rounded ${
-                                          item.category === 'Skills' || item.category === 'Technical Skills'
-                                            ? 'bg-blue-100 text-blue-700'
-                                            : 'bg-gray-100 text-gray-700'
-                                        }`}>
-                                          {val}
+                                      {/* Show changed value (from -> to) */}
+                                      {change.changed && (
+                                        <span className="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 flex items-center gap-1">
+                                          <span className="line-through opacity-60">{change.changed.from}</span>
+                                          <span>→</span>
+                                          <span className="font-medium">{change.changed.to}</span>
+                                        </span>
+                                      )}
+                                      {/* Show added items */}
+                                      {change.added.map((val, i) => (
+                                        <span key={`add-${i}`} className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 flex items-center gap-1">
+                                          <span className="font-bold">+</span> {val}
+                                        </span>
+                                      ))}
+                                      {/* Show removed items */}
+                                      {change.removed.map((val, i) => (
+                                        <span key={`rem-${i}`} className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 flex items-center gap-1">
+                                          <span className="font-bold">−</span> {val}
                                         </span>
                                       ))}
                                     </div>
@@ -1269,7 +1326,7 @@ Best regards`);
                                 ))}
                               </div>
                             ) : (
-                              <p className="text-xs text-gray-500 italic">No parsed content available. Restart backend to enable.</p>
+                              <p className="text-xs text-gray-500 italic">No changes detected compared to previous version.</p>
                             )}
                           </div>
                         )}

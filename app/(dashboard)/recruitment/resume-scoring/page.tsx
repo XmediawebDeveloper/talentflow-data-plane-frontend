@@ -96,42 +96,56 @@ export default function ResumeScoringRoute() {
 
       // Immediately fetch current batch status from API (don't wait for poll interval)
       const fetchInitialStatus = async () => {
+        // First, get candidate names from sessionStorage (always available from the page that started scoring)
+        let storedResumeItems: { resumeId: string; candidateName: string }[] = [];
+        try {
+          const storedData = sessionStorage.getItem('pendingScoringBatch');
+          if (storedData) {
+            const data = JSON.parse(storedData);
+            storedResumeItems = data.resumeItems || [];
+            console.log('[ResumeScoringRoute] Loaded candidate names from sessionStorage:', storedResumeItems.length);
+          }
+        } catch (e) {
+          console.error('[ResumeScoringRoute] Error reading sessionStorage:', e);
+        }
+
+        // Create a map for quick lookup of candidate names by resumeId
+        const candidateNameMap = new Map<string, string>();
+        storedResumeItems.forEach(item => {
+          candidateNameMap.set(item.resumeId, item.candidateName);
+        });
+
         try {
           const status = await scoringService.getBatchStatus(batchIdParam);
           console.log('[ResumeScoringRoute] Initial batch status:', status);
 
-          // Map items from API response
-          let items = (status.items || []).map(item => ({
-            resumeId: item.resume_id,
-            candidateName: item.candidate_name || 'Unknown',
-            status: item.status,
-            score: item.overall_score,
-            errorMessage: item.error_message,
-          }));
+          let items: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed'; score?: number; errorMessage?: string }[];
 
-          // If API returned empty items, try to use sessionStorage fallback for candidate names
-          if (items.length === 0) {
-            console.log('[ResumeScoringRoute] API returned empty items, checking sessionStorage fallback');
-            try {
-              const storedData = sessionStorage.getItem('pendingScoringBatch');
-              if (storedData) {
-                const data = JSON.parse(storedData);
-                items = (data.resumeItems || []).map((item: { resumeId: string; candidateName: string }) => ({
-                  resumeId: item.resumeId,
-                  candidateName: item.candidateName || 'Unknown',
-                  status: 'queued' as const,
-                }));
-                console.log('[ResumeScoringRoute] Using sessionStorage fallback items:', items.length);
-              }
-            } catch (e2) {
-              console.error('[ResumeScoringRoute] Error reading sessionStorage fallback:', e2);
-            }
+          if (status.items && status.items.length > 0) {
+            // Map items from API response, but use sessionStorage for candidate names if API has 'Unknown'
+            items = status.items.map(item => ({
+              resumeId: item.resume_id,
+              candidateName: candidateNameMap.get(item.resume_id) || item.candidate_name || 'Unknown',
+              status: item.status,
+              score: item.overall_score,
+              errorMessage: item.error_message,
+            }));
+          } else if (storedResumeItems.length > 0) {
+            // API returned empty items, use sessionStorage items as placeholders
+            console.log('[ResumeScoringRoute] API returned empty items, using sessionStorage fallback');
+            items = storedResumeItems.map(item => ({
+              resumeId: item.resumeId,
+              candidateName: item.candidateName || 'Unknown',
+              status: 'queued' as const,
+            }));
+          } else {
+            items = [];
           }
 
           setBatchProgress({
             jobId: status.jd_id,
             jobTitle: status.jd_title,
-            total: status.total,
+            total: status.total || storedResumeItems.length,
             queued: status.queued,
             processing: status.processing,
             completed: status.completed,
@@ -141,29 +155,30 @@ export default function ResumeScoringRoute() {
         } catch (e) {
           console.error('[ResumeScoringRoute] Error fetching initial status:', e);
           // Fallback to sessionStorage data if API fails
-          try {
-            const storedData = sessionStorage.getItem('pendingScoringBatch');
-            if (storedData) {
-              const data = JSON.parse(storedData);
-              // Include resumeItems as placeholder items with queued status
-              const items = (data.resumeItems || []).map((item: { resumeId: string; candidateName: string }) => ({
-                resumeId: item.resumeId,
-                candidateName: item.candidateName || 'Unknown',
-                status: 'queued' as const,
-              }));
-              setBatchProgress({
-                jobId: data.jobId,
-                jobTitle: data.jobTitle,
-                total: data.totalResumes,
-                queued: data.totalResumes,
-                processing: 0,
-                completed: 0,
-                failed: 0,
-                items: items,
-              });
+          if (storedResumeItems.length > 0) {
+            try {
+              const storedData = sessionStorage.getItem('pendingScoringBatch');
+              if (storedData) {
+                const data = JSON.parse(storedData);
+                const items = storedResumeItems.map(item => ({
+                  resumeId: item.resumeId,
+                  candidateName: item.candidateName || 'Unknown',
+                  status: 'queued' as const,
+                }));
+                setBatchProgress({
+                  jobId: data.jobId,
+                  jobTitle: data.jobTitle,
+                  total: data.totalResumes,
+                  queued: data.totalResumes,
+                  processing: 0,
+                  completed: 0,
+                  failed: 0,
+                  items: items,
+                });
+              }
+            } catch (e2) {
+              console.error('[ResumeScoringRoute] Error reading stored data:', e2);
             }
-          } catch (e2) {
-            console.error('[ResumeScoringRoute] Error reading stored data:', e2);
           }
         }
       };
@@ -203,41 +218,55 @@ export default function ResumeScoringRoute() {
   useEffect(() => {
     if (!pendingBatchId) return;
 
+    // Get candidate names from sessionStorage once at the start of polling
+    let storedResumeItems: { resumeId: string; candidateName: string }[] = [];
+    try {
+      const storedData = sessionStorage.getItem('pendingScoringBatch');
+      if (storedData) {
+        const data = JSON.parse(storedData);
+        storedResumeItems = data.resumeItems || [];
+      }
+    } catch (e) {
+      // Ignore sessionStorage errors
+    }
+
+    // Create a map for quick lookup of candidate names by resumeId
+    const candidateNameMap = new Map<string, string>();
+    storedResumeItems.forEach(item => {
+      candidateNameMap.set(item.resumeId, item.candidateName);
+    });
+
     const pollInterval = setInterval(async () => {
       try {
         const status = await scoringService.getBatchStatus(pendingBatchId);
         console.log('[ResumeScoringRoute] Batch status:', status);
 
-        // Map items from API response to our format
-        let items = (status.items || []).map(item => ({
-          resumeId: item.resume_id,
-          candidateName: item.candidate_name || 'Unknown',
-          status: item.status,
-          score: item.overall_score,
-          errorMessage: item.error_message,
-        }));
+        let items: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed'; score?: number; errorMessage?: string }[];
 
-        // If API returned empty items, try to use sessionStorage fallback for candidate names
-        if (items.length === 0) {
-          try {
-            const storedData = sessionStorage.getItem('pendingScoringBatch');
-            if (storedData) {
-              const data = JSON.parse(storedData);
-              items = (data.resumeItems || []).map((item: { resumeId: string; candidateName: string }) => ({
-                resumeId: item.resumeId,
-                candidateName: item.candidateName || 'Unknown',
-                status: 'queued' as const,
-              }));
-            }
-          } catch (e2) {
-            // Ignore sessionStorage errors
-          }
+        if (status.items && status.items.length > 0) {
+          // Map items from API response, but use sessionStorage for candidate names if API has 'Unknown'
+          items = status.items.map(item => ({
+            resumeId: item.resume_id,
+            candidateName: candidateNameMap.get(item.resume_id) || item.candidate_name || 'Unknown',
+            status: item.status,
+            score: item.overall_score,
+            errorMessage: item.error_message,
+          }));
+        } else if (storedResumeItems.length > 0) {
+          // API returned empty items, use sessionStorage items as placeholders
+          items = storedResumeItems.map(item => ({
+            resumeId: item.resumeId,
+            candidateName: item.candidateName || 'Unknown',
+            status: 'queued' as const,
+          }));
+        } else {
+          items = [];
         }
 
         setBatchProgress({
           jobId: status.jd_id,
           jobTitle: status.jd_title,
-          total: status.total,
+          total: status.total || storedResumeItems.length,
           queued: status.queued,
           processing: status.processing,
           completed: status.completed,

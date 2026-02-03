@@ -62,6 +62,15 @@ interface ScoredResumeData {
   source: 'my-resumes' | 'database';
   totalScored: number;
   scoredResumes: any[];
+  // Processing state for in-progress jobs
+  isProcessing?: boolean;
+  processingProgress?: {
+    total: number;
+    queued: number;
+    processing: number;
+    completed: number;
+    failed: number;
+  };
 }
 
 interface PendingScoringData {
@@ -1083,6 +1092,39 @@ export default function ResumeScoringPage({
 
   // View History List
   if (viewMode === 'history') {
+    // Create a processing entry from batchProgress if it exists
+    let processingEntry: ScoredResumeData | null = null;
+    if (batchProgress && batchProgress.jobId && (batchProgress.queued > 0 || batchProgress.processing > 0)) {
+      // Check if this job is not already in scoredHistory (avoid duplicate)
+      const alreadyInHistory = scoredHistory.some(h => h.jobId === batchProgress.jobId);
+      if (!alreadyInHistory) {
+        processingEntry = {
+          id: `processing-${batchProgress.jobId}`,
+          jobId: batchProgress.jobId,
+          jobTitle: batchProgress.jobTitle || 'Processing...',
+          scoredAt: new Date(),
+          source: 'database',
+          totalScored: batchProgress.total,
+          scoredResumes: (batchProgress.items || []).map(item => ({
+            id: item.resumeId,
+            resumeId: item.resumeId,
+            candidateName: item.candidateName,
+            status: item.status,
+            overall_score: item.score,
+            errorReason: item.errorMessage,
+          })),
+          isProcessing: true,
+          processingProgress: {
+            total: batchProgress.total,
+            queued: batchProgress.queued,
+            processing: batchProgress.processing,
+            completed: batchProgress.completed,
+            failed: batchProgress.failed,
+          },
+        };
+      }
+    }
+
     // Filter history items
     const filteredHistory = scoredHistory.filter(item => {
       const matchesSearch = historySearchQuery === '' ||
@@ -1107,6 +1149,11 @@ export default function ResumeScoringPage({
 
       return matchesSearch && matchesSource && matchesDate && matchesCandidates && matchesAvgScore;
     });
+
+    // Add processing entry at the top if it exists and matches filters
+    const displayHistory = processingEntry && (historySearchQuery === '' || processingEntry.jobTitle.toLowerCase().includes(historySearchQuery.toLowerCase()))
+      ? [processingEntry, ...filteredHistory]
+      : filteredHistory;
 
     const activeFiltersCount = [
       historySearchQuery !== '',
