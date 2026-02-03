@@ -6,17 +6,30 @@ import {
   SubscriptionInactiveDetail,
   clearTokens
 } from '@/lib/services/api';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+
+// Pages where the modal should NOT appear (user needs access to renew)
+const ALLOWED_PATHS = [
+  '/subscription/current-plan',
+  '/subscription/payment-methods',
+];
 
 export default function SubscriptionInactiveModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [errorDetails, setErrorDetails] = useState<SubscriptionInactiveDetail | null>(null);
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Check if current path is allowed (subscription management pages)
+  const isAllowedPath = ALLOWED_PATHS.some(path => pathname?.includes(path));
 
   useEffect(() => {
     const handleSubscriptionInactive = (event: CustomEvent<SubscriptionInactiveDetail>) => {
       setErrorDetails(event.detail);
-      setIsOpen(true);
+      // Only show modal if NOT on an allowed path
+      if (!ALLOWED_PATHS.some(path => window.location.pathname.includes(path))) {
+        setIsOpen(true);
+      }
     };
 
     window.addEventListener(
@@ -32,6 +45,13 @@ export default function SubscriptionInactiveModal() {
     };
   }, []);
 
+  // Close modal if user navigates to an allowed path
+  useEffect(() => {
+    if (isAllowedPath && isOpen) {
+      setIsOpen(false);
+    }
+  }, [isAllowedPath, isOpen]);
+
   const handleLogout = () => {
     clearTokens();
     setIsOpen(false);
@@ -42,6 +62,11 @@ export default function SubscriptionInactiveModal() {
     if (errorDetails?.support_email) {
       window.location.href = `mailto:${errorDetails.support_email}?subject=Account Access Issue`;
     }
+  };
+
+  const handleRenewSubscription = () => {
+    setIsOpen(false);
+    router.push('/subscription/current-plan');
   };
 
   // Determine title and message based on status
@@ -86,7 +111,8 @@ export default function SubscriptionInactiveModal() {
     return 'bg-orange-100';
   };
 
-  if (!isOpen) return null;
+  // Don't show modal if not open OR if on an allowed path
+  if (!isOpen || isAllowedPath) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -120,7 +146,7 @@ export default function SubscriptionInactiveModal() {
           <div className="flex flex-col gap-3">
             {isExpired ? (
               <button
-                onClick={() => window.location.href = '/subscription/current-plan'}
+                onClick={handleRenewSubscription}
                 className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

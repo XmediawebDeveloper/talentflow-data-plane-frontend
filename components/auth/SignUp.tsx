@@ -4,10 +4,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft,
-  Building2, User, CheckCircle, Loader2, Phone, ShieldCheck, CreditCard, Check
+  Building2, User, CheckCircle, Loader2, Phone, ShieldCheck, CreditCard, Check, Sparkles
 } from 'lucide-react';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
+import PlanSelectionModal from './PlanSelectionModal';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -73,6 +74,13 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
   // Get encoded plan from URL query params (e.g., /signup?plan=ENCODED_ID)
   const encodedPlanFromUrl = searchParams.get('plan');
+
+  // Check if user explicitly selected free trial
+  const isExplicitFreeTrial = encodedPlanFromUrl === 'free_trial';
+
+  // State for plan selection modal - show when no plan in URL
+  const [showPlanModal, setShowPlanModal] = useState(!encodedPlanFromUrl);
+  const [freeTrialAcknowledged, setFreeTrialAcknowledged] = useState(isExplicitFreeTrial);
 
   const [form, setForm] = useState<SignUpForm>({
     companyName: '',
@@ -146,10 +154,20 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
   }, [resendTimer]);
 
+  // Update modal state when URL changes (e.g., user comes from pricing page with plan)
+  useEffect(() => {
+    if (encodedPlanFromUrl) {
+      setShowPlanModal(false);
+      if (encodedPlanFromUrl === 'free_trial') {
+        setFreeTrialAcknowledged(true);
+      }
+    }
+  }, [encodedPlanFromUrl]);
+
   // Fetch plan details when plan ID is present in URL
   useEffect(() => {
     const fetchPlanDetails = async () => {
-      if (!encodedPlanFromUrl) return;
+      if (!encodedPlanFromUrl || encodedPlanFromUrl === 'free_trial') return;
 
       const planId = decodePlanId(encodedPlanFromUrl);
       if (!planId) return;
@@ -296,6 +314,12 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const passwordsMatch = form.password && form.confirmPassword && form.password === form.confirmPassword;
 
   const validateForm = (): string | null => {
+    // Plan selection validation - user must explicitly choose a plan
+    if (!freeTrialAcknowledged && !selectedPlanDetails) {
+      setShowPlanModal(true);
+      return 'Please select a plan to continue';
+    }
+
     // Company name validation
     if (!form.companyName.trim()) {
       return 'Company name is required';
@@ -393,11 +417,14 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         phone_number: form.phoneNumber,
       };
 
-      // Add plan details if a plan is selected from URL (paid signup)
-      if (encodedPlanFromUrl && selectedPlanDetails) {
+      // Add plan details if a paid plan is selected from URL
+      if (encodedPlanFromUrl && encodedPlanFromUrl !== 'free_trial' && selectedPlanDetails) {
         requestBody.plan_id = selectedPlanDetails.id;
         requestBody.billing_interval = billingInterval;
       }
+
+      // Note: If freeTrialAcknowledged is true and no plan_id, backend handles as trial
+      // The key difference is user has now EXPLICITLY acknowledged they want free trial
 
       const response = await fetch(`${API_URL}/signup/complete-registration`, {
         method: 'POST',
@@ -442,12 +469,17 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       }
 
       // If paid signup, show payment step to complete purchase
-      // If trial signup, go directly to success
+      // If trial signup (user explicitly acknowledged), go directly to success
       if (data.purchase_intent === 'paid' && data.tenant_id) {
         setStep('payment'); // Show payment step
         toast.success('Account created!', { description: 'Please complete your payment to activate your plan.' });
       } else {
         setStep('success');
+        toast.success('Welcome aboard!', {
+          description: freeTrialAcknowledged
+            ? `Your ${trialDays}-day free trial has started. Explore all features!`
+            : 'Your account has been created successfully.',
+        });
         // Redirect to login page after brief success message
         setTimeout(() => {
           router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
@@ -573,7 +605,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           password: 'PLACEHOLDER_PENDING',  // Actual password sent in complete-registration
           terms_accepted: true,
           privacy_accepted: true,
-          plan_id: encodedPlanFromUrl ? parseInt(decodePlanId(encodedPlanFromUrl) || '0') : null,
+          plan_id: (encodedPlanFromUrl && encodedPlanFromUrl !== 'free_trial') ? parseInt(decodePlanId(encodedPlanFromUrl) || '0') : null,
         }),
       });
 
@@ -805,6 +837,34 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         emailInput.focus();
       }
     }, 100);
+  };
+
+  // Handle plan selection from modal
+  const handlePlanSelected = (planParam: string, billingInterval?: 'MONTHLY' | 'ANNUAL') => {
+    setShowPlanModal(false);
+
+    if (planParam === 'free_trial') {
+      // User explicitly acknowledged free trial
+      setFreeTrialAcknowledged(true);
+      // Update URL to reflect the choice
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.set('plan', 'free_trial');
+      window.history.replaceState({}, '', newUrl.toString());
+      toast.success('Free Trial Selected', {
+        description: `You've chosen the free trial. Complete your signup to get started!`,
+      });
+    } else {
+      // User selected a paid plan - update URL and reload to trigger plan fetch
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.set('plan', planParam);
+      if (billingInterval) {
+        newUrl.searchParams.set('billing', billingInterval);
+        setBillingInterval(billingInterval);
+      }
+      window.history.replaceState({}, '', newUrl.toString());
+      // Force reload to fetch the new plan details
+      window.location.reload();
+    }
   };
 
   // Styles
@@ -1114,12 +1174,34 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   if (step === 'success') {
     return (
       <div style={containerStyle}>
-        <div style={{ ...formCardStyle, maxWidth: 440, margin: '0 auto', textAlign: 'center' }}>
+        <div style={{ ...formCardStyle, maxWidth: 480, margin: '0 auto', textAlign: 'center' }}>
           <div style={{ width: 80, height: 80, borderRadius: '50%', backgroundColor: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
             <CheckCircle style={{ width: 40, height: 40, color: '#16A34A' }} />
           </div>
           <h2 style={{ fontSize: 28, fontWeight: 700, color: '#111827', marginBottom: 8 }}>Welcome to TalentFlow!</h2>
-          <p style={{ color: '#6B7280', marginBottom: 24 }}>Your account has been created successfully. Please sign in to continue.</p>
+          <p style={{ color: '#6B7280', marginBottom: 16 }}>Your account has been created successfully.</p>
+
+          {/* Show plan info */}
+          {freeTrialAcknowledged && (
+            <div style={{
+              padding: 16,
+              backgroundColor: '#F0FDF4',
+              borderRadius: 12,
+              border: '1px solid #BBF7D0',
+              marginBottom: 24,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
+                <Sparkles style={{ width: 20, height: 20, color: '#059669' }} />
+                <span style={{ fontSize: 16, fontWeight: 600, color: '#166534' }}>
+                  {trialDays}-Day Free Trial Activated
+                </span>
+              </div>
+              <p style={{ fontSize: 14, color: '#15803D' }}>
+                Explore all premium features. Upgrade anytime from your dashboard.
+              </p>
+            </div>
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#6B7280' }}>
             <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
             Redirecting to login...
@@ -1133,6 +1215,13 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   // Main Form UI
   return (
     <div style={containerStyle}>
+      {/* Plan Selection Modal - shown when no plan in URL */}
+      <PlanSelectionModal
+        isOpen={showPlanModal}
+        onPlanSelected={handlePlanSelected}
+        onClose={() => router.push('/pricing')}
+      />
+
       {/* Background Blobs */}
       <div style={{ position: 'absolute', top: 80, left: 40, width: 288, height: 288, backgroundColor: '#93C5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
       <div style={{ position: 'absolute', top: 160, right: 40, width: 288, height: 288, backgroundColor: '#C4B5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
@@ -1216,7 +1305,67 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             )}
 
             <h2 style={{ fontSize: 28, fontWeight: 700, color: '#111827', marginBottom: 8 }}>Create Account</h2>
-            <p style={{ color: '#6B7280', marginBottom: 24 }}>Set up your recruitment workspace</p>
+            <p style={{ color: '#6B7280', marginBottom: 16 }}>Set up your recruitment workspace</p>
+
+            {/* Selected Plan Indicator */}
+            {(freeTrialAcknowledged || selectedPlanDetails) && (
+              <div
+                style={{
+                  marginBottom: 24,
+                  padding: 16,
+                  borderRadius: 12,
+                  backgroundColor: freeTrialAcknowledged ? '#F0FDF4' : '#EFF6FF',
+                  border: `1px solid ${freeTrialAcknowledged ? '#BBF7D0' : '#BFDBFE'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      backgroundColor: freeTrialAcknowledged ? '#D1FAE5' : '#DBEAFE',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {freeTrialAcknowledged ? (
+                      <Sparkles style={{ width: 20, height: 20, color: '#059669' }} />
+                    ) : (
+                      <CreditCard style={{ width: 20, height: 20, color: '#2563EB' }} />
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: freeTrialAcknowledged ? '#166534' : '#1E40AF' }}>
+                      {freeTrialAcknowledged ? `Free Trial (${trialDays} days)` : selectedPlanDetails?.plan_name}
+                    </div>
+                    <div style={{ fontSize: 12, color: freeTrialAcknowledged ? '#15803D' : '#3B82F6' }}>
+                      {freeTrialAcknowledged ? 'No credit card required' : `${formatCurrency(selectedPlanDetails?.base_price || 0, selectedPlanDetails?.currency || 'INR')} / ${billingInterval === 'ANNUAL' ? 'year' : 'month'}`}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPlanModal(true)}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: freeTrialAcknowledged ? '#166534' : '#1E40AF',
+                    backgroundColor: 'transparent',
+                    border: `1px solid ${freeTrialAcknowledged ? '#86EFAC' : '#93C5FD'}`,
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Change Plan
+                </button>
+              </div>
+            )}
 
             {error && (
               <div style={{ marginBottom: 24, padding: 16, backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
