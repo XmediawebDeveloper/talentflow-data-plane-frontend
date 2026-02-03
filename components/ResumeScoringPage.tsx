@@ -248,7 +248,7 @@ export default function ResumeScoringPage({
         matchStatus: item.match_status || 'No Match',
         scorePercentage: Math.round(item.overall_score || 0),
         scoredDate: item.created_at || new Date().toISOString(),
-        scoredBy: item.scored_by || 'AI Engine',
+        scoredBy: item.scored_by_name || item.scored_by || 'AI Engine',
         // Source, Status, Error Reason fields
         source: item.source || 'database',
         status: item.status || 'completed',
@@ -261,6 +261,9 @@ export default function ResumeScoringPage({
         gaps: item.gaps,
         jobTitle: item.jd_title,
         jdId: item.jd_id,
+        // Version tracking
+        version: item.resume_version || 1,
+        resumeVersion: item.resume_version || 1,
       }));
 
       setGlobalScoredResumes(converted);
@@ -716,22 +719,19 @@ export default function ResumeScoringPage({
         phone: resume.phone || 'N/A',
         matchStatus: matchStatus,
         scorePercentage: Math.round(scoreValue),
-        scoredDate: new Date(scoredData.scoredAt).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric'
-        }),
-        scoredBy: 'AI Resume Scorer',
+        // Keep ISO string for timestamp - let display component format it
+        scoredDate: resume.scoredDate || resume.created_at || scoredData.scoredAt,
+        // Use scored_by_name from API for recruiter attribution
+        scoredBy: resume.scored_by_name || resume.scoredBy || resume.scored_by || 'AI Resume Scorer',
         experience: resume.experience || 'N/A',
         education: resume.education || 'N/A',
         certifications: resume.certifications || [],
-        resumeVersion: getResumeVersion(),
         // Job Title and JD ID from parent scoredData
         jobTitle: scoredData.jobTitle,
         jdId: scoredData.jobId,
-        // Version info
-        version: resume.version || resume.resumeVersion || 1,
-        resumeVersion: resume.version || resume.resumeVersion || 1,
+        // Version info - use resume_version from API
+        version: resume.resume_version || resume.version || resume.resumeVersion || 1,
+        resumeVersion: resume.resume_version || resume.version || resume.resumeVersion || 1,
         // Source, Status, Error Reason fields
         source: resume.source || scoredData.source || 'database',
         status: resume.status || 'completed',
@@ -757,9 +757,6 @@ export default function ResumeScoringPage({
         // Explicit matched and missing skills from scoring
         matchedSkills: resume.matchedSkills || resume.matched_skills || resume.skills || [],
         missingSkills: resume.missingSkills || resume.missing_skills || [],
-        // Pass scoredBy from API data
-        scoredBy: resume.scoredBy || 'AI Resume Scorer',
-        scoredDate: resume.scoredDate || resume.created_at,
       };
     });
   };

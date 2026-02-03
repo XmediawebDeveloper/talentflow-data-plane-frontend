@@ -118,31 +118,38 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
 
         {/* Stats Bar */}
         <div className="bg-gradient-to-r from-gray-50 to-gray-50 border-t border-gray-200 px-6 py-4">
-          <div className="flex items-center gap-8">
-            <div>
-              <div className="text-2xl text-gray-900">{results.length}</div>
-              <div className="text-sm text-gray-600">Total Candidates</div>
-            </div>
-            <div className="w-px h-10 bg-gray-300" />
-            <div>
-              <div className="text-2xl text-green-600">
-                {results.filter(r => r.matchScore >= 85).length}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-8">
+              <div>
+                <div className="text-2xl text-gray-900">{results.length}</div>
+                <div className="text-sm text-gray-600">Total Candidates</div>
               </div>
-              <div className="text-sm text-gray-600">Excellent Matches (85%+)</div>
-            </div>
-            <div className="w-px h-10 bg-gray-300" />
-            <div>
-              <div className="text-2xl text-gray-800">
-                {results.filter(r => r.matchScore >= 70 && r.matchScore < 85).length}
+              <div className="w-px h-10 bg-gray-300" />
+              <div>
+                <div className="text-2xl text-green-600">
+                  {results.filter(r => r.matchScore >= 85).length}
+                </div>
+                <div className="text-sm text-gray-600">Excellent Matches (85%+)</div>
               </div>
-              <div className="text-sm text-gray-600">Good Matches (70-84%)</div>
-            </div>
-            <div className="w-px h-10 bg-gray-300" />
-            <div>
-              <div className="text-2xl text-yellow-600">
-                {results.filter(r => r.matchScore >= 50 && r.matchScore < 70).length}
+              <div className="w-px h-10 bg-gray-300" />
+              <div>
+                <div className="text-2xl text-gray-800">
+                  {results.filter(r => r.matchScore >= 70 && r.matchScore < 85).length}
+                </div>
+                <div className="text-sm text-gray-600">Good Matches (70-84%)</div>
               </div>
-              <div className="text-sm text-gray-600">Moderate Matches (50-69%)</div>
+              <div className="w-px h-10 bg-gray-300" />
+              <div>
+                <div className="text-2xl text-yellow-600">
+                  {results.filter(r => r.matchScore >= 50 && r.matchScore < 70).length}
+                </div>
+                <div className="text-sm text-gray-600">Moderate Matches (50-69%)</div>
+              </div>
+            </div>
+            {/* Units Consumed Note */}
+            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg border border-blue-200">
+              <Sparkles className="w-4 h-4" />
+              <span className="text-sm font-medium">AI Talent Match • 0 units consumed</span>
             </div>
           </div>
         </div>

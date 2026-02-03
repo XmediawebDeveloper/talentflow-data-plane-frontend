@@ -45,6 +45,7 @@ export interface ScoringResponse {
   languages?: string[];
   scored_by: string;
   scored_by_name?: string;
+  scored_by_id?: string;
   overall_score: number;
   essential_score?: number;
   non_essential_score?: number;
@@ -56,6 +57,9 @@ export interface ScoringResponse {
   criteria_scores?: Record<string, { score: number; eligible: boolean; reasoning: string }>;
   unit_consumed: boolean;
   created_at: string;
+  updated_at?: string;
+  // Resume version tracking
+  resume_version?: number;
   // Scorecard PDF - auto-generated after scoring
   scorecard_download_url?: string;
   scorecard_ready?: boolean;

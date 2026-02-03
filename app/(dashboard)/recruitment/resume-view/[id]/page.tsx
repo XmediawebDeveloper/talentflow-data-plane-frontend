@@ -223,6 +223,57 @@ export default function ResumeViewPage() {
   const [shareMessage, setShareMessage] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
+  // Version changes visibility state
+  const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
+
+  // Helper function to get version content summary
+  const getVersionContent = (version: any) => {
+    const content: { category: string; items: string[] }[] = [];
+
+    // Skills
+    if (version.skills && version.skills.length > 0) {
+      content.push({ category: 'Skills', items: version.skills.slice(0, 10) });
+    }
+
+    // Technical Skills
+    if (version.technicalSkills && version.technicalSkills.length > 0) {
+      content.push({ category: 'Technical Skills', items: version.technicalSkills.slice(0, 10) });
+    }
+
+    // Job Title
+    if (version.currentTitle) {
+      content.push({ category: 'Job Title', items: [version.currentTitle] });
+    }
+
+    // Company
+    if (version.currentCompany) {
+      content.push({ category: 'Company', items: [version.currentCompany] });
+    }
+
+    // Location
+    if (version.location) {
+      content.push({ category: 'Location', items: [version.location] });
+    }
+
+    // Experience count
+    if (version.experience && version.experience.length > 0) {
+      content.push({ category: 'Experience', items: [`${version.experience.length} position(s)`] });
+    }
+
+    // Education count
+    if (version.education && version.education.length > 0) {
+      content.push({ category: 'Education', items: [`${version.education.length} entry(ies)`] });
+    }
+
+    // Certifications
+    if (version.certifications && version.certifications.length > 0) {
+      const certNames = version.certifications.map((c: any) => c.name || c).slice(0, 5);
+      content.push({ category: 'Certifications', items: certNames });
+    }
+
+    return content.length > 0 ? content : null;
+  };
+
   useEffect(() => {
     if (resumeId) {
       fetchResume();
@@ -262,7 +313,7 @@ export default function ResumeViewPage() {
     source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
     folderId: r.folder_id || '',
     uploadDate: r.created_at,
-    attachments: r.file_name ? 1 : 0,
+    attachments: r.version_count || versionsData.length || 1,
     uploadedBy: r.uploaded_by_name || 'Unknown',
     fileName: r.file_name,
     fileType: r.file_type,
@@ -309,8 +360,18 @@ export default function ResumeViewPage() {
       uploadDate: v.created_at || v.upload_date,
       size: v.file_size_kb ? `${v.file_size_kb} KB` : 'Unknown',
       uploadedBy: v.uploaded_by_name || 'Unknown',
-      version: v.version || 1,  // Version number from API
+      version: v.version || 1,
       fileName: v.file_name,
+      // Parsed content for comparison
+      skills: v.skills || [],
+      technicalSkills: v.technical_skills || [],
+      experience: v.experience || [],
+      education: v.education || [],
+      certifications: v.certifications || [],
+      currentTitle: v.current_title,
+      currentCompany: v.current_company,
+      location: v.location,
+      professionalSummary: v.professional_summary,
     })),
     versionCount: r.version_count || versionsData.length || 1,
     extractedText: r.extracted_text,
@@ -1079,81 +1140,143 @@ Best regards`);
                 </span>
               </div>
               <div className="space-y-3">
-                {resume.versions.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()).map((version, index) => (
-                  <div key={version.id} className={`p-4 rounded-lg border transition-all ${
-                    index === 0
-                      ? 'bg-gray-100 border-gray-400'
-                      : 'bg-gray-100 border-gray-300'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 flex-1">
-                        <div className={`p-2 rounded-lg ${
-                          index === 0 ? 'bg-gray-300' : 'bg-gray-200'
-                        }`}>
-                          <FileText className={`w-4 h-4 ${
-                            index === 0 ? 'text-gray-700' : 'text-gray-600'
-                          }`} />
+                {(() => {
+                  const sortedVersions = [...resume.versions].sort((a, b) => (b.version || 0) - (a.version || 0));
+                  return sortedVersions.map((version, index) => {
+                    const isLatest = index === 0;
+                    const versionNumber = version.version || (resume.versions.length - index);
+                    const content = getVersionContent(version);
+                    const isExpanded = expandedVersionId === version.id;
+
+                    return (
+                      <div key={version.id} className={`rounded-lg border transition-all ${
+                        isLatest
+                          ? 'bg-blue-50 border-blue-300'
+                          : 'bg-gray-100 border-gray-300'
+                      }`}>
+                        <div className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 flex-1">
+                              <div className={`p-2 rounded-lg ${
+                                isLatest ? 'bg-blue-100' : 'bg-gray-200'
+                              }`}>
+                                <FileText className={`w-4 h-4 ${
+                                  isLatest ? 'text-blue-600' : 'text-gray-600'
+                                }`} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className={`text-sm font-semibold ${isLatest ? 'text-blue-800' : 'text-gray-800'}`}>
+                                    Version {versionNumber}
+                                  </span>
+                                  {isLatest && (
+                                    <span className="px-2 py-0.5 bg-blue-600 text-white rounded text-xs flex-shrink-0">
+                                      Latest
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500 mb-1 truncate">{version.name}</div>
+                                <div className="flex items-center gap-3 text-xs text-gray-600">
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {new Date(version.uploadDate + (version.uploadDate.includes('Z') ? '' : 'Z')).toLocaleString('en-IN', {
+                                      timeZone: 'Asia/Kolkata',
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      hour12: true
+                                    })}
+                                  </span>
+                                  <span>•</span>
+                                  <span>{version.size}</span>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-1">
+                                    <User className="w-3 h-3" />
+                                    {version.uploadedBy}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setExpandedVersionId(isExpanded ? null : version.id)}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${
+                                  isExpanded
+                                    ? 'bg-gray-800 text-white'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                }`}
+                              >
+                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                {isExpanded ? 'Hide' : 'View'} Content
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const blob = await resumeService.downloadVersion(resumeId, version.id);
+                                    const url = window.URL.createObjectURL(blob);
+                                    const link = document.createElement('a');
+                                    link.href = url;
+                                    link.download = version.fileName || version.name || `resume-v${versionNumber}.pdf`;
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                    window.URL.revokeObjectURL(url);
+                                  } catch (err) {
+                                    toast.error('Failed to download version');
+                                  }
+                                }}
+                                className={`p-2 rounded-md transition-colors ${
+                                  isLatest
+                                    ? 'text-blue-600 hover:bg-blue-100'
+                                    : 'text-gray-600 hover:bg-gray-300'
+                                }`}
+                                title="Download this version"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-medium text-gray-800 truncate">{version.name}</span>
-                            {index === 0 && (
-                              <span className="px-2 py-0.5 bg-gray-500 text-white rounded text-xs flex-shrink-0">
-                                Latest
-                              </span>
+
+                        {/* Version Content - Expanded */}
+                        {isExpanded && (
+                          <div className={`px-4 pb-4 pt-2 border-t ${isLatest ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-gray-50/50'}`}>
+                            <div className="text-xs font-medium text-gray-700 mb-3 flex items-center gap-1">
+                              <FileText className="w-3 h-3" />
+                              Content in Version {versionNumber}
+                            </div>
+                            {content && content.length > 0 ? (
+                              <div className="space-y-2">
+                                {content.map((item, idx) => (
+                                  <div key={idx} className="flex items-start gap-2">
+                                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-200 text-gray-700 min-w-[80px] text-center">
+                                      {item.category}
+                                    </span>
+                                    <div className="flex-1 flex flex-wrap gap-1">
+                                      {item.items.map((val, i) => (
+                                        <span key={i} className={`text-xs px-2 py-0.5 rounded ${
+                                          item.category === 'Skills' || item.category === 'Technical Skills'
+                                            ? 'bg-blue-100 text-blue-700'
+                                            : 'bg-gray-100 text-gray-700'
+                                        }`}>
+                                          {val}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-500 italic">No parsed content available. Restart backend to enable.</p>
                             )}
                           </div>
-                          <div className="flex items-center gap-3 text-xs text-gray-600">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {new Date(version.uploadDate + (version.uploadDate.includes('Z') ? '' : 'Z')).toLocaleString('en-IN', {
-                                timeZone: 'Asia/Kolkata',
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                hour12: true
-                              })}
-                            </span>
-                            <span>•</span>
-                            <span>{version.size}</span>
-                            <span>•</span>
-                            <span className="flex items-center gap-1">
-                              <User className="w-3 h-3" />
-                              {version.uploadedBy}
-                            </span>
-                          </div>
-                        </div>
+                        )}
                       </div>
-                      <button
-                        onClick={async () => {
-                          try {
-                            const blob = await resumeService.downloadVersion(resumeId, version.id);
-                            const url = window.URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.download = version.fileName || version.name || `resume-v${index + 1}.pdf`;
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            window.URL.revokeObjectURL(url);
-                          } catch (err) {
-                            toast.error('Failed to download version');
-                          }
-                        }}
-                        className={`p-2 rounded-md transition-colors ${
-                          index === 0
-                            ? 'text-gray-700 hover:bg-gray-300'
-                            : 'text-gray-600 hover:bg-gray-300'
-                        }`}
-                        title="Download this version"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}
@@ -1277,29 +1400,6 @@ Best regards`);
             </div>
           </div>
 
-          {/* Metadata Summary */}
-          <div className="bg-gray-200 border border-gray-300 rounded-lg p-4">
-            <div className="grid grid-cols-4 gap-4 text-sm">
-              <div className="text-center">
-                <div className="text-xs text-gray-500 mb-1">Document ID</div>
-                <div className="font-medium text-gray-800">#{resume.id.substring(0, 8).toUpperCase()}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-gray-500 mb-1">Source</div>
-                <div className="font-medium text-gray-800">{resume.source}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-gray-500 mb-1">Folder</div>
-                <div className="font-medium text-gray-800">{resume.folderId || 'Uncategorized'}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-gray-500 mb-1">Status</div>
-                <div className="inline-flex items-center px-2 py-1 bg-gray-300 text-gray-700 rounded text-xs">
-                  Active
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
