@@ -332,7 +332,7 @@ const formatQuotaValue = (value: number | string | undefined | null): string => 
 function CurrentPlanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
@@ -405,18 +405,27 @@ function CurrentPlanContent() {
   // Use ref to track if data has been fetched to prevent duplicate calls
   const hasFetchedRef = useRef(false);
 
-  // Get tenant ID from token on mount
+  // Get tenant ID from user context or token on mount
   useEffect(() => {
+    // First try to get from user context (most reliable for expired subscriptions)
+    if (user?.tenantId) {
+      setTenantId(user.tenantId);
+      console.log('[CurrentPlan] tenant_id set from user context:', user.tenantId);
+      return;
+    }
+
+    // Fallback: try to parse from JWT token
     const token = localStorage.getItem('accessToken');
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setTenantId(payload.tenant_id || null);
+        console.log('[CurrentPlan] tenant_id set from token:', payload.tenant_id);
       } catch (e) {
         console.error('Failed to parse token:', e);
       }
     }
-  }, []);
+  }, [user]);
 
   // Debug: Log company settings whenever it changes
   useEffect(() => {
@@ -486,15 +495,15 @@ function CurrentPlanContent() {
         console.log('[CurrentPlan] Setting subscription_status as:', status, '(is_trial:', quotaData.is_trial, ')');
       }
 
-      // If quota-status API failed, set error state instead of defaulting to trial
+      // If quota-status API failed (likely due to expired subscription), set appropriate state
       if (!quotaData) {
-        console.log('[CurrentPlan] Quota-status API failed, setting error state');
-        setQuotaSubscriptionStatus('error');
+        console.log('[CurrentPlan] Quota-status API failed - likely expired subscription, allowing plan selection');
+        setQuotaSubscriptionStatus('expired');
         setCompanySettings(prev => ({
           ...(prev || {}),
-          current_plan_name: 'Unable to load plan',
-          subscription_status: 'error',
-          status: 'error',
+          current_plan_name: 'Subscription Expired',
+          subscription_status: 'expired',
+          status: 'expired',
           max_seats: 0,
           max_jobs: 0,
           max_resume_uploads: 0,
@@ -503,7 +512,8 @@ function CurrentPlanContent() {
           max_ai_interviews: 0,
           storage_limit_gb: 0,
         } as CompanySettings));
-        setError('Unable to load subscription data. Please try again later.');
+        // Don't set error - allow user to select a plan to renew
+        // setError('Unable to load subscription data. Please try again later.');
       }
 
       if (quotaData?.quotas || quotaData) {
@@ -694,10 +704,10 @@ function CurrentPlanContent() {
         })
         .filter((plan): plan is DisplayPlan => plan !== null)
         .sort((a, b) => {
-          // Sort by price descending (highest first)
+          // Sort by price ascending (lowest first)
           const orderA = a.monthlyPrice || 0;
           const orderB = b.monthlyPrice || 0;
-          return orderB - orderA;
+          return orderA - orderB;
         });
 
       setPlans(transformedPlans);
@@ -784,7 +794,12 @@ function CurrentPlanContent() {
         }, 2000);
         return; // Exit early
       } else {
-        setError(data.detail || data.data?.message || 'Failed to apply upgrade');
+        // Handle both string and object error formats
+        const errorDetail = data.detail;
+        const errorMsg = typeof errorDetail === 'string'
+          ? errorDetail
+          : errorDetail?.message || data.data?.message || 'Failed to apply upgrade';
+        setError(errorMsg);
       }
     } catch (err) {
       console.error('[CurrentPlan] Error applying upgrade:', err);
@@ -821,7 +836,12 @@ function CurrentPlanContent() {
         setCancelReason('');
         await fetchQueuedUpgrades();
       } else {
-        setError(data.detail || 'Failed to cancel upgrade');
+        // Handle both string and object error formats
+        const errorDetail = data.detail;
+        const errorMsg = typeof errorDetail === 'string'
+          ? errorDetail
+          : errorDetail?.message || 'Failed to cancel upgrade';
+        setError(errorMsg);
       }
     } catch (err) {
       console.error('[CurrentPlan] Error cancelling upgrade:', err);
@@ -836,13 +856,13 @@ function CurrentPlanContent() {
     if (quotaLoading) return;
 
     // Prevent duplicate calls on re-renders or React Strict Mode
-    if (hasFetchedRef.current && sharedQuotaData) return;
+    if (hasFetchedRef.current) return;
 
-    if (sharedQuotaData) {
-      hasFetchedRef.current = true;
-      fetchData();
-      fetchQueuedUpgrades();
-    }
+    // Fetch data even if sharedQuotaData is null (e.g., when subscription is expired)
+    // This allows expired users to see available plans and renew their subscription
+    hasFetchedRef.current = true;
+    fetchData();
+    fetchQueuedUpgrades();
   }, [sharedQuotaData, quotaLoading]);
 
   // Auto-select plan from URL parameter (from pricing page flow)
@@ -1083,7 +1103,11 @@ function CurrentPlanContent() {
         // Notify Header component to refresh quota/plan display
         window.dispatchEvent(new CustomEvent('planChanged'));
       } else {
-        const errorMessage = data.detail || data.message || 'Failed to upgrade plan';
+        // Handle both string and object error formats
+        const errorDetail = data.detail;
+        const errorMessage = typeof errorDetail === 'string'
+          ? errorDetail
+          : errorDetail?.message || data.message || 'Failed to upgrade plan';
         setError(errorMessage);
         toast.error('Plan Selection Failed', {
           description: errorMessage,
@@ -1145,6 +1169,8 @@ function CurrentPlanContent() {
                            companySettings?.payment_status === 'pending';
   const isLocked = companySettings?.status?.toLowerCase() === 'locked';
   const isActive = quotaSubscriptionStatus.toLowerCase() === 'active';
+  const isExpiredSubscription = quotaSubscriptionStatus.toLowerCase() === 'expired' ||
+                                 companySettings?.status?.toLowerCase() === 'expired';
   // Use quotaSubscriptionStatus as source of truth for status badge
   const statusBadge = getStatusBadge(quotaSubscriptionStatus, companySettings?.payment_status, freeTrialSettings?.trial_days);
   const StatusIcon = statusBadge.icon;
@@ -1685,10 +1711,10 @@ function CurrentPlanContent() {
               onMouseLeave={() => setHoveredPlan(null)}
             >
               {[...plans].sort((a, b) => {
-                // Sort by price descending (highest first)
+                // Sort by price ascending (lowest first)
                 const priceA = a.monthlyPrice || a.annualPrice || 0;
                 const priceB = b.monthlyPrice || b.annualPrice || 0;
-                return priceB - priceA;
+                return priceA - priceB;
               }).map((plan) => {
                 const Icon = plan.icon;
                 const isSelectedPending = isPendingPayment && companySettings?.selected_plan_id === plan.numericId;
@@ -1914,7 +1940,7 @@ function CurrentPlanContent() {
                         'Upgrade Queued'
                       ) : (!plan.monthlyPrice && !plan.annualPrice) ? (
                         'Contact Sales'
-                      ) : isOnTrial || isLocked ? (
+                      ) : isOnTrial || isLocked || isExpiredSubscription ? (
                         'Choose Plan'
                       ) : (
                         'Upgrade'
