@@ -764,7 +764,7 @@ export default function PricingPage() {
                         {/* CTA Button */}
                         <Link
                           href={isTrialPlan
-                            ? "/signup"
+                            ? "/signup?plan=free_trial"
                             : ((plan.monthlyPrice || plan.yearlyPrice)
                                 ? (() => {
                                     const hasAnnual = !!plan.annualPlanId;
