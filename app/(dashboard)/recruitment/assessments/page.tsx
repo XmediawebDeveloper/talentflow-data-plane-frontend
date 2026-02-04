@@ -37,7 +37,7 @@ export default function AssessmentsRoute() {
     const fetchJobs = async () => {
       try {
         // Fetch only published JDs from the API
-        const response = await jdService.list({ status: 'published', page_size: 100 });
+        const response = await jdService.list({ status: 'published', page_size: 100, source: 'my-jds' });
         const realJobs: Job[] = (response.items || []).map((jd: any) => ({
           id: jd.id,
           job_id: jd.job_id,

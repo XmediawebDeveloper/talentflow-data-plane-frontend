@@ -99,9 +99,10 @@ export default function JobOpeningsPage() {
       setLoading(true);
       try {
         // Build params - only include status if not 'all'
-        const params: { status?: string; search?: string; page: number; page_size: number } = {
+        const params: { status?: string; search?: string; source?: string; page: number; page_size: number } = {
           page: currentPage,
           page_size: 12,
+          source: 'my-jds',  // Only show JDs created by the logged-in user
         };
 
         if (activeFilter !== 'all') {
@@ -117,11 +118,11 @@ export default function JobOpeningsPage() {
         setTotalPages(response.total_pages);
         setTotal(response.total);
 
-        // Calculate stats from multiple API calls
+        // Calculate stats from multiple API calls (also filtered by user)
         const [allRes, publishedRes, draftRes] = await Promise.all([
-          jdService.list({ page_size: 1 }),
-          jdService.list({ status: 'published', page_size: 1 }),
-          jdService.list({ status: 'draft', page_size: 1 }),
+          jdService.list({ page_size: 1, source: 'my-jds' }),
+          jdService.list({ status: 'published', page_size: 1, source: 'my-jds' }),
+          jdService.list({ status: 'draft', page_size: 1, source: 'my-jds' }),
         ]);
 
         const totalApplicants = response.items.reduce((sum, j) => sum + (j.applicants_count || 0), 0);

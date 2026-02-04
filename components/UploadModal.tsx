@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
 import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
+import DuplicateResumeDetectedModal from './DuplicateResumeDetectedModal';
 
 // Default constants for fallback
 const DEFAULT_MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
@@ -43,15 +44,33 @@ interface UploadModalProps {
       candidateName: string;
       uploadedAt?: string;
     };
+    duplicateData?: {
+      file: File;
+      existingResume: {
+        id: string;
+        candidate_name: string;
+        email: string;
+        folder_name?: string;
+        folder_path?: string;
+        upload_date: string;
+        file_size: number;
+        file_name: string;
+        version: number;
+      };
+      contentDifferences: string[];
+      isDuplicate: boolean;
+      targetFolderId?: string;
+    };
   }>;
   onUploadComplete?: (statuses: any[]) => void;
   onCreateFolder?: (name: string, parentId?: string) => void;
   onViewResume?: (resumeId: string) => void;
   onScoreResume?: (resumeId: string, candidateName: string) => void; // New callback for scoring
+  onDuplicateDetected?: (duplicateData: any) => void; // Callback for duplicate resolution
   targetFolder?: string;
 }
 
-export default function UploadModal({ folders, tenant, uploadSection, onClose, onUpload, onUploadComplete, onCreateFolder, onViewResume, onScoreResume, targetFolder }: UploadModalProps) {
+export default function UploadModal({ folders, tenant, uploadSection, onClose, onUpload, onUploadComplete, onCreateFolder, onViewResume, onScoreResume, onDuplicateDetected, targetFolder }: UploadModalProps) {
   const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadSuccess, setUploadSuccess] = useState<{ resumeId: string; candidateName: string } | null>(null);
@@ -77,6 +96,21 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
   const [showNoFilesError, setShowNoFilesError] = useState(false);
   const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Duplicate resume detection state
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState<{
+    fileName: string;
+    existingResume: {
+      id: string;
+      candidate_name: string;
+      email?: string;
+      current_title?: string;
+      folder_name?: string;
+      uploaded_at?: string;
+      version?: number;
+    };
+  } | null>(null);
 
   // Handler to switch tabs with validation
   const handleTabSwitch = (newTab: 'single' | 'bulk') => {
@@ -403,12 +437,52 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
       console.log('[UPLOAD-MODAL-DEBUG] result.existingResume:', result.existingResume);
 
       if (!result.success && result.error) {
-        // Show duplicate error in the modal with existing resume details
+        // Check if this is a duplicate error with existing resume info
+        if (result.existingResume) {
+          console.log('[UPLOAD-MODAL-DEBUG] Duplicate detected:', result.existingResume);
+
+          // If onScoreResume is provided (scoring context), show DuplicateResumeDetectedModal
+          // with options: View existing, Proceed with Scoring, Cancel
+          if (onScoreResume) {
+            console.log('[UPLOAD-MODAL-DEBUG] Scoring mode - showing DuplicateResumeDetectedModal');
+            setDuplicateInfo({
+              fileName: selectedFiles[0]?.name || '',
+              existingResume: {
+                id: result.existingResume.id,
+                candidate_name: result.existingResume.candidateName,
+                email: result.existingResume.email,
+                current_title: result.existingResume.currentTitle,
+                folder_name: result.existingResume.folderName,
+                uploaded_at: result.existingResume.uploadedAt,
+                version: result.existingResume.version,
+              }
+            });
+            setShowDuplicateModal(true);
+            setIsUploading(false);
+            return;
+          }
+
+          // Not in scoring mode - check if parent wants to handle duplicates
+          if (onDuplicateDetected && result.duplicateData) {
+            console.log('[UPLOAD-MODAL-DEBUG] Calling onDuplicateDetected with data');
+            onDuplicateDetected(result.duplicateData);
+            onClose(); // Close upload modal, parent will show duplicate modal
+            return;
+          }
+
+          console.log('[UPLOAD-MODAL-DEBUG] Not scoring mode - showing error with details');
+        }
+
+        // Show errors in the validation errors section
         const errorObj = {
           fileName: selectedFiles[0]?.name || '',
           error: result.error,
           type: 'duplicate' as const,
-          existingResume: result.existingResume
+          existingResume: result.existingResume ? {
+            id: result.existingResume.id,
+            candidateName: result.existingResume.candidateName,
+            uploadedAt: result.existingResume.uploadedAt,
+          } : undefined
         };
         console.log('[UPLOAD-MODAL-DEBUG] Setting validationErrors:', errorObj);
         setValidationErrors([errorObj]);
@@ -920,6 +994,35 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
         </div>
         )}
       </div>
+
+      {/* Duplicate Resume Detection Modal */}
+      {duplicateInfo && (
+        <DuplicateResumeDetectedModal
+          isOpen={showDuplicateModal}
+          onClose={() => {
+            setShowDuplicateModal(false);
+            setDuplicateInfo(null);
+          }}
+          fileName={duplicateInfo.fileName}
+          existingResume={duplicateInfo.existingResume}
+          onViewExisting={(resumeId) => {
+            if (onViewResume) {
+              onViewResume(resumeId);
+            }
+            setShowDuplicateModal(false);
+            setDuplicateInfo(null);
+            onClose();
+          }}
+          onProceedWithScoring={(resumeId) => {
+            if (onScoreResume && duplicateInfo.existingResume) {
+              onScoreResume(resumeId, duplicateInfo.existingResume.candidate_name);
+            }
+            setShowDuplicateModal(false);
+            setDuplicateInfo(null);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }

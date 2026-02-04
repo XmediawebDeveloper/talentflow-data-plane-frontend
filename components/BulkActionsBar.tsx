@@ -1,6 +1,6 @@
 'use client'
 
-import { X, FolderInput, Briefcase, Download, Trash2, CheckCircle2, Target, ClipboardCheck, Archive } from 'lucide-react';
+import { X, FolderInput, Briefcase, Download, Trash2, CheckCircle2, Target, ClipboardCheck, Archive, Sparkles } from 'lucide-react';
 import { Folder } from '@/lib/types/types';
 import { useState } from 'react';
 import { toast } from './ui/enhanced-toast';
@@ -16,6 +16,7 @@ interface BulkActionsBarProps {
   onResumeScoring?: () => void;
   onAssessment?: () => void;
   onArchive?: () => void;
+  onAITalentMatch?: () => void;
 }
 
 export default function BulkActionsBar({
@@ -29,6 +30,7 @@ export default function BulkActionsBar({
   onResumeScoring,
   onAssessment,
   onArchive,
+  onAITalentMatch,
 }: BulkActionsBarProps) {
   const [showFolderMenu, setShowFolderMenu] = useState(false);
 
@@ -126,6 +128,16 @@ export default function BulkActionsBar({
             >
               <ClipboardCheck className="w-4 h-4" />
               Assessment
+            </button>
+          )}
+
+          {onAITalentMatch && (
+            <button
+              onClick={onAITalentMatch}
+              className="flex items-center gap-2 px-4 py-2 text-white bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-all text-sm shadow-sm border border-white/20"
+            >
+              <Sparkles className="w-4 h-4" />
+              AI Talent Match
             </button>
           )}
 

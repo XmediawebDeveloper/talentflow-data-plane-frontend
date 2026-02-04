@@ -135,6 +135,7 @@ export default function JDListPage() {
       const response = await jdService.list({
         status: statusFilter !== 'all' ? statusFilter : undefined,
         search: searchQuery || undefined,
+        source: 'my-jds',  // Only show JDs created by the logged-in user
         sort_by: sortBy,
         page: currentPage,
         page_size: 20,

@@ -14,6 +14,7 @@ import UploadModal from '@/components/UploadModal';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
+import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
 import { Resume, Folder, Job } from '@/lib/types/types';
 import { resumeService, folderService, ResumeSearchParams } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
@@ -65,6 +66,9 @@ export default function ResumeDatabasePage() {
   const [showApplyToJobModal, setShowApplyToJobModal] = useState(false);
   const [resumesForApply, setResumesForApply] = useState<Resume[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
+
+  // AI Talent Match modal state
+  const [showAITalentMatchModal, setShowAITalentMatchModal] = useState(false);
 
   // Build search params from filters
   const buildSearchParams = useCallback((): ResumeSearchParams => {
@@ -401,7 +405,7 @@ export default function ResumeDatabasePage() {
   // Fetch jobs for Apply to Job modal
   const fetchJobs = async () => {
     try {
-      const response = await jdService.list({ page_size: 100 });
+      const response = await jdService.list({ page_size: 100, source: 'my-jds' });
       const convertedJobs: Job[] = response.items.map((jd: any) => ({
         id: jd.id,
         job_id: jd.job_id,
@@ -469,6 +473,18 @@ export default function ResumeDatabasePage() {
     setResumesForApply(selectedResumesList);
     fetchJobs();
     setShowApplyToJobModal(true);
+  };
+
+  // Handle AI Talent Match for bulk selected resumes
+  const handleBulkAITalentMatch = () => {
+    const selectedResumesList = resumes.filter(r => selectedResumes.includes(r.id));
+    if (selectedResumesList.length === 0) {
+      toast.error('Please select at least one resume');
+      return;
+    }
+    setResumesForApply(selectedResumesList);
+    fetchJobs();
+    setShowAITalentMatchModal(true);
   };
 
   // Handle actual apply action from modal - using async Celery scoring
@@ -683,6 +699,7 @@ export default function ResumeDatabasePage() {
             onDelete={() => handleDeleteResumes(selectedResumes)}
             onResumeScoring={() => {}}
             onAssessment={() => {}}
+            onAITalentMatch={handleBulkAITalentMatch}
           />
         </div>
       )}
@@ -830,6 +847,35 @@ export default function ResumeDatabasePage() {
             setResumesForApply([]);
           }}
           onApply={handleApply}
+        />
+      )}
+
+      {/* AI Talent Match Modal */}
+      {showAITalentMatchModal && (
+        <AITalentMatchSelectJobModal
+          resumes={resumesForApply}
+          jobs={jobs}
+          onClose={() => {
+            setShowAITalentMatchModal(false);
+            setResumesForApply([]);
+          }}
+          onMatch={(resumeIds, jobId) => {
+            // Store selected resumes in sessionStorage for the AI Talent Match page
+            const resumeData = resumesForApply.map(r => ({
+              id: r.id,
+              candidateName: r.name,
+              email: r.email,
+            }));
+            sessionStorage.setItem('aiTalentMatchResumes', JSON.stringify(resumeData));
+
+            // Close modal and clear selection
+            setShowAITalentMatchModal(false);
+            setResumesForApply([]);
+            setSelectedResumes([]);
+
+            // Navigate to AI Talent Match page with the selected JD
+            router.push(`/recruitment/ai-talent-match?jdId=${jobId}&view=new`);
+          }}
         />
       )}
     </main>

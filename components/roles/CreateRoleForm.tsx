@@ -6,8 +6,6 @@ import {
   ArrowLeft,
   Shield,
   Loader2,
-  ChevronDown,
-  ChevronRight,
   Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,9 +13,223 @@ import rbacService from '@/lib/services/rbacService';
 import {
   Permission,
   RoleListItem,
-  getModuleDisplayName,
-  getActionDisplayName,
 } from '@/lib/types/rbac';
+
+// ============================================================================
+// CUSTOM PERMISSION CATEGORIES CONFIGURATION
+// ============================================================================
+// This defines the simplified permission structure matching user requirements
+
+interface CustomPermissionAction {
+  code: string;
+  label: string;
+  description?: string;
+}
+
+interface CustomPermissionSubCategory {
+  name: string;
+  viewCode?: string; // Auto-enabled when any action is selected
+  actions: CustomPermissionAction[];
+}
+
+interface CustomPermissionCategory {
+  id: string;
+  name: string;
+  description?: string;
+  isMenuToggle?: boolean;
+  viewCode?: string; // Auto-enabled when any action is selected (for categories without subcategories)
+  subCategories?: CustomPermissionSubCategory[];
+  actions?: CustomPermissionAction[];
+  dependencies?: {
+    [actionCode: string]: string[];
+  };
+}
+
+// Custom permission categories matching the backend database
+// viewCode: When any action is selected, the view permission is auto-enabled
+const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
+  {
+    id: 'job_description',
+    name: 'Job Description',
+    description: 'Job description management permissions',
+    viewCode: 'jd:read',
+    actions: [
+      { code: 'jd:create', label: 'Create' },
+      { code: 'jd:update', label: 'Edit' },
+      { code: 'jd:delete', label: 'Delete' },
+    ],
+  },
+  {
+    id: 'resumes',
+    name: 'Resumes',
+    description: 'Resume management permissions',
+    viewCode: 'resumes:read',
+    actions: [
+      { code: 'resumes:create', label: 'Upload' },
+      { code: 'resumes:update', label: 'Edit' },
+      { code: 'resumes:delete', label: 'Delete' },
+    ],
+  },
+  {
+    id: 'internal_database',
+    name: 'Internal Database',
+    description: 'Access to internal resume database',
+    actions: [
+      { code: 'internal_db:read', label: 'View/Access' },
+    ],
+  },
+  {
+    id: 'assessments',
+    name: 'Assessments',
+    description: 'Assessment management permissions',
+    viewCode: 'assessments:read',
+    actions: [
+      { code: 'assessments:create', label: 'Create' },
+      { code: 'assessments:update', label: 'Edit' },
+      { code: 'assessments:delete', label: 'Delete' },
+    ],
+  },
+  {
+    id: 'subscription_billing',
+    name: 'Subscription & Billing',
+    description: 'Billing and subscription management',
+    isMenuToggle: true,
+    viewCode: 'billing:read',
+    subCategories: [
+      {
+        name: 'Billing Management',
+        actions: [
+          { code: 'billing:update', label: 'Manage' },
+        ],
+      },
+      {
+        name: 'Invoices',
+        viewCode: 'invoices:read',
+        actions: [
+          { code: 'invoices:create', label: 'Create' },
+          { code: 'invoices:update', label: 'Edit' },
+        ],
+      },
+      {
+        name: 'Usage & Quotas',
+        viewCode: 'usage:read',
+        actions: [
+          { code: 'usage:update', label: 'Manage' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'settings',
+    name: 'Settings',
+    description: 'System settings and configuration',
+    isMenuToggle: true,
+    viewCode: 'settings:read',
+    actions: [
+      { code: 'settings:update', label: 'Manage' },
+    ],
+  },
+  {
+    id: 'user_management',
+    name: 'User Management',
+    description: 'User and role management',
+    subCategories: [
+      {
+        name: 'Users',
+        viewCode: 'users:read',
+        actions: [
+          { code: 'users:create', label: 'Create' },
+          { code: 'users:update', label: 'Edit' },
+          { code: 'users:delete', label: 'Delete' },
+        ],
+      },
+      {
+        name: 'Roles',
+        viewCode: 'roles:read',
+        actions: [
+          { code: 'roles:create', label: 'Create' },
+          { code: 'roles:update', label: 'Edit' },
+          { code: 'roles:delete', label: 'Delete' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'analytics',
+    name: 'Analytics & Reports',
+    description: 'View analytics and reports',
+    actions: [
+      { code: 'analytics:read', label: 'View' },
+    ],
+  },
+];
+
+// Helper to get dependencies for a permission code
+const getPermissionDependencies = (code: string): string[] => {
+  for (const category of CUSTOM_PERMISSION_CATEGORIES) {
+    if (category.dependencies && category.dependencies[code]) {
+      return category.dependencies[code];
+    }
+  }
+  return [];
+};
+
+// Helper to get all permission codes from custom categories (including view codes)
+const getAllCustomPermissionCodes = (): string[] => {
+  const codes: string[] = [];
+  CUSTOM_PERMISSION_CATEGORIES.forEach(category => {
+    if (category.viewCode) codes.push(category.viewCode);
+    if (category.actions) {
+      category.actions.forEach(action => codes.push(action.code));
+    }
+    if (category.subCategories) {
+      category.subCategories.forEach(sub => {
+        if (sub.viewCode) codes.push(sub.viewCode);
+        sub.actions.forEach(action => codes.push(action.code));
+      });
+    }
+  });
+  return codes;
+};
+
+// Helper to find which category/subcategory an action belongs to
+const findCategoryForAction = (actionCode: string): { category: CustomPermissionCategory; subCategory?: CustomPermissionSubCategory } | null => {
+  for (const category of CUSTOM_PERMISSION_CATEGORIES) {
+    if (category.actions?.some(a => a.code === actionCode)) {
+      return { category };
+    }
+    if (category.subCategories) {
+      for (const sub of category.subCategories) {
+        if (sub.actions.some(a => a.code === actionCode)) {
+          return { category, subCategory: sub };
+        }
+      }
+    }
+  }
+  return null;
+};
+
+// Helper to get all action codes for a category or subcategory (excluding view codes)
+const getActionCodesForCategory = (category: CustomPermissionCategory, subCategory?: CustomPermissionSubCategory): string[] => {
+  if (subCategory) {
+    return subCategory.actions.map(a => a.code);
+  }
+  if (category.actions) {
+    return category.actions.map(a => a.code);
+  }
+  // For categories with only subcategories, get all subcategory actions
+  const codes: string[] = [];
+  category.subCategories?.forEach(sub => {
+    sub.actions.forEach(a => codes.push(a.code));
+  });
+  return codes;
+};
+
+// Helper to check if any action in a category/subcategory is selected
+const hasAnyActionSelected = (selectedCodes: Set<string>, category: CustomPermissionCategory, subCategory?: CustomPermissionSubCategory): boolean => {
+  const actionCodes = getActionCodesForCategory(category, subCategory);
+  return actionCodes.some(code => selectedCodes.has(code));
+};
 
 export default function CreateRoleForm() {
   const router = useRouter();
@@ -25,7 +237,6 @@ export default function CreateRoleForm() {
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
 
   // Form state
   const [formData, setFormData] = useState({
@@ -34,17 +245,10 @@ export default function CreateRoleForm() {
     description: '',
     priority: 50,
     parent_role_id: undefined as number | undefined,
-    permission_ids: [] as number[],
   });
 
-  // Group permissions by module
-  const permissionsByModule = permissions.reduce((acc, perm) => {
-    if (!acc[perm.module]) {
-      acc[perm.module] = [];
-    }
-    acc[perm.module].push(perm);
-    return acc;
-  }, {} as Record<string, Permission[]>);
+  // Selected permission codes (using Set for easier management)
+  const [selectedPermissionCodes, setSelectedPermissionCodes] = useState<Set<string>>(new Set());
 
   // Load data
   useEffect(() => {
@@ -58,6 +262,9 @@ export default function CreateRoleForm() {
         rbacService.getRoles(),
         rbacService.getPermissions(),
       ]);
+      console.log('[LOAD DATA] Loaded roles:', rolesData.roles.length);
+      console.log('[LOAD DATA] Loaded permissions:', permissionsData.permissions.length);
+      console.log('[LOAD DATA] Permission codes available:', permissionsData.permissions.map((p: Permission) => `${p.code} (id:${p.id})`));
       setRoles(rolesData.roles);
       setPermissions(permissionsData.permissions);
     } catch (error) {
@@ -68,40 +275,105 @@ export default function CreateRoleForm() {
     }
   };
 
-  const toggleModule = (module: string) => {
-    setExpandedModules(prev => ({
-      ...prev,
-      [module]: !prev[module],
-    }));
+  // Get permission ID by code from backend permissions
+  const getPermissionIdByCode = (code: string): number | null => {
+    const perm = permissions.find(p => p.code === code);
+    return perm ? perm.id : null;
   };
 
-  const handlePermissionToggle = (permissionId: number) => {
-    setFormData(prev => ({
-      ...prev,
-      permission_ids: prev.permission_ids.includes(permissionId)
-        ? prev.permission_ids.filter(id => id !== permissionId)
-        : [...prev.permission_ids, permissionId],
-    }));
+  // Convert selected permission codes to IDs for backend
+  const getSelectedPermissionIds = (): number[] => {
+    const ids: number[] = [];
+    const missingCodes: string[] = [];
+    selectedPermissionCodes.forEach(code => {
+      const id = getPermissionIdByCode(code);
+      if (id) {
+        ids.push(id);
+        console.log(`[PERMISSION ID] ${code} -> ID ${id}`);
+      } else {
+        missingCodes.push(code);
+        console.warn(`[PERMISSION ID] ${code} -> NOT FOUND IN BACKEND!`);
+      }
+    });
+    if (missingCodes.length > 0) {
+      console.error('[PERMISSION ID] These codes are NOT in backend:', missingCodes);
+      toast.error(`Warning: ${missingCodes.length} permissions not found in backend: ${missingCodes.join(', ')}`);
+    }
+    return ids;
   };
 
-  const handleModuleToggle = (module: string) => {
-    const modulePermissions = permissions.filter(p => p.module === module);
-    const modulePermissionIds = modulePermissions.map(p => p.id);
-    const allSelected = modulePermissionIds.every(id => formData.permission_ids.includes(id));
+  // Handle permission toggle with dependency and view code handling
+  const handlePermissionToggle = (code: string) => {
+    const deps = getPermissionDependencies(code);
+    const found = findCategoryForAction(code);
+
+    console.log(`[PERMISSION TOGGLE] Code: ${code}, Dependencies: ${deps.join(', ') || 'none'}`);
+
+    setSelectedPermissionCodes(prev => {
+      const newSet = new Set(prev);
+      const isCurrentlySelected = newSet.has(code);
+
+      if (!isCurrentlySelected) {
+        // Enabling: add this permission and its dependencies
+        newSet.add(code);
+        deps.forEach(depCode => {
+          newSet.add(depCode);
+          console.log(`[PERMISSION TOGGLE] Auto-added dependency: ${depCode}`);
+          // Also add view code for dependency's category
+          const depFound = findCategoryForAction(depCode);
+          if (depFound) {
+            const depViewCode = depFound.subCategory?.viewCode || depFound.category.viewCode;
+            if (depViewCode) {
+              newSet.add(depViewCode);
+              console.log(`[PERMISSION TOGGLE] Auto-added view code for dependency: ${depViewCode}`);
+            }
+          }
+        });
+
+        // Auto-add view code for this action's category/subcategory
+        if (found) {
+          const viewCode = found.subCategory?.viewCode || found.category.viewCode;
+          if (viewCode) {
+            newSet.add(viewCode);
+            console.log(`[PERMISSION TOGGLE] Auto-added view code: ${viewCode}`);
+          }
+        }
+      } else {
+        // Disabling: remove this permission
+        newSet.delete(code);
+
+        // Check if we should also remove the view code (no other actions selected)
+        if (found) {
+          const viewCode = found.subCategory?.viewCode || found.category.viewCode;
+          if (viewCode) {
+            // Check if any other action in the same category/subcategory is still selected
+            const stillHasActions = hasAnyActionSelected(newSet, found.category, found.subCategory);
+            if (!stillHasActions) {
+              newSet.delete(viewCode);
+              console.log(`[PERMISSION TOGGLE] Auto-removed view code: ${viewCode}`);
+            }
+          }
+        }
+      }
+
+      console.log(`[PERMISSION TOGGLE] Selected codes:`, Array.from(newSet));
+      return newSet;
+    });
+  };
+
+  // Handle select all permissions
+  const handleSelectAll = () => {
+    const allCodes = getAllCustomPermissionCodes();
+    const allSelected = allCodes.every(code => selectedPermissionCodes.has(code));
 
     if (allSelected) {
-      setFormData(prev => ({
-        ...prev,
-        permission_ids: prev.permission_ids.filter(id => !modulePermissionIds.includes(id)),
-      }));
+      setSelectedPermissionCodes(new Set());
     } else {
-      setFormData(prev => ({
-        ...prev,
-        permission_ids: [...new Set([...prev.permission_ids, ...modulePermissionIds])],
-      }));
+      setSelectedPermissionCodes(new Set(allCodes));
     }
   };
 
+  // Handle parent role change - inherit permissions
   const handleParentRoleChange = async (parentRoleId: string) => {
     const roleId = parentRoleId ? parseInt(parentRoleId) : undefined;
 
@@ -114,15 +386,12 @@ export default function CreateRoleForm() {
         const parentRole = await rbacService.getRoleById(roleId);
         console.log('[ROLE INHERIT] Parent role loaded:', parentRole.name, 'Permissions:', parentRole.permissions?.length || 0);
 
-        // Pre-populate with parent role's permissions
+        // Pre-populate with parent role's permissions (by code)
         if (parentRole.permissions) {
-          const permissionIds = parentRole.permissions.map(p => p.id);
-          setFormData(prev => ({
-            ...prev,
-            permission_ids: permissionIds,
-          }));
-          console.log('[ROLE INHERIT] ✓ Loaded', permissionIds.length, 'permissions from parent role');
-          toast.success(`Loaded ${permissionIds.length} permissions from ${parentRole.name}`);
+          const codes = new Set(parentRole.permissions.map(p => p.code));
+          setSelectedPermissionCodes(codes);
+          console.log('[ROLE INHERIT] Loaded', codes.size, 'permissions from parent role');
+          toast.success(`Loaded ${codes.size} permissions from ${parentRole.name}`);
         }
       } catch (error) {
         console.error('[ROLE INHERIT] Failed to load parent role permissions:', error);
@@ -130,24 +399,8 @@ export default function CreateRoleForm() {
       }
     } else {
       // Clear permissions if "None" is selected
-      setFormData(prev => ({
-        ...prev,
-        permission_ids: [],
-      }));
+      setSelectedPermissionCodes(new Set());
       console.log('[ROLE INHERIT] Cleared parent role and permissions');
-    }
-  };
-
-  const handleSelectAll = () => {
-    const allPermissionIds = permissions.map(p => p.id);
-    const allSelected = allPermissionIds.every(id => formData.permission_ids.includes(id));
-
-    if (allSelected) {
-      // Deselect all
-      setFormData(prev => ({ ...prev, permission_ids: [] }));
-    } else {
-      // Select all
-      setFormData(prev => ({ ...prev, permission_ids: allPermissionIds }));
     }
   };
 
@@ -157,44 +410,56 @@ export default function CreateRoleForm() {
       return;
     }
 
+    const permissionIds = getSelectedPermissionIds();
+
+    const payload = {
+      name: formData.name,
+      code: formData.code.toLowerCase().replace(/\s+/g, '_'),
+      description: formData.description,
+      priority: formData.priority,
+      parent_role_id: formData.parent_role_id,
+      permission_ids: permissionIds,
+      permission_codes: Array.from(selectedPermissionCodes), // Also send codes for future backend support
+    };
+
+    console.log('[CREATE ROLE] Submitting payload:', payload);
+    console.log('[CREATE ROLE] Permission codes:', Array.from(selectedPermissionCodes));
+    console.log('[CREATE ROLE] Permission IDs:', permissionIds);
+
     setIsSaving(true);
     try {
-      await rbacService.createRole({
-        name: formData.name,
-        code: formData.code.toLowerCase().replace(/\s+/g, '_'),
-        description: formData.description,
-        priority: formData.priority,
-        parent_role_id: formData.parent_role_id,
-        permission_ids: formData.permission_ids,
-      });
+      const result = await rbacService.createRole(payload);
+      console.log('[CREATE ROLE] Success! Created role:', result);
       toast.success('Role created successfully');
       router.push('/organization/role-management');
-    } catch (error) {
-      console.error('Failed to create role:', error);
-      toast.error('Failed to create role');
+    } catch (error: any) {
+      console.error('[CREATE ROLE] Failed:', error);
+      console.error('[CREATE ROLE] Error response:', error?.response?.data);
+      toast.error(error?.response?.data?.detail || 'Failed to create role');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const renderPermissionMatrix = () => {
-    const allPermissionIds = permissions.map(p => p.id);
-    const allSelected = allPermissionIds.every(id => formData.permission_ids.includes(id));
-    const someSelected = formData.permission_ids.length > 0 && !allSelected;
+  const renderPermissionCategories = () => {
+    const allCodes = getAllCustomPermissionCodes();
+    const allSelected = allCodes.every(code => selectedPermissionCodes.has(code));
+    const someSelected = selectedPermissionCodes.size > 0 && !allSelected;
 
     return (
-      <div className="space-y-2">
+      <div className="space-y-4">
         {/* Select All Option */}
         <div className="border border-gray-300 rounded-lg overflow-hidden bg-gray-50">
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 onClick={handleSelectAll}
                 className={`w-5 h-5 rounded flex items-center justify-center border-2 ${
                   allSelected
                     ? 'bg-gray-800 border-gray-800'
                     : someSelected
-                    ? 'bg-gray-200 border-gray-800'
+                    ? 'bg-gray-400 border-gray-800'
                     : 'border-gray-300'
                 }`}
               >
@@ -204,77 +469,138 @@ export default function CreateRoleForm() {
                 Select All Permissions
               </span>
               <span className="text-xs text-gray-500">
-                ({formData.permission_ids.length}/{allPermissionIds.length} selected)
+                ({selectedPermissionCodes.size}/{allCodes.length} selected)
               </span>
             </div>
           </div>
         </div>
 
-        {/* Module-wise Permissions */}
-        {Object.entries(permissionsByModule).map(([module, perms]) => {
-          const allSelected = perms.every(p => formData.permission_ids.includes(p.id));
-          const someSelected = perms.some(p => formData.permission_ids.includes(p.id));
-          const isExpanded = expandedModules[module] !== false;
-
-          return (
-            <div key={module} className="border border-gray-200 rounded-lg overflow-hidden">
-              <div
-                className="flex items-center justify-between px-4 py-3 bg-gray-50 cursor-pointer hover:bg-gray-100"
-                onClick={() => toggleModule(module)}
-              >
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleModuleToggle(module);
-                    }}
-                    className={`w-5 h-5 rounded flex items-center justify-center border-2 ${
-                      allSelected
-                        ? 'bg-gray-800 border-gray-800'
-                        : someSelected
-                        ? 'bg-gray-200 border-gray-800'
-                        : 'border-gray-300'
-                    }`}
-                  >
-                    {(allSelected || someSelected) && <Check className="w-3 h-3 text-white" />}
-                  </button>
-                  <span className="font-medium text-gray-900">
-                    {getModuleDisplayName(module)}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    ({perms.filter(p => formData.permission_ids.includes(p.id)).length}/{perms.length})
-                  </span>
-                </div>
-                {isExpanded ? (
-                  <ChevronDown className="w-5 h-5 text-gray-500" />
-                ) : (
-                  <ChevronRight className="w-5 h-5 text-gray-500" />
-                )}
+        {/* Permission Categories */}
+        {CUSTOM_PERMISSION_CATEGORIES.map(category => (
+          <div key={category.id} className="border border-gray-200 rounded-lg overflow-hidden">
+            {/* Category Header */}
+            <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200">
+              <div className="text-sm font-semibold text-gray-900">
+                {category.name}
               </div>
+              {category.isMenuToggle && (
+                <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded">
+                  Menu Enable/Disable
+                </span>
+              )}
+              {category.description && (
+                <span className="text-xs text-gray-500">- {category.description}</span>
+              )}
+            </div>
 
-              {isExpanded && (
-                <div className="p-4 bg-white grid grid-cols-2 gap-2">
-                  {perms.map(perm => (
-                    <label
-                      key={perm.id}
-                      className="flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:bg-gray-50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.permission_ids.includes(perm.id)}
-                        onChange={() => handlePermissionToggle(perm.id)}
-                        className="w-4 h-4 text-gray-800 rounded focus:ring-gray-600"
-                      />
-                      <span className="text-sm text-gray-700">
-                        {getActionDisplayName(perm.action)}
-                      </span>
-                    </label>
-                  ))}
+            <div className="p-4 bg-white">
+              {/* Direct Actions (no subcategories) */}
+              {category.actions && (
+                <div className="flex flex-wrap gap-2 items-center">
+                  {/* View badge - shown when any action is selected */}
+                  {category.viewCode && selectedPermissionCodes.has(category.viewCode) && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-100 text-green-700 border border-green-200">
+                      <Check className="w-3.5 h-3.5" />
+                      <span className="text-sm font-medium">View</span>
+                    </div>
+                  )}
+                  {category.actions.map(action => {
+                    const isSelected = selectedPermissionCodes.has(action.code);
+                    const hasDeps = getPermissionDependencies(action.code).length > 0;
+
+                    return (
+                      <button
+                        key={action.code}
+                        type="button"
+                        onClick={() => handlePermissionToggle(action.code)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${
+                          isSelected
+                            ? 'bg-gray-800 text-white border-gray-800'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="text-sm">{action.label}</span>
+                        {hasDeps && (
+                          <span className="text-xs opacity-75" title="Auto-enables Resume Upload">*</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Subcategories */}
+              {category.subCategories && (
+                <div className="space-y-4">
+                  {category.subCategories.map(subCategory => {
+                    const subViewCode = subCategory.viewCode || category.viewCode;
+                    const hasViewEnabled = subViewCode && selectedPermissionCodes.has(subViewCode);
+
+                    return (
+                    <div key={subCategory.name} className="space-y-2">
+                      <div className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+                        {subCategory.name}
+                      </div>
+                      <div className="flex flex-wrap gap-2 items-center">
+                        {/* View badge - shown when any action in this subcategory is selected */}
+                        {subCategory.viewCode && selectedPermissionCodes.has(subCategory.viewCode) && (
+                          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-100 text-green-700 border border-green-200">
+                            <Check className="w-3.5 h-3.5" />
+                            <span className="text-sm font-medium">View</span>
+                          </div>
+                        )}
+                        {subCategory.actions.map(action => {
+                          const isSelected = selectedPermissionCodes.has(action.code);
+                          const hasDeps = getPermissionDependencies(action.code).length > 0;
+
+                          return (
+                            <button
+                              key={action.code}
+                              type="button"
+                              onClick={() => handlePermissionToggle(action.code)}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${
+                                isSelected
+                                  ? 'bg-gray-800 text-white border-gray-800'
+                                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              <span className="text-sm">{action.label}</span>
+                              {hasDeps && (
+                                <span className="text-xs opacity-75" title="Auto-enables dependencies">*</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
-          );
-        })}
+          </div>
+        ))}
+
+        {/* Note about auto-enabled permissions */}
+        <div className="text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+          <div><strong>View Permission:</strong> Automatically enabled when you select any action (Create, Edit, Delete, etc.) for a category.</div>
+        </div>
+
+        {/* Summary of selected permissions */}
+        {selectedPermissionCodes.size > 0 && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <div className="text-sm font-medium text-green-800 mb-2">
+              Permissions to be saved ({selectedPermissionCodes.size}):
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {Array.from(selectedPermissionCodes).sort().map(code => (
+                <span key={code} className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
+                  {code}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -396,7 +722,7 @@ export default function CreateRoleForm() {
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Permissions
             </label>
-            {renderPermissionMatrix()}
+            {renderPermissionCategories()}
           </div>
         </div>
 

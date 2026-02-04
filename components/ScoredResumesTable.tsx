@@ -270,11 +270,8 @@ export default function ScoredResumesTable({
           typeof cert === 'string' ? cert : (cert?.name || '')
         ).join(', ') || '';
       case 'scoredDate':
-        return new Date(resume.scoredDate).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric'
-        });
+        const d = new Date(resume.scoredDate);
+        return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
       case 'scoredBy':
         return resume.scoredBy || '';
       default:
@@ -810,15 +807,26 @@ export default function ScoredResumesTable({
                     );
                   }
                   if (col.id === 'scoredDate') {
+                    const dateObj = new Date(resume.scoredDate);
                     return (
                       <td key={col.id} className="py-3 px-4">
                         <div className="flex items-center gap-1 text-sm text-gray-600">
                           <Calendar className="w-3.5 h-3.5" />
-                          {new Date(resume.scoredDate).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
+                          <span>
+                            {dateObj.toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                            {' '}
+                            <span className="text-gray-400">
+                              {dateObj.toLocaleTimeString('en-US', {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true
+                              })}
+                            </span>
+                          </span>
                         </div>
                       </td>
                     );
@@ -1000,11 +1008,21 @@ export default function ScoredResumesTable({
               {enabledColumns.find(c => c.id === 'scoredDate') && (
                 <div className="flex items-center gap-2 text-gray-600">
                   <Calendar className="w-4 h-4" />
-                  {new Date(resume.scoredDate).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                  })}
+                  <span>
+                    {new Date(resume.scoredDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                    {' '}
+                    <span className="text-gray-400">
+                      {new Date(resume.scoredDate).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
+                    </span>
+                  </span>
                 </div>
               )}
               {enabledColumns.find(c => c.id === 'scoredBy') && (
