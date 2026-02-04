@@ -143,6 +143,11 @@ function mapApiUserToUser(apiUser: ApiUser): User {
     // RBAC06: Feature flags
     featureFlags: mapApiFeatureFlagsToFeatureFlags(apiUser.feature_flags),
     enabledFeatures: apiUser.enabled_features,
+    // Tenant status info (for suspension/expiry display)
+    tenantStatus: apiUser.tenant_status,
+    suspensionReason: apiUser.suspension_reason,
+    suspensionNotes: apiUser.suspension_notes,
+    suspendedAt: apiUser.suspended_at,
   };
 }
 

@@ -317,9 +317,44 @@ const formatCardNumber = (value: string): string => {
   return parts.length ? parts.join(' ') : value;
 };
 
-// Format quota values - handles "unlimited" string and large numbers
-const formatQuotaValue = (value: number | string | undefined | null): string => {
+// Extract numeric quota value from potentially nested objects
+// Returns the numeric value or the original value if already primitive
+const extractQuotaValue = (value: any): number | string => {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === 'number' || typeof value === 'string') return value;
+
+  // Handle object values (e.g., { subscription: { limit: 10 } } or { limit: 10 })
+  if (typeof value === 'object') {
+    const numericValue =
+      value?.subscription?.limit ??
+      value?.limit ??
+      value?.total_remaining ??
+      value?.value;
+    if (numericValue !== undefined) {
+      return extractQuotaValue(numericValue); // Recursively extract
+    }
+  }
+  return 0;
+};
+
+// Format quota values - handles "unlimited" string, large numbers, and quota objects
+const formatQuotaValue = (value: number | string | undefined | null | Record<string, any>): string => {
   if (value === undefined || value === null) return '-';
+
+  // Handle object values (e.g., { subscription: { limit: 10 } } or { limit: 10 })
+  if (typeof value === 'object') {
+    // Try common paths for quota values
+    const numericValue =
+      value?.subscription?.limit ??
+      value?.limit ??
+      value?.total_remaining ??
+      value?.value;
+    if (numericValue !== undefined) {
+      return formatQuotaValue(numericValue); // Recursively format the extracted value
+    }
+    return '-'; // Object without recognizable structure
+  }
+
   if (value === 'unlimited' || value === 'Unlimited') return 'Unlimited';
   if (typeof value === 'string' && value.toLowerCase() === 'unlimited') return 'Unlimited';
   if (typeof value === 'number') {
@@ -461,17 +496,17 @@ function CurrentPlanContent() {
           const ftData = freeTrialResult.data || freeTrialResult;
           console.log('[CurrentPlan] Free trial API response:', ftData);
 
-          // Use API data only for trial settings
+          // Use API data only for trial settings - extract numeric values from potential objects
           trialSettings = {
             id: ftData.id,
             trial_days: ftData.trial_days,
             features: {
-              MAX_JOBS: ftData.features?.MAX_JOBS,
-              MAX_SEATS: ftData.features?.MAX_SEATS,
-              ASSESSMENTS: ftData.features?.ASSESSMENTS,
-              AI_INTERVIEW: ftData.features?.AI_INTERVIEW,
-              RESUME_SCORING: ftData.features?.RESUME_SCORING,
-              RESUME_STORAGE: ftData.features?.RESUME_STORAGE,
+              MAX_JOBS: extractQuotaValue(ftData.features?.MAX_JOBS) as number,
+              MAX_SEATS: extractQuotaValue(ftData.features?.MAX_SEATS) as number,
+              ASSESSMENTS: extractQuotaValue(ftData.features?.ASSESSMENTS) as number,
+              AI_INTERVIEW: extractQuotaValue(ftData.features?.AI_INTERVIEW) as number,
+              RESUME_SCORING: extractQuotaValue(ftData.features?.RESUME_SCORING) as number,
+              RESUME_STORAGE: extractQuotaValue(ftData.features?.RESUME_STORAGE) as number,
             },
             trial_includes: ftData.trial_includes || [],
           };
@@ -549,13 +584,14 @@ function CurrentPlanContent() {
           plan_start_date: planStartDate || prev?.plan_start_date,
           plan_expiry_date: planEndDate || prev?.plan_expiry_date,
           // Update quota limits - use free trial API data for trial users, otherwise use quota-status (API only)
-          max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : (quotas?.max_seats?.subscription?.limit || prev?.max_seats || 0),
-          max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : (quotas?.max_jobs?.subscription?.limit || prev?.max_jobs || 0),
-          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : (quotas?.RU?.subscription?.limit || prev?.max_resume_uploads || 0),
-          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : (quotas?.RS?.subscription?.limit || prev?.max_resume_searches || 0),
-          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : (quotas?.AS?.subscription?.limit || prev?.max_assessments || 0),
-          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : (quotas?.AIU?.subscription?.limit || prev?.max_ai_interviews || 0),
-          storage_limit_gb: quotas?.storage_gb?.subscription?.limit || prev?.storage_limit_gb || 0,
+          // Use extractQuotaValue to handle potential object values from API
+          max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : extractQuotaValue(quotas?.max_seats || prev?.max_seats || 0),
+          max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : extractQuotaValue(quotas?.max_jobs || prev?.max_jobs || 0),
+          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : extractQuotaValue(quotas?.RU || prev?.max_resume_uploads || 0),
+          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : extractQuotaValue(quotas?.RS || prev?.max_resume_searches || 0),
+          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : extractQuotaValue(quotas?.AS || prev?.max_assessments || 0),
+          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : extractQuotaValue(quotas?.AIU || prev?.max_ai_interviews || 0),
+          storage_limit_gb: extractQuotaValue(quotas?.storage_gb || prev?.storage_limit_gb || 0),
         } as CompanySettings));
 
         console.log('[CurrentPlan] isTrial:', isTrial, 'trialSettings:', trialSettings?.features);
