@@ -125,6 +125,11 @@ export interface User {
   // UI control flags (for role-based UI rendering)
   can_upgrade_plan?: boolean;
   can_manage_billing?: boolean;
+  // Tenant status info (for suspension/expiry display)
+  tenantStatus?: 'ACTIVE' | 'SUSPENDED' | 'EXPIRED' | 'PENDING_ACTIVATION' | 'PROVISIONING' | 'DELETED';
+  suspensionReason?: string;  // User-friendly suspension reason message
+  suspensionNotes?: string;   // Additional suspension details
+  suspendedAt?: string;       // ISO date string when account was suspended
 }
 
 export interface PlanLimits {

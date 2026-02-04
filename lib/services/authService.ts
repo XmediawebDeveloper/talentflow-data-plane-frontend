@@ -70,6 +70,11 @@ export interface User {
   enabled_features?: string[];
   last_login?: string;
   created_at: string;
+  // Tenant status info (for suspension/expiry display)
+  tenant_status?: 'ACTIVE' | 'SUSPENDED' | 'EXPIRED' | 'PENDING_ACTIVATION' | 'PROVISIONING' | 'DELETED';
+  suspension_reason?: string;  // User-friendly suspension reason message
+  suspension_notes?: string;   // Additional suspension details
+  suspended_at?: string;       // ISO date string when account was suspended
 }
 
 export interface LoginResponse {
