@@ -469,14 +469,14 @@ export default function JobOpeningsPage() {
                             Disable Job
                           </button>
                         )}
-                        {/* Republish for disabled */}
+                        {/* Re-enable JD for disabled */}
                         {job.status === 'disabled' && (
                           <button
                             onClick={() => handleStatusChange(job.id, 'published')}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
                           >
-                            <RefreshCw className="w-4 h-4" />
-                            Republish
+                            <Power className="w-4 h-4" />
+                            Re-enable JD
                           </button>
                         )}
                         {/* Archive Job */}
@@ -652,14 +652,14 @@ export default function JobOpeningsPage() {
                                   Disable Job
                                 </button>
                               )}
-                              {/* Republish for disabled */}
+                              {/* Re-enable JD for disabled */}
                               {job.status === 'disabled' && (
                                 <button
                                   onClick={() => handleStatusChange(job.id, 'published')}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
                                 >
-                                  <RefreshCw className="w-4 h-4" />
-                                  Republish
+                                  <Power className="w-4 h-4" />
+                                  Re-enable JD
                                 </button>
                               )}
                               {/* Archive Job */}
