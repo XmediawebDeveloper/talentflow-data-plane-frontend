@@ -703,9 +703,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <span className="text-gray-300">•</span>
                 )}
 
-                {/* Posted Date */}
+                {/* Posted Date with Time */}
                 <span>
-                  Posted {job.postedDate ? new Date(new Date(job.postedDate).getTime() + 19800000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+                  Posted {job.postedDate ? new Date(new Date(job.postedDate).getTime() + 19800000).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A'}
                 </span>
                 <span className="text-gray-300">•</span>
 

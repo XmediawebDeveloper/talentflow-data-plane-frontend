@@ -5,9 +5,11 @@ import {
   HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
   FileText, Upload, Trash2, Search, X, ArrowLeft, Filter, Download, ExternalLink,
   CheckCircle2, Circle, Clock3, XCircle, ChevronDown, Mail, Phone, Globe, Book,
-  Video, FileQuestion, Tag, User, Calendar, Paperclip, Loader2
+  Video, FileQuestion, Tag, User, Calendar, Paperclip, Loader2, Inbox,
+  Users, UserCheck, RefreshCw, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketPriority } from '@/lib/services';
 
 // Main API - Local backend handles everything including support tickets
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -41,6 +43,22 @@ interface TicketStats {
   total_tickets: number;
 }
 
+// Internal ticket categories for team support
+const internalCategories = [
+  { value: 'account-access', label: 'Account Access', icon: KeyRound },
+  { value: 'permission-request', label: 'Permission Request', icon: User },
+  { value: 'feature-question', label: 'Feature Question', icon: MessageCircleQuestion },
+  { value: 'bug-report', label: 'Bug Report', icon: Bug },
+  { value: 'general-inquiry', label: 'General Inquiry', icon: HelpCircle },
+  { value: 'other', label: 'Other', icon: MoreHorizontal }
+];
+
+const internalPriorities = [
+  { value: 'low', label: 'Low', color: 'text-gray-600 bg-gray-100 border-gray-300' },
+  { value: 'medium', label: 'Medium', color: 'text-gray-800 bg-gray-100 border-gray-300' },
+  { value: 'high', label: 'High', color: 'text-orange-600 bg-orange-100 border-orange-300' },
+];
+
 // Transform API response to frontend format
 function transformTicket(apiTicket: any): SupportTicket {
   return {
@@ -70,7 +88,13 @@ function transformTicket(apiTicket: any): SupportTicket {
   };
 }
 
-export default function SupportCenter() {
+interface SupportCenterProps {
+  isAdmin?: boolean;
+}
+
+export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
+  // Active tab: 'external' for TalentFlow support, 'team' for internal team tickets
+  const [activeTab, setActiveTab] = useState<'external' | 'team'>('external');
   const [view, setView] = useState<'overview' | 'submit' | 'tickets' | 'detail' | 'knowledge-base'>('overview');
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -91,8 +115,17 @@ export default function SupportCenter() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // Team/Internal ticket states (for admin)
+  const [internalTickets, setInternalTickets] = useState<InternalTicket[]>([]);
+  const [internalStats, setInternalStats] = useState<InternalTicketAdminStats | null>(null);
+  const [selectedInternalTicket, setSelectedInternalTicket] = useState<InternalTicket | null>(null);
+  const [internalLoading, setInternalLoading] = useState(false);
+  const [internalActionLoading, setInternalActionLoading] = useState<string | null>(null);
+  const [internalFilterAssignment, setInternalFilterAssignment] = useState<string>('all');
+
   // Prevent duplicate API calls
   const hasFetched = useRef(false);
+  const hasInternalFetched = useRef(false);
 
   const categories = [
     { value: 'resume-upload', label: 'Resume Upload Issues', icon: Upload },
@@ -217,6 +250,208 @@ export default function SupportCenter() {
     if (!hasFetched.current) return;
     fetchTickets();
   }, [filterStatus, filterPriority]);
+
+  // Fetch internal tickets when admin switches to team tab
+  useEffect(() => {
+    if (activeTab === 'team' && isAdmin && !hasInternalFetched.current) {
+      hasInternalFetched.current = true;
+      fetchInternalTickets();
+      fetchInternalStats();
+    }
+  }, [activeTab, isAdmin]);
+
+  // Re-fetch internal tickets when filters change
+  useEffect(() => {
+    if (!hasInternalFetched.current) return;
+    fetchInternalTickets();
+  }, [filterStatus, filterPriority, internalFilterAssignment]);
+
+  const fetchInternalTickets = async () => {
+    try {
+      setInternalLoading(true);
+      const response = await internalTicketService.adminListAllTickets({
+        status: filterStatus !== 'all' ? filterStatus as any : undefined,
+        priority: filterPriority !== 'all' ? filterPriority as any : undefined,
+        search: searchQuery || undefined,
+        assigned_to_me: internalFilterAssignment === 'mine' ? true : undefined,
+        unassigned: internalFilterAssignment === 'unassigned' ? true : undefined,
+      });
+      setInternalTickets(response.items);
+    } catch (error) {
+      console.error('Error fetching internal tickets:', error);
+      setInternalTickets([]);
+    } finally {
+      setInternalLoading(false);
+    }
+  };
+
+  const fetchInternalStats = async () => {
+    try {
+      const data = await internalTicketService.adminGetStats();
+      setInternalStats(data);
+    } catch (error) {
+      console.error('Error fetching internal stats:', error);
+    }
+  };
+
+  const fetchInternalTicketDetail = async (ticketId: string) => {
+    try {
+      const ticket = await internalTicketService.getTicket(ticketId);
+      setSelectedInternalTicket(ticket);
+    } catch (error) {
+      console.error('Error fetching internal ticket detail:', error);
+    }
+  };
+
+  const handleAssignInternalTicket = async (ticketId: string) => {
+    try {
+      setInternalActionLoading(ticketId);
+      const updatedTicket = await internalTicketService.assignTicket(ticketId);
+      setInternalTickets(internalTickets.map(t => t.id === ticketId ? updatedTicket : t));
+      if (selectedInternalTicket?.id === ticketId) {
+        setSelectedInternalTicket(updatedTicket);
+      }
+      toast.success('Ticket assigned to you');
+      fetchInternalStats();
+    } catch (error) {
+      console.error('Error assigning ticket:', error);
+      toast.error('Failed to assign ticket');
+    } finally {
+      setInternalActionLoading(null);
+    }
+  };
+
+  const handleResolveInternalTicket = async (ticketId: string) => {
+    try {
+      setInternalActionLoading(ticketId);
+      const updatedTicket = await internalTicketService.resolveTicket(ticketId);
+      setInternalTickets(internalTickets.map(t => t.id === ticketId ? updatedTicket : t));
+      if (selectedInternalTicket?.id === ticketId) {
+        setSelectedInternalTicket(updatedTicket);
+      }
+      toast.success('Ticket marked as resolved');
+      fetchInternalStats();
+    } catch (error) {
+      console.error('Error resolving ticket:', error);
+      toast.error('Failed to resolve ticket');
+    } finally {
+      setInternalActionLoading(null);
+    }
+  };
+
+  const handleCloseInternalTicket = async (ticketId: string) => {
+    try {
+      setInternalActionLoading(ticketId);
+      const updatedTicket = await internalTicketService.closeTicket(ticketId);
+      setInternalTickets(internalTickets.map(t => t.id === ticketId ? updatedTicket : t));
+      if (selectedInternalTicket?.id === ticketId) {
+        setSelectedInternalTicket(updatedTicket);
+      }
+      toast.success('Ticket closed');
+      fetchInternalStats();
+    } catch (error) {
+      console.error('Error closing ticket:', error);
+      toast.error('Failed to close ticket');
+    } finally {
+      setInternalActionLoading(null);
+    }
+  };
+
+  const handleReopenInternalTicket = async (ticketId: string) => {
+    try {
+      setInternalActionLoading(ticketId);
+      const updatedTicket = await internalTicketService.reopenTicket(ticketId);
+      setInternalTickets(internalTickets.map(t => t.id === ticketId ? updatedTicket : t));
+      if (selectedInternalTicket?.id === ticketId) {
+        setSelectedInternalTicket(updatedTicket);
+      }
+      toast.success('Ticket reopened');
+      fetchInternalStats();
+    } catch (error) {
+      console.error('Error reopening ticket:', error);
+      toast.error('Failed to reopen ticket');
+    } finally {
+      setInternalActionLoading(null);
+    }
+  };
+
+  const handleSendInternalReply = async () => {
+    if (!replyMessage.trim() || !selectedInternalTicket) return;
+
+    try {
+      const updatedTicket = await internalTicketService.addResponse(selectedInternalTicket.id, {
+        message: replyMessage,
+      });
+
+      setSelectedInternalTicket(updatedTicket);
+      setInternalTickets(internalTickets.map(t => t.id === selectedInternalTicket.id ? updatedTicket : t));
+      setReplyMessage('');
+      toast.success('Reply sent successfully');
+    } catch (error) {
+      console.error('Error sending reply:', error);
+      toast.error('Failed to send reply');
+    }
+  };
+
+  const handleUpdateInternalPriority = async (ticketId: string, newPriority: InternalTicketPriority) => {
+    try {
+      const updatedTicket = await internalTicketService.updateTicket(ticketId, { priority: newPriority });
+      setInternalTickets(internalTickets.map(t => t.id === ticketId ? updatedTicket : t));
+      if (selectedInternalTicket?.id === ticketId) {
+        setSelectedInternalTicket(updatedTicket);
+      }
+      toast.success('Priority updated');
+    } catch (error) {
+      console.error('Error updating priority:', error);
+      toast.error('Failed to update priority');
+    }
+  };
+
+  const getInternalStatusBadge = (status: string) => {
+    const styles = {
+      'open': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', icon: Circle },
+      'in-progress': { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300', icon: Clock3 },
+      'resolved': { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300', icon: CheckCircle2 },
+      'closed': { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300', icon: XCircle }
+    };
+
+    const style = styles[status as keyof typeof styles] || styles['open'];
+    const Icon = style.icon;
+
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border ${style.bg} ${style.text} ${style.border}`}>
+        <Icon className="w-3.5 h-3.5" />
+        {status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')}
+      </span>
+    );
+  };
+
+  const getInternalPriorityBadge = (priorityValue: string) => {
+    const priorityData = internalPriorities.find(p => p.value === priorityValue);
+    return (
+      <span className={`px-2.5 py-1 rounded text-xs border ${priorityData?.color}`}>
+        {priorityData?.label}
+      </span>
+    );
+  };
+
+  const getInternalCategoryLabel = (categoryValue: string) => {
+    return internalCategories.find(c => c.value === categoryValue)?.label || categoryValue;
+  };
+
+  const getInternalCategoryIcon = (categoryValue: string) => {
+    const cat = internalCategories.find(c => c.value === categoryValue);
+    return cat?.icon || HelpCircle;
+  };
+
+  const filteredInternalTickets = internalTickets.filter(ticket => {
+    const matchesSearch =
+      ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ticket.ticket_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ticket.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ticket.created_by?.name?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
 
   const handleSubmitTicket = async () => {
     if (!title.trim() || !description.trim()) {
@@ -467,6 +702,13 @@ export default function SupportCenter() {
   const resolvedTickets = stats?.resolved_tickets ?? tickets.filter(t => t.status === 'resolved').length;
   const totalTickets = stats?.total_tickets ?? tickets.length;
 
+  // Internal ticket stats
+  const internalOpenTickets = internalStats?.open_tickets ?? 0;
+  const internalInProgressTickets = internalStats?.in_progress_tickets ?? 0;
+  const internalResolvedTickets = internalStats?.resolved_tickets ?? 0;
+  const internalUnassignedTickets = internalStats?.unassigned_tickets ?? 0;
+  const internalTotalTickets = internalStats?.total_tickets ?? 0;
+
   return (
     <div className="flex-1 bg-gray-50 h-screen overflow-auto">
       {/* Header */}
@@ -478,28 +720,80 @@ export default function SupportCenter() {
                 <HelpCircle className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-gray-900">Support Center</h1>
-                <p className="text-sm text-gray-600">Get help and manage your support tickets</p>
+                <h1 className="text-xl font-semibold text-gray-900">Support Center</h1>
+                <p className="text-sm text-gray-600">
+                  {activeTab === 'external' ? 'Get help from TalentFlow support team' : 'Manage help requests from your team'}
+                </p>
               </div>
             </div>
 
-            {view !== 'overview' && view !== 'submit' && (
-              <button
-                onClick={() => setView('submit')}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-sm"
-              >
-                <Send className="w-4 h-4" />
-                New Ticket
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {activeTab === 'team' && isAdmin && (
+                <button
+                  onClick={() => { fetchInternalTickets(); fetchInternalStats(); }}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh
+                </button>
+              )}
+              {activeTab === 'external' && view !== 'overview' && view !== 'submit' && (
+                <button
+                  onClick={() => setView('submit')}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-sm"
+                >
+                  <Send className="w-4 h-4" />
+                  New Ticket
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Tab Switcher - Only show for admins */}
+          {isAdmin && (
+            <div className="flex gap-1 mt-6 border-b border-gray-200 -mb-6">
+              <button
+                onClick={() => { setActiveTab('external'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'external'
+                    ? 'text-gray-900 border-gray-900'
+                    : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <HelpCircle className="w-4 h-4" />
+                  My Support Tickets
+                </div>
+              </button>
+              <button
+                onClick={() => { setActiveTab('team'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'team'
+                    ? 'text-gray-900 border-gray-900'
+                    : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Inbox className="w-4 h-4" />
+                  Team Support Tickets
+                  {internalUnassignedTickets > 0 && (
+                    <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-full">
+                      {internalUnassignedTickets}
+                    </span>
+                  )}
+                </div>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Content */}
       <div className="p-8">
+        {/* ========== EXTERNAL SUPPORT TICKETS (TalentFlow Support) ========== */}
+
         {/* Overview */}
-        {view === 'overview' && (
+        {activeTab === 'external' && view === 'overview' && (
           <div className="space-y-6">
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -691,7 +985,7 @@ export default function SupportCenter() {
         )}
 
         {/* Submit Ticket Form */}
-        {view === 'submit' && (
+        {activeTab === 'external' && view === 'submit' && (
           <div className="max-w-3xl mx-auto">
             <button
               onClick={() => setView('overview')}
@@ -841,7 +1135,7 @@ export default function SupportCenter() {
         )}
 
         {/* All Tickets List */}
-        {view === 'tickets' && (
+        {activeTab === 'external' && view === 'tickets' && (
           <div>
             <button
               onClick={() => setView('overview')}
@@ -968,7 +1262,7 @@ export default function SupportCenter() {
         )}
 
         {/* Ticket Detail View */}
-        {view === 'detail' && selectedTicket && (
+        {activeTab === 'external' && view === 'detail' && selectedTicket && (
           <div className="max-w-5xl mx-auto">
             <button
               onClick={() => setView('tickets')}
@@ -1168,7 +1462,7 @@ export default function SupportCenter() {
         )}
 
         {/* Knowledge Base */}
-        {view === 'knowledge-base' && (
+        {activeTab === 'external' && view === 'knowledge-base' && (
           <div>
             <button
               onClick={() => setView('overview')}
@@ -1196,6 +1490,564 @@ export default function SupportCenter() {
                     </a>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========== TEAM SUPPORT TICKETS (Admin Only) ========== */}
+
+        {/* Team Tickets Overview */}
+        {activeTab === 'team' && isAdmin && view === 'overview' && (
+          <div className="space-y-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-600">Open</span>
+                  <Circle className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="text-3xl font-semibold text-gray-900 mb-1">{internalOpenTickets}</div>
+                <div className="text-xs text-gray-500">Awaiting action</div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-600">In Progress</span>
+                  <Clock3 className="w-5 h-5 text-yellow-600" />
+                </div>
+                <div className="text-3xl font-semibold text-gray-900 mb-1">{internalInProgressTickets}</div>
+                <div className="text-xs text-gray-500">Being handled</div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-600">Resolved</span>
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="text-3xl font-semibold text-gray-900 mb-1">{internalResolvedTickets}</div>
+                <div className="text-xs text-gray-500">Successfully resolved</div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-600">Unassigned</span>
+                  <Users className="w-5 h-5 text-orange-600" />
+                </div>
+                <div className="text-3xl font-semibold text-gray-900 mb-1">{internalUnassignedTickets}</div>
+                <div className="text-xs text-gray-500">Need assignment</div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-600">Total</span>
+                  <Ticket className="w-5 h-5 text-gray-600" />
+                </div>
+                <div className="text-3xl font-semibold text-gray-900 mb-1">{internalTotalTickets}</div>
+                <div className="text-xs text-gray-500">All time</div>
+              </div>
+            </div>
+
+            {/* Category Breakdown */}
+            {internalStats?.tickets_by_category && Object.keys(internalStats.tickets_by_category).length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-900 mb-4">Tickets by Category</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                  {Object.entries(internalStats.tickets_by_category).map(([cat, count]) => {
+                    const CategoryIcon = getInternalCategoryIcon(cat);
+                    return (
+                      <div key={cat} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                        <CategoryIcon className="w-5 h-5 text-gray-600" />
+                        <div>
+                          <div className="text-lg font-semibold text-gray-900">{count}</div>
+                          <div className="text-xs text-gray-600">{getInternalCategoryLabel(cat)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Quick Actions */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <button
+                onClick={() => { setInternalFilterAssignment('unassigned'); setView('tickets'); }}
+                className="bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl shadow-lg p-6 text-left hover:from-orange-600 hover:to-red-600 transition-all"
+              >
+                <Users className="w-8 h-8 mb-3" />
+                <h3 className="text-lg font-semibold text-white mb-1">Unassigned Tickets</h3>
+                <p className="text-sm text-orange-100">
+                  {internalUnassignedTickets} tickets need attention
+                </p>
+              </button>
+
+              <button
+                onClick={() => { setInternalFilterAssignment('mine'); setView('tickets'); }}
+                className="bg-gradient-to-r from-gray-700 to-gray-900 text-white rounded-xl shadow-lg p-6 text-left hover:from-gray-800 hover:to-black transition-all"
+              >
+                <UserCheck className="w-8 h-8 mb-3" />
+                <h3 className="text-lg font-semibold text-white mb-1">My Assigned Tickets</h3>
+                <p className="text-sm text-gray-300">
+                  View tickets assigned to you
+                </p>
+              </button>
+
+              <button
+                onClick={() => { setInternalFilterAssignment('all'); setView('tickets'); }}
+                className="bg-white border-2 border-gray-200 rounded-xl shadow-sm p-6 text-left hover:border-gray-300 hover:shadow-md transition-all"
+              >
+                <Ticket className="w-8 h-8 text-gray-700 mb-3" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">All Team Tickets</h3>
+                <p className="text-sm text-gray-600">
+                  View all team support requests
+                </p>
+              </button>
+            </div>
+
+            {/* Recent Team Tickets */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-semibold text-gray-900">Recent Team Tickets</h3>
+                <button
+                  onClick={() => setView('tickets')}
+                  className="text-sm text-gray-700 hover:text-gray-900"
+                >
+                  View All
+                </button>
+              </div>
+
+              {internalLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
+                </div>
+              ) : internalTickets.length === 0 ? (
+                <div className="text-center py-12">
+                  <Inbox className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                  <p className="text-sm text-gray-600">No team tickets yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {internalTickets.slice(0, 5).map(ticket => (
+                    <button
+                      key={ticket.id}
+                      onClick={() => {
+                        setSelectedInternalTicket(ticket);
+                        fetchInternalTicketDetail(ticket.id);
+                        setView('detail');
+                      }}
+                      className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs text-gray-600">{ticket.ticket_number}</span>
+                            <span className="text-xs text-gray-400">-</span>
+                            <span className="text-xs text-gray-600">from {ticket.created_by?.name}</span>
+                          </div>
+                          <h4 className="text-sm font-medium text-gray-900">{ticket.title}</h4>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {!ticket.assigned_to && (
+                            <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded border border-orange-200">
+                              Unassigned
+                            </span>
+                          )}
+                          {getInternalStatusBadge(ticket.status)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-gray-600">
+                        <span>{getInternalCategoryLabel(ticket.category)}</span>
+                        <span>-</span>
+                        {getInternalPriorityBadge(ticket.priority)}
+                        <span>-</span>
+                        <span>{formatDate(ticket.updated_at)}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Team Tickets List */}
+        {activeTab === 'team' && isAdmin && view === 'tickets' && (
+          <div>
+            <button
+              onClick={() => { setInternalFilterAssignment('all'); setView('overview'); }}
+              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-6"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Overview
+            </button>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+              {/* Filters */}
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search by ticket, title, or user..."
+                      className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    />
+                  </div>
+
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="open">Open</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="closed">Closed</option>
+                  </select>
+
+                  <select
+                    value={internalFilterAssignment}
+                    onChange={(e) => setInternalFilterAssignment(e.target.value)}
+                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    <option value="all">All Tickets</option>
+                    <option value="mine">Assigned to Me</option>
+                    <option value="unassigned">Unassigned</option>
+                  </select>
+
+                  <select
+                    value={filterPriority}
+                    onChange={(e) => setFilterPriority(e.target.value)}
+                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    <option value="all">All Priority</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Tickets Table */}
+              {internalLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Ticket #</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Title</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">From</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Category</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Priority</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Status</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Assigned</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Updated</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredInternalTickets.map(ticket => {
+                        const CategoryIcon = getInternalCategoryIcon(ticket.category);
+                        return (
+                          <tr key={ticket.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4">
+                              <span className="text-sm font-medium text-gray-900">{ticket.ticket_number}</span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm text-gray-900 max-w-xs truncate">{ticket.title}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs font-medium text-gray-700">
+                                  {ticket.created_by?.name?.charAt(0) || 'U'}
+                                </div>
+                                <span className="text-sm text-gray-600">{ticket.created_by?.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <CategoryIcon className="w-4 h-4 text-gray-600" />
+                                <span className="text-sm text-gray-600">{getInternalCategoryLabel(ticket.category)}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              {getInternalPriorityBadge(ticket.priority)}
+                            </td>
+                            <td className="px-6 py-4">
+                              {getInternalStatusBadge(ticket.status)}
+                            </td>
+                            <td className="px-6 py-4">
+                              {ticket.assigned_to ? (
+                                <span className="text-sm text-gray-600">{ticket.assigned_to.name}</span>
+                              ) : (
+                                <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">Unassigned</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-sm text-gray-600">{formatDate(ticket.updated_at)}</span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <button
+                                onClick={() => {
+                                  setSelectedInternalTicket(ticket);
+                                  fetchInternalTicketDetail(ticket.id);
+                                  setView('detail');
+                                }}
+                                className="text-sm text-gray-700 hover:text-gray-900"
+                              >
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+
+                  {filteredInternalTickets.length === 0 && (
+                    <div className="text-center py-12">
+                      <Inbox className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                      <p className="text-sm text-gray-600">No tickets found</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Team Ticket Detail View */}
+        {activeTab === 'team' && isAdmin && view === 'detail' && selectedInternalTicket && (
+          <div className="max-w-5xl mx-auto">
+            <button
+              onClick={() => setView('tickets')}
+              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-6"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Tickets
+            </button>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Main Content */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* Ticket Header */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <span className="text-xs text-gray-600 block mb-2">{selectedInternalTicket.ticket_number}</span>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-3">{selectedInternalTicket.title}</h2>
+                      <div className="flex flex-wrap items-center gap-3">
+                        {getInternalStatusBadge(selectedInternalTicket.status)}
+                        {getInternalPriorityBadge(selectedInternalTicket.priority)}
+                        <span className="text-xs text-gray-600">
+                          {getInternalCategoryLabel(selectedInternalTicket.category)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="pt-4 border-t border-gray-200">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <User className="w-4 h-4" />
+                      <span>Submitted by <strong>{selectedInternalTicket.created_by?.name}</strong></span>
+                      {selectedInternalTicket.created_by?.email && (
+                        <span className="text-gray-400">({selectedInternalTicket.created_by.email})</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Conversation */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="font-semibold text-gray-900 mb-6">Conversation</h3>
+
+                  <div className="space-y-6">
+                    {selectedInternalTicket.responses?.map((response) => (
+                      <div
+                        key={response.id}
+                        className={`${
+                          response.user_role === 'admin'
+                            ? 'bg-gray-100 border-gray-300'
+                            : 'bg-blue-50 border-blue-200'
+                        } border rounded-lg p-5`}
+                      >
+                        <div className="flex items-start gap-4 mb-3">
+                          {response.user_role === 'admin' ? (
+                            <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center text-white flex-shrink-0 text-sm font-medium">
+                              A
+                            </div>
+                          ) : (
+                            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white flex-shrink-0 text-sm font-medium">
+                              {response.user_name?.charAt(0) || 'U'}
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium text-gray-900">
+                                {response.user_role === 'admin' ? `${response.user_name} (Admin)` : response.user_name}
+                              </span>
+                              <span className="text-xs text-gray-500">{formatDate(response.created_at)}</span>
+                            </div>
+                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{response.message}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Reply Box */}
+                  {selectedInternalTicket.status !== 'closed' && (
+                    <div className="mt-6 pt-6 border-t border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Reply to User</label>
+                      <textarea
+                        value={replyMessage}
+                        onChange={(e) => setReplyMessage(e.target.value)}
+                        placeholder="Type your response..."
+                        rows={4}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none"
+                      />
+                      <div className="flex justify-end mt-3">
+                        <button
+                          onClick={handleSendInternalReply}
+                          disabled={!replyMessage.trim()}
+                          className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          Send Reply
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Sidebar */}
+              <div className="space-y-6">
+                {/* Ticket Info */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-4">Ticket Information</h4>
+
+                  <div className="space-y-4">
+                    <div>
+                      <div className="text-xs text-gray-600 mb-1">Created</div>
+                      <div className="text-sm text-gray-900">{formatFullDate(selectedInternalTicket.created_at)}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-gray-600 mb-1">Last Updated</div>
+                      <div className="text-sm text-gray-900">{formatFullDate(selectedInternalTicket.updated_at)}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-gray-600 mb-1">Assigned To</div>
+                      {selectedInternalTicket.assigned_to ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center text-white text-xs">
+                            {selectedInternalTicket.assigned_to.name.charAt(0)}
+                          </div>
+                          <div className="text-sm text-gray-900">{selectedInternalTicket.assigned_to.name}</div>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-orange-600">Not assigned</span>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-gray-600 mb-1">Responses</div>
+                      <div className="text-sm text-gray-900">{selectedInternalTicket.responses?.length || 0} messages</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Update Priority */}
+                {selectedInternalTicket.status !== 'closed' && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-4">Update Priority</h4>
+                    <select
+                      value={selectedInternalTicket.priority}
+                      onChange={(e) => handleUpdateInternalPriority(selectedInternalTicket.id, e.target.value as InternalTicketPriority)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    >
+                      {internalPriorities.map(p => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-4">Actions</h4>
+
+                  <div className="space-y-2">
+                    {!selectedInternalTicket.assigned_to && selectedInternalTicket.status !== 'closed' && (
+                      <button
+                        onClick={() => handleAssignInternalTicket(selectedInternalTicket.id)}
+                        disabled={internalActionLoading === selectedInternalTicket.id}
+                        className="w-full px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm text-left flex items-center gap-2 disabled:bg-gray-400"
+                      >
+                        {internalActionLoading === selectedInternalTicket.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <UserCheck className="w-4 h-4" />
+                        )}
+                        Assign to Me
+                      </button>
+                    )}
+
+                    {(selectedInternalTicket.status === 'open' || selectedInternalTicket.status === 'in-progress') && (
+                      <button
+                        onClick={() => handleResolveInternalTicket(selectedInternalTicket.id)}
+                        disabled={internalActionLoading === selectedInternalTicket.id}
+                        className="w-full px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm text-left flex items-center gap-2 disabled:bg-green-400"
+                      >
+                        {internalActionLoading === selectedInternalTicket.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <CheckCircle className="w-4 h-4" />
+                        )}
+                        Mark as Resolved
+                      </button>
+                    )}
+
+                    {(selectedInternalTicket.status === 'resolved' || selectedInternalTicket.status === 'closed') && (
+                      <button
+                        onClick={() => handleReopenInternalTicket(selectedInternalTicket.id)}
+                        disabled={internalActionLoading === selectedInternalTicket.id}
+                        className="w-full px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm text-left flex items-center gap-2 disabled:bg-gray-50"
+                      >
+                        {internalActionLoading === selectedInternalTicket.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-4 h-4" />
+                        )}
+                        Reopen Ticket
+                      </button>
+                    )}
+
+                    {selectedInternalTicket.status !== 'closed' && (
+                      <button
+                        onClick={() => handleCloseInternalTicket(selectedInternalTicket.id)}
+                        disabled={internalActionLoading === selectedInternalTicket.id}
+                        className="w-full px-4 py-2.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm text-left flex items-center gap-2 disabled:bg-red-50"
+                      >
+                        {internalActionLoading === selectedInternalTicket.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <XCircle className="w-4 h-4" />
+                        )}
+                        Close Ticket
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -546,16 +546,16 @@ export default function PricingPage() {
           // Combine free trial card with other plans
           const allPlans = freeTrialCard ? [...plans, freeTrialCard] : plans;
 
-          // Sort plans: descending order (highest price first, free trial last)
+          // Sort plans: ascending order (lowest price first, free trial first)
           const sortedPlans = [...allPlans].sort((a, b) => {
             const aIsTrial = a.id === 'free-trial';
             const bIsTrial = b.id === 'free-trial';
-            if (aIsTrial) return 1; // Trial goes last
-            if (bIsTrial) return -1; // Trial goes last
-            // Sort by price descending (highest first)
+            if (aIsTrial) return -1; // Trial goes first
+            if (bIsTrial) return 1; // Trial goes first
+            // Sort by price ascending (lowest first)
             const priceA = a.yearlyPrice || a.monthlyPrice || 0;
             const priceB = b.yearlyPrice || b.monthlyPrice || 0;
-            return priceB - priceA;
+            return priceA - priceB;
           });
 
           // Simple gray color scheme for all cards
@@ -764,7 +764,7 @@ export default function PricingPage() {
                         {/* CTA Button */}
                         <Link
                           href={isTrialPlan
-                            ? "/signup"
+                            ? "/signup?plan=free_trial"
                             : ((plan.monthlyPrice || plan.yearlyPrice)
                                 ? (() => {
                                     const hasAnnual = !!plan.annualPlanId;

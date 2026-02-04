@@ -223,6 +223,109 @@ export default function ResumeViewPage() {
   const [shareMessage, setShareMessage] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
+  // Version changes visibility state
+  const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
+
+  // Helper function to get version differences compared to previous version
+  const getVersionChanges = (currentVersion: any, previousVersion: any | null) => {
+    const changes: { category: string; added: string[]; removed: string[]; changed?: { from: string; to: string } }[] = [];
+
+    // Helper to compare arrays
+    const compareArrays = (current: string[] = [], previous: string[] = []) => {
+      const added = current.filter(item => !previous.includes(item));
+      const removed = previous.filter(item => !current.includes(item));
+      return { added, removed };
+    };
+
+    // Helper to compare single values
+    const compareSingle = (category: string, current: string | undefined, previous: string | undefined) => {
+      if (current !== previous) {
+        if (current && previous) {
+          changes.push({ category, added: [], removed: [], changed: { from: previous, to: current } });
+        } else if (current && !previous) {
+          changes.push({ category, added: [current], removed: [] });
+        } else if (!current && previous) {
+          changes.push({ category, added: [], removed: [previous] });
+        }
+      }
+    };
+
+    // If no previous version, this is the first version - show as "Initial"
+    if (!previousVersion) {
+      return [{ category: 'Initial Version', added: ['First upload - no changes to compare'], removed: [] }];
+    }
+
+    // Compare Skills
+    const skillsChanges = compareArrays(
+      currentVersion.skills || [],
+      previousVersion.skills || []
+    );
+    if (skillsChanges.added.length > 0 || skillsChanges.removed.length > 0) {
+      changes.push({ category: 'Skills', ...skillsChanges });
+    }
+
+    // Compare Technical Skills
+    const techSkillsChanges = compareArrays(
+      currentVersion.technicalSkills || [],
+      previousVersion.technicalSkills || []
+    );
+    if (techSkillsChanges.added.length > 0 || techSkillsChanges.removed.length > 0) {
+      changes.push({ category: 'Technical Skills', ...techSkillsChanges });
+    }
+
+    // Compare Job Title
+    compareSingle('Job Title', currentVersion.currentTitle, previousVersion.currentTitle);
+
+    // Compare Company
+    compareSingle('Company', currentVersion.currentCompany, previousVersion.currentCompany);
+
+    // Compare Location
+    compareSingle('Location', currentVersion.location, previousVersion.location);
+
+    // Compare Experience count
+    const currExpCount = currentVersion.experience?.length || 0;
+    const prevExpCount = previousVersion.experience?.length || 0;
+    if (currExpCount !== prevExpCount) {
+      changes.push({
+        category: 'Experience',
+        added: currExpCount > prevExpCount ? [`+${currExpCount - prevExpCount} position(s)`] : [],
+        removed: currExpCount < prevExpCount ? [`-${prevExpCount - currExpCount} position(s)`] : [],
+      });
+    }
+
+    // Compare Education count
+    const currEduCount = currentVersion.education?.length || 0;
+    const prevEduCount = previousVersion.education?.length || 0;
+    if (currEduCount !== prevEduCount) {
+      changes.push({
+        category: 'Education',
+        added: currEduCount > prevEduCount ? [`+${currEduCount - prevEduCount} entry(ies)`] : [],
+        removed: currEduCount < prevEduCount ? [`-${prevEduCount - currEduCount} entry(ies)`] : [],
+      });
+    }
+
+    // Compare Certifications
+    const currCerts = (currentVersion.certifications || []).map((c: any) => c.name || c);
+    const prevCerts = (previousVersion.certifications || []).map((c: any) => c.name || c);
+    const certsChanges = compareArrays(currCerts, prevCerts);
+    if (certsChanges.added.length > 0 || certsChanges.removed.length > 0) {
+      changes.push({ category: 'Certifications', ...certsChanges });
+    }
+
+    // Compare Professional Summary
+    if (currentVersion.professionalSummary !== previousVersion.professionalSummary) {
+      if (currentVersion.professionalSummary && previousVersion.professionalSummary) {
+        changes.push({ category: 'Summary', added: ['Updated'], removed: [] });
+      } else if (currentVersion.professionalSummary) {
+        changes.push({ category: 'Summary', added: ['Added'], removed: [] });
+      } else {
+        changes.push({ category: 'Summary', added: [], removed: ['Removed'] });
+      }
+    }
+
+    return changes.length > 0 ? changes : null;
+  };
+
   useEffect(() => {
     if (resumeId) {
       fetchResume();
@@ -262,7 +365,7 @@ export default function ResumeViewPage() {
     source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
     folderId: r.folder_id || '',
     uploadDate: r.created_at,
-    attachments: r.file_name ? 1 : 0,
+    attachments: r.version_count || versionsData.length || 1,
     uploadedBy: r.uploaded_by_name || 'Unknown',
     fileName: r.file_name,
     fileType: r.file_type,
@@ -309,8 +412,18 @@ export default function ResumeViewPage() {
       uploadDate: v.created_at || v.upload_date,
       size: v.file_size_kb ? `${v.file_size_kb} KB` : 'Unknown',
       uploadedBy: v.uploaded_by_name || 'Unknown',
-      version: v.version || 1,  // Version number from API
+      version: v.version || 1,
       fileName: v.file_name,
+      // Parsed content for comparison
+      skills: v.skills || [],
+      technicalSkills: v.technical_skills || [],
+      experience: v.experience || [],
+      education: v.education || [],
+      certifications: v.certifications || [],
+      currentTitle: v.current_title,
+      currentCompany: v.current_company,
+      location: v.location,
+      professionalSummary: v.professional_summary,
     })),
     versionCount: r.version_count || versionsData.length || 1,
     extractedText: r.extracted_text,
@@ -662,14 +775,6 @@ Best regards`);
                   )}
                 </div>
 
-                {/* Tags */}
-                <div className="flex flex-wrap gap-2">
-                  {resume.skills?.slice(0, 8).map((skill, index) => (
-                    <span key={index} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs border border-gray-300">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
               </div>
             </div>
           </div>
@@ -1079,81 +1184,156 @@ Best regards`);
                 </span>
               </div>
               <div className="space-y-3">
-                {resume.versions.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()).map((version, index) => (
-                  <div key={version.id} className={`p-4 rounded-lg border transition-all ${
-                    index === 0
-                      ? 'bg-gray-100 border-gray-400'
-                      : 'bg-gray-100 border-gray-300'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 flex-1">
-                        <div className={`p-2 rounded-lg ${
-                          index === 0 ? 'bg-gray-300' : 'bg-gray-200'
-                        }`}>
-                          <FileText className={`w-4 h-4 ${
-                            index === 0 ? 'text-gray-700' : 'text-gray-600'
-                          }`} />
+                {(() => {
+                  const sortedVersions = [...resume.versions].sort((a, b) => (b.version || 0) - (a.version || 0));
+                  return sortedVersions.map((version, index) => {
+                    const isLatest = index === 0;
+                    const versionNumber = version.version || (resume.versions.length - index);
+                    // Get previous version for comparison (next in sorted array since sorted newest first)
+                    const previousVersion = index < sortedVersions.length - 1 ? sortedVersions[index + 1] : null;
+                    const changes = getVersionChanges(version, previousVersion);
+                    const isExpanded = expandedVersionId === version.id;
+
+                    return (
+                      <div key={version.id} className={`rounded-lg border transition-all ${
+                        isLatest
+                          ? 'bg-blue-50 border-blue-300'
+                          : 'bg-gray-100 border-gray-300'
+                      }`}>
+                        <div className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 flex-1">
+                              <div className={`p-2 rounded-lg ${
+                                isLatest ? 'bg-blue-100' : 'bg-gray-200'
+                              }`}>
+                                <FileText className={`w-4 h-4 ${
+                                  isLatest ? 'text-blue-600' : 'text-gray-600'
+                                }`} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className={`text-sm font-semibold ${isLatest ? 'text-blue-800' : 'text-gray-800'}`}>
+                                    Version {versionNumber}
+                                  </span>
+                                  {isLatest && (
+                                    <span className="px-2 py-0.5 bg-blue-600 text-white rounded text-xs flex-shrink-0">
+                                      Latest
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500 mb-1 truncate">{version.name}</div>
+                                <div className="flex items-center gap-3 text-xs text-gray-600">
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {new Date(version.uploadDate + (version.uploadDate.includes('Z') ? '' : 'Z')).toLocaleString('en-IN', {
+                                      timeZone: 'Asia/Kolkata',
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      hour12: true
+                                    })}
+                                  </span>
+                                  <span>•</span>
+                                  <span>{version.size}</span>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-1">
+                                    <User className="w-3 h-3" />
+                                    {version.uploadedBy}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setExpandedVersionId(isExpanded ? null : version.id)}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${
+                                  isExpanded
+                                    ? 'bg-gray-800 text-white'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                }`}
+                              >
+                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                {isExpanded ? 'Hide' : 'View'} Changes
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const blob = await resumeService.downloadVersion(resumeId, version.id);
+                                    const url = window.URL.createObjectURL(blob);
+                                    const link = document.createElement('a');
+                                    link.href = url;
+                                    link.download = version.fileName || version.name || `resume-v${versionNumber}.pdf`;
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                    window.URL.revokeObjectURL(url);
+                                  } catch (err) {
+                                    toast.error('Failed to download version');
+                                  }
+                                }}
+                                className={`p-2 rounded-md transition-colors ${
+                                  isLatest
+                                    ? 'text-blue-600 hover:bg-blue-100'
+                                    : 'text-gray-600 hover:bg-gray-300'
+                                }`}
+                                title="Download this version"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-medium text-gray-800 truncate">{version.name}</span>
-                            {index === 0 && (
-                              <span className="px-2 py-0.5 bg-gray-500 text-white rounded text-xs flex-shrink-0">
-                                Latest
-                              </span>
+
+                        {/* Version Changes - Expanded */}
+                        {isExpanded && (
+                          <div className={`px-4 pb-4 pt-2 border-t ${isLatest ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-gray-50/50'}`}>
+                            <div className="text-xs font-medium text-gray-700 mb-3 flex items-center gap-1">
+                              <History className="w-3 h-3" />
+                              Changes in Version {versionNumber}
+                            </div>
+                            {changes && changes.length > 0 ? (
+                              <div className="space-y-2">
+                                {changes.map((change, idx) => (
+                                  <div key={idx} className="flex items-start gap-2">
+                                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-200 text-gray-700 min-w-[90px] text-center flex-shrink-0">
+                                      {change.category}
+                                    </span>
+                                    <div className="flex-1 flex flex-wrap gap-1">
+                                      {/* Show changed value (from -> to) */}
+                                      {change.changed && (
+                                        <span className="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 flex items-center gap-1">
+                                          <span className="line-through opacity-60">{change.changed.from}</span>
+                                          <span>→</span>
+                                          <span className="font-medium">{change.changed.to}</span>
+                                        </span>
+                                      )}
+                                      {/* Show added items */}
+                                      {change.added.map((val, i) => (
+                                        <span key={`add-${i}`} className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 flex items-center gap-1">
+                                          <span className="font-bold">+</span> {val}
+                                        </span>
+                                      ))}
+                                      {/* Show removed items */}
+                                      {change.removed.map((val, i) => (
+                                        <span key={`rem-${i}`} className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 flex items-center gap-1">
+                                          <span className="font-bold">−</span> {val}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-500 italic">No changes detected compared to previous version.</p>
                             )}
                           </div>
-                          <div className="flex items-center gap-3 text-xs text-gray-600">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {new Date(version.uploadDate + (version.uploadDate.includes('Z') ? '' : 'Z')).toLocaleString('en-IN', {
-                                timeZone: 'Asia/Kolkata',
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                hour12: true
-                              })}
-                            </span>
-                            <span>•</span>
-                            <span>{version.size}</span>
-                            <span>•</span>
-                            <span className="flex items-center gap-1">
-                              <User className="w-3 h-3" />
-                              {version.uploadedBy}
-                            </span>
-                          </div>
-                        </div>
+                        )}
                       </div>
-                      <button
-                        onClick={async () => {
-                          try {
-                            const blob = await resumeService.downloadVersion(resumeId, version.id);
-                            const url = window.URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.download = version.fileName || version.name || `resume-v${index + 1}.pdf`;
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            window.URL.revokeObjectURL(url);
-                          } catch (err) {
-                            toast.error('Failed to download version');
-                          }
-                        }}
-                        className={`p-2 rounded-md transition-colors ${
-                          index === 0
-                            ? 'text-gray-700 hover:bg-gray-300'
-                            : 'text-gray-600 hover:bg-gray-300'
-                        }`}
-                        title="Download this version"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}
@@ -1277,29 +1457,6 @@ Best regards`);
             </div>
           </div>
 
-          {/* Metadata Summary */}
-          <div className="bg-gray-200 border border-gray-300 rounded-lg p-4">
-            <div className="grid grid-cols-4 gap-4 text-sm">
-              <div className="text-center">
-                <div className="text-xs text-gray-500 mb-1">Document ID</div>
-                <div className="font-medium text-gray-800">#{resume.id.substring(0, 8).toUpperCase()}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-gray-500 mb-1">Source</div>
-                <div className="font-medium text-gray-800">{resume.source}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-gray-500 mb-1">Folder</div>
-                <div className="font-medium text-gray-800">{resume.folderId || 'Uncategorized'}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-gray-500 mb-1">Status</div>
-                <div className="inline-flex items-center px-2 py-1 bg-gray-300 text-gray-700 rounded text-xs">
-                  Active
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

@@ -146,8 +146,14 @@ api.interceptors.response.use(
     if (error.response?.status === 403) {
       const detail = error.response.data as { detail?: SubscriptionInactiveDetail };
       if (detail?.detail?.error_code === 'SUBSCRIPTION_INACTIVE') {
-        // Dispatch event for global UI handling
-        dispatchSubscriptionInactiveEvent(detail.detail);
+        // Skip modal dispatch if user is already on the subscription page (where they can renew)
+        const isOnSubscriptionPage = typeof window !== 'undefined' &&
+          window.location.pathname.includes('/subscription/current-plan');
+
+        if (!isOnSubscriptionPage) {
+          // Dispatch event for global UI handling
+          dispatchSubscriptionInactiveEvent(detail.detail);
+        }
         // Don't reject - let the event handler show the modal
         return Promise.reject(error);
       }

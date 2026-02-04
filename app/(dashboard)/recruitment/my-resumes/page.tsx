@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import ResumeTable from '@/components/ResumeTable';
@@ -15,6 +15,7 @@ import DuplicateResumeModal, { DuplicateFile, ExistingResume } from '@/component
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import UploadHistoryDetailModal, { UploadHistoryItem } from '@/components/UploadHistoryDetailModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
+import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
 import ResumeVersionSelector from '@/components/ResumeVersionSelector';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
@@ -118,6 +119,9 @@ export default function MyResumesPage() {
   // Assessment modal state
   const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
   const [selectedJobForAssessment, setSelectedJobForAssessment] = useState<string | null>(null);
+
+  // AI Talent Match modal state
+  const [isAITalentMatchModalOpen, setIsAITalentMatchModalOpen] = useState(false);
 
   // Delete folder confirmation state
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<{
@@ -240,7 +244,7 @@ export default function MyResumesPage() {
         source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
         folderId: r.folder_id || '',
         uploadDate: r.created_at,
-        attachments: r.file_name ? 1 : 0,
+        attachments: r.version_count || 1,
         uploadedBy: r.uploaded_by_name || 'Unknown',
         currentCompany: r.current_company,
         previousCompany: r.previous_company,
@@ -541,6 +545,19 @@ export default function MyResumesPage() {
       await fetchPublishedJobs();
     }
     setIsAssessmentModalOpen(true);
+  };
+
+  // Handle AI Talent Match button click
+  const handleAITalentMatch = async () => {
+    if (selectedResumes.length === 0) {
+      toast.error('Please select at least one resume');
+      return;
+    }
+    // Fetch published jobs if not already loaded
+    if (publishedJobs.length === 0) {
+      await fetchPublishedJobs();
+    }
+    setIsAITalentMatchModalOpen(true);
   };
 
   // Fetch published jobs for the Apply to Job modal
@@ -1006,30 +1023,40 @@ export default function MyResumesPage() {
           console.log('[UPLOAD-ERROR] existingResume:', existingResume);
 
           if (existingResume) {
-            // Show duplicate modal instead of simple error
-            const duplicateFile: DuplicateFile = {
-              file: files[0],
+            // Return existing resume info - UploadModal will decide how to handle it
+            // If onScoreResume is provided, UploadModal shows DuplicateResumeDetectedModal
+            // Otherwise, show the full duplicate resolution modal here
+            return {
+              success: false,
+              error: `A resume for ${existingResume.candidate_name || 'this candidate'} already exists in your Internal Resume Database.`,
               existingResume: {
                 id: existingResume.id,
-                candidate_name: existingResume.candidate_name || existingResume.file_name || 'Unknown',
+                candidateName: existingResume.candidate_name || existingResume.file_name || 'Unknown',
                 email: existingResume.email || '',
-                folder_name: existingResume.folder_name,
-                folder_path: existingResume.folder_path || 'My Resumes',
-                upload_date: existingResume.upload_date || '',
-                file_size: existingResume.file_size || 0,
-                file_name: existingResume.file_name || '',
+                currentTitle: existingResume.current_title || '',
+                folderName: existingResume.folder_name || '',
+                uploadedAt: existingResume.upload_date || '',
                 version: existingResume.version || 1,
               },
-              contentDifferences: contentDifferences,
-              isDuplicate: isExactDuplicate,
+              // Also include full data for the old duplicate modal fallback
+              duplicateData: {
+                file: files[0],
+                existingResume: {
+                  id: existingResume.id,
+                  candidate_name: existingResume.candidate_name || existingResume.file_name || 'Unknown',
+                  email: existingResume.email || '',
+                  folder_name: existingResume.folder_name,
+                  folder_path: existingResume.folder_path || 'My Resumes',
+                  upload_date: existingResume.upload_date || '',
+                  file_size: existingResume.file_size || 0,
+                  file_name: existingResume.file_name || '',
+                  version: existingResume.version || 1,
+                },
+                contentDifferences: contentDifferences,
+                isDuplicate: isExactDuplicate,
+                targetFolderId: targetFolderId,
+              }
             };
-
-            setDuplicateFiles([duplicateFile]);
-            setPendingUploadFolderId(targetFolderId);
-            setIsUploadModalOpen(false);
-            setIsDuplicateModalOpen(true);
-
-            return { success: true }; // Return success to close upload modal
           }
 
           return {
@@ -1186,7 +1213,7 @@ export default function MyResumesPage() {
     source: 'Manual',
     folderId: r.folder_id || '',
     uploadDate: r.created_at,
-    attachments: r.file_name ? 1 : 0,
+    attachments: r.version_count || 1,
     uploadedBy: r.uploaded_by_name || 'Unknown',
     currentCompany: r.current_company,
     previousCompany: r.previous_company,
@@ -1401,6 +1428,7 @@ export default function MyResumesPage() {
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
             onAssessment={handleAssessment}
             onArchive={() => handleArchiveResumes(selectedResumes)}
+            onAITalentMatch={handleAITalentMatch}
           />
         )}
 
@@ -1701,22 +1729,29 @@ export default function MyResumesPage() {
                             {/* Phone */}
                             <div className="text-sm text-gray-600 truncate">{resume.phone || '-'}</div>
                             {/* Skills */}
-                            <div className="flex flex-wrap gap-1">
+                            <div className="flex flex-wrap gap-1.5 max-w-[200px]">
                               {resume.skills && resume.skills.length > 0 ? (
                                 <>
-                                  {resume.skills.slice(0, 2).map((skill, idx) => (
-                                    <span key={idx} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs truncate max-w-[60px]">
+                                  {resume.skills.slice(0, 3).map((skill, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 truncate max-w-[90px]"
+                                      title={skill}
+                                    >
                                       {skill}
                                     </span>
                                   ))}
-                                  {resume.skills.length > 2 && (
-                                    <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">
-                                      +{resume.skills.length - 2}
+                                  {resume.skills.length > 3 && (
+                                    <span
+                                      className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors"
+                                      title={resume.skills.slice(3).join(', ')}
+                                    >
+                                      +{resume.skills.length - 3}
                                     </span>
                                   )}
                                 </>
                               ) : (
-                                <span className="text-sm text-gray-400">-</span>
+                                <span className="text-xs text-gray-400 italic">No skills</span>
                               )}
                             </div>
                             {/* Experience */}
@@ -1816,7 +1851,18 @@ export default function MyResumesPage() {
             setIsUploadModalOpen(false);
             router.push(`/recruitment/resume-detail/${resumeId}`);
           }}
-          onScoreResume={handleScoreUploadedResume}
+          onDuplicateDetected={(duplicateData) => {
+            // Set duplicate files for the DuplicateResumeModal
+            setDuplicateFiles([{
+              file: duplicateData.file,
+              existingResume: duplicateData.existingResume,
+              contentDifferences: duplicateData.contentDifferences || [],
+              isDuplicate: duplicateData.isDuplicate,
+            }]);
+            setPendingUploadFolderId(duplicateData.targetFolderId);
+            setIsUploadModalOpen(false);
+            setIsDuplicateModalOpen(true);
+          }}
         />
       )}
 
@@ -2474,6 +2520,33 @@ export default function MyResumesPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* AI Talent Match Modal */}
+      {isAITalentMatchModalOpen && (
+        <AITalentMatchSelectJobModal
+          resumes={resumes.filter(r => selectedResumes.includes(r.id))}
+          jobs={publishedJobs}
+          onClose={() => setIsAITalentMatchModalOpen(false)}
+          onMatch={(resumeIds, jobId) => {
+            // Store selected resumes in sessionStorage for the AI Talent Match page
+            const resumeData = resumes
+              .filter(r => resumeIds.includes(r.id))
+              .map(r => ({
+                id: r.id,
+                candidateName: r.name,
+                email: r.email,
+              }));
+            sessionStorage.setItem('aiTalentMatchResumes', JSON.stringify(resumeData));
+
+            // Close modal
+            setIsAITalentMatchModalOpen(false);
+            setSelectedResumes([]);
+
+            // Navigate to AI Talent Match page with the selected JD
+            router.push(`/recruitment/ai-talent-match?jdId=${jobId}&view=new`);
+          }}
+        />
       )}
 
       {/* Delete Folder Confirmation Dialog */}

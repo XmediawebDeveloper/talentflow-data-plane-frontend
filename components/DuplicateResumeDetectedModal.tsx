@@ -1,0 +1,159 @@
+'use client';
+
+import React from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { AlertTriangle, Eye, Target, X, Calendar, User, Mail, FileText, Briefcase } from 'lucide-react';
+import { format } from 'date-fns';
+
+interface ExistingResumeInfo {
+  id: string;
+  candidate_name: string;
+  email?: string;
+  current_title?: string;
+  folder_name?: string;
+  uploaded_at?: string;
+  version?: number;
+}
+
+interface DuplicateResumeDetectedModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  fileName: string;
+  existingResume: ExistingResumeInfo;
+  jobTitle?: string;
+  onViewExisting: (resumeId: string) => void;
+  onProceedWithScoring: (resumeId: string) => void;
+}
+
+export function DuplicateResumeDetectedModal({
+  isOpen,
+  onClose,
+  fileName,
+  existingResume,
+  jobTitle,
+  onViewExisting,
+  onProceedWithScoring,
+}: DuplicateResumeDetectedModalProps) {
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-amber-600">
+            <AlertTriangle className="w-5 h-5" />
+            Resume Already Exists
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="py-4">
+          <p className="text-sm text-gray-600 mb-4">
+            This resume already exists in your Internal Resume Database.
+            {jobTitle && (
+              <> Do you still want to submit for scoring against <span className="font-medium text-gray-900">{jobTitle}</span>?</>
+            )}
+          </p>
+
+          {/* Uploaded File Info */}
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <FileText className="w-4 h-4 text-gray-400" />
+              <span className="font-medium">Uploaded File:</span>
+              <span className="truncate">{fileName}</span>
+            </div>
+          </div>
+
+          {/* Existing Resume Info */}
+          <div className="border rounded-lg overflow-hidden">
+            <div className="px-3 py-2 bg-amber-50 border-b border-amber-200">
+              <span className="text-xs font-medium text-amber-700">Existing Record in Database</span>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4 text-gray-400" />
+                <span className="font-medium text-gray-900">{existingResume.candidate_name || 'Unknown Candidate'}</span>
+                {existingResume.version && existingResume.version > 1 && (
+                  <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">
+                    v{existingResume.version}
+                  </span>
+                )}
+              </div>
+
+              {existingResume.email && (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Mail className="w-4 h-4 text-gray-400" />
+                  <span>{existingResume.email}</span>
+                </div>
+              )}
+
+              {existingResume.current_title && (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Briefcase className="w-4 h-4 text-gray-400" />
+                  <span>{existingResume.current_title}</span>
+                </div>
+              )}
+
+              {existingResume.folder_name && (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <FileText className="w-4 h-4 text-gray-400" />
+                  <span>Folder: {existingResume.folder_name}</span>
+                </div>
+              )}
+
+              {existingResume.uploaded_at && (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Calendar className="w-4 h-4 text-gray-400" />
+                  <span>Uploaded: {format(new Date(existingResume.uploaded_at), 'MMM d, yyyy')}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="flex flex-col sm:flex-row gap-2">
+          {/* Cancel Button */}
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="flex items-center gap-2 order-3 sm:order-1"
+          >
+            <X className="w-4 h-4" />
+            Cancel
+          </Button>
+
+          {/* View Existing Record Button */}
+          <Button
+            variant="outline"
+            onClick={() => {
+              onViewExisting(existingResume.id);
+              onClose();
+            }}
+            className="flex items-center gap-2 order-2"
+          >
+            <Eye className="w-4 h-4" />
+            View Existing Record
+          </Button>
+
+          {/* Proceed with Scoring Button */}
+          <Button
+            onClick={() => {
+              onProceedWithScoring(existingResume.id);
+              onClose();
+            }}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 order-1 sm:order-3"
+          >
+            <Target className="w-4 h-4" />
+            Proceed with Scoring
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default DuplicateResumeDetectedModal;

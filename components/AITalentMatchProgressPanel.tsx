@@ -24,9 +24,9 @@ export default function AITalentMatchProgressPanel({
 
   const steps = [
     'Analyzing job requirements',
-    'Generating embeddings',
+    'Processing job criteria',
     'Scanning candidate database',
-    'Computing similarity scores',
+    'Computing match scores',
     'AI filtering candidates',
     'Finalizing results'
   ];
