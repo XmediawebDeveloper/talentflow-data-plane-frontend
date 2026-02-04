@@ -6,7 +6,7 @@ import {
   Search,
   Plus,
   Pencil,
-  Trash2,
+  Ban,
   Shield,
   Users,
   Loader2,
@@ -477,8 +477,9 @@ export default function RoleManagement() {
                             <button
                               onClick={() => handleDeleteRole(role.id)}
                               className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Deactivate role"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Ban className="w-4 h-4" />
                             </button>
                           )}
                           {role.is_system && (
