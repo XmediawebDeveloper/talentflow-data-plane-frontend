@@ -105,7 +105,7 @@ interface JDCreationProps {
   // FIX-003: Props for embedded mode in sheet/modal
   editingJDId?: string | null;  // JD ID to fetch and edit
   onClose?: () => void;  // Callback when closed
-  onSuccess?: () => void;  // Callback on successful create/update
+  onSuccess?: (jdId?: string) => void;  // Callback on successful create/update (with optional JD ID)
   isEmbedded?: boolean;  // Flag to indicate embedded mode
 }
 
@@ -2671,9 +2671,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         });
       }
 
-      // FIX-003: Call onSuccess in embedded mode
+      // FIX-003: Call onSuccess in embedded mode with published JD ID
       if (isEmbedded && onSuccess) {
-        onSuccess();
+        onSuccess(publishedJd.id);
       }
     } catch (error) {
       console.error('[ERROR] Failed to publish JD:', error);

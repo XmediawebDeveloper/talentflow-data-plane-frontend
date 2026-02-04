@@ -737,8 +737,58 @@ export function useProctoringMonitor({
       return false;
     };
 
-    // Block keyboard shortcuts for copy/paste/cut
+    // Block keyboard shortcuts for copy/paste/cut AND Alt+Tab
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Alt+Tab (switch window/tab) - CRITICAL BLOCKING
+      if (e.altKey && e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('tab_switch', { method: 'alt_tab', blocked: true });
+        console.log('[PROCTORING] Alt+Tab blocked');
+        return false;
+      }
+
+      // Alt+F4 (close window)
+      if (e.altKey && e.key === 'F4') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('window_blur', { method: 'alt_f4', blocked: true });
+        console.log('[PROCTORING] Alt+F4 blocked');
+        return false;
+      }
+
+      // Cmd+Tab (Mac - switch application)
+      if (e.metaKey && e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('tab_switch', { method: 'cmd_tab', blocked: true });
+        console.log('[PROCTORING] Cmd+Tab blocked');
+        return false;
+      }
+
+      // Ctrl+Tab (switch browser tab)
+      if (e.ctrlKey && e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('tab_switch', { method: 'ctrl_tab', blocked: true });
+        console.log('[PROCTORING] Ctrl+Tab blocked');
+        return false;
+      }
+
+      // Windows key (brings up start menu)
+      if (e.key === 'Meta' || e.key === 'OS') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('window_blur', { method: 'windows_key', blocked: true });
+        console.log('[PROCTORING] Windows key blocked');
+        return false;
+      }
+
       // Ctrl+C or Cmd+C (copy)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
         e.preventDefault();
@@ -794,6 +844,69 @@ export function useProctoringMonitor({
     };
   }, [logEvent]);
 
+  // ==================== MOUSE MOVEMENT TRACKING ====================
+  const setupMouseTracking = useCallback(() => {
+    let lastMousePosition = { x: 0, y: 0 };
+    let mouseIdleTime = 0;
+    let mouseMoveCount = 0;
+    const IDLE_THRESHOLD = 120; // 2 minutes of no mouse movement
+    const SUSPICIOUS_MOVEMENT_THRESHOLD = 5000; // Very high movement count in short time
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const currentX = e.clientX;
+      const currentY = e.clientY;
+
+      // Calculate movement distance
+      const distance = Math.sqrt(
+        Math.pow(currentX - lastMousePosition.x, 2) +
+        Math.pow(currentY - lastMousePosition.y, 2)
+      );
+
+      // Only count significant movements (not micro jitters)
+      if (distance > 10) {
+        mouseMoveCount++;
+        mouseIdleTime = 0; // Reset idle time
+      }
+
+      lastMousePosition = { x: currentX, y: currentY };
+    };
+
+    const handleMouseLeave = () => {
+      console.log('[PROCTORING] Mouse left window - potential tab switch');
+      logEvent('window_blur', { reason: 'mouse_left_window' });
+    };
+
+    // Check for suspicious patterns every 10 seconds
+    const trackingInterval = setInterval(() => {
+      mouseIdleTime += 10;
+
+      // Detect prolonged idle (might indicate user left)
+      if (mouseIdleTime >= IDLE_THRESHOLD) {
+        console.log('[PROCTORING] Mouse idle for 2+ minutes');
+        // Don't log event - just track (too many false positives)
+        mouseIdleTime = 0; // Reset to avoid spam
+      }
+
+      // Detect bot-like behavior (too many movements)
+      if (mouseMoveCount > SUSPICIOUS_MOVEMENT_THRESHOLD) {
+        console.log('[PROCTORING] Suspicious mouse activity detected');
+        mouseMoveCount = 0; // Reset counter
+      } else {
+        mouseMoveCount = 0; // Reset every interval
+      }
+    }, 10000);
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseleave', handleMouseLeave);
+    console.log('[PROCTORING] Mouse movement tracking started');
+
+    return () => {
+      clearInterval(trackingInterval);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseleave', handleMouseLeave);
+    };
+  }, [logEvent]);
+
   // ==================== TAB SWITCH / WINDOW BLUR DETECTION ====================
   const setupTabSwitchDetection = useCallback(() => {
     const handleVisibilityChange = () => {
@@ -831,6 +944,7 @@ export function useProctoringMonitor({
     const cleanupScreenRecording = setupScreenRecordingDetection();
     const cleanupCopyPaste = setupCopyPasteDetection();
     const cleanupTabSwitch = setupTabSwitchDetection();
+    const cleanupMouseTracking = setupMouseTracking();
 
     // Stream-dependent setups (heavy processing offloaded to Web Worker)
     if (streamRef.current) {
@@ -918,6 +1032,7 @@ export function useProctoringMonitor({
       cleanupScreenRecording();
       cleanupCopyPaste();
       cleanupTabSwitch();
+      cleanupMouseTracking();
 
       console.log('[PROCTORING] All monitoring systems stopped');
     };

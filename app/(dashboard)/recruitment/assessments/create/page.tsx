@@ -98,7 +98,8 @@ export default function CreateAssessmentPage() {
   };
 
   const handleNavigateToJDCreation = () => {
-    router.push('/recruitment/job-descriptions?create=true');
+    // Pass returnUrl to redirect back to assessments page after job creation
+    router.push('/recruitment/jd-list?create=true&returnUrl=/recruitment/assessments');
   };
 
   if (isLoading) {
