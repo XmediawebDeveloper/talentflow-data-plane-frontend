@@ -21,6 +21,132 @@ import { CompletedScreen } from './CompletedScreen';
 import { useRefreshPrevention } from '@/hooks/useRefreshPrevention';
 import { useProctoringMonitor, ProctoringWarning } from '@/hooks/useProctoringMonitor';
 import { ProctoringWarningModal, useProctoringWarnings } from './ProctoringWarningModal';
+import { Monitor, Loader2, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+// ============================================
+// FULLSCREEN PROMPT SCREEN COMPONENT
+// ============================================
+
+interface FullscreenPromptScreenProps {
+  onFullscreenReady: () => void;
+}
+
+function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenProps) {
+  const [isEnteringFullscreen, setIsEnteringFullscreen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const enterFullscreenAndStart = async () => {
+    setIsEnteringFullscreen(true);
+    setError(null);
+
+    try {
+      if (!document.fullscreenElement) {
+        // Request fullscreen
+        await document.documentElement.requestFullscreen({
+          navigationUI: 'hide' // Hides browser UI like F11
+        });
+
+        // Wait a moment for fullscreen to take effect
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Verify we're in fullscreen
+        if (document.fullscreenElement) {
+          console.log('[FULLSCREEN] Successfully entered fullscreen mode');
+          // Start the assessment
+          onFullscreenReady();
+        } else {
+          throw new Error('Failed to enter fullscreen mode');
+        }
+      } else {
+        // Already in fullscreen, just start
+        onFullscreenReady();
+      }
+    } catch (err) {
+      console.error('[FULLSCREEN] Error entering fullscreen:', err);
+      setError('Failed to enter fullscreen mode. Please try again or enable fullscreen in your browser settings.');
+      setIsEnteringFullscreen(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-12">
+        {/* Icon */}
+        <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+          <Monitor className="w-12 h-12 text-blue-600" />
+        </div>
+
+        {/* Title */}
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 text-center">
+          Enter Fullscreen Mode
+        </h1>
+
+        {/* Description */}
+        <p className="text-lg text-gray-600 mb-8 text-center">
+          This assessment requires fullscreen mode to prevent distractions and ensure a fair testing environment.
+          Click the button below to enter fullscreen and begin your assessment.
+        </p>
+
+        {/* Benefits */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-8">
+          <p className="font-semibold text-blue-900 mb-3">Fullscreen Assessment Benefits:</p>
+          <ul className="space-y-2 text-blue-800">
+            <li className="flex items-start gap-2">
+              <span className="text-blue-600 mt-1">✓</span>
+              <span>Hides browser tabs & navigation (like F11)</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-blue-600 mt-1">✓</span>
+              <span>Full-screen immersive experience</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-blue-600 mt-1">✓</span>
+              <span>Eliminates external distractions</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-blue-600 mt-1">✓</span>
+              <span>Provides fair testing environment</span>
+            </li>
+          </ul>
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-red-800">{error}</p>
+          </div>
+        )}
+
+        {/* Enter Fullscreen Button */}
+        <Button
+          onClick={enterFullscreenAndStart}
+          disabled={isEnteringFullscreen}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-xl font-semibold rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+        >
+          {isEnteringFullscreen ? (
+            <>
+              <Loader2 className="w-6 h-6 mr-3 animate-spin" />
+              Entering Fullscreen...
+            </>
+          ) : (
+            <>
+              <Monitor className="w-6 h-6 mr-3" />
+              Enter Fullscreen & Start Assessment
+            </>
+          )}
+        </Button>
+
+        {/* Help Text */}
+        <p className="text-sm text-gray-500 mt-6 text-center">
+          You can exit fullscreen anytime by pressing <kbd className="px-2 py-1 bg-gray-100 border border-gray-300 rounded text-xs font-mono">Esc</kbd>,
+          but you'll be prompted to return to continue.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 type AssessmentStep =
   | 'loading'
@@ -28,6 +154,7 @@ type AssessmentStep =
   | 'landing'
   | 'consent'
   | 'system_check'
+  | 'fullscreen_prompt'  // NEW: Show fullscreen prompt BEFORE starting assessment
   | 'generating_questions'
   | 'assessment'
   | 'completing'
@@ -98,6 +225,9 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   const isAssessmentActive = step === 'assessment' || step === 'completing';
   // Proctoring should stop when assessment is completed
   const isProctoringActive = step === 'assessment';
+
+  // Fullscreen state for pre-assessment fullscreen prompt
+  const [isReadyToStart, setIsReadyToStart] = useState(false);
 
   useRefreshPrevention({
     enabled: isAssessmentActive,
@@ -336,14 +466,17 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     try {
       // Trigger question generation in background BEFORE system check
       console.log('[PORTAL] Triggering background question generation...');
-      await candidateService.prepareAssessment(token);
-      console.log('[PORTAL] Question generation started, proceeding to system check');
+      const prepareResponse = await candidateService.prepareAssessment(token);
+      console.log('[PORTAL] Prepare response:', prepareResponse);
+      console.log('[PORTAL] Question generation started successfully, proceeding to system check');
 
       // Proceed to system check while questions generate in parallel
       setStepSafe('system_check');
     } catch (err) {
-      console.error('[PORTAL] Failed to prepare assessment:', err);
-      // Still proceed to system check - questions will be generated on start if prepare failed
+      console.error('[PORTAL] ERROR: Failed to prepare assessment:', err);
+      console.error('[PORTAL] Error details:', err instanceof Error ? err.message : String(err));
+      // Still proceed to system check - fallback will handle it
+      console.log('[PORTAL] Proceeding to system check anyway - fallback will trigger prepare later');
       setStepSafe('system_check');
     }
   };
@@ -366,8 +499,29 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     }
   };
 
-  const handleSystemCheckComplete = async () => {
+  const handleSystemCheckComplete = async (existingStream?: MediaStream) => {
     console.log('[DEBUG] handleSystemCheckComplete started');
+
+    // If SystemCheck passed us a stream, keep it alive for assessment
+    if (existingStream) {
+      console.log('[PORTAL] Received camera stream from SystemCheck - keeping it alive');
+      streamRef.current = existingStream;
+      setCameraStream(existingStream);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = existingStream;
+      }
+    }
+
+    // Don't start assessment yet - show fullscreen prompt first
+    console.log('[PORTAL] System check complete, showing fullscreen prompt...');
+    setStepSafe('fullscreen_prompt');
+    setIsReadyToStart(true);
+  };
+
+  // NEW: Handler for when user enters fullscreen and is ready to start
+  const handleFullscreenReady = async () => {
+    console.log('[DEBUG] handleFullscreenReady started - user is in fullscreen');
 
     // Set BOTH flags to prevent ANY interference
     isStartingRef.current = true;
@@ -508,31 +662,77 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
 
         pollForReady();
       } else {
-        // Not started or failed - trigger generation now (fallback to old flow)
-        console.log('[PORTAL] Generation not started, using fallback flow');
+        // Not started or failed - trigger generation now (fallback flow)
+        console.log('[PORTAL] Generation not started, triggering prepare now...');
         setStepSafe('generating_questions');
 
-        const response = await candidateService.startAssessment(token);
+        try {
+          // Call prepare to trigger background generation
+          console.log('[PORTAL] Calling prepareAssessment as fallback...');
+          await candidateService.prepareAssessment(token);
+          console.log('[PORTAL] Prepare called, waiting for generation...');
 
-        if (!isMountedRef.current) return;
+          // Wait for generation to complete
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Give it 2 seconds to start
 
-        setAssessmentData(response);
+          // Now poll for ready
+          for (let i = 0; i < 45; i++) {
+            if (!isMountedRef.current) return;
 
-        if (!response.first_question || response.total_questions === 0) {
-          // Auto-refresh page instead of showing error
-          console.log('[PORTAL] Fallback flow - no questions - auto-refreshing page');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const checkStatus = await candidateService.getGenerationStatus(token);
+
+            if (checkStatus.status === 'ready' && checkStatus.questions_ready) {
+              console.log('[PORTAL] Questions ready after fallback prepare!');
+              const response = await candidateService.startAssessment(token);
+
+              if (!isMountedRef.current) return;
+
+              setAssessmentData(response);
+
+              if (!response.first_question || response.total_questions === 0) {
+                console.log('[PORTAL] No questions after fallback - auto-refreshing page');
+                window.location.reload();
+                return;
+              }
+
+              setCurrentQuestion(response.first_question);
+              setProgress({
+                answered: 0,
+                total: response.total_questions,
+                percent: 0
+              });
+
+              setStepSafe('assessment');
+              return;
+            }
+          }
+
+          // Timeout after polling
+          console.log('[PORTAL] Fallback generation timeout - auto-refreshing page');
           window.location.reload();
-          return;
+
+        } catch (prepareErr) {
+          console.error('[PORTAL] Prepare fallback failed:', prepareErr);
+          // Last resort - try to start anyway
+          try {
+            const response = await candidateService.startAssessment(token);
+            if (!isMountedRef.current) return;
+            setAssessmentData(response);
+
+            if (response.first_question && response.total_questions > 0) {
+              setCurrentQuestion(response.first_question);
+              setProgress({ answered: 0, total: response.total_questions, percent: 0 });
+              setStepSafe('assessment');
+            } else {
+              console.log('[PORTAL] Last resort failed - auto-refreshing page');
+              window.location.reload();
+            }
+          } catch (startErr) {
+            console.error('[PORTAL] Start fallback also failed:', startErr);
+            window.location.reload();
+          }
         }
-
-        setCurrentQuestion(response.first_question);
-        setProgress({
-          answered: 0,
-          total: response.total_questions,
-          percent: 0
-        });
-
-        setStepSafe('assessment');
       }
     } catch (err) {
       console.error('[PORTAL] Error in handleSystemCheckComplete:', err);
@@ -629,20 +829,33 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   const startProctoring = async () => {
     // Initialize camera stream for video monitoring
     // The useProctoringMonitor hook handles all event detection (copy, paste, tab switch, voice, etc.)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
-      });
-      streamRef.current = stream;
-      setCameraStream(stream);
+
+    // Check if we already have a stream from SystemCheck (prevents black screen gap)
+    if (streamRef.current && streamRef.current.active) {
+      console.log('[PROCTORING] Reusing existing camera stream from SystemCheck - no black screen!');
+      setCameraStream(streamRef.current);
 
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+        videoRef.current.srcObject = streamRef.current;
       }
-      console.log('[PROCTORING] Camera stream initialized successfully');
-    } catch (err) {
-      console.error('[PROCTORING] Failed to initialize camera:', err);
+    } else {
+      // No existing stream - request a new one (fallback)
+      console.log('[PROCTORING] No existing stream - requesting new camera access');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+        streamRef.current = stream;
+        setCameraStream(stream);
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        console.log('[PROCTORING] Camera stream initialized successfully');
+      } catch (err) {
+        console.error('[PROCTORING] Failed to initialize camera:', err);
+      }
     }
 
     // Start heartbeat for session keepalive
@@ -729,6 +942,9 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
           }}
         />
       );
+
+    case 'fullscreen_prompt':
+      return <FullscreenPromptScreen onFullscreenReady={handleFullscreenReady} />;
 
     case 'generating_questions':
       return (

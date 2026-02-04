@@ -1146,7 +1146,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                   Disable Job
                                 </button>
                               )}
-                              {/* Republish for Disabled */}
+                              {/* Re-enable JD for Disabled */}
                               {job.status === 'Disabled' && onRepublishJob && (
                                 <button
                                   onClick={(e) => {
@@ -1154,10 +1154,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                     onRepublishJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
                                 >
-                                  <RefreshCw className="w-4 h-4" />
-                                  Republish
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  Re-enable JD
                                 </button>
                               )}
                               {/* Archive Job */}
@@ -1396,7 +1396,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                   Disable Job
                                 </button>
                               )}
-                              {/* Republish for Disabled */}
+                              {/* Re-enable JD for Disabled */}
                               {job.status === 'Disabled' && onRepublishJob && (
                                 <button
                                   onClick={(e) => {
@@ -1404,10 +1404,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                     onRepublishJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
                                 >
-                                  <RefreshCw className="w-4 h-4" />
-                                  Republish
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  Re-enable JD
                                 </button>
                               )}
                               {/* Archive Job */}

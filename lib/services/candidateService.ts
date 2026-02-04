@@ -589,6 +589,35 @@ export const candidateService = {
   },
 
   /**
+   * Check time-based unit deduction thresholds
+   * Called periodically to automatically deduct units when time thresholds are reached
+   * Units are deducted from Control Plane via External API
+   */
+  async checkTimeBasedDeduction(token: string): Promise<{
+    success: boolean;
+    message: string;
+    units_deducted_now?: number;
+    units_deducted_so_far: number;
+    threshold_reached?: string;
+    time_percentage?: number;
+    remaining_units?: number;
+    completed?: boolean;
+    next_threshold?: string;
+  }> {
+    try {
+      const response = await candidateApi.post(
+        `/candidate/assessment/${token}/check-time-deduction`
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.detail || 'Failed to check time deduction');
+      }
+      throw error;
+    }
+  },
+
+  /**
    * Get assessment results
    * Returns null if results are still processing (overall_score is null)
    */

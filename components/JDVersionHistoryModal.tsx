@@ -94,7 +94,6 @@ export default function JDVersionHistoryModal({
   };
 
   const handleVersionClick = (version: JDVersion, index: number) => {
-    alert('Version clicked: v' + version.version_number);
     console.log('Version clicked:', version.version_number, version);
     setSelectedVersion(version);
     // Find the previous version for diff comparison

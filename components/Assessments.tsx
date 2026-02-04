@@ -548,8 +548,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
 
-    // Check if quota is available
-    if (totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0) {
+    // Check if quota is available (use availableUnits from API)
+    if (availableUnits !== null && availableUnits <= 0) {
       alert('Assessment quota exhausted. Please upgrade your plan or purchase add-on credits to continue.');
       return;
     }
@@ -857,25 +857,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <div className="flex items-center gap-1">
                     {isUnlimited ? (
                       <span className="text-sm font-bold text-green-700">Unlimited</span>
-                    ) : (
+                    ) : availableUnits !== null ? (
                       <>
-                        {/* Use stats.units_consumed to calculate remaining for consistency */}
-                        {(() => {
-                          const calculatedRemaining = Math.max(0, totalUnits - stats.units_consumed);
-                          return (
-                            <>
-                              <span className={`text-sm font-bold ${
-                                calculatedRemaining === 0
-                                  ? 'text-red-700'
-                                  : calculatedRemaining <= 2
-                                  ? 'text-orange-700'
-                                  : 'text-gray-900'
-                              }`}>{calculatedRemaining}</span>
-                              <span className="text-xs text-gray-500">/ {totalUnits} available</span>
-                            </>
-                          );
-                        })()}
+                        {/* Use availableUnits from API (source of truth from Control Plane) */}
+                        <span className={`text-sm font-bold ${
+                          availableUnits === 0
+                            ? 'text-red-700'
+                            : availableUnits <= 2
+                            ? 'text-orange-700'
+                            : 'text-gray-900'
+                        }`}>{availableUnits}</span>
+                        <span className="text-xs text-gray-500">/ {totalUnits} available</span>
                       </>
+                    ) : (
+                      <span className="text-xs text-gray-400">Loading...</span>
                     )}
                   </div>
                 </div>
@@ -906,7 +901,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         </div>
 
         {/* Low Quota Warning Banner */}
-        {!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) > 0 && (totalUnits - stats.units_consumed) <= 3 && (
+        {!isUnlimited && availableUnits !== null && availableUnits > 0 && availableUnits <= 3 && (
           <div className="mb-6 bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-orange-200 flex items-center justify-center flex-shrink-0">
@@ -915,7 +910,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <div className="flex-1">
                 <h3 className="text-sm font-semibold text-orange-900 mb-1">Low Assessment Quota</h3>
                 <p className="text-sm text-orange-800">
-                  You have only <span className="font-bold">{Math.max(0, totalUnits - stats.units_consumed)}</span> assessment unit{(totalUnits - stats.units_consumed) !== 1 ? 's' : ''} remaining out of {totalUnits}.
+                  You have only <span className="font-bold">{availableUnits}</span> assessment unit{availableUnits !== 1 ? 's' : ''} remaining out of {totalUnits}.
                   {' '}Consider purchasing add-on credits to avoid interruptions.
                 </p>
               </div>
@@ -930,7 +925,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         )}
 
         {/* Quota Exhausted Banner */}
-        {!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 && (
+        {!isUnlimited && availableUnits !== null && availableUnits <= 0 && (
           <div className="mb-6 bg-red-50 border-2 border-red-300 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-200 flex items-center justify-center flex-shrink-0">
@@ -1773,9 +1768,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             AI
                           </span>
                         )}
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold flex-shrink-0">
-                          V{assessment.version || 1}
-                        </span>
                       </div>
                       <div className="text-xs text-gray-600 mb-1">
                         {assessment.jd_short_id && (
@@ -1986,9 +1978,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 AI
                               </span>
                             )}
-                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold flex-shrink-0">
-                              V{assessment.version || 1}
-                            </span>
                           </div>
 
                           <div className="text-xs text-gray-600 mb-1.5">

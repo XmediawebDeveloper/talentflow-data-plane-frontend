@@ -6,7 +6,7 @@ import {
   Search,
   Plus,
   Pencil,
-  Trash2,
+  Ban,
   X,
   Mail,
   Calendar,
@@ -1701,14 +1701,14 @@ export default function UserManagement() {
                         </button>
                       )}
 
-                      {/* Hide Delete button ONLY for tenant admins and current user */}
+                      {/* Hide Deactivate button ONLY for tenant admins and current user */}
                       {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
                         <button
                           onClick={() => handleDeleteUser(user.id)}
                           className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete User"
+                          title="Deactivate User"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Ban className="w-4 h-4" />
                         </button>
                       )}
                     </div>

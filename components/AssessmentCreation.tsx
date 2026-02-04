@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -44,7 +44,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   const [step, setStepState] = useState<'select-jd' | 'configure' | 'preview'>(urlStep || 'select-jd');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [duration, setDuration] = useState(30);
+  const duration = 30; // LOCKED: Duration is fixed at 30 minutes (not editable)
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<any>(null);
 
@@ -1616,32 +1616,35 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
               </div>
 
-              {/* Assessment Duration */}
+              {/* Assessment Duration - LOCKED at 30 minutes */}
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <Clock className="w-5 h-5 text-gray-700" />
                   <h3 className="font-medium text-gray-900">Assessment Duration</h3>
+                  <Lock className="w-4 h-4 text-gray-500" />
+                  <span className="text-xs text-gray-500">(Fixed)</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <input
                     type="range"
-                    min="15"
-                    max="120"
+                    min="30"
+                    max="30"
                     step="5"
-                    value={duration}
-                    onChange={(e) => handleDurationChange(Number(e.target.value))}
-                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
+                    value={30}
+                    disabled
+                    className="flex-1 h-2 bg-gray-100 rounded-lg appearance-none cursor-not-allowed"
                   />
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
-                      value={duration}
-                      onChange={(e) => handleDurationChange(Number(e.target.value))}
-                      className="w-16 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm text-gray-900"
+                      value={30}
+                      disabled
+                      className="w-16 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm text-gray-900 bg-gray-50 cursor-not-allowed"
                     />
                     <span className="text-sm text-gray-600">minutes</span>
                   </div>
                 </div>
+                <p className="text-xs text-gray-500 mt-2">Duration is fixed at 30 minutes for all assessments</p>
               </div>
 
               {/* Proctoring & Security - Hidden for now */}

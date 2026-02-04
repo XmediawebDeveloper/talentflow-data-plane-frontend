@@ -49,6 +49,7 @@ interface CustomPermissionCategory {
 // Custom permission categories matching the backend database
 // viewCode: When any action is selected, the view permission is auto-enabled
 const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
+  // 1. Job Description
   {
     id: 'job_description',
     name: 'Job Description',
@@ -58,38 +59,84 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'jd:create', label: 'Create' },
       { code: 'jd:update', label: 'Edit' },
       { code: 'jd:delete', label: 'Delete' },
+      { code: 'jd:archive', label: 'Archive' },
+      { code: 'jd:disable', label: 'Disable' },
     ],
   },
+  // 2. Resume Scoring (auto-enables Resume Upload when any action is selected)
   {
-    id: 'resumes',
-    name: 'Resumes',
+    id: 'resume_scoring',
+    name: 'Resume Scoring',
+    description: 'Resume scoring permissions (auto-enables Resume Upload)',
+    viewCode: 'scoring:read',
+    actions: [
+      { code: 'scoring:score', label: 'Score Resumes' },
+      { code: 'scoring:export', label: 'Export' },
+      { code: 'scoring:download', label: 'Download Scorecard' },
+      { code: 'scoring:delete', label: 'Delete' },
+    ],
+    dependencies: {
+      'scoring:score': ['my_resumes:upload', 'internal_db:upload'],
+      'scoring:export': ['my_resumes:upload', 'internal_db:upload'],
+      'scoring:download': ['my_resumes:upload', 'internal_db:upload'],
+      'scoring:delete': ['my_resumes:upload', 'internal_db:upload'],
+    },
+  },
+  // 3. AI Talent Match
+  {
+    id: 'ai_talent_match',
+    name: 'AI Talent Match',
+    description: 'AI talent matching permissions',
+    viewCode: 'ai_match:read',
+    actions: [
+      { code: 'ai_match:run', label: 'Run AI Match' },
+      { code: 'ai_match:apply', label: 'Apply for Job' },
+      { code: 'ai_match:delete', label: 'Delete' },
+      { code: 'ai_match:export', label: 'Export' },
+    ],
+  },
+  // 4. Resume Management
+  {
+    id: 'resume_management',
+    name: 'Resume Management',
     description: 'Resume management permissions',
-    viewCode: 'resumes:read',
-    actions: [
-      { code: 'resumes:create', label: 'Upload' },
-      { code: 'resumes:update', label: 'Edit' },
-      { code: 'resumes:delete', label: 'Delete' },
+    subCategories: [
+      {
+        name: 'My Resumes',
+        viewCode: 'my_resumes:read',
+        actions: [
+          { code: 'my_resumes:upload', label: 'Resume Upload' },
+          { code: 'my_resumes:delete', label: 'Delete' },
+          { code: 'my_resumes:archive', label: 'Archive' },
+          { code: 'my_resumes:apply_assessment', label: 'Apply to Assessment' },
+        ],
+      },
+      {
+        name: 'Internal Database',
+        viewCode: 'internal_db:read',
+        actions: [
+          { code: 'internal_db:upload', label: 'Resume Upload' },
+          { code: 'internal_db:delete', label: 'Delete' },
+          { code: 'internal_db:archive', label: 'Archive' },
+          { code: 'internal_db:apply_assessment', label: 'Apply to Assessment' },
+        ],
+      },
     ],
   },
-  {
-    id: 'internal_database',
-    name: 'Internal Database',
-    description: 'Access to internal resume database',
-    actions: [
-      { code: 'internal_db:read', label: 'View/Access' },
-    ],
-  },
+  // 5. Assessment
   {
     id: 'assessments',
-    name: 'Assessments',
+    name: 'Assessment',
     description: 'Assessment management permissions',
     viewCode: 'assessments:read',
     actions: [
       { code: 'assessments:create', label: 'Create' },
       { code: 'assessments:update', label: 'Edit' },
       { code: 'assessments:delete', label: 'Delete' },
+      { code: 'assessments:archive', label: 'Archive' },
     ],
   },
+  // 6. Subscription & Billing
   {
     id: 'subscription_billing',
     name: 'Subscription & Billing',
@@ -98,69 +145,102 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     viewCode: 'billing:read',
     subCategories: [
       {
-        name: 'Billing Management',
+        name: 'Current Plan',
+        viewCode: 'current_plan:read',
         actions: [
-          { code: 'billing:update', label: 'Manage' },
-        ],
-      },
-      {
-        name: 'Invoices',
-        viewCode: 'invoices:read',
-        actions: [
-          { code: 'invoices:create', label: 'Create' },
-          { code: 'invoices:update', label: 'Edit' },
+          { code: 'current_plan:upgrade', label: 'Upgrade' },
         ],
       },
       {
         name: 'Usage & Quotas',
         viewCode: 'usage:read',
         actions: [
-          { code: 'usage:update', label: 'Manage' },
+          { code: 'usage:upgrade', label: 'Upgrade' },
+          { code: 'usage:export', label: 'Export' },
+        ],
+      },
+      {
+        name: 'Payment Methods',
+        viewCode: 'payment_methods:read',
+        actions: [
+          { code: 'payment_methods:create', label: 'Add' },
+          { code: 'payment_methods:update', label: 'Edit' },
+          { code: 'payment_methods:delete', label: 'Delete' },
+        ],
+      },
+      {
+        name: 'Billing History',
+        actions: [
+          { code: 'billing_history:view', label: 'View' },
+        ],
+      },
+      {
+        name: 'Refund History',
+        actions: [
+          { code: 'refund_history:view', label: 'View' },
+        ],
+      },
+      {
+        name: 'Dispute History',
+        actions: [
+          { code: 'dispute_history:view', label: 'View' },
         ],
       },
     ],
   },
+  // 7. Settings
   {
     id: 'settings',
     name: 'Settings',
     description: 'System settings and configuration',
     isMenuToggle: true,
     viewCode: 'settings:read',
-    actions: [
-      { code: 'settings:update', label: 'Manage' },
-    ],
-  },
-  {
-    id: 'user_management',
-    name: 'User Management',
-    description: 'User and role management',
     subCategories: [
       {
-        name: 'Users',
-        viewCode: 'users:read',
+        name: 'General Settings',
+        viewCode: 'general_settings:read',
         actions: [
-          { code: 'users:create', label: 'Create' },
-          { code: 'users:update', label: 'Edit' },
-          { code: 'users:delete', label: 'Delete' },
+          { code: 'general_settings:update', label: 'Manage' },
         ],
       },
       {
-        name: 'Roles',
-        viewCode: 'roles:read',
+        name: 'Permissions & Roles',
+        viewCode: 'permissions_roles:read',
         actions: [
-          { code: 'roles:create', label: 'Create' },
-          { code: 'roles:update', label: 'Edit' },
-          { code: 'roles:delete', label: 'Delete' },
+          { code: 'permissions_roles:update', label: 'Manage' },
+        ],
+      },
+      {
+        name: 'API Management',
+        viewCode: 'api_management:read',
+        actions: [
+          { code: 'api_management:update', label: 'Manage' },
+        ],
+      },
+      {
+        name: 'Branding & White Label',
+        viewCode: 'branding:read',
+        actions: [
+          { code: 'branding:update', label: 'Manage' },
         ],
       },
     ],
   },
+  // 8. Support
   {
-    id: 'analytics',
-    name: 'Analytics & Reports',
-    description: 'View analytics and reports',
-    actions: [
-      { code: 'analytics:read', label: 'View' },
+    id: 'support',
+    name: 'Support',
+    description: 'Support and security settings',
+    isMenuToggle: true,
+    viewCode: 'support:read',
+    subCategories: [
+      {
+        name: 'Security Settings',
+        viewCode: 'security_settings:read',
+        actions: [
+          { code: 'security_settings:update', label: 'Manage' },
+        ],
+      },
     ],
   },
 ];
