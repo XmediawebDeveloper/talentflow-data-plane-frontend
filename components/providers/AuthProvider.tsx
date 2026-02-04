@@ -143,6 +143,11 @@ function mapApiUserToUser(apiUser: ApiUser): User {
     // RBAC06: Feature flags
     featureFlags: mapApiFeatureFlagsToFeatureFlags(apiUser.feature_flags),
     enabledFeatures: apiUser.enabled_features,
+    // Tenant status info (for suspension/expiry display)
+    tenantStatus: apiUser.tenant_status,
+    suspensionReason: apiUser.suspension_reason,
+    suspensionNotes: apiUser.suspension_notes,
+    suspendedAt: apiUser.suspended_at,
   };
 }
 
@@ -224,6 +229,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const axiosError = error as { response?: { status?: number; data?: { detail?: { error_code?: string } } } };
           if (axiosError?.response?.status === 403 &&
               axiosError?.response?.data?.detail?.error_code === 'SUBSCRIPTION_INACTIVE') {
+            // Check if user is on subscription page - they need to stay logged in to renew
+            const isOnSubscriptionPage = typeof window !== 'undefined' &&
+              window.location.pathname.includes('/subscription/current-plan');
+
+            if (isOnSubscriptionPage) {
+              console.warn('[AUTH] Subscription inactive but on subscription page, keeping session for renewal');
+              // Keep the user logged in so they can renew
+              return;
+            }
+
             console.warn('[AUTH] Subscription inactive, clearing session');
             clearTokens();
             clearUserFromStorage();

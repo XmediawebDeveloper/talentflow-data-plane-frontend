@@ -78,7 +78,263 @@ const MODULE_DISPLAY_NAMES: Record<string, string> = {
   export: 'Data Export',
 };
 
-// Group permissions by module
+// ============================================================================
+// CUSTOM PERMISSION CATEGORIES CONFIGURATION
+// ============================================================================
+// This defines the simplified permission structure for the Add/Edit User modal
+
+interface CustomPermissionAction {
+  code: string;  // Maps to backend permission code
+  label: string;
+  description?: string;
+}
+
+interface CustomPermissionSubCategory {
+  name: string;
+  viewCode?: string; // Auto-enabled when any action is selected
+  actions: CustomPermissionAction[];
+}
+
+interface CustomPermissionCategory {
+  id: string;
+  name: string;
+  icon?: string;
+  description?: string;
+  isMenuToggle?: boolean;  // If true, shows as single enable/disable toggle
+  viewCode?: string; // Auto-enabled when any action is selected
+  subCategories?: CustomPermissionSubCategory[];
+  actions?: CustomPermissionAction[];
+  dependencies?: {
+    // When this action is enabled, auto-enable these
+    [actionCode: string]: string[];
+  };
+}
+
+// Custom permission categories matching the user's requirements
+// NOTE: These permission codes need to exist in the backend RBAC system
+// Backend permission format: module:action (e.g., jd:create, resumes:delete)
+// viewCode: When any action is selected, the view permission is auto-enabled
+const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
+  {
+    id: 'job_description',
+    name: 'Job Description',
+    description: 'Job description management permissions',
+    viewCode: 'jd:read',
+    actions: [
+      { code: 'jd:create', label: 'Create' },
+      { code: 'jd:update', label: 'Edit' },
+      { code: 'jd:delete', label: 'Delete' },
+      { code: 'jd:archive', label: 'Archive' },
+      { code: 'jd:disable', label: 'Disable' },
+    ],
+  },
+  {
+    id: 'resume_scoring',
+    name: 'Resume Scoring',
+    description: 'Resume scoring and evaluation permissions',
+    viewCode: 'resume_scoring:read',
+    actions: [
+      { code: 'resume_scoring:create', label: 'Score Resumes' },
+      { code: 'resume_scoring:export', label: 'Export' },
+      { code: 'resume_scoring:download', label: 'Download Scorecard' },
+      { code: 'resume_scoring:delete', label: 'Delete' },
+    ],
+    // Important: If Resume Scoring is enabled, Resume Upload is auto-enabled for both My Resumes and Internal Database
+    dependencies: {
+      'resume_scoring:create': ['my_resumes:create', 'internal_db:create'],
+    },
+  },
+  {
+    id: 'ai_talent_match',
+    name: 'AI Talent Match',
+    description: 'AI-powered talent matching permissions',
+    viewCode: 'ai_talent_match:read',
+    actions: [
+      { code: 'ai_talent_match:create', label: 'Run AI Match' },
+      { code: 'ai_talent_match:apply', label: 'Apply for Job' },
+      { code: 'ai_talent_match:delete', label: 'Delete' },
+      { code: 'ai_talent_match:export', label: 'Export' },
+    ],
+  },
+  {
+    id: 'resume_management',
+    name: 'Resume Management',
+    description: 'Resume and candidate management permissions',
+    subCategories: [
+      {
+        name: 'My Resumes',
+        viewCode: 'my_resumes:read',
+        actions: [
+          { code: 'my_resumes:create', label: 'Resume Upload' },
+          { code: 'my_resumes:delete', label: 'Delete' },
+          { code: 'my_resumes:archive', label: 'Archive' },
+          { code: 'my_resumes:apply_assessment', label: 'Apply to Assessment' },
+        ],
+      },
+      {
+        name: 'Internal Database',
+        viewCode: 'internal_db:read',
+        actions: [
+          { code: 'internal_db:create', label: 'Resume Upload' },
+          { code: 'internal_db:delete', label: 'Delete' },
+          { code: 'internal_db:archive', label: 'Archive' },
+          { code: 'internal_db:apply_assessment', label: 'Apply to Assessment' },
+        ],
+      },
+      {
+        name: 'Assessment',
+        viewCode: 'assessments:read',
+        actions: [
+          { code: 'assessments:create', label: 'Create' },
+          { code: 'assessments:update', label: 'Edit' },
+          { code: 'assessments:delete', label: 'Delete' },
+          { code: 'assessments:archive', label: 'Archive' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'subscription_billing',
+    name: 'Subscription & Billing',
+    description: 'Billing and subscription management',
+    isMenuToggle: true,
+    viewCode: 'billing:read',
+    subCategories: [
+      {
+        name: 'Current Plan',
+        actions: [
+          { code: 'billing:upgrade', label: 'Upgrade' },
+        ],
+      },
+      {
+        name: 'Usage & Quotas',
+        actions: [
+          { code: 'usage:upgrade', label: 'Upgrade' },
+          { code: 'usage:export', label: 'Export' },
+        ],
+      },
+      {
+        name: 'Payment Methods',
+        actions: [
+          { code: 'payment_methods:create', label: 'Add' },
+          { code: 'payment_methods:update', label: 'Edit' },
+          { code: 'payment_methods:delete', label: 'Delete' },
+        ],
+      },
+      {
+        name: 'Billing History',
+        actions: [
+          { code: 'billing_history:read', label: 'View' },
+        ],
+      },
+      {
+        name: 'Refund History',
+        actions: [
+          { code: 'refund_history:read', label: 'View' },
+        ],
+      },
+      {
+        name: 'Dispute History',
+        actions: [
+          { code: 'dispute_history:read', label: 'View' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'settings',
+    name: 'Settings',
+    description: 'System settings and configuration',
+    isMenuToggle: true,
+    viewCode: 'settings:read',
+    subCategories: [
+      {
+        name: 'General Settings',
+        actions: [
+          { code: 'settings:general', label: 'Access' },
+        ],
+      },
+      {
+        name: 'Permissions & Roles',
+        actions: [
+          { code: 'settings:permissions_roles', label: 'Access' },
+        ],
+      },
+      {
+        name: 'API Management',
+        actions: [
+          { code: 'settings:api_management', label: 'Access' },
+        ],
+      },
+      {
+        name: 'Branding & White Label',
+        actions: [
+          { code: 'settings:branding', label: 'Access' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'support',
+    name: 'Support',
+    description: 'Support and security settings',
+    isMenuToggle: true,
+    viewCode: 'support:read',
+    subCategories: [
+      {
+        name: 'Security Settings',
+        actions: [
+          { code: 'support:security_settings', label: 'Access' },
+        ],
+      },
+    ],
+  },
+];
+
+// Helper to get all permission codes from custom categories
+const getAllCustomPermissionCodes = (): string[] => {
+  const codes: string[] = [];
+  CUSTOM_PERMISSION_CATEGORIES.forEach(category => {
+    if (category.actions) {
+      category.actions.forEach(action => codes.push(action.code));
+    }
+    if (category.subCategories) {
+      category.subCategories.forEach(sub => {
+        sub.actions.forEach(action => codes.push(action.code));
+      });
+    }
+  });
+  return codes;
+};
+
+// Helper to check if a permission code matches our custom categories
+const findPermissionInCustomCategories = (code: string): { categoryId: string; subCategory?: string; action: CustomPermissionAction } | null => {
+  for (const category of CUSTOM_PERMISSION_CATEGORIES) {
+    if (category.actions) {
+      const action = category.actions.find(a => a.code === code);
+      if (action) return { categoryId: category.id, action };
+    }
+    if (category.subCategories) {
+      for (const sub of category.subCategories) {
+        const action = sub.actions.find(a => a.code === code);
+        if (action) return { categoryId: category.id, subCategory: sub.name, action };
+      }
+    }
+  }
+  return null;
+};
+
+// Helper to get dependencies for a permission code
+const getPermissionDependencies = (code: string): string[] => {
+  for (const category of CUSTOM_PERMISSION_CATEGORIES) {
+    if (category.dependencies && category.dependencies[code]) {
+      return category.dependencies[code];
+    }
+  }
+  return [];
+};
+
+// Group permissions by module (original function - kept for backwards compatibility)
 const groupPermissionsByModule = (permissions: Permission[]): PermissionGroup[] => {
   const groups: Record<string, PermissionGroup> = {};
 
@@ -132,6 +388,38 @@ const groupPermissionsByModule = (permissions: Permission[]): PermissionGroup[] 
   return moduleOrder
     .filter(mod => groups[mod])
     .map(mod => groups[mod]);
+};
+
+// Map permission code to permission ID (helper for custom permission UI)
+const getPermissionIdByCode = (permissions: Permission[], code: string): number | null => {
+  const perm = permissions.find(p => p.code === code);
+  return perm ? perm.id : null;
+};
+
+// Get all permission IDs for a custom category
+const getCategoryPermissionIds = (
+  permissions: Permission[],
+  category: CustomPermissionCategory
+): number[] => {
+  const ids: number[] = [];
+
+  if (category.actions) {
+    category.actions.forEach(action => {
+      const id = getPermissionIdByCode(permissions, action.code);
+      if (id) ids.push(id);
+    });
+  }
+
+  if (category.subCategories) {
+    category.subCategories.forEach(sub => {
+      sub.actions.forEach(action => {
+        const id = getPermissionIdByCode(permissions, action.code);
+        if (id) ids.push(id);
+      });
+    });
+  }
+
+  return ids;
 };
 
 interface ApiUser {
@@ -340,6 +628,10 @@ export default function UserManagement() {
   const [selectedPermissionIds, setSelectedPermissionIds] = useState<Set<number>>(new Set());
   const [editSelectedPermissionIds, setEditSelectedPermissionIds] = useState<Set<number>>(new Set());
   const [editOriginalPermissionIds, setEditOriginalPermissionIds] = useState<Set<number>>(new Set());
+
+  // Track selected permission codes (for custom permission UI)
+  const [selectedPermissionCodes, setSelectedPermissionCodes] = useState<Set<string>>(new Set());
+  const [editSelectedPermissionCodes, setEditSelectedPermissionCodes] = useState<Set<string>>(new Set());
   const [editOriginalRoleId, setEditOriginalRoleId] = useState<number | null>(null);
 
   // RBAC06-07: Feature permission states
@@ -352,10 +644,6 @@ export default function UserManagement() {
   // Refresh trigger for SeatQuotaCard
   const [seatQuotaRefreshTrigger, setSeatQuotaRefreshTrigger] = useState(0);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
-  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
-  const [editRoleDropdownOpen, setEditRoleDropdownOpen] = useState(false);
-  const roleDropdownRef = useRef<HTMLDivElement>(null);
-  const editRoleDropdownRef = useRef<HTMLDivElement>(null);
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
@@ -437,20 +725,6 @@ export default function UserManagement() {
     loadAllPermissions();
   }, []);
 
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target as Node)) {
-        setRoleDropdownOpen(false);
-      }
-      if (editRoleDropdownRef.current && !editRoleDropdownRef.current.contains(event.target as Node)) {
-        setEditRoleDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const loadAllPermissions = async () => {
     try {
@@ -483,19 +757,25 @@ export default function UserManagement() {
       // Fetch full role details including permissions
       const roleDetails = await rbacService.getRoleById(roleId);
 
-      // Get permission IDs from the role
+      // Get permission IDs and codes from the role
       const permissionIds = new Set<number>(
         roleDetails.permissions?.map(p => p.id) || []
       );
+      const permissionCodes = new Set<string>(
+        roleDetails.permissions?.map(p => p.code) || []
+      );
 
       console.log(`[DEBUG] Loaded ${permissionIds.size} permissions for role ${roleId}`);
+      console.log(`[DEBUG] Permission codes:`, Array.from(permissionCodes));
 
       if (isEdit) {
         setEditSelectedRoleId(roleId);
         setEditSelectedPermissionIds(permissionIds);
+        setEditSelectedPermissionCodes(permissionCodes);
       } else {
         setSelectedRoleId(roleId);
         setSelectedPermissionIds(permissionIds);
+        setSelectedPermissionCodes(permissionCodes);
       }
     } catch (error) {
       console.error('Error fetching role permissions:', error);
@@ -503,9 +783,11 @@ export default function UserManagement() {
       if (isEdit) {
         setEditSelectedRoleId(roleId);
         setEditSelectedPermissionIds(new Set());
+        setEditSelectedPermissionCodes(new Set());
       } else {
         setSelectedRoleId(roleId);
         setSelectedPermissionIds(new Set());
+        setSelectedPermissionCodes(new Set());
       }
     } finally {
       setIsLoadingPermissions(false);
@@ -755,6 +1037,10 @@ export default function UserManagement() {
 
     setIsSaving(true);
     try {
+      // Log selected permission codes for debugging
+      console.log('[CREATE USER] Selected permission codes:', Array.from(selectedPermissionCodes));
+      console.log('[CREATE USER] Mapped permission IDs:', Array.from(selectedPermissionIds));
+
       const response = await fetch(`${API_URL}/users`, {
         method: 'POST',
         headers: {
@@ -768,6 +1054,7 @@ export default function UserManagement() {
           role: roleCode,
           role_id: selectedRoleId,
           permission_ids: Array.from(selectedPermissionIds),
+          permission_codes: Array.from(selectedPermissionCodes), // Also send codes for future backend support
         }),
       });
 
@@ -832,7 +1119,7 @@ export default function UserManagement() {
     setEmailCheckResult({ error: null, available: true }); // Reset validation
     setSelectedRoleId(null);
     setSelectedPermissionIds(new Set());
-    setRoleDropdownOpen(false);
+    setSelectedPermissionCodes(new Set()); // Reset permission codes
     setIsCreateModalOpen(false);
     // Clear email validation state
     setEmailCheckResult({ error: null, available: true });
@@ -947,7 +1234,19 @@ export default function UserManagement() {
       // Store original permissions for comparison later
       setEditOriginalPermissionIds(new Set(currentPermissionIds));
       setEditOriginalRoleId(matchingRole?.id || null);
+
+      // Also initialize permission codes based on permission IDs
+      const currentPermissionCodes = new Set<string>();
+      currentPermissionIds.forEach(id => {
+        const perm = allPermissions.find(p => p.id === id);
+        if (perm) {
+          currentPermissionCodes.add(perm.code);
+        }
+      });
+      setEditSelectedPermissionCodes(currentPermissionCodes);
+
       console.log(`[EDIT USER] Pre-selected ${currentPermissionIds.size} permissions for user ${user.email}`);
+      console.log(`[EDIT USER] Permission codes:`, Array.from(currentPermissionCodes));
     } catch (error) {
       console.error('Error fetching user permissions for edit:', error);
       // Fallback to empty permissions if fetch fails
@@ -969,8 +1268,8 @@ export default function UserManagement() {
     setEditSelectedRoleId(null);
     setEditSelectedPermissionIds(new Set());
     setEditOriginalPermissionIds(new Set());
+    setEditSelectedPermissionCodes(new Set()); // Reset permission codes
     setEditOriginalRoleId(null);
-    setEditRoleDropdownOpen(false);
     setEditEmailUsername('');
   };
 
@@ -1080,7 +1379,9 @@ export default function UserManagement() {
     // - If role NOT changed and no permission_ids → preserve existing
     if (permissionsChanged) {
       requestBody.permission_ids = Array.from(editSelectedPermissionIds);
+      requestBody.permission_codes = Array.from(editSelectedPermissionCodes); // Also send codes for future backend support
       console.log('[EDIT USER] Permissions changed, sending updated permission_ids');
+      console.log('[EDIT USER] Selected permission codes:', Array.from(editSelectedPermissionCodes));
     } else if (roleChanged) {
       // Role changed but permissions weren't explicitly modified
       // Don't send permission_ids - backend will apply new role defaults
@@ -1488,126 +1789,133 @@ export default function UserManagement() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Role <span className="text-red-500">*</span>
                 </label>
-                <div ref={roleDropdownRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-left flex items-center justify-between"
-                  >
-                    <span className={selectedRoleId ? 'text-gray-900' : 'text-gray-500'}>
-                      {selectedRoleId
-                        ? availableRoles.find(r => r.id === selectedRoleId)?.name || 'Select a role...'
-                        : 'Select a role...'}
-                    </span>
-                    <svg className={`w-5 h-5 text-gray-400 transition-transform ${roleDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  {roleDropdownOpen && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {availableRoles.map(role => (
-                        <button
-                          key={role.id}
-                          type="button"
-                          onClick={() => {
-                            selectRole(role.id);
-                            setRoleDropdownOpen(false);
-                          }}
-                          className={`w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
-                            selectedRoleId === role.id ? 'bg-gray-50' : ''
-                          }`}
-                        >
-                          <div className="font-medium text-gray-900">{role.name}</div>
-                          {role.description && (
-                            <div className="text-sm text-gray-500 mt-0.5">{role.description}</div>
+                {/* Role Selection Grid */}
+                <div className="grid grid-cols-2 gap-2">
+                  {availableRoles.map(role => {
+                    const isSelected = selectedRoleId === role.id;
+                    const isSystemRole = role.is_system;
+
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        onClick={() => selectRole(role.id)}
+                        className={`relative p-3 rounded-lg border-2 text-left transition-all ${
+                          isSelected
+                            ? 'border-gray-800 bg-gray-50 ring-1 ring-gray-800'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`font-medium ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
+                            {role.name}
+                          </span>
+                          {isSelected && (
+                            <div className="w-5 h-5 bg-gray-800 rounded-full flex items-center justify-center">
+                              <Check className="w-3 h-3 text-white" />
+                            </div>
                           )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                        </div>
+                        {role.description && (
+                          <p className="text-xs text-gray-500 mt-1 line-clamp-1">{role.description}</p>
+                        )}
+                        {isSystemRole && (
+                          <span className="absolute top-1 right-1 text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                            System
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
+                {availableRoles.length === 0 && (
+                  <div className="text-center py-4 text-gray-500 text-sm border border-dashed border-gray-300 rounded-lg">
+                    No roles available. Create roles in Role Management first.
+                  </div>
+                )}
               </div>
 
-              {/* Permissions - Only show after role is selected */}
+              {/* Role Permissions - Read-only display of what the selected role has */}
               {selectedRoleId && (
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-medium text-gray-700">
-                      Permissions <span className="text-xs text-gray-500">(Pre-filled based on role, customize as needed)</span>
+                      Role Permissions
                     </label>
-                    {allPermissions.length > 0 && !isLoadingPermissions && (
-                      <button
-                        type="button"
-                        onClick={handleSelectAllPermissions}
-                        className="text-xs font-medium text-gray-700 hover:text-gray-900 px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        {allPermissions.every(p => selectedPermissionIds.has(p.id)) ? 'Deselect All' : 'Select All'}
-                      </button>
-                    )}
+                    <span className="text-xs text-gray-500">
+                      {selectedPermissionCodes.size} permissions assigned
+                    </span>
                   </div>
                   {isLoadingPermissions ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
-                      <span className="ml-2 text-sm text-gray-500">Loading permissions...</span>
+                    <div className="flex items-center justify-center py-3 border border-gray-200 rounded-lg bg-gray-50">
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                      <span className="ml-2 text-sm text-gray-500">Loading...</span>
                     </div>
-                  ) : allPermissions.length > 0 ? (
-                    <div className="space-y-4 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                      {groupPermissionsByModule(allPermissions).map(group => {
-                        const modulePermissionIds = group.permissions.map(p => p.id);
-                        const allModuleSelected = modulePermissionIds.every(id => selectedPermissionIds.has(id));
-                        const someModuleSelected = modulePermissionIds.some(id => selectedPermissionIds.has(id)) && !allModuleSelected;
+                  ) : (
+                    <div className="space-y-3 max-h-[250px] overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                      {CUSTOM_PERMISSION_CATEGORIES.map(category => {
+                        // Check if any permission in this category is selected
+                        const hasAnyPermission = () => {
+                          if (category.actions) {
+                            if (category.actions.some(a => selectedPermissionCodes.has(a.code))) return true;
+                          }
+                          if (category.subCategories) {
+                            for (const sub of category.subCategories) {
+                              if (sub.actions.some(a => selectedPermissionCodes.has(a.code))) return true;
+                            }
+                          }
+                          return false;
+                        };
+
+                        // Only show categories that have at least one permission
+                        if (!hasAnyPermission()) return null;
+
+                        // Collect all selected actions for this category
+                        const selectedActions: string[] = [];
+                        if (category.actions) {
+                          category.actions.filter(a => selectedPermissionCodes.has(a.code)).forEach(a => selectedActions.push(a.label));
+                        }
+                        if (category.subCategories) {
+                          category.subCategories.forEach(sub => {
+                            sub.actions.filter(a => selectedPermissionCodes.has(a.code)).forEach(a => {
+                              selectedActions.push(`${sub.name}: ${a.label}`);
+                            });
+                          });
+                        }
 
                         return (
-                          <div key={group.module} className="space-y-2">
-                            <div className="flex items-center gap-2 border-b border-gray-100 pb-1">
-                              <button
-                                type="button"
-                                onClick={() => handleSelectModulePermissions(group.permissions)}
-                                className={`w-4 h-4 rounded flex items-center justify-center border-2 flex-shrink-0 ${
-                                  allModuleSelected
-                                    ? 'bg-gray-800 border-gray-800'
-                                    : someModuleSelected
-                                    ? 'bg-gray-200 border-gray-800'
-                                    : 'border-gray-300'
-                                }`}
-                              >
-                                {(allModuleSelected || someModuleSelected) && (
-                                  <Check className="w-3 h-3 text-white" />
-                                )}
-                              </button>
-                              <div className="text-sm font-medium text-gray-800">
-                                {group.moduleName}
-                                <span className="text-xs text-gray-500 ml-1">
-                                  ({modulePermissionIds.filter(id => selectedPermissionIds.has(id)).length}/{modulePermissionIds.length})
-                                </span>
-                              </div>
+                          <div key={category.id} className="flex items-start gap-2">
+                            <div className="flex-shrink-0 w-5 h-5 bg-green-100 rounded flex items-center justify-center mt-0.5">
+                              <Check className="w-3 h-3 text-green-600" />
                             </div>
-                            <div className="grid grid-cols-2 gap-2 pl-2">
-                              {group.permissions.map(perm => (
-                                <label
-                                  key={perm.id}
-                                  className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedPermissionIds.has(perm.id)}
-                                    onChange={() => togglePermission(perm.id)}
-                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                  />
-                                  <span className="text-sm text-gray-700">{perm.name}</span>
-                                </label>
-                              ))}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-900">
+                                {category.name}
+                                {category.isMenuToggle && (
+                                  <span className="ml-2 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+                                    Menu Access
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {selectedActions.join(' • ')}
+                              </div>
                             </div>
                           </div>
                         );
                       })}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 border border-gray-200 rounded-lg bg-gray-50">
-                      <p className="text-sm text-gray-500">No permissions available</p>
+
+                      {/* Show message if no custom permissions found */}
+                      {selectedPermissionCodes.size === 0 && (
+                        <div className="text-center py-4 text-gray-500 text-sm">
+                          No permissions assigned to this role yet.
+                          <br />
+                          <span className="text-xs">Configure permissions in Role Management.</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1698,126 +2006,127 @@ export default function UserManagement() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Role <span className="text-red-500">*</span>
                 </label>
-                <div ref={editRoleDropdownRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setEditRoleDropdownOpen(!editRoleDropdownOpen)}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-left flex items-center justify-between"
-                  >
-                    <span className={editSelectedRoleId ? 'text-gray-900' : 'text-gray-500'}>
-                      {editSelectedRoleId
-                        ? availableRoles.find(r => r.id === editSelectedRoleId)?.name || 'Select a role...'
-                        : 'Select a role...'}
-                    </span>
-                    <svg className={`w-5 h-5 text-gray-400 transition-transform ${editRoleDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  {editRoleDropdownOpen && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {availableRoles.map(role => (
-                        <button
-                          key={role.id}
-                          type="button"
-                          onClick={() => {
-                            selectRole(role.id, true);
-                            setEditRoleDropdownOpen(false);
-                          }}
-                          className={`w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
-                            editSelectedRoleId === role.id ? 'bg-gray-50' : ''
-                          }`}
-                        >
-                          <div className="font-medium text-gray-900">{role.name}</div>
-                          {role.description && (
-                            <div className="text-sm text-gray-500 mt-0.5">{role.description}</div>
+                {/* Role Selection Grid */}
+                <div className="grid grid-cols-2 gap-2">
+                  {availableRoles.map(role => {
+                    const isSelected = editSelectedRoleId === role.id;
+                    const isSystemRole = role.is_system;
+
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        onClick={() => selectRole(role.id, true)}
+                        className={`relative p-3 rounded-lg border-2 text-left transition-all ${
+                          isSelected
+                            ? 'border-gray-800 bg-gray-50 ring-1 ring-gray-800'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`font-medium ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
+                            {role.name}
+                          </span>
+                          {isSelected && (
+                            <div className="w-5 h-5 bg-gray-800 rounded-full flex items-center justify-center">
+                              <Check className="w-3 h-3 text-white" />
+                            </div>
                           )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                        </div>
+                        {role.description && (
+                          <p className="text-xs text-gray-500 mt-1 line-clamp-1">{role.description}</p>
+                        )}
+                        {isSystemRole && (
+                          <span className="absolute top-1 right-1 text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                            System
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Permissions - Only show after role is selected */}
+              {/* Role Permissions - Read-only display of what the selected role has */}
               {editSelectedRoleId && (
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-medium text-gray-700">
-                      Permissions <span className="text-xs text-gray-500">(Pre-filled based on role, customize as needed)</span>
+                      Role Permissions
                     </label>
-                    {allPermissions.length > 0 && !isLoadingPermissions && (
-                      <button
-                        type="button"
-                        onClick={handleSelectAllEditPermissions}
-                        className="text-xs font-medium text-gray-700 hover:text-gray-900 px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        {allPermissions.every(p => editSelectedPermissionIds.has(p.id)) ? 'Deselect All' : 'Select All'}
-                      </button>
-                    )}
+                    <span className="text-xs text-gray-500">
+                      {editSelectedPermissionCodes.size} permissions assigned
+                    </span>
                   </div>
                   {isLoadingPermissions ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
-                      <span className="ml-2 text-sm text-gray-500">Loading permissions...</span>
+                    <div className="flex items-center justify-center py-3 border border-gray-200 rounded-lg bg-gray-50">
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                      <span className="ml-2 text-sm text-gray-500">Loading...</span>
                     </div>
-                  ) : allPermissions.length > 0 ? (
-                    <div className="space-y-4 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                      {groupPermissionsByModule(allPermissions).map(group => {
-                        const modulePermissionIds = group.permissions.map(p => p.id);
-                        const allModuleSelected = modulePermissionIds.every(id => editSelectedPermissionIds.has(id));
-                        const someModuleSelected = modulePermissionIds.some(id => editSelectedPermissionIds.has(id)) && !allModuleSelected;
+                  ) : (
+                    <div className="space-y-3 max-h-[250px] overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                      {CUSTOM_PERMISSION_CATEGORIES.map(category => {
+                        // Check if any permission in this category is selected
+                        const hasAnyPermission = () => {
+                          if (category.actions) {
+                            if (category.actions.some(a => editSelectedPermissionCodes.has(a.code))) return true;
+                          }
+                          if (category.subCategories) {
+                            for (const sub of category.subCategories) {
+                              if (sub.actions.some(a => editSelectedPermissionCodes.has(a.code))) return true;
+                            }
+                          }
+                          return false;
+                        };
+
+                        // Only show categories that have at least one permission
+                        if (!hasAnyPermission()) return null;
+
+                        // Collect all selected actions for this category
+                        const selectedActions: string[] = [];
+                        if (category.actions) {
+                          category.actions.filter(a => editSelectedPermissionCodes.has(a.code)).forEach(a => selectedActions.push(a.label));
+                        }
+                        if (category.subCategories) {
+                          category.subCategories.forEach(sub => {
+                            sub.actions.filter(a => editSelectedPermissionCodes.has(a.code)).forEach(a => {
+                              selectedActions.push(`${sub.name}: ${a.label}`);
+                            });
+                          });
+                        }
 
                         return (
-                          <div key={group.module} className="space-y-2">
-                            <div className="flex items-center gap-2 border-b border-gray-100 pb-1">
-                              <button
-                                type="button"
-                                onClick={() => handleSelectEditModulePermissions(group.permissions)}
-                                className={`w-4 h-4 rounded flex items-center justify-center border-2 flex-shrink-0 ${
-                                  allModuleSelected
-                                    ? 'bg-gray-800 border-gray-800'
-                                    : someModuleSelected
-                                    ? 'bg-gray-200 border-gray-800'
-                                    : 'border-gray-300'
-                                }`}
-                              >
-                                {(allModuleSelected || someModuleSelected) && (
-                                  <Check className="w-3 h-3 text-white" />
-                                )}
-                              </button>
-                              <div className="text-sm font-medium text-gray-800">
-                                {group.moduleName}
-                                <span className="text-xs text-gray-500 ml-1">
-                                  ({modulePermissionIds.filter(id => editSelectedPermissionIds.has(id)).length}/{modulePermissionIds.length})
-                                </span>
-                              </div>
+                          <div key={category.id} className="flex items-start gap-2">
+                            <div className="flex-shrink-0 w-5 h-5 bg-green-100 rounded flex items-center justify-center mt-0.5">
+                              <Check className="w-3 h-3 text-green-600" />
                             </div>
-                            <div className="grid grid-cols-2 gap-2 pl-2">
-                              {group.permissions.map(perm => (
-                                <label
-                                  key={perm.id}
-                                  className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={editSelectedPermissionIds.has(perm.id)}
-                                    onChange={() => toggleEditPermission(perm.id)}
-                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                  />
-                                  <span className="text-sm text-gray-700">{perm.name}</span>
-                                </label>
-                              ))}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-900">
+                                {category.name}
+                                {category.isMenuToggle && (
+                                  <span className="ml-2 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+                                    Menu Access
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {selectedActions.join(' • ')}
+                              </div>
                             </div>
                           </div>
                         );
                       })}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 border border-gray-200 rounded-lg bg-gray-50">
-                      <p className="text-sm text-gray-500">No permissions available</p>
+
+                      {/* Show message if no custom permissions found */}
+                      {editSelectedPermissionCodes.size === 0 && (
+                        <div className="text-center py-3 text-gray-500 text-sm">
+                          No permissions assigned to this role.
+                          <span className="block text-xs mt-1">Configure in Role Management.</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

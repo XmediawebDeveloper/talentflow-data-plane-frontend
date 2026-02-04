@@ -317,9 +317,44 @@ const formatCardNumber = (value: string): string => {
   return parts.length ? parts.join(' ') : value;
 };
 
-// Format quota values - handles "unlimited" string and large numbers
-const formatQuotaValue = (value: number | string | undefined | null): string => {
+// Extract numeric quota value from potentially nested objects
+// Returns the numeric value or the original value if already primitive
+const extractQuotaValue = (value: any): number | string => {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === 'number' || typeof value === 'string') return value;
+
+  // Handle object values (e.g., { subscription: { limit: 10 } } or { limit: 10 })
+  if (typeof value === 'object') {
+    const numericValue =
+      value?.subscription?.limit ??
+      value?.limit ??
+      value?.total_remaining ??
+      value?.value;
+    if (numericValue !== undefined) {
+      return extractQuotaValue(numericValue); // Recursively extract
+    }
+  }
+  return 0;
+};
+
+// Format quota values - handles "unlimited" string, large numbers, and quota objects
+const formatQuotaValue = (value: number | string | undefined | null | Record<string, any>): string => {
   if (value === undefined || value === null) return '-';
+
+  // Handle object values (e.g., { subscription: { limit: 10 } } or { limit: 10 })
+  if (typeof value === 'object') {
+    // Try common paths for quota values
+    const numericValue =
+      value?.subscription?.limit ??
+      value?.limit ??
+      value?.total_remaining ??
+      value?.value;
+    if (numericValue !== undefined) {
+      return formatQuotaValue(numericValue); // Recursively format the extracted value
+    }
+    return '-'; // Object without recognizable structure
+  }
+
   if (value === 'unlimited' || value === 'Unlimited') return 'Unlimited';
   if (typeof value === 'string' && value.toLowerCase() === 'unlimited') return 'Unlimited';
   if (typeof value === 'number') {
@@ -332,7 +367,7 @@ const formatQuotaValue = (value: number | string | undefined | null): string => 
 function CurrentPlanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
@@ -405,18 +440,27 @@ function CurrentPlanContent() {
   // Use ref to track if data has been fetched to prevent duplicate calls
   const hasFetchedRef = useRef(false);
 
-  // Get tenant ID from token on mount
+  // Get tenant ID from user context or token on mount
   useEffect(() => {
+    // First try to get from user context (most reliable for expired subscriptions)
+    if (user?.tenantId) {
+      setTenantId(user.tenantId);
+      console.log('[CurrentPlan] tenant_id set from user context:', user.tenantId);
+      return;
+    }
+
+    // Fallback: try to parse from JWT token
     const token = localStorage.getItem('accessToken');
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setTenantId(payload.tenant_id || null);
+        console.log('[CurrentPlan] tenant_id set from token:', payload.tenant_id);
       } catch (e) {
         console.error('Failed to parse token:', e);
       }
     }
-  }, []);
+  }, [user]);
 
   // Debug: Log company settings whenever it changes
   useEffect(() => {
@@ -452,17 +496,17 @@ function CurrentPlanContent() {
           const ftData = freeTrialResult.data || freeTrialResult;
           console.log('[CurrentPlan] Free trial API response:', ftData);
 
-          // Use API data only for trial settings
+          // Use API data only for trial settings - extract numeric values from potential objects
           trialSettings = {
             id: ftData.id,
             trial_days: ftData.trial_days,
             features: {
-              MAX_JOBS: ftData.features?.MAX_JOBS,
-              MAX_SEATS: ftData.features?.MAX_SEATS,
-              ASSESSMENTS: ftData.features?.ASSESSMENTS,
-              AI_INTERVIEW: ftData.features?.AI_INTERVIEW,
-              RESUME_SCORING: ftData.features?.RESUME_SCORING,
-              RESUME_STORAGE: ftData.features?.RESUME_STORAGE,
+              MAX_JOBS: extractQuotaValue(ftData.features?.MAX_JOBS) as number,
+              MAX_SEATS: extractQuotaValue(ftData.features?.MAX_SEATS) as number,
+              ASSESSMENTS: extractQuotaValue(ftData.features?.ASSESSMENTS) as number,
+              AI_INTERVIEW: extractQuotaValue(ftData.features?.AI_INTERVIEW) as number,
+              RESUME_SCORING: extractQuotaValue(ftData.features?.RESUME_SCORING) as number,
+              RESUME_STORAGE: extractQuotaValue(ftData.features?.RESUME_STORAGE) as number,
             },
             trial_includes: ftData.trial_includes || [],
           };
@@ -486,15 +530,15 @@ function CurrentPlanContent() {
         console.log('[CurrentPlan] Setting subscription_status as:', status, '(is_trial:', quotaData.is_trial, ')');
       }
 
-      // If quota-status API failed, set error state instead of defaulting to trial
+      // If quota-status API failed (likely due to expired subscription), set appropriate state
       if (!quotaData) {
-        console.log('[CurrentPlan] Quota-status API failed, setting error state');
-        setQuotaSubscriptionStatus('error');
+        console.log('[CurrentPlan] Quota-status API failed - likely expired subscription, allowing plan selection');
+        setQuotaSubscriptionStatus('expired');
         setCompanySettings(prev => ({
           ...(prev || {}),
-          current_plan_name: 'Unable to load plan',
-          subscription_status: 'error',
-          status: 'error',
+          current_plan_name: 'Subscription Expired',
+          subscription_status: 'expired',
+          status: 'expired',
           max_seats: 0,
           max_jobs: 0,
           max_resume_uploads: 0,
@@ -503,7 +547,8 @@ function CurrentPlanContent() {
           max_ai_interviews: 0,
           storage_limit_gb: 0,
         } as CompanySettings));
-        setError('Unable to load subscription data. Please try again later.');
+        // Don't set error - allow user to select a plan to renew
+        // setError('Unable to load subscription data. Please try again later.');
       }
 
       if (quotaData?.quotas || quotaData) {
@@ -539,13 +584,14 @@ function CurrentPlanContent() {
           plan_start_date: planStartDate || prev?.plan_start_date,
           plan_expiry_date: planEndDate || prev?.plan_expiry_date,
           // Update quota limits - use free trial API data for trial users, otherwise use quota-status (API only)
-          max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : (quotas?.max_seats?.subscription?.limit || prev?.max_seats || 0),
-          max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : (quotas?.max_jobs?.subscription?.limit || prev?.max_jobs || 0),
-          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : (quotas?.RU?.subscription?.limit || prev?.max_resume_uploads || 0),
-          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : (quotas?.RS?.subscription?.limit || prev?.max_resume_searches || 0),
-          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : (quotas?.AS?.subscription?.limit || prev?.max_assessments || 0),
-          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : (quotas?.AIU?.subscription?.limit || prev?.max_ai_interviews || 0),
-          storage_limit_gb: quotas?.storage_gb?.subscription?.limit || prev?.storage_limit_gb || 0,
+          // Use extractQuotaValue to handle potential object values from API
+          max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : extractQuotaValue(quotas?.max_seats || prev?.max_seats || 0),
+          max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : extractQuotaValue(quotas?.max_jobs || prev?.max_jobs || 0),
+          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : extractQuotaValue(quotas?.RU || prev?.max_resume_uploads || 0),
+          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : extractQuotaValue(quotas?.RS || prev?.max_resume_searches || 0),
+          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : extractQuotaValue(quotas?.AS || prev?.max_assessments || 0),
+          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : extractQuotaValue(quotas?.AIU || prev?.max_ai_interviews || 0),
+          storage_limit_gb: extractQuotaValue(quotas?.storage_gb || prev?.storage_limit_gb || 0),
         } as CompanySettings));
 
         console.log('[CurrentPlan] isTrial:', isTrial, 'trialSettings:', trialSettings?.features);
@@ -784,7 +830,12 @@ function CurrentPlanContent() {
         }, 2000);
         return; // Exit early
       } else {
-        setError(data.detail || data.data?.message || 'Failed to apply upgrade');
+        // Handle both string and object error formats
+        const errorDetail = data.detail;
+        const errorMsg = typeof errorDetail === 'string'
+          ? errorDetail
+          : errorDetail?.message || data.data?.message || 'Failed to apply upgrade';
+        setError(errorMsg);
       }
     } catch (err) {
       console.error('[CurrentPlan] Error applying upgrade:', err);
@@ -821,7 +872,12 @@ function CurrentPlanContent() {
         setCancelReason('');
         await fetchQueuedUpgrades();
       } else {
-        setError(data.detail || 'Failed to cancel upgrade');
+        // Handle both string and object error formats
+        const errorDetail = data.detail;
+        const errorMsg = typeof errorDetail === 'string'
+          ? errorDetail
+          : errorDetail?.message || 'Failed to cancel upgrade';
+        setError(errorMsg);
       }
     } catch (err) {
       console.error('[CurrentPlan] Error cancelling upgrade:', err);
@@ -836,13 +892,13 @@ function CurrentPlanContent() {
     if (quotaLoading) return;
 
     // Prevent duplicate calls on re-renders or React Strict Mode
-    if (hasFetchedRef.current && sharedQuotaData) return;
+    if (hasFetchedRef.current) return;
 
-    if (sharedQuotaData) {
-      hasFetchedRef.current = true;
-      fetchData();
-      fetchQueuedUpgrades();
-    }
+    // Fetch data even if sharedQuotaData is null (e.g., when subscription is expired)
+    // This allows expired users to see available plans and renew their subscription
+    hasFetchedRef.current = true;
+    fetchData();
+    fetchQueuedUpgrades();
   }, [sharedQuotaData, quotaLoading]);
 
   // Auto-select plan from URL parameter (from pricing page flow)
@@ -1083,7 +1139,11 @@ function CurrentPlanContent() {
         // Notify Header component to refresh quota/plan display
         window.dispatchEvent(new CustomEvent('planChanged'));
       } else {
-        const errorMessage = data.detail || data.message || 'Failed to upgrade plan';
+        // Handle both string and object error formats
+        const errorDetail = data.detail;
+        const errorMessage = typeof errorDetail === 'string'
+          ? errorDetail
+          : errorDetail?.message || data.message || 'Failed to upgrade plan';
         setError(errorMessage);
         toast.error('Plan Selection Failed', {
           description: errorMessage,
@@ -1145,6 +1205,8 @@ function CurrentPlanContent() {
                            companySettings?.payment_status === 'pending';
   const isLocked = companySettings?.status?.toLowerCase() === 'locked';
   const isActive = quotaSubscriptionStatus.toLowerCase() === 'active';
+  const isExpiredSubscription = quotaSubscriptionStatus.toLowerCase() === 'expired' ||
+                                 companySettings?.status?.toLowerCase() === 'expired';
   // Use quotaSubscriptionStatus as source of truth for status badge
   const statusBadge = getStatusBadge(quotaSubscriptionStatus, companySettings?.payment_status, freeTrialSettings?.trial_days);
   const StatusIcon = statusBadge.icon;
@@ -1914,7 +1976,7 @@ function CurrentPlanContent() {
                         'Upgrade Queued'
                       ) : (!plan.monthlyPrice && !plan.annualPrice) ? (
                         'Contact Sales'
-                      ) : isOnTrial || isLocked ? (
+                      ) : isOnTrial || isLocked || isExpiredSubscription ? (
                         'Choose Plan'
                       ) : (
                         'Upgrade'

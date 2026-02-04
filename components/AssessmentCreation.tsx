@@ -295,7 +295,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
     // Refresh the jobs list to include the new JD
     try {
-      const response = await jdService.list({ status: 'published', page_size: 100 });
+      const response = await jdService.list({ status: 'published', page_size: 100, source: 'my-jds' });
       if (response?.items?.length > 0) {
         const mappedJobs: Job[] = response.items.map((jd: any) => ({
           id: jd.id,
@@ -338,7 +338,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       try {
         // Fetch both JDs and JDs with assessments in parallel
         const [jdResponse, jdsWithAssessmentsResponse] = await Promise.all([
-          jdService.list({ status: 'published', page_size: 100 }),
+          jdService.list({ status: 'published', page_size: 100, source: 'my-jds' }),
           assessmentService.getJDsWithAssessments(),
         ]);
 

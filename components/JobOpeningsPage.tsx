@@ -99,9 +99,10 @@ export default function JobOpeningsPage() {
       setLoading(true);
       try {
         // Build params - only include status if not 'all'
-        const params: { status?: string; search?: string; page: number; page_size: number } = {
+        const params: { status?: string; search?: string; source?: string; page: number; page_size: number } = {
           page: currentPage,
           page_size: 12,
+          source: 'my-jds',  // Only show JDs created by the logged-in user
         };
 
         if (activeFilter !== 'all') {
@@ -117,11 +118,11 @@ export default function JobOpeningsPage() {
         setTotalPages(response.total_pages);
         setTotal(response.total);
 
-        // Calculate stats from multiple API calls
+        // Calculate stats from multiple API calls (also filtered by user)
         const [allRes, publishedRes, draftRes] = await Promise.all([
-          jdService.list({ page_size: 1 }),
-          jdService.list({ status: 'published', page_size: 1 }),
-          jdService.list({ status: 'draft', page_size: 1 }),
+          jdService.list({ page_size: 1, source: 'my-jds' }),
+          jdService.list({ status: 'published', page_size: 1, source: 'my-jds' }),
+          jdService.list({ status: 'draft', page_size: 1, source: 'my-jds' }),
         ]);
 
         const totalApplicants = response.items.reduce((sum, j) => sum + (j.applicants_count || 0), 0);
@@ -468,14 +469,14 @@ export default function JobOpeningsPage() {
                             Disable Job
                           </button>
                         )}
-                        {/* Republish for disabled */}
+                        {/* Re-enable JD for disabled */}
                         {job.status === 'disabled' && (
                           <button
                             onClick={() => handleStatusChange(job.id, 'published')}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
                           >
-                            <RefreshCw className="w-4 h-4" />
-                            Republish
+                            <Power className="w-4 h-4" />
+                            Re-enable JD
                           </button>
                         )}
                         {/* Archive Job */}
@@ -651,14 +652,14 @@ export default function JobOpeningsPage() {
                                   Disable Job
                                 </button>
                               )}
-                              {/* Republish for disabled */}
+                              {/* Re-enable JD for disabled */}
                               {job.status === 'disabled' && (
                                 <button
                                   onClick={() => handleStatusChange(job.id, 'published')}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
                                 >
-                                  <RefreshCw className="w-4 h-4" />
-                                  Republish
+                                  <Power className="w-4 h-4" />
+                                  Re-enable JD
                                 </button>
                               )}
                               {/* Archive Job */}

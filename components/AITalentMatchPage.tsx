@@ -589,6 +589,10 @@ export default function AITalentMatchPage({
                     <User className="w-4 h-4" />
                     {selectedHistoryItem.totalMatches} matches
                   </span>
+                  <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-xs font-medium border border-blue-200">
+                    <Sparkles className="w-3 h-3" />
+                    AI Talent Match • 0 units consumed
+                  </span>
                 </div>
               </div>
             </div>
@@ -1205,6 +1209,10 @@ export default function AITalentMatchPage({
                   <span className="flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
                     <CheckCircle2 className="w-3 h-3" />
                     Complete
+                  </span>
+                  <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-xs font-medium border border-blue-200">
+                    <Sparkles className="w-3 h-3" />
+                    AI Talent Match • 0 units consumed
                   </span>
                 </div>
               </div>

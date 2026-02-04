@@ -1756,27 +1756,71 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleAddSkill = (category: 'mustHaveSkills' | 'niceToHaveSkills') => {
+  const handleAddSkill = async (category: 'mustHaveSkills' | 'niceToHaveSkills') => {
     if (newSkill.trim()) {
+      const skillToAdd = newSkill.trim();
+      console.log('[Add] Adding skill:', skillToAdd, 'to', category);
+
+      // Calculate updated arrays
+      const updatedMustHave = category === 'mustHaveSkills'
+        ? [...extractedData.mustHaveSkills, skillToAdd]
+        : extractedData.mustHaveSkills;
+      const updatedNiceToHave = category === 'niceToHaveSkills'
+        ? [...extractedData.niceToHaveSkills, skillToAdd]
+        : extractedData.niceToHaveSkills;
+
       setExtractedData(prev => ({
         ...prev,
-        [category]: [...prev[category], newSkill.trim()],
+        mustHaveSkills: updatedMustHave,
+        niceToHaveSkills: updatedNiceToHave,
       }));
       setNewSkill('');
       setEditingCategory(null);
       setExtractedDataModified(true);
+
       // Clear validation error when skill is added
       if (category === 'mustHaveSkills') {
         setValidationErrors(prev => ({ ...prev, mustHaveSkills: undefined }));
+      }
+
+      // Save to DB immediately
+      if (editingId) {
+        try {
+          await jdService.update(editingId, {
+            must_have_skills: updatedMustHave,
+            nice_to_have_skills: updatedNiceToHave,
+          });
+          console.log('[Add] Skill added and saved to DB successfully:', skillToAdd);
+        } catch (error) {
+          console.error('[Add] Failed to save skill addition:', error);
+          toast.error({
+            title: 'Failed to save',
+            description: 'Skill was added locally but could not be saved. Please try again.',
+          });
+        }
+      } else {
+        console.warn('[Add] editingId is null - skill addition not persisted to DB.');
       }
     }
   };
 
   const handleRemoveSkill = async (category: 'mustHaveSkills' | 'niceToHaveSkills', index: number) => {
+    // Get the skill being deleted for logging
+    const deletedSkill = extractedData[category][index];
+    console.log('[Delete] Removing skill:', deletedSkill, 'from', category);
+
     // Update local state immediately
+    const updatedMustHave = category === 'mustHaveSkills'
+      ? extractedData.mustHaveSkills.filter((_, i) => i !== index)
+      : extractedData.mustHaveSkills;
+    const updatedNiceToHave = category === 'niceToHaveSkills'
+      ? extractedData.niceToHaveSkills.filter((_, i) => i !== index)
+      : extractedData.niceToHaveSkills;
+
     const updatedData = {
       ...extractedData,
-      [category]: extractedData[category].filter((_, i) => i !== index),
+      mustHaveSkills: updatedMustHave,
+      niceToHaveSkills: updatedNiceToHave,
     };
     setExtractedData(updatedData);
     setExtractedDataModified(true);  // Mark as modified to prevent reload from DB
@@ -1785,36 +1829,87 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (editingId) {
       try {
         await jdService.update(editingId, {
-          must_have_skills: category === 'mustHaveSkills' ? updatedData.mustHaveSkills : extractedData.mustHaveSkills,
-          nice_to_have_skills: category === 'niceToHaveSkills' ? updatedData.niceToHaveSkills : extractedData.niceToHaveSkills,
+          must_have_skills: updatedMustHave,
+          nice_to_have_skills: updatedNiceToHave,
         });
-        console.log('[Delete] Skill deleted and saved to DB');
+        console.log('[Delete] Skill deleted and saved to DB successfully:', deletedSkill);
       } catch (error) {
         console.error('[Delete] Failed to save skill deletion:', error);
+        toast.error({
+          title: 'Failed to save',
+          description: 'Skill was removed locally but could not be saved. Please try again.',
+        });
       }
+    } else {
+      // editingId is null - JD hasn't been saved yet
+      // This shouldn't happen in Stage 2, but log it for debugging
+      console.warn('[Delete] editingId is null - skill deletion not persisted to DB. Will be saved when proceeding to next stage.');
     }
   };
 
-  const handleMoveSkill = (skill: string, from: 'mustHaveSkills' | 'niceToHaveSkills', to: 'mustHaveSkills' | 'niceToHaveSkills') => {
+  const handleMoveSkill = async (skill: string, from: 'mustHaveSkills' | 'niceToHaveSkills', to: 'mustHaveSkills' | 'niceToHaveSkills') => {
+    console.log('[Move] Moving skill:', skill, 'from', from, 'to', to);
+
+    // Calculate updated arrays
+    const updatedFrom = extractedData[from].filter(s => s !== skill);
+    const updatedTo = [...extractedData[to], skill];
+
+    const updatedMustHave = from === 'mustHaveSkills' ? updatedFrom : (to === 'mustHaveSkills' ? updatedTo : extractedData.mustHaveSkills);
+    const updatedNiceToHave = from === 'niceToHaveSkills' ? updatedFrom : (to === 'niceToHaveSkills' ? updatedTo : extractedData.niceToHaveSkills);
+
     setExtractedData(prev => ({
       ...prev,
-      [from]: prev[from].filter(s => s !== skill),
-      [to]: [...prev[to], skill],
+      mustHaveSkills: updatedMustHave,
+      niceToHaveSkills: updatedNiceToHave,
     }));
     setExtractedDataModified(true);
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          must_have_skills: updatedMustHave,
+          nice_to_have_skills: updatedNiceToHave,
+        });
+        console.log('[Move] Skill moved and saved to DB successfully:', skill);
+      } catch (error) {
+        console.error('[Move] Failed to save skill move:', error);
+        toast.error({
+          title: 'Failed to save',
+          description: 'Skill was moved locally but could not be saved. Please try again.',
+        });
+      }
+    } else {
+      console.warn('[Move] editingId is null - skill move not persisted to DB.');
+    }
   };
 
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (newComment.trim()) {
+      const commentToAdd = newComment.trim();
+      const updatedComments = [...extractedData.mustHaveComments, commentToAdd];
+
       setExtractedData(prev => ({
         ...prev,
-        mustHaveComments: [...prev.mustHaveComments, newComment.trim()],
+        mustHaveComments: updatedComments,
       }));
       setNewComment('');
       setEditingCategory(null);
       setExtractedDataModified(true); // Mark as modified for regeneration
       // Clear validation error when comment is added
       setValidationErrors(prev => ({ ...prev, mustHaveComments: undefined }));
+
+      // Save to DB immediately
+      if (editingId) {
+        try {
+          await jdService.update(editingId, {
+            must_have_comments: updatedComments,
+          });
+          console.log('[Add] Comment added and saved to DB');
+        } catch (error) {
+          console.error('[Add] Failed to save comment addition:', error);
+        }
+      }
     }
   };
 
@@ -1846,14 +1941,38 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setEditingSkillValue(value);
   };
 
-  const handleSaveEditSkill = () => {
+  const handleSaveEditSkill = async () => {
     if (editingSkillIndex && editingSkillValue.trim()) {
       const { category, index } = editingSkillIndex;
+      const newValue = editingSkillValue.trim();
+
+      // Calculate updated arrays
+      const updatedMustHave = category === 'mustHaveSkills'
+        ? extractedData.mustHaveSkills.map((skill, i) => i === index ? newValue : skill)
+        : extractedData.mustHaveSkills;
+      const updatedNiceToHave = category === 'niceToHaveSkills'
+        ? extractedData.niceToHaveSkills.map((skill, i) => i === index ? newValue : skill)
+        : extractedData.niceToHaveSkills;
+
       setExtractedData(prev => ({
         ...prev,
-        [category]: prev[category].map((skill, i) => i === index ? editingSkillValue.trim() : skill),
+        mustHaveSkills: updatedMustHave,
+        niceToHaveSkills: updatedNiceToHave,
       }));
       setExtractedDataModified(true);
+
+      // Save to DB immediately
+      if (editingId) {
+        try {
+          await jdService.update(editingId, {
+            must_have_skills: updatedMustHave,
+            nice_to_have_skills: updatedNiceToHave,
+          });
+          console.log('[Edit] Skill edited and saved to DB');
+        } catch (error) {
+          console.error('[Edit] Failed to save skill edit:', error);
+        }
+      }
     }
     setEditingSkillIndex(null);
     setEditingSkillValue('');
@@ -1869,15 +1988,30 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setEditingCommentValue(value);
   };
 
-  const handleSaveEditComment = () => {
+  const handleSaveEditComment = async () => {
     if (editingCommentIndex !== null && editingCommentValue.trim()) {
+      const newValue = editingCommentValue.trim();
+      const updatedComments = extractedData.mustHaveComments.map((comment, i) =>
+        i === editingCommentIndex ? newValue : comment
+      );
+
       setExtractedData(prev => ({
         ...prev,
-        mustHaveComments: prev.mustHaveComments.map((comment, i) =>
-          i === editingCommentIndex ? editingCommentValue.trim() : comment
-        ),
+        mustHaveComments: updatedComments,
       }));
       setExtractedDataModified(true); // Mark as modified for regeneration
+
+      // Save to DB immediately
+      if (editingId) {
+        try {
+          await jdService.update(editingId, {
+            must_have_comments: updatedComments,
+          });
+          console.log('[Edit] Comment edited and saved to DB');
+        } catch (error) {
+          console.error('[Edit] Failed to save comment edit:', error);
+        }
+      }
     }
     setEditingCommentIndex(null);
     setEditingCommentValue('');

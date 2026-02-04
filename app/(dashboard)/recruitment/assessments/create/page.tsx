@@ -40,7 +40,7 @@ export default function CreateAssessmentPage() {
       try {
         // Fetch jobs and topic settings in parallel
         const [jobsResponse, topicsResponse] = await Promise.allSettled([
-          jdService.list({ status: 'published', page_size: 100 }),
+          jdService.list({ status: 'published', page_size: 100, source: 'my-jds' }),
           api.get('/assessments/settings/topics'),
         ]);
 

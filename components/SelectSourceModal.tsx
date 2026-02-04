@@ -1,12 +1,21 @@
 'use client';
 
-import { X, Users, Database, Search, CheckSquare, Square, Loader2, Mail, Phone, Briefcase, MapPin, Calendar, Target, ArrowLeft, FolderOpen, ChevronRight, ChevronDown, Folder } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { X, Users, Database, Search, CheckSquare, Square, Loader2, Mail, Phone, Briefcase, MapPin, Calendar, Target, ArrowLeft, FolderOpen, ChevronRight, ChevronDown, Folder, Clock, CheckCircle2, XCircle, User, Timer, Minus, RotateCcw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { resumeService, folderService, Resume, Folder as FolderType } from '@/lib/services/resumeService';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
+
+// Progress item interface
+interface ProgressItem {
+  resumeId: string;
+  candidateName: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  score?: number;
+  errorMessage?: string;
+}
 
 interface SelectSourceModalProps {
   onClose: () => void;
@@ -33,6 +42,13 @@ export default function SelectSourceModal({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+
+  // Progress modal state
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [progressItems, setProgressItems] = useState<ProgressItem[]>([]);
+  const [scoringStats, setScoringStats] = useState({ queued: 0, processing: 0, completed: 0, failed: 0 });
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const startTimeRef = useRef<Date | null>(null);
 
   // Fetch resumes and folders on mount and tab change
   useEffect(() => {
@@ -131,26 +147,158 @@ export default function SelectSourceModal({
     setSelectedFolder('all');
   };
 
-  // Submit for scoring
+  // Timer effect for elapsed time
+  useEffect(() => {
+    if (!showProgressModal || scoringStats.queued === 0 && scoringStats.processing === 0) return;
+
+    const interval = setInterval(() => {
+      if (startTimeRef.current) {
+        const now = new Date();
+        const diff = Math.floor((now.getTime() - startTimeRef.current.getTime()) / 1000);
+        setElapsedSeconds(diff);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [showProgressModal, scoringStats.queued, scoringStats.processing]);
+
+  // Format elapsed time
+  const formatElapsedTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Submit for scoring with progress tracking
   const handleSubmitForScoring = async () => {
     if (selectedResumes.length === 0) return;
 
+    // Initialize all items with 'queued' status immediately
+    const initialItems: ProgressItem[] = selectedResumes.map(resumeId => {
+      const resume = resumes.find(r => r.id === resumeId);
+      return {
+        resumeId,
+        candidateName: resume?.candidate_name || 'Unknown',
+        status: 'queued' as const,
+      };
+    });
+
+    setProgressItems(initialItems);
+    setScoringStats({ queued: selectedResumes.length, processing: 0, completed: 0, failed: 0 });
+    setShowProgressModal(true);
     setSubmitting(true);
-    try {
-      // Call bulk scoring API
-      await scoringService.bulkScore(jobId, selectedResumes);
+    startTimeRef.current = new Date();
+    setElapsedSeconds(0);
 
-      toast.success(`${selectedResumes.length} resume(s) submitted for scoring`);
+    let completed = 0;
+    let failed = 0;
 
-      if (onScoringComplete) {
-        onScoringComplete();
+    // Score resumes one by one to show real-time progress
+    for (let i = 0; i < selectedResumes.length; i++) {
+      const resumeId = selectedResumes[i];
+      const resume = resumes.find(r => r.id === resumeId);
+      const candidateName = resume?.candidate_name || 'Unknown';
+
+      // Update current item to 'processing'
+      setProgressItems(prev => prev.map(item =>
+        item.resumeId === resumeId
+          ? { ...item, status: 'processing' as const }
+          : item
+      ));
+      setScoringStats({
+        queued: selectedResumes.length - i - 1,
+        processing: 1,
+        completed,
+        failed,
+      });
+
+      try {
+        const result = await scoringService.scoreResume(jobId, resumeId);
+        completed++;
+
+        // Update item to 'completed' with score
+        setProgressItems(prev => prev.map(item =>
+          item.resumeId === resumeId
+            ? { ...item, status: 'completed' as const, score: Math.round(result.overall_score) }
+            : item
+        ));
+        setScoringStats({
+          queued: selectedResumes.length - i - 1,
+          processing: 0,
+          completed,
+          failed,
+        });
+      } catch (error: any) {
+        failed++;
+        const errorMsg = error?.message || 'Scoring failed';
+
+        // Update item to 'failed' with error
+        setProgressItems(prev => prev.map(item =>
+          item.resumeId === resumeId
+            ? { ...item, status: 'failed' as const, errorMessage: errorMsg }
+            : item
+        ));
+        setScoringStats({
+          queued: selectedResumes.length - i - 1,
+          processing: 0,
+          completed,
+          failed,
+        });
       }
+    }
+
+    // All done
+    setSubmitting(false);
+    startTimeRef.current = null;
+
+    if (completed > 0) {
+      toast.success(`${completed} resume(s) scored successfully${failed > 0 ? `, ${failed} failed` : ''}`);
+    } else if (failed > 0) {
+      toast.error(`All ${failed} resume(s) failed to score`);
+    }
+
+    if (onScoringComplete) {
+      onScoringComplete();
+    }
+  };
+
+  // Retry failed scoring
+  const handleRetryFailed = async (resumeId: string) => {
+    const item = progressItems.find(i => i.resumeId === resumeId);
+    if (!item || item.status !== 'failed') return;
+
+    // Update to processing
+    setProgressItems(prev => prev.map(i =>
+      i.resumeId === resumeId ? { ...i, status: 'processing' as const, errorMessage: undefined } : i
+    ));
+    setScoringStats(prev => ({ ...prev, failed: prev.failed - 1, processing: prev.processing + 1 }));
+
+    try {
+      const result = await scoringService.scoreResume(jobId, resumeId);
+      setProgressItems(prev => prev.map(i =>
+        i.resumeId === resumeId
+          ? { ...i, status: 'completed' as const, score: Math.round(result.overall_score) }
+          : i
+      ));
+      setScoringStats(prev => ({ ...prev, processing: prev.processing - 1, completed: prev.completed + 1 }));
+      toast.success('Retry successful');
+      if (onScoringComplete) onScoringComplete();
+    } catch (error: any) {
+      setProgressItems(prev => prev.map(i =>
+        i.resumeId === resumeId
+          ? { ...i, status: 'failed' as const, errorMessage: error?.message || 'Retry failed' }
+          : i
+      ));
+      setScoringStats(prev => ({ ...prev, processing: prev.processing - 1, failed: prev.failed + 1 }));
+      toast.error('Retry failed');
+    }
+  };
+
+  // Close progress modal
+  const handleCloseProgress = () => {
+    if (!submitting) {
+      setShowProgressModal(false);
       onClose();
-    } catch (error) {
-      console.error('Failed to submit for scoring:', error);
-      handleQuotaError(error, router, 'Failed to submit resumes for scoring');
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -569,6 +717,185 @@ export default function SelectSourceModal({
           </div>
         </div>
       </div>
+
+      {/* Progress Modal */}
+      {showProgressModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-gray-900 to-gray-800 text-white flex-shrink-0">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Target className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-lg font-bold truncate">Scoring: {jobTitle}</h2>
+                  <p className="text-sm text-gray-300">{scoringStats.completed}/{progressItems.length} resumes scored</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 flex-shrink-0">
+                {/* Timer */}
+                {(scoringStats.queued > 0 || scoringStats.processing > 0) && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/10 rounded-lg">
+                    <Timer className="w-3.5 h-3.5 text-gray-300" />
+                    <span className="text-xs font-mono text-gray-200">{formatElapsedTime(elapsedSeconds)}</span>
+                  </div>
+                )}
+
+                {/* Progress bar */}
+                <div className="hidden md:flex items-center gap-2">
+                  <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 ${scoringStats.queued === 0 && scoringStats.processing === 0 ? 'bg-green-500' : 'bg-blue-500'}`}
+                      style={{ width: `${progressItems.length > 0 ? ((scoringStats.completed + scoringStats.failed) / progressItems.length * 100) : 0}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-semibold w-10">
+                    {progressItems.length > 0 ? Math.round((scoringStats.completed + scoringStats.failed) / progressItems.length * 100) : 0}%
+                  </span>
+                </div>
+
+                <button
+                  onClick={handleCloseProgress}
+                  disabled={submitting}
+                  className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Stats Row */}
+            <div className="flex flex-wrap items-center gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-gray-400" />
+                <span className="text-sm text-gray-600">Queue: <span className="font-semibold text-gray-900">{scoringStats.queued}</span></span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Loader2 className={`w-3.5 h-3.5 text-blue-500 ${scoringStats.processing > 0 ? 'animate-spin' : ''}`} />
+                <span className="text-sm text-gray-600">Processing: <span className="font-semibold text-blue-600">{scoringStats.processing}</span></span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                <span className="text-sm text-gray-600">Done: <span className="font-semibold text-green-600">{scoringStats.completed}</span></span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <XCircle className="w-3.5 h-3.5 text-red-500" />
+                <span className="text-sm text-gray-600">Failed: <span className="font-semibold text-red-600">{scoringStats.failed}</span></span>
+              </div>
+
+              {scoringStats.queued === 0 && scoringStats.processing === 0 && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium ml-auto">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Complete
+                </div>
+              )}
+            </div>
+
+            {/* Resume List */}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {progressItems.length > 0 ? (
+                <div className="divide-y divide-gray-100">
+                  {progressItems.map((item, index) => (
+                    <div
+                      key={item.resumeId}
+                      className={`flex items-center gap-4 px-6 py-3 border-l-4 ${
+                        item.status === 'processing' ? 'bg-blue-50 border-l-blue-500' :
+                        item.status === 'completed' ? 'bg-green-50 border-l-green-500' :
+                        item.status === 'failed' ? 'bg-red-50 border-l-red-500' :
+                        'bg-gray-50 border-l-gray-300'
+                      }`}
+                    >
+                      {/* Icon */}
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        item.status === 'processing' ? 'bg-blue-100' :
+                        item.status === 'completed' ? 'bg-green-100' :
+                        item.status === 'failed' ? 'bg-red-100' :
+                        'bg-gray-100'
+                      }`}>
+                        <User className={`w-5 h-5 ${
+                          item.status === 'processing' ? 'text-blue-600' :
+                          item.status === 'completed' ? 'text-green-600' :
+                          item.status === 'failed' ? 'text-red-600' :
+                          'text-gray-500'
+                        }`} />
+                      </div>
+
+                      {/* Name */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {item.candidateName}
+                        </p>
+                        {item.status === 'failed' && item.errorMessage && (
+                          <p className="text-xs text-red-500 truncate">{item.errorMessage}</p>
+                        )}
+                      </div>
+
+                      {/* Status */}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {item.status === 'queued' && <Clock className="w-4 h-4 text-gray-400" />}
+                        {item.status === 'processing' && <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />}
+                        {item.status === 'completed' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                        {item.status === 'failed' && <XCircle className="w-4 h-4 text-red-500" />}
+                        <span className={`text-sm font-medium ${
+                          item.status === 'processing' ? 'text-blue-600' :
+                          item.status === 'completed' ? 'text-green-600' :
+                          item.status === 'failed' ? 'text-red-600' :
+                          'text-gray-500'
+                        }`}>
+                          {item.status === 'queued' ? 'Queued' :
+                           item.status === 'processing' ? 'Processing...' :
+                           item.status === 'completed' ? 'Scored' :
+                           'Failed'}
+                        </span>
+                      </div>
+
+                      {/* Score */}
+                      {item.status === 'completed' && item.score !== undefined && (
+                        <div className="flex items-center gap-1 px-3 py-1 bg-green-100 rounded-full flex-shrink-0">
+                          <span className="text-sm font-bold text-green-700">{item.score}%</span>
+                        </div>
+                      )}
+
+                      {/* Retry button */}
+                      {item.status === 'failed' && !submitting && (
+                        <button
+                          onClick={() => handleRetryFailed(item.resumeId)}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex-shrink-0"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Retry
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                  <Target className="w-12 h-12 mb-3 text-gray-300" />
+                  <p className="text-sm">Preparing resumes for scoring...</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {scoringStats.queued === 0 && scoringStats.processing === 0 && (
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex-shrink-0">
+                <div className="flex items-center justify-end">
+                  <button
+                    onClick={handleCloseProgress}
+                    className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

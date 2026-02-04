@@ -81,8 +81,8 @@ export default function JobOpeningsPage() {
   const fetchJobs = async () => {
     setLoading(true);
     try {
-      // Fetch all jobs - filtering is done client-side in JobsListing
-      const response = await jdService.list({ page_size: 100 });
+      // Fetch user's jobs - filtering is done client-side in JobsListing
+      const response = await jdService.list({ page_size: 100, source: 'my-jds' });
 
       // Convert API JD to component Job type
       const convertedJobs: Job[] = response.items.map((jd: any) => ({
