@@ -10,10 +10,19 @@ import { encodePlanId } from '@/lib/utils/planEncoder';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 interface PlanQuotas {
+  // Short names (common in API)
   AS?: number;
   RS?: number;
   RU?: number;
   AIU?: number;
+  // Long names (alternative API format)
+  assessments?: number;
+  resume_scoring?: number;
+  resume_uploads?: number;
+  resume_storage?: number;
+  ai_interviews?: number;
+  ai_interview?: number;
+  // Other quotas
   max_jobs?: number;
   max_seats?: number;
 }
@@ -41,12 +50,19 @@ interface DisplayPlan {
 interface FreeTrialData {
   trial_days: number;
   features: {
-    MAX_JOBS: number;
-    MAX_SEATS: number;
-    ASSESSMENTS: number;
-    AI_INTERVIEW: number;
-    RESUME_SCORING: number;
-    RESUME_STORAGE: number;
+    // Support both uppercase (legacy) and lowercase (API) property names
+    MAX_JOBS?: number;
+    MAX_SEATS?: number;
+    ASSESSMENTS?: number;
+    AI_INTERVIEW?: number;
+    RESUME_SCORING?: number;
+    RESUME_STORAGE?: number;
+    max_jobs?: number;
+    max_seats?: number;
+    assessments?: number;
+    ai_interview?: number;
+    resume_scoring?: number;
+    resume_storage?: number;
   };
   trial_includes: string[];
 }
@@ -103,6 +119,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
   const [isYearly, setIsYearly] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [expandedFeatures, setExpandedFeatures] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -238,6 +255,8 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
   if (!isOpen) return null;
 
   // Create free trial plan object for display
+  // Handle both uppercase (MAX_JOBS) and lowercase (max_jobs) property names from API
+  const trialFeatures = freeTrial?.features || {};
   const freeTrialPlan: DisplayPlan | null = freeTrial ? {
     id: 'free_trial',
     name: 'Free Trial',
@@ -251,12 +270,12 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
     ),
     trialDays: freeTrial.trial_days,
     quotas: {
-      max_jobs: typeof freeTrial.features?.MAX_JOBS === 'number' ? freeTrial.features.MAX_JOBS : undefined,
-      max_seats: typeof freeTrial.features?.MAX_SEATS === 'number' ? freeTrial.features.MAX_SEATS : undefined,
-      AS: typeof freeTrial.features?.ASSESSMENTS === 'number' ? freeTrial.features.ASSESSMENTS : undefined,
-      AIU: typeof freeTrial.features?.AI_INTERVIEW === 'number' ? freeTrial.features.AI_INTERVIEW : undefined,
-      RS: typeof freeTrial.features?.RESUME_SCORING === 'number' ? freeTrial.features.RESUME_SCORING : undefined,
-      RU: typeof freeTrial.features?.RESUME_STORAGE === 'number' ? freeTrial.features.RESUME_STORAGE : undefined,
+      max_jobs: trialFeatures.MAX_JOBS ?? trialFeatures.max_jobs,
+      max_seats: trialFeatures.MAX_SEATS ?? trialFeatures.max_seats,
+      AS: trialFeatures.ASSESSMENTS ?? trialFeatures.assessments,
+      AIU: trialFeatures.AI_INTERVIEW ?? trialFeatures.ai_interview,
+      RS: trialFeatures.RESUME_SCORING ?? trialFeatures.resume_scoring,
+      RU: trialFeatures.RESUME_STORAGE ?? trialFeatures.resume_storage,
     },
     planSlug: 'free-trial',
     planTier: 'Trial',
@@ -562,43 +581,66 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                     </div>
 
                     {/* Key quotas */}
-                    {displayQuotas && (
-                      <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: '12px', marginBottom: '12px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
-                          {displayQuotas.max_seats !== undefined && typeof displayQuotas.max_seats === 'number' && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <span style={{ color: '#6B7280' }}>Users</span>
-                              <span style={{ fontWeight: 600, color: '#111827' }}>{displayQuotas.max_seats}</span>
-                            </div>
-                          )}
-                          {displayQuotas.max_jobs !== undefined && typeof displayQuotas.max_jobs === 'number' && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <span style={{ color: '#6B7280' }}>Jobs</span>
-                              <span style={{ fontWeight: 600, color: '#111827' }}>
-                                {isFreeTrial ? displayQuotas.max_jobs : 'Unlimited'}
-                              </span>
-                            </div>
-                          )}
-                          {displayQuotas.RS !== undefined && typeof displayQuotas.RS === 'number' && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <span style={{ color: '#6B7280' }}>Resume Scores</span>
-                              <span style={{ fontWeight: 600, color: '#111827' }}>{displayQuotas.RS}</span>
-                            </div>
-                          )}
-                          {displayQuotas.AS !== undefined && typeof displayQuotas.AS === 'number' && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <span style={{ color: '#6B7280' }}>Assessments</span>
-                              <span style={{ fontWeight: 600, color: '#111827' }}>{displayQuotas.AS}</span>
-                            </div>
-                          )}
+                    {displayQuotas && (() => {
+                      // Normalize quota values to handle different API property names
+                      const normalizedQuotas = {
+                        max_seats: displayQuotas.max_seats,
+                        max_jobs: displayQuotas.max_jobs,
+                        RS: displayQuotas.RS ?? displayQuotas.resume_scoring,
+                        AS: displayQuotas.AS ?? displayQuotas.assessments,
+                        AIU: displayQuotas.AIU ?? displayQuotas.ai_interviews ?? displayQuotas.ai_interview,
+                        RU: displayQuotas.RU ?? displayQuotas.resume_uploads ?? displayQuotas.resume_storage,
+                      };
+                      return (
+                        <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: '12px', marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
+                            {normalizedQuotas.max_seats !== undefined && typeof normalizedQuotas.max_seats === 'number' && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#6B7280' }}>Users</span>
+                                <span style={{ fontWeight: 600, color: '#111827' }}>{normalizedQuotas.max_seats}</span>
+                              </div>
+                            )}
+                            {normalizedQuotas.max_jobs !== undefined && typeof normalizedQuotas.max_jobs === 'number' && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#6B7280' }}>Jobs</span>
+                                <span style={{ fontWeight: 600, color: '#111827' }}>
+                                  {isFreeTrial ? normalizedQuotas.max_jobs : 'Unlimited'}
+                                </span>
+                              </div>
+                            )}
+                            {normalizedQuotas.RS !== undefined && typeof normalizedQuotas.RS === 'number' && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#6B7280' }}>Resume Scores</span>
+                                <span style={{ fontWeight: 600, color: '#111827' }}>{normalizedQuotas.RS}</span>
+                              </div>
+                            )}
+                            {normalizedQuotas.AS !== undefined && typeof normalizedQuotas.AS === 'number' && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#6B7280' }}>Assessments</span>
+                                <span style={{ fontWeight: 600, color: '#111827' }}>{normalizedQuotas.AS}</span>
+                              </div>
+                            )}
+                            {normalizedQuotas.RU !== undefined && typeof normalizedQuotas.RU === 'number' && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#6B7280' }}>Resume Storage</span>
+                                <span style={{ fontWeight: 600, color: '#111827' }}>{normalizedQuotas.RU}</span>
+                              </div>
+                            )}
+                            {normalizedQuotas.AIU !== undefined && typeof normalizedQuotas.AIU === 'number' && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#6B7280' }}>AI Interviews</span>
+                                <span style={{ fontWeight: 600, color: '#111827' }}>{normalizedQuotas.AIU}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Features preview */}
                     {plan.features.length > 0 && (
                       <div>
-                        {plan.features.slice(0, 3).map((feature, idx) => (
+                        {plan.features.slice(0, expandedFeatures === plan.id ? undefined : 3).map((feature, idx) => (
                           <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                             <Check style={{ width: '14px', height: '14px', color: '#10B981', flexShrink: 0 }} />
                             <span style={{ fontSize: '12px', color: '#4B5563' }}>
@@ -607,9 +649,25 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                           </div>
                         ))}
                         {plan.features.length > 3 && (
-                          <span style={{ fontSize: '12px', color: '#9CA3AF' }}>
-                            +{plan.features.length - 3} more features
-                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedFeatures(expandedFeatures === plan.id ? null : plan.id);
+                            }}
+                            style={{
+                              fontSize: '12px',
+                              color: '#2563EB',
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                            }}
+                          >
+                            {expandedFeatures === plan.id
+                              ? 'Show less'
+                              : `+${plan.features.length - 3} more features`}
+                          </button>
                         )}
                       </div>
                     )}

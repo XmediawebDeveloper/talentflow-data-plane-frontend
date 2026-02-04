@@ -7,7 +7,7 @@
  * Endpoint: POST /api/v1/usage/record (proxies to Admin API)
  */
 
-import { dispatchUnitsConsumed } from './api';
+import { dispatchUnitsConsumed, handleUnauthorized } from './api';
 
 // Use backend API - no direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -98,6 +98,12 @@ export async function recordUsage(request: RecordUsageRequest): Promise<RecordUs
       },
       body: JSON.stringify(request),
     });
+
+    // Handle 401 - logout and redirect
+    if (response.status === 401) {
+      handleUnauthorized();
+      return { status: 'error', error: 'Session expired' };
+    }
 
     const data = await response.json();
 
@@ -238,6 +244,12 @@ export async function checkQuotaStatus(): Promise<QuotaStatusResponse> {
         'Content-Type': 'application/json',
       },
     });
+
+    // Handle 401 - logout and redirect
+    if (response.status === 401) {
+      handleUnauthorized();
+      return { status: 'error', error: 'Session expired' };
+    }
 
     const data = await response.json();
 

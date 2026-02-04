@@ -4,6 +4,7 @@ import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, B
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { handleUnauthorized } from '@/lib/services/api';
 
 interface ScoredResume {
   id: string;  // This is the SCORE ID, not resume ID!
@@ -304,6 +305,12 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
         },
       });
 
+      // Handle 401 - logout and redirect
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         console.error('[Download] Failed:', response.status, errorData);
@@ -315,7 +322,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
           errorMessage = 'Scorecard not found. The score may have been deleted.';
         } else if (response.status === 500) {
           errorMessage = 'Server error while generating scorecard. Our team has been notified.';
-        } else if (response.status === 401 || response.status === 403) {
+        } else if (response.status === 403) {
           errorMessage = 'You do not have permission to download this scorecard.';
         }
 

@@ -2,6 +2,7 @@
 
 import { Shield, Users, Check, X, Edit2, Save, Plus, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { handleUnauthorized } from '@/lib/services/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -117,6 +118,10 @@ export default function PermissionsPage() {
       };
 
       const res = await fetch(`${API_URL}/rbac/roles/${roleId}`, { headers: reqHeaders });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
       if (!res.ok) {
         throw new Error(`Failed to fetch role details: ${res.status}`);
       }
@@ -171,6 +176,11 @@ export default function PermissionsPage() {
           permission_ids: editedPermissionIds,
         }),
       });
+
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));

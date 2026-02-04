@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, MessageSquare, RefreshCw, Shield, Filter, Calendar } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
+import { handleUnauthorized } from '@/lib/services/api';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -100,6 +101,11 @@ export default function DisputeHistoryPage() {
           'Authorization': `Bearer ${token}`,
         },
       });
+
+      if (disputeResponse.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       if (!disputeResponse.ok) {
         throw new Error('Failed to fetch dispute history');

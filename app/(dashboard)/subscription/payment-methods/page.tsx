@@ -2,6 +2,7 @@
 
 import { Wallet, Plus, CreditCard, Trash2, Check, Building2, X, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { handleUnauthorized } from '@/lib/services/api';
 
 interface PaymentMethod {
   id: string;
@@ -83,6 +84,11 @@ export default function PaymentMethodsPage() {
           'Authorization': `Bearer ${token}`,
         },
       });
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -176,6 +182,11 @@ export default function PaymentMethodsPage() {
         }),
       });
 
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
       if (response.ok) {
         const newMethod = await response.json();
 
@@ -229,6 +240,11 @@ export default function PaymentMethodsPage() {
         },
       });
 
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
       if (response.ok) {
         setPaymentMethods(prev =>
           prev.map(pm => ({ ...pm, is_default: pm.id === id }))
@@ -253,6 +269,11 @@ export default function PaymentMethodsPage() {
           'Authorization': `Bearer ${token}`,
         },
       });
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       if (response.ok) {
         setPaymentMethods(prev => prev.filter(pm => pm.id !== id));

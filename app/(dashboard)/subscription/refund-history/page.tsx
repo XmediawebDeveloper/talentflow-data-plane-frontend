@@ -2,6 +2,7 @@
 
 import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Filter, Calendar } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
+import { handleUnauthorized } from '@/lib/services/api';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -94,6 +95,11 @@ export default function RefundHistoryPage() {
           'Authorization': `Bearer ${token}`,
         },
       });
+
+      if (refundResponse.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       if (!refundResponse.ok) {
         throw new Error('Failed to fetch refund history');

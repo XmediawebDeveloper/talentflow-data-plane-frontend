@@ -41,10 +41,19 @@ interface PlanFeature {
 }
 
 interface PlanQuotas {
+  // Short names (common in API)
   AS?: number;           // Assessment Sessions
   RS?: number;           // Resume Scores
   RU?: number;           // Resume Uploads
   AIU?: number;          // AI Interview Units
+  // Long names (alternative API format)
+  assessments?: number;
+  resume_scoring?: number;
+  resume_uploads?: number;
+  resume_storage?: number;
+  ai_interviews?: number;
+  ai_interview?: number;
+  // Other quotas
   max_jobs?: number;
   max_seats?: number;
   storage_gb?: number;
@@ -141,12 +150,19 @@ interface FreeTrialData {
   id?: number;
   trial_days: number;
   features: {
-    MAX_JOBS: number;
-    MAX_SEATS: number;
-    ASSESSMENTS: number;
-    AI_INTERVIEW: number;
-    RESUME_SCORING: number;
-    RESUME_STORAGE: number;
+    // Support both uppercase (legacy) and lowercase (API) property names
+    MAX_JOBS?: number;
+    MAX_SEATS?: number;
+    ASSESSMENTS?: number;
+    AI_INTERVIEW?: number;
+    RESUME_SCORING?: number;
+    RESUME_STORAGE?: number;
+    max_jobs?: number;
+    max_seats?: number;
+    assessments?: number;
+    ai_interview?: number;
+    resume_scoring?: number;
+    resume_storage?: number;
   };
   trial_includes: string[];
 }
@@ -517,6 +533,8 @@ export default function PricingPage() {
         {/* Pricing Cards - Interactive Hover Design */}
         {(() => {
           // Create a free trial plan card if freeTrial config exists
+          // Handle both uppercase (MAX_JOBS) and lowercase (max_jobs) property names from API
+          const trialFeatures = freeTrial?.features || {};
           const freeTrialCard: DisplayPlan | null = freeTrial ? {
             id: 'free-trial',
             name: 'Free Trial',
@@ -533,12 +551,12 @@ export default function PricingPage() {
             features: freeTrial.trial_includes || [],
             trialDays: freeTrial.trial_days,
             quotas: {
-              max_jobs: freeTrial.features.MAX_JOBS,
-              max_seats: freeTrial.features.MAX_SEATS,
-              AS: freeTrial.features.ASSESSMENTS,
-              AIU: freeTrial.features.AI_INTERVIEW,
-              RS: freeTrial.features.RESUME_SCORING,
-              RU: freeTrial.features.RESUME_STORAGE,
+              max_jobs: trialFeatures.MAX_JOBS ?? trialFeatures.max_jobs,
+              max_seats: trialFeatures.MAX_SEATS ?? trialFeatures.max_seats,
+              AS: trialFeatures.ASSESSMENTS ?? trialFeatures.assessments,
+              AIU: trialFeatures.AI_INTERVIEW ?? trialFeatures.ai_interview,
+              RS: trialFeatures.RESUME_SCORING ?? trialFeatures.resume_scoring,
+              RU: trialFeatures.RESUME_STORAGE ?? trialFeatures.resume_storage,
             },
             planSlug: 'free-trial',
           } : null;
@@ -662,68 +680,79 @@ export default function PricingPage() {
 
                         {/* Quotas - Single column layout for clarity */}
                         {(() => {
-                          const displayQuotas = isTrialPlan
+                          const rawQuotas = isTrialPlan
                             ? plan.quotas
                             : (isYearly ? (plan.annualQuotas || plan.quotas) : (plan.monthlyQuotas || plan.quotas));
 
-                          if (!displayQuotas) return null;
+                          if (!rawQuotas) return null;
+
+                          // Normalize quota values to handle different API property names
+                          const normalizedQuotas = {
+                            max_seats: rawQuotas.max_seats,
+                            max_jobs: rawQuotas.max_jobs,
+                            RU: rawQuotas.RU ?? rawQuotas.resume_uploads ?? rawQuotas.resume_storage,
+                            RS: rawQuotas.RS ?? rawQuotas.resume_scoring,
+                            AS: rawQuotas.AS ?? rawQuotas.assessments,
+                            AIU: rawQuotas.AIU ?? rawQuotas.ai_interviews ?? rawQuotas.ai_interview,
+                            total_resume_storage: rawQuotas.total_resume_storage ?? rawQuotas.storage_gb,
+                          };
 
                           return (
                             <div className="mb-6 py-4 border-t border-b border-gray-100 dark:border-gray-800">
                               <div className="space-y-2 text-sm">
-                                {displayQuotas.max_seats !== undefined && displayQuotas.max_seats >= 1 && (
+                                {normalizedQuotas.max_seats !== undefined && normalizedQuotas.max_seats >= 1 && (
                                   <div className="flex justify-between items-center">
                                     <span className="text-gray-500">Max Users</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
-                                      {displayQuotas.max_seats.toLocaleString()}
+                                      {normalizedQuotas.max_seats.toLocaleString()}
                                     </span>
                                   </div>
                                 )}
-                                {displayQuotas.max_jobs !== undefined && displayQuotas.max_jobs >= 1 && (
+                                {normalizedQuotas.max_jobs !== undefined && normalizedQuotas.max_jobs >= 1 && (
                                   <div className="flex justify-between items-center">
                                     <span className="text-gray-500">Max Jobs</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
-                                      {isTrialPlan ? displayQuotas.max_jobs.toLocaleString() : 'Unlimited'}
+                                      {isTrialPlan ? normalizedQuotas.max_jobs.toLocaleString() : 'Unlimited'}
                                     </span>
                                   </div>
                                 )}
-                                {displayQuotas.RU !== undefined && displayQuotas.RU >= 1 && (
+                                {normalizedQuotas.RU !== undefined && normalizedQuotas.RU >= 1 && (
                                   <div className="flex justify-between items-center">
                                     <span className="text-gray-500">Resume Storage</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
-                                      {displayQuotas.RU.toLocaleString()}
+                                      {normalizedQuotas.RU.toLocaleString()}
                                     </span>
                                   </div>
                                 )}
-                                {displayQuotas.RS !== undefined && displayQuotas.RS >= 1 && (
+                                {normalizedQuotas.RS !== undefined && normalizedQuotas.RS >= 1 && (
                                   <div className="flex justify-between items-center">
                                     <span className="text-gray-500">Resume Scores</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
-                                      {displayQuotas.RS.toLocaleString()}
+                                      {normalizedQuotas.RS.toLocaleString()}
                                     </span>
                                   </div>
                                 )}
-                                {displayQuotas.AS !== undefined && displayQuotas.AS >= 1 && (
+                                {normalizedQuotas.AS !== undefined && normalizedQuotas.AS >= 1 && (
                                   <div className="flex justify-between items-center">
                                     <span className="text-gray-500">Assessments</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
-                                      {displayQuotas.AS.toLocaleString()}
+                                      {normalizedQuotas.AS.toLocaleString()}
                                     </span>
                                   </div>
                                 )}
-                                {displayQuotas.AIU !== undefined && displayQuotas.AIU >= 1 && (
+                                {normalizedQuotas.AIU !== undefined && normalizedQuotas.AIU >= 1 && (
                                   <div className="flex justify-between items-center">
                                     <span className="text-gray-500">AI Interviews</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
-                                      {displayQuotas.AIU.toLocaleString()}
+                                      {normalizedQuotas.AIU.toLocaleString()}
                                     </span>
                                   </div>
                                 )}
-                                {displayQuotas.total_resume_storage !== undefined && displayQuotas.total_resume_storage >= 1 && (
+                                {normalizedQuotas.total_resume_storage !== undefined && normalizedQuotas.total_resume_storage >= 1 && (
                                   <div className="flex justify-between items-center">
                                     <span className="text-gray-500">Total Storage</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
-                                      {displayQuotas.total_resume_storage.toLocaleString()}
+                                      {normalizedQuotas.total_resume_storage.toLocaleString()}
                                     </span>
                                   </div>
                                 )}

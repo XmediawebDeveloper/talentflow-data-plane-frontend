@@ -45,12 +45,14 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
   const [singleTeamUsage, setSingleTeamUsage] = useState<TeamUsageSummary | null>(null);
   const [selectedDays, setSelectedDays] = useState(30);
 
-  const isTenantAdmin = userRole === 'tenant_admin' || userRole === 'admin' || userRole === 'recruiter';
+  // Only tenant_admin and owner roles should have access to all teams' usage
+  const isTenantAdmin = userRole === 'tenant_admin' || userRole === 'owner' || userRole === 'admin';
   const isBillingManager = userRole === 'billing_manager' || userRole === 'finance';
 
   useEffect(() => {
     fetchUsageData();
-  }, [selectedDays, teamId, userRole]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDays, teamId, userRole, isTenantAdmin, isBillingManager]);
 
   const fetchUsageData = async () => {
     setIsLoading(true);

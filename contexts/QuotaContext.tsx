@@ -1,13 +1,20 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import api from '@/lib/services/api';
+import api, { handleUnauthorized } from '@/lib/services/api';
 
 interface QuotaData {
   tenant_id?: string;
   is_trial?: boolean;
   quota_source?: string;
   plan_name?: string;
+  trial_info?: {
+    trial_type?: string;
+    trial_start_date?: string;
+    trial_end_date?: string;
+    days_remaining?: number;
+    credits?: Record<string, number>;
+  };
   plan_info?: {
     plan_id?: number;
     plan_name?: string;
@@ -61,6 +68,7 @@ interface QuotaContextType {
   quotaData: QuotaData | null;
   loading: boolean;
   error: string | null;
+  hasPermission: boolean;
   refetch: () => Promise<void>;
   lastFetchTime: number | null;
 }
@@ -69,6 +77,7 @@ const QuotaContext = createContext<QuotaContextType>({
   quotaData: null,
   loading: false,
   error: null,
+  hasPermission: true,
   refetch: async () => {},
   lastFetchTime: null,
 });
@@ -80,6 +89,7 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
   const [quotaData, setQuotaData] = useState<QuotaData | null>(null);
   const [loading, setLoading] = useState(true); // Start as true since we fetch on mount
   const [error, setError] = useState<string | null>(null);
+  const [hasPermission, setHasPermission] = useState(true);
   const [lastFetchTime, setLastFetchTime] = useState<number | null>(null);
   const fetchingRef = useRef(false);
 
@@ -114,9 +124,24 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
       setQuotaData(data);
       setLastFetchTime(Date.now());
       console.log('[QuotaContext] Quota data fetched successfully');
-    } catch (err) {
-      console.error('[QuotaContext] Error fetching quota:', err);
-      setError('Failed to fetch quota data');
+    } catch (err: any) {
+      const statusCode = err?.response?.status;
+      console.error('[QuotaContext] Error fetching quota:', statusCode, err);
+
+      if (statusCode === 401) {
+        // Session expired - logout user
+        handleUnauthorized();
+        return;
+      }
+
+      if (statusCode === 403 || statusCode === 503) {
+        // Permission denied - hide the usage card silently
+        console.log('[QuotaContext] User does not have permission to view quota data');
+        setHasPermission(false);
+        setError(null); // Clear error to prevent error displays
+      } else {
+        setError('Failed to fetch quota data');
+      }
     } finally {
       setLoading(false);
       fetchingRef.current = false;
@@ -133,7 +158,7 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
   }, [fetchQuotaData]);
 
   return (
-    <QuotaContext.Provider value={{ quotaData, loading, error, refetch, lastFetchTime }}>
+    <QuotaContext.Provider value={{ quotaData, loading, error, hasPermission, refetch, lastFetchTime }}>
       {children}
     </QuotaContext.Provider>
   );
