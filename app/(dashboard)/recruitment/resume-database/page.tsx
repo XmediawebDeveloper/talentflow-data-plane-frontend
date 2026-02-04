@@ -401,7 +401,7 @@ export default function ResumeDatabasePage() {
   // Fetch jobs for Apply to Job modal
   const fetchJobs = async () => {
     try {
-      const response = await jdService.list({ page_size: 100 });
+      const response = await jdService.list({ page_size: 100, source: 'my-jds' });
       const convertedJobs: Job[] = response.items.map((jd: any) => ({
         id: jd.id,
         job_id: jd.job_id,

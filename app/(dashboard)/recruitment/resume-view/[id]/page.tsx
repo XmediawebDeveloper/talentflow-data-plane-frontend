@@ -415,7 +415,7 @@ Best regards`);
   // Fetch published jobs for the Apply to Job modal
   const fetchPublishedJobs = async () => {
     try {
-      const response = await jdService.list({ status: 'published', page_size: 100 });
+      const response = await jdService.list({ status: 'published', page_size: 100, source: 'my-jds' });
       const convertedJobs: Job[] = response.items.map((jd: any) => ({
         id: jd.id,
         job_id: jd.job_id,

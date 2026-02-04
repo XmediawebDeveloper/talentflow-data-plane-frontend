@@ -129,25 +129,27 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
       setLoadingJDs(true);
       try {
-        // Fetch published JDs
+        // Fetch published JDs (filtered by logged-in user)
         const publishedResponse = await jdService.list({
           status: 'published',
           page_size: 5,
           page: 1,
+          source: 'my-jds',
         });
         if (controller.signal.aborted) return;
         setPublishedJDs(publishedResponse.items || []);
 
-        // Fetch draft JDs
+        // Fetch draft JDs (filtered by logged-in user)
         const draftResponse = await jdService.list({
           status: 'draft',
           page_size: 5,
           page: 1,
+          source: 'my-jds',
         });
         if (controller.signal.aborted) return;
         setDraftJDs(draftResponse.items || []);
 
-        // Fetch all JDs for stats and status counts (fetch multiple pages if needed)
+        // Fetch all JDs for stats and status counts (fetch multiple pages if needed, filtered by user)
         let allJDs: JDResponse[] = [];
         let currentPage = 1;
         let hasMore = true;
@@ -156,6 +158,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           const response = await jdService.list({
             page_size: 100,
             page: currentPage,
+            source: 'my-jds',
           });
           if (controller.signal.aborted) return;
 

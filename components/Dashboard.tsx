@@ -83,10 +83,10 @@ export default function Dashboard({
     const fetchData = async () => {
       setLoadingJDs(true);
       try {
-        // Fetch all data in parallel
+        // Fetch all data in parallel (filtered by logged-in user's JDs)
         const [publishedResponse, draftResponse, statsResponse] = await Promise.allSettled([
-          jdService.list({ status: 'published', page_size: 5, page: 1 }),
-          jdService.list({ status: 'draft', page_size: 5, page: 1 }),
+          jdService.list({ status: 'published', page_size: 5, page: 1, source: 'my-jds' }),
+          jdService.list({ status: 'draft', page_size: 5, page: 1, source: 'my-jds' }),
           assessmentService.getStats(),
         ]);
 

@@ -401,7 +401,7 @@ export default function ResumeScoringRoute() {
     try {
       // Fetch JDs from tenant database - only published JDs for scoring dropdown
       const [jdResponse, resumeResponse, folderResponse] = await Promise.all([
-        jdService.list({ status: 'published', page_size: 100 }),
+        jdService.list({ status: 'published', page_size: 100, source: 'my-jds' }),
         resumeService.list({ page_size: 100 }).catch(() => ({ items: [] })),
         folderService.list().catch(() => []),
       ]);

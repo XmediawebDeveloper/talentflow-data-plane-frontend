@@ -67,7 +67,7 @@ export default function AITalentMatchRoute() {
         // Fetch ALL jobs (not just published) so we can show disabled jobs in history
         // and match history in parallel
         const [jobsResponse, historyResponse] = await Promise.all([
-          jdService.list({ page_size: 100 }), // Fetch all jobs to show disabled jobs in history
+          jdService.list({ page_size: 100, source: 'my-jds' }), // Fetch user's jobs to show disabled jobs in history
           aiMatchService.listSessions({ page_size: 100 }).catch(() => ({ items: [], total: 0 })),
         ]);
 

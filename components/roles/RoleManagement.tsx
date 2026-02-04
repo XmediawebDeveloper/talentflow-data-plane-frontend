@@ -418,11 +418,6 @@ export default function RoleManagement() {
                           <div>
                             <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
                               {role.name}
-                              {role.is_default && (
-                                <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">
-                                  Default
-                                </span>
-                              )}
                             </div>
                             <div className="text-xs text-gray-500">{role.description}</div>
                           </div>
@@ -460,21 +455,24 @@ export default function RoleManagement() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              console.log('[ROLE EDIT] Attempting to edit role:', { id: role.id, name: role.name, code: role.code });
-                              if (!role.id || role.id <= 0) {
-                                console.error('[ROLE EDIT] Invalid role ID:', role.id, 'Full role object:', role);
-                                toast.error(`Invalid role ID: ${role.id}`);
-                                return;
-                              }
-                              console.log('[ROLE EDIT] Navigating to edit page with ID:', role.id);
-                              router.push(`/organization/role-management/edit/${role.id}`);
-                            }}
-                            className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
+                          {/* Hide edit button for protected system roles: Admin, Recruiter, Billing Manager, Viewer */}
+                          {!['admin', 'recruiter', 'billing_manager', 'viewer'].includes(role.code) && (
+                            <button
+                              onClick={() => {
+                                console.log('[ROLE EDIT] Attempting to edit role:', { id: role.id, name: role.name, code: role.code });
+                                if (!role.id || role.id <= 0) {
+                                  console.error('[ROLE EDIT] Invalid role ID:', role.id, 'Full role object:', role);
+                                  toast.error(`Invalid role ID: ${role.id}`);
+                                  return;
+                                }
+                                console.log('[ROLE EDIT] Navigating to edit page with ID:', role.id);
+                                router.push(`/organization/role-management/edit/${role.id}`);
+                              }}
+                              className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
                           {!role.is_system && (
                             <button
                               onClick={() => handleDeleteRole(role.id)}
