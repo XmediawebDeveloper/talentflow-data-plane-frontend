@@ -18,6 +18,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { handleUnauthorized } from '@/lib/services/api';
 import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
@@ -717,12 +718,36 @@ export default function UserManagement() {
   }, []);
 
   // Load users, roles, and permissions
+  // Auto-sync with Admin API first to ensure accurate counts
   useEffect(() => {
     if (hasFetched.current) return;
     hasFetched.current = true;
-    loadUsers();
-    loadRoles();
-    loadAllPermissions();
+
+    const initializeUsers = async () => {
+      // Auto-sync with Admin API first to reconcile any count mismatches
+      try {
+        const syncResult = await userService.syncUsers();
+        if (syncResult.synced) {
+          console.log(`[USER-SYNC] Tenant ${syncResult.tenant_id}: Local=${syncResult.local_count}, Admin=${syncResult.admin_count}, Synced=${syncResult.synced_users || 0} users`);
+        } else if (syncResult.error === 'USER_LIMIT_EXCEEDED' && syncResult.upgrade_required) {
+          console.warn(`[USER-SYNC] Plan limit exceeded: ${syncResult.message}`);
+          toast.warning(
+            `User count mismatch: You have ${syncResult.local_count} users but your plan allows ${syncResult.max_seats}. Please upgrade your plan.`,
+            { duration: 8000 }
+          );
+        }
+      } catch (error) {
+        console.warn('Failed to sync users with Admin API:', error);
+        // Continue loading users even if sync fails
+      }
+
+      // Then load users and related data
+      loadUsers();
+      loadRoles();
+      loadAllPermissions();
+    };
+
+    initializeUsers();
   }, []);
 
 
@@ -937,6 +962,12 @@ export default function UserManagement() {
         },
       });
 
+      // Handle 401 - logout and redirect
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
       if (!response.ok) {
         // Check for permission denied (403 Forbidden)
         if (response.status === 403) {
@@ -1057,6 +1088,12 @@ export default function UserManagement() {
           permission_codes: Array.from(selectedPermissionCodes), // Also send codes for future backend support
         }),
       });
+
+      // Handle 401 - logout and redirect
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -1286,6 +1323,12 @@ export default function UserManagement() {
         },
       });
 
+      // Handle 401 - logout and redirect
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         // Handle last admin deactivation blocked
@@ -1316,6 +1359,12 @@ export default function UserManagement() {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
         },
       });
+
+      // Handle 401 - logout and redirect
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -1403,6 +1452,12 @@ export default function UserManagement() {
         body: JSON.stringify(requestBody),
       });
 
+      // Handle 401 - logout and redirect
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         if (errorData.detail?.error === 'LAST_ADMIN_ROLE_CHANGE_BLOCKED') {
@@ -1481,7 +1536,7 @@ export default function UserManagement() {
 
         {/* RBAC01: User Limits - always visible */}
         <div className="mt-6 space-y-4">
-          <UserLimits compact onAddSeatsClick={() => {}} refreshTrigger={seatQuotaRefreshTrigger} />
+          <UserLimits compact refreshTrigger={seatQuotaRefreshTrigger} />
           {/* Addon card - only shows when quota exhausted */}
           <SeatQuotaCard
             onRefresh={() => { loadUsers(); refreshLimits(); }}

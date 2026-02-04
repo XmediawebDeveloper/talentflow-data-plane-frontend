@@ -52,6 +52,58 @@ export const clearTokens = () => {
   }
 };
 
+// Handle 401 Unauthorized - clear tokens and redirect to login
+// Can be called from any component using fetch directly
+export const handleUnauthorized = () => {
+  console.log('[API] 401 Unauthorized - logging out user');
+  clearTokens();
+  if (typeof window !== 'undefined') {
+    // Clear any other auth-related storage
+    localStorage.removeItem('user');
+    sessionStorage.clear();
+    // Redirect to login
+    window.location.href = '/login';
+  }
+};
+
+// Helper to check response and handle 401 automatically
+// Use this when making fetch calls outside of the axios instance
+export const checkResponseAuth = async (response: Response): Promise<Response> => {
+  if (response.status === 401) {
+    handleUnauthorized();
+    throw new Error('Session expired. Please log in again.');
+  }
+  return response;
+};
+
+// Authenticated fetch wrapper - handles 401 automatically
+// Use this instead of native fetch for authenticated API calls
+export const authFetch = async (
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> => {
+  const { accessToken } = getTokens();
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+    ...options.headers,
+  };
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  // Handle 401 - logout and redirect
+  if (response.status === 401) {
+    handleUnauthorized();
+    throw new Error('Session expired. Please log in again.');
+  }
+
+  return response;
+};
+
 // Request interceptor - add auth token
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -175,12 +227,13 @@ api.interceptors.response.use(
 
           originalRequest.headers.Authorization = `Bearer ${access_token}`;
           return api(originalRequest);
+        } else {
+          // No refresh token available - logout immediately
+          handleUnauthorized();
         }
       } catch (refreshError) {
-        clearTokens();
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
-        }
+        // Token refresh failed - logout immediately
+        handleUnauthorized();
       }
     }
 

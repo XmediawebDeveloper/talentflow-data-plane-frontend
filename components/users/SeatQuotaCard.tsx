@@ -36,21 +36,31 @@ interface SeatQuotaData {
   total_remaining: number;
 }
 
-interface Addon {
-  id: number;
-  name: string;
-  unit_price?: number;
-  price?: number;
-  currency?: string;
-  credit_amount?: number;
-  max_quantity?: number;
-}
-
 interface SeatQuotaCardProps {
   onRefresh?: () => void;
   compact?: boolean;
   refreshTrigger?: number; // Increment this to trigger a refresh
 }
+
+interface SeatPricing {
+  addon_id?: number;
+  addon_name?: string;
+  units_per_package: number;  // e.g., 5 seats per package
+  price_per_package: number;  // e.g., ₹49 per package
+  currency: string;
+  max_packages?: number;
+}
+
+// Helper to get currency symbol
+const getCurrencySymbol = (currency: string): string => {
+  switch (currency?.toUpperCase()) {
+    case 'INR': return '₹';
+    case 'USD': return '$';
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    default: return currency || '₹';
+  }
+};
 
 export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigger = 0 }: SeatQuotaCardProps) {
   const [loading, setLoading] = useState(true);
@@ -60,14 +70,14 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
 
   // Addon modal states
   const [showAddonModal, setShowAddonModal] = useState(false);
-  const [seatAddon, setSeatAddon] = useState<Addon | null>(null);
+  const [seatPricing, setSeatPricing] = useState<SeatPricing | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchQuotaData();
-    fetchSeatAddon();
+    fetchSeatPricing();
   }, [refreshTrigger]); // Re-fetch when refreshTrigger changes
 
   const getAuthHeaders = () => {
@@ -124,48 +134,78 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
     }
   };
 
-  const fetchSeatAddon = async () => {
+  const fetchSeatPricing = async () => {
     try {
+      // Fetch from same /addons API as usage-quotas page
       const response = await fetch(`${API_BASE}/addons?active_only=true&public_only=true`, {
         headers: getAuthHeaders(),
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        const addons: Addon[] = result.data || result || [];
+      const result = await response.json();
+      console.log('[SeatQuotaCard] Addons response:', response.status, result);
 
-        // Find seat addon
-        const seat = addons.find(a => {
-          const name = (a.name || '').toLowerCase();
-          return name.includes('seat') || name.includes('user');
+      if (response.ok) {
+        const addons = result.data || result || [];
+
+        // Find seat addon (same logic as usage-quotas page)
+        const seatAddon = addons.find((addon: any) => {
+          const name = (addon.name || addon.addon_name || '').toLowerCase();
+          return name.includes('seat') || name.includes('max_seats');
         });
 
-        if (seat) {
-          setSeatAddon(seat);
+        if (seatAddon) {
+          console.log('[SeatQuotaCard] Found seat addon (raw):', JSON.stringify(seatAddon, null, 2));
+          const units = seatAddon.credit_amount || seatAddon.min_quantity || 1;
+          const price = seatAddon.price || seatAddon.unit_price || 0;
+          console.log('[SeatQuotaCard] Extracted: units=', units, 'price=', price);
+          setSeatPricing({
+            units_per_package: units,
+            price_per_package: price,
+            currency: seatAddon.currency || 'INR',
+            addon_id: seatAddon.id,
+            addon_name: seatAddon.name || seatAddon.addon_name,
+            max_packages: seatAddon.max_quantity || 50,
+          });
+        } else {
+          console.error('[SeatQuotaCard] No seat addon found in:', addons.map((a: any) => a.name));
+          setPurchaseError('Seat addon not available');
         }
+      } else {
+        console.error('[SeatQuotaCard] Addons API error:', result);
+        setPurchaseError(result.detail || 'Failed to load addons');
       }
     } catch (error) {
       console.error('[SeatQuotaCard] Error fetching addons:', error);
+      setPurchaseError('Failed to load seat pricing');
     }
   };
 
   const handlePurchase = async () => {
-    if (quantity < 1) return;
+    if (quantity < 1 || !seatPricing) return;
 
     setPurchasing(true);
     setPurchaseError(null);
+
+    // Calculate total seats from packages
+    const seatsToAdd = quantity * seatPricing.units_per_package;
+    console.log('[SeatQuotaCard] Purchase:', {
+      packages: quantity,
+      units_per_package: seatPricing.units_per_package,
+      total_seats: seatsToAdd,
+      price_per_package: seatPricing.price_per_package,
+    });
 
     try {
       const response = await fetch(`${API_BASE}/addons/purchase-seats`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ quantity }),
+        body: JSON.stringify({ quantity: seatsToAdd }),  // Send total seats
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        toast.success(`Successfully added ${quantity} seat${quantity > 1 ? 's' : ''} to your account!`);
+        toast.success(`Successfully added ${totalSeats} seat${totalSeats > 1 ? 's' : ''} to your account!`);
         setShowAddonModal(false);
         setQuantity(1);
         fetchQuotaData();
@@ -182,9 +222,12 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
     }
   };
 
-  const pricePerSeat = seatAddon?.unit_price || seatAddon?.price || 10;
-  const currency = seatAddon?.currency || 'USD';
-  const totalPrice = (quantity * pricePerSeat).toFixed(2);
+  // Use pricing from seat-pricing API (package-based, no hardcoded values)
+  const unitsPerPackage = seatPricing?.units_per_package || 0;
+  const pricePerPackage = seatPricing?.price_per_package || 0;
+  const currency = seatPricing?.currency || 'INR';
+  const totalSeats = quantity * unitsPerPackage;
+  const totalPrice = (quantity * pricePerPackage).toFixed(2);
 
   // Don't show anything while loading - card only appears when at limit
   if (loading) {
@@ -378,10 +421,10 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
                 )}
               </div>
 
-              {/* Quantity Selector */}
+              {/* Package Selector */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Number of seats to add
+                  Number of packages to buy
                 </label>
                 <div className="flex items-center justify-center gap-4">
                   <button
@@ -395,36 +438,40 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
                     <input
                       type="number"
                       min={1}
-                      max={50}
+                      max={seatPricing?.max_packages || 50}
                       value={quantity}
-                      onChange={(e) => setQuantity(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
+                      onChange={(e) => setQuantity(Math.max(1, Math.min(seatPricing?.max_packages || 50, parseInt(e.target.value) || 1)))}
                       className="w-full text-center text-3xl font-bold text-gray-900 border-0 focus:ring-0 bg-transparent"
                     />
-                    <span className="text-sm text-gray-500">seat{quantity > 1 ? 's' : ''}</span>
+                    <span className="text-sm text-gray-500">package{quantity > 1 ? 's' : ''}</span>
                   </div>
                   <button
-                    onClick={() => setQuantity(Math.min(50, quantity + 1))}
-                    disabled={quantity >= 50}
+                    onClick={() => setQuantity(Math.min(seatPricing?.max_packages || 50, quantity + 1))}
+                    disabled={quantity >= (seatPricing?.max_packages || 50)}
                     className="w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <Plus className="w-5 h-5" />
                   </button>
                 </div>
+                {seatPricing && (
+                  <p className="text-center text-sm text-gray-500 mt-2">
+                    = {totalSeats} seat{totalSeats !== 1 ? 's' : ''} total
+                  </p>
+                )}
               </div>
 
               {/* Pricing */}
               <div className="bg-gray-100 rounded-xl p-4 mb-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Price per seat</span>
+                  <span className="text-sm text-gray-600">Package</span>
                   <span className="text-sm font-medium text-gray-900">
-                    ${pricePerSeat.toFixed(2)} {currency}/month
+                    {unitsPerPackage} seats for {getCurrencySymbol(currency)}{pricePerPackage}
                   </span>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                  <span className="text-base font-medium text-gray-800">Total</span>
+                  <span className="text-base font-medium text-gray-800">Total ({totalSeats} seats)</span>
                   <span className="text-2xl font-bold text-gray-900">
-                    ${totalPrice}
-                    <span className="text-sm font-normal text-gray-600">/month</span>
+                    {getCurrencySymbol(currency)}{totalPrice}
                   </span>
                 </div>
               </div>
@@ -456,7 +503,7 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
                 </button>
                 <button
                   onClick={handlePurchase}
-                  disabled={purchasing || quantity < 1}
+                  disabled={purchasing || quantity < 1 || !seatPricing}
                   className="flex-1 px-4 py-3 bg-gray-800 text-white rounded-xl font-medium hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
                   {purchasing ? (
@@ -467,7 +514,7 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
                   ) : (
                     <>
                       <ShoppingCart className="w-4 h-4" />
-                      Add {quantity} Seat{quantity > 1 ? 's' : ''}
+                      Add {totalSeats} Seat{totalSeats !== 1 ? 's' : ''}
                     </>
                   )}
                 </button>

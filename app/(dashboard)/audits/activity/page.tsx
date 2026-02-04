@@ -21,6 +21,7 @@ import {
   Send
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
+import { handleUnauthorized } from '@/lib/services/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -99,6 +100,11 @@ export default function ActivityLogsPage() {
       });
 
       if (!response.ok) {
+        // Handle 401 - logout and redirect to login
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         const errorData = await response.json().catch(() => ({}));
         console.error('[DEBUG] Activity logs error:', response.status, errorData);
         throw new Error(errorData.detail || `Failed to fetch activity logs (${response.status})`);

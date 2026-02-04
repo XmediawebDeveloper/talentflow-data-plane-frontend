@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import authService from '@/lib/services/authService';
+import { handleUnauthorized } from '@/lib/services/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -182,9 +183,10 @@ export default function CompanyProfilePage() {
         const data = await response.json();
         console.error('[DEBUG] Error response:', data);
 
-        // Handle 401 specifically
+        // Handle 401 - logout and redirect
         if (response.status === 401) {
-          throw new Error('Session expired. Please log in again.');
+          handleUnauthorized();
+          return;
         }
 
         throw new Error(data.detail || 'Failed to save');

@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { handleUnauthorized } from '@/lib/services/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -219,6 +220,11 @@ export function useUserManagement() {
         },
       });
 
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
       if (!response.ok) throw new Error('Failed to fetch users');
 
       const data = await response.json();
@@ -302,6 +308,11 @@ export function useUserManagement() {
         }),
       });
 
+      if (response.status === 401) {
+        handleUnauthorized();
+        return { success: false };
+      }
+
       if (!response.ok) throw new Error('Failed to invite user');
 
       await fetchUsers();
@@ -338,6 +349,11 @@ export function useUserManagement() {
         },
       });
 
+      if (response.status === 401) {
+        handleUnauthorized();
+        return { success: false };
+      }
+
       if (!response.ok) throw new Error('Failed to resend invitation');
 
       return { success: true };
@@ -366,6 +382,11 @@ export function useUserManagement() {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
       });
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return { success: false };
+      }
 
       if (!response.ok) throw new Error('Failed to deactivate user');
 

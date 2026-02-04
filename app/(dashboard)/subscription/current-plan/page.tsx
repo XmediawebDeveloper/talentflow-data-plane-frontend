@@ -3,7 +3,7 @@
 import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, ArrowUpRight, Crown, FileText, Mail } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import api from '@/lib/services/api';
+import api, { handleUnauthorized } from '@/lib/services/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { decodePlanId } from '@/lib/utils/planEncoder';
@@ -25,10 +25,19 @@ interface PlanFeature {
 }
 
 interface PlanQuotas {
+  // Short names (common in API)
   AS?: number;
   RS?: number;
   RU?: number;
   AIU?: number;
+  // Long names (alternative API format)
+  assessments?: number;
+  resume_scoring?: number;
+  resume_uploads?: number;
+  resume_storage?: number;
+  ai_interviews?: number;
+  ai_interview?: number;
+  // Other quotas
   max_jobs?: number;
   max_seats?: number;
   storage_gb?: number;
@@ -215,12 +224,19 @@ interface FreeTrialSettings {
   id?: number;
   trial_days: number;
   features: {
-    MAX_JOBS: number;
-    MAX_SEATS: number;
-    ASSESSMENTS: number;
-    AI_INTERVIEW: number;
-    RESUME_SCORING: number;
-    RESUME_STORAGE: number;
+    // Support both uppercase (legacy) and lowercase (API) property names
+    MAX_JOBS?: number;
+    MAX_SEATS?: number;
+    ASSESSMENTS?: number;
+    AI_INTERVIEW?: number;
+    RESUME_SCORING?: number;
+    RESUME_STORAGE?: number;
+    max_jobs?: number;
+    max_seats?: number;
+    assessments?: number;
+    ai_interview?: number;
+    resume_scoring?: number;
+    resume_storage?: number;
   };
   trial_includes: string[];
 }
@@ -497,16 +513,18 @@ function CurrentPlanContent() {
           console.log('[CurrentPlan] Free trial API response:', ftData);
 
           // Use API data only for trial settings - extract numeric values from potential objects
+          // Handle both uppercase (MAX_JOBS) and lowercase (max_jobs) property names from API
+          const ftFeatures = ftData.features || {};
           trialSettings = {
             id: ftData.id,
             trial_days: ftData.trial_days,
             features: {
-              MAX_JOBS: extractQuotaValue(ftData.features?.MAX_JOBS) as number,
-              MAX_SEATS: extractQuotaValue(ftData.features?.MAX_SEATS) as number,
-              ASSESSMENTS: extractQuotaValue(ftData.features?.ASSESSMENTS) as number,
-              AI_INTERVIEW: extractQuotaValue(ftData.features?.AI_INTERVIEW) as number,
-              RESUME_SCORING: extractQuotaValue(ftData.features?.RESUME_SCORING) as number,
-              RESUME_STORAGE: extractQuotaValue(ftData.features?.RESUME_STORAGE) as number,
+              MAX_JOBS: extractQuotaValue(ftFeatures.MAX_JOBS ?? ftFeatures.max_jobs) as number,
+              MAX_SEATS: extractQuotaValue(ftFeatures.MAX_SEATS ?? ftFeatures.max_seats) as number,
+              ASSESSMENTS: extractQuotaValue(ftFeatures.ASSESSMENTS ?? ftFeatures.assessments) as number,
+              AI_INTERVIEW: extractQuotaValue(ftFeatures.AI_INTERVIEW ?? ftFeatures.ai_interview) as number,
+              RESUME_SCORING: extractQuotaValue(ftFeatures.RESUME_SCORING ?? ftFeatures.resume_scoring) as number,
+              RESUME_STORAGE: extractQuotaValue(ftFeatures.RESUME_STORAGE ?? ftFeatures.resume_storage) as number,
             },
             trial_includes: ftData.trial_includes || [],
           };
@@ -585,12 +603,13 @@ function CurrentPlanContent() {
           plan_expiry_date: planEndDate || prev?.plan_expiry_date,
           // Update quota limits - use free trial API data for trial users, otherwise use quota-status (API only)
           // Use extractQuotaValue to handle potential object values from API
+          // Handle both short (RU, RS, AS, AIU) and long (resume_uploads, resume_scoring, etc.) property names
           max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : extractQuotaValue(quotas?.max_seats || prev?.max_seats || 0),
           max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : extractQuotaValue(quotas?.max_jobs || prev?.max_jobs || 0),
-          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : extractQuotaValue(quotas?.RU || prev?.max_resume_uploads || 0),
-          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : extractQuotaValue(quotas?.RS || prev?.max_resume_searches || 0),
-          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : extractQuotaValue(quotas?.AS || prev?.max_assessments || 0),
-          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : extractQuotaValue(quotas?.AIU || prev?.max_ai_interviews || 0),
+          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : extractQuotaValue((quotas?.RU ?? quotas?.resume_uploads ?? quotas?.resume_storage) || prev?.max_resume_uploads || 0),
+          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : extractQuotaValue((quotas?.RS ?? quotas?.resume_scoring) || prev?.max_resume_searches || 0),
+          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : extractQuotaValue((quotas?.AS ?? quotas?.assessments) || prev?.max_assessments || 0),
+          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : extractQuotaValue((quotas?.AIU ?? quotas?.ai_interviews ?? quotas?.ai_interview) || prev?.max_ai_interviews || 0),
           storage_limit_gb: extractQuotaValue(quotas?.storage_gb || prev?.storage_limit_gb || 0),
         } as CompanySettings));
 
@@ -643,6 +662,11 @@ function CurrentPlanContent() {
           },
         });
         console.log('[CurrentPlan] /auth/me response status:', meResponse.status);
+        // Handle 401 - logout and redirect
+        if (meResponse.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         if (meResponse.ok) {
           const meData = await meResponse.json();
           console.log('[CurrentPlan] /auth/me data:', meData);
@@ -768,6 +792,12 @@ function CurrentPlanContent() {
         },
       });
 
+      // Handle 401 - logout and redirect
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
       if (response.ok) {
         const result = await response.json();
         const upgrades = result.data?.queued_upgrades || [];
@@ -799,6 +829,12 @@ function CurrentPlanContent() {
           terms_accepted: true,
         }),
       });
+
+      // Handle 401 - logout and redirect
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       const data = await response.json();
 
@@ -832,14 +868,33 @@ function CurrentPlanContent() {
       } else {
         // Handle both string and object error formats
         const errorDetail = data.detail;
-        const errorMsg = typeof errorDetail === 'string'
+        let errorMsg = typeof errorDetail === 'string'
           ? errorDetail
           : errorDetail?.message || data.data?.message || 'Failed to apply upgrade';
+
+        // Check for migration/database errors and show user-friendly message
+        if (errorMsg.toLowerCase().includes('migration failed') ||
+            errorMsg.toLowerCase().includes('does not exist') ||
+            errorMsg.toLowerCase().includes('relation') ||
+            errorMsg.toLowerCase().includes('database error')) {
+          errorMsg = 'We encountered an issue while applying your upgrade. Please contact support for assistance.';
+        }
+
         setError(errorMsg);
       }
     } catch (err) {
       console.error('[CurrentPlan] Error applying upgrade:', err);
-      setError(err instanceof Error ? err.message : 'Failed to apply upgrade');
+      let errorMsg = err instanceof Error ? err.message : 'Failed to apply upgrade';
+
+      // Check for migration/database errors and show user-friendly message
+      if (errorMsg.toLowerCase().includes('migration failed') ||
+          errorMsg.toLowerCase().includes('does not exist') ||
+          errorMsg.toLowerCase().includes('relation') ||
+          errorMsg.toLowerCase().includes('database error')) {
+        errorMsg = 'We encountered an issue while applying your upgrade. Please contact support for assistance.';
+      }
+
+      setError(errorMsg);
     } finally {
       setIsApplyingUpgrade(false);
     }
@@ -862,6 +917,12 @@ function CurrentPlanContent() {
           'Content-Type': 'application/json',
         },
       });
+
+      // Handle 401 - logout and redirect
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       const data = await response.json();
 
@@ -1141,9 +1202,18 @@ function CurrentPlanContent() {
       } else {
         // Handle both string and object error formats
         const errorDetail = data.detail;
-        const errorMessage = typeof errorDetail === 'string'
+        let errorMessage = typeof errorDetail === 'string'
           ? errorDetail
           : errorDetail?.message || data.message || 'Failed to upgrade plan';
+
+        // Check for migration/database errors and show user-friendly message
+        if (errorMessage.toLowerCase().includes('migration failed') ||
+            errorMessage.toLowerCase().includes('does not exist') ||
+            errorMessage.toLowerCase().includes('relation') ||
+            errorMessage.toLowerCase().includes('database error')) {
+          errorMessage = 'We encountered an issue while upgrading your plan. Please contact support for assistance.';
+        }
+
         setError(errorMessage);
         toast.error('Plan Selection Failed', {
           description: errorMessage,
@@ -1152,7 +1222,16 @@ function CurrentPlanContent() {
       }
     } catch (err) {
       console.error('Error selecting plan:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to select plan';
+      let errorMessage = err instanceof Error ? err.message : 'Failed to select plan';
+
+      // Check for migration/database errors and show user-friendly message
+      if (errorMessage.toLowerCase().includes('migration failed') ||
+          errorMessage.toLowerCase().includes('does not exist') ||
+          errorMessage.toLowerCase().includes('relation') ||
+          errorMessage.toLowerCase().includes('database error')) {
+        errorMessage = 'We encountered an issue while upgrading your plan. Please contact support for assistance.';
+      }
+
       setError(errorMessage);
       toast.error('Plan Selection Failed', {
         description: errorMessage,
@@ -1881,11 +1960,21 @@ function CurrentPlanContent() {
                     {/* Quotas Section - Single column layout */}
                     {(() => {
                       // Use correct quotas based on billing toggle - all values from API directly
-                      const displayQuotas = isYearly
+                      const rawQuotas = isYearly
                         ? (plan.annualQuotas || plan.quotas)
                         : (plan.monthlyQuotas || plan.quotas);
 
-                      if (!displayQuotas) return null;
+                      if (!rawQuotas) return null;
+
+                      // Normalize quota values to handle different API property names
+                      const displayQuotas = {
+                        max_seats: rawQuotas.max_seats,
+                        max_jobs: rawQuotas.max_jobs,
+                        RU: rawQuotas.RU ?? rawQuotas.resume_uploads ?? rawQuotas.resume_storage,
+                        RS: rawQuotas.RS ?? rawQuotas.resume_scoring,
+                        AS: rawQuotas.AS ?? rawQuotas.assessments,
+                        AIU: rawQuotas.AIU ?? rawQuotas.ai_interviews ?? rawQuotas.ai_interview,
+                      };
 
                       return (
                         <div className="mb-6 py-4 border-t border-b border-gray-100">

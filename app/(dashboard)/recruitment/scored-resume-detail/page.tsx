@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, ArrowLeft, Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, User, FileText, Download, Building2, Code } from 'lucide-react';
 import { toast } from 'sonner';
 import ResumePreviewModal from '@/components/ResumePreviewModal';
+import { handleUnauthorized } from '@/lib/services/api';
 
 function ScoredResumeDetailContent() {
   const router = useRouter();
@@ -38,6 +39,12 @@ function ScoredResumeDetailContent() {
           'Content-Type': 'application/json',
         },
       });
+
+      // Handle 401 - logout and redirect
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       if (response.ok) {
         const data = await response.json();

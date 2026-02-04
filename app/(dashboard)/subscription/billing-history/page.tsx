@@ -2,6 +2,7 @@
 
 import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { handleUnauthorized } from '@/lib/services/api';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -81,6 +82,11 @@ export default function BillingHistoryPage() {
           'Authorization': `Bearer ${token}`,
         },
       });
+
+      if (historyResponse.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       if (!historyResponse.ok) {
         throw new Error('Failed to fetch billing history');
