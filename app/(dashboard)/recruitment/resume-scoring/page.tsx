@@ -510,6 +510,7 @@ export default function ResumeScoringRoute() {
       folders={folders}
       scoredHistory={scoredHistory}
       onSaveScores={saveScoredHistory}
+      onRefreshHistory={loadScoredHistory}
       initialJdId={initialJdId}
       initialScoreId={initialScoreId}
       initialShowProgress={showProgress}
