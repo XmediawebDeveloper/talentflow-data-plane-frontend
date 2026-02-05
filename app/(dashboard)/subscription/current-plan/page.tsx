@@ -220,27 +220,6 @@ interface QueuedUpgrade {
   billing_invoice_number?: string;
 }
 
-interface FreeTrialSettings {
-  id?: number;
-  trial_days: number;
-  features: {
-    // Support both uppercase (legacy) and lowercase (API) property names
-    MAX_JOBS?: number;
-    MAX_SEATS?: number;
-    ASSESSMENTS?: number;
-    AI_INTERVIEW?: number;
-    RESUME_SCORING?: number;
-    RESUME_STORAGE?: number;
-    max_jobs?: number;
-    max_seats?: number;
-    assessments?: number;
-    ai_interview?: number;
-    resume_scoring?: number;
-    resume_storage?: number;
-  };
-  trial_includes: string[];
-}
-
 interface PlanSettings {
   yearlyDiscountPercentage: number;
   databasePerTenantMonthlyPrice: number;
@@ -297,7 +276,7 @@ const getStatusBadge = (status?: string, paymentStatus?: string, trialDays?: num
     case 'active':
       return { bg: 'bg-green-100', text: 'text-green-700', label: 'Active', icon: CheckCircle };
     case 'trial':
-      return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: trialDays ? `Free Trial (${trialDays} days)` : 'Free Trial', icon: Clock };
+      return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Free Trial', icon: Clock };
     case 'pending_payment':
       return { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Pending Payment', icon: Clock };
     case 'suspended':
@@ -426,9 +405,6 @@ function CurrentPlanContent() {
   });
   const [formErrors, setFormErrors] = useState<Partial<PaymentFormData>>({});
 
-  // Free trial settings from admin API
-  const [freeTrialSettings, setFreeTrialSettings] = useState<FreeTrialSettings | null>(null);
-
   // Plan settings from admin API (yearly discount, database extra charge)
   const [planSettings, setPlanSettings] = useState<PlanSettings | null>(null);
 
@@ -503,37 +479,6 @@ function CurrentPlanContent() {
       const quotaData: any = sharedQuotaData;
       console.log('[CurrentPlan] Using shared quota data from context:', quotaData ? 'available' : 'not yet loaded');
 
-      // Fetch free trial settings from API
-      let trialSettings: FreeTrialSettings | null = null;
-      try {
-        const freeTrialResponse = await fetch(`${API_URL}/addons/free-trial`);
-        if (freeTrialResponse.ok) {
-          const freeTrialResult = await freeTrialResponse.json();
-          const ftData = freeTrialResult.data || freeTrialResult;
-          console.log('[CurrentPlan] Free trial API response:', ftData);
-
-          // Use API data only for trial settings - extract numeric values from potential objects
-          // Handle both uppercase (MAX_JOBS) and lowercase (max_jobs) property names from API
-          const ftFeatures = ftData.features || {};
-          trialSettings = {
-            id: ftData.id,
-            trial_days: ftData.trial_days,
-            features: {
-              MAX_JOBS: extractQuotaValue(ftFeatures.MAX_JOBS ?? ftFeatures.max_jobs) as number,
-              MAX_SEATS: extractQuotaValue(ftFeatures.MAX_SEATS ?? ftFeatures.max_seats) as number,
-              ASSESSMENTS: extractQuotaValue(ftFeatures.ASSESSMENTS ?? ftFeatures.assessments) as number,
-              AI_INTERVIEW: extractQuotaValue(ftFeatures.AI_INTERVIEW ?? ftFeatures.ai_interview) as number,
-              RESUME_SCORING: extractQuotaValue(ftFeatures.RESUME_SCORING ?? ftFeatures.resume_scoring) as number,
-              RESUME_STORAGE: extractQuotaValue(ftFeatures.RESUME_STORAGE ?? ftFeatures.resume_storage) as number,
-            },
-            trial_includes: ftData.trial_includes || [],
-          };
-          setFreeTrialSettings(trialSettings);
-        }
-      } catch (ftError) {
-        console.log('[CurrentPlan] Could not fetch free trial settings:', ftError);
-      }
-
       // Check is_trial from quota-status API (handle both boolean and string)
       const isTrial = quotaData?.is_trial === true || quotaData?.is_trial === 'true' || quotaData?.quota_source === 'FREE_TRIAL';
 
@@ -601,19 +546,19 @@ function CurrentPlanContent() {
           // Set plan dates if available (keep existing if API doesn't return new ones)
           plan_start_date: planStartDate || prev?.plan_start_date,
           plan_expiry_date: planEndDate || prev?.plan_expiry_date,
-          // Update quota limits - use free trial API data for trial users, otherwise use quota-status (API only)
+          // Update quota limits from quota-status API (single source of truth for both trial and paid users)
           // Use extractQuotaValue to handle potential object values from API
           // Handle both short (RU, RS, AS, AIU) and long (resume_uploads, resume_scoring, etc.) property names
-          max_seats: isTrial && trialSettings ? trialSettings.features.MAX_SEATS : extractQuotaValue(quotas?.max_seats || prev?.max_seats || 0),
-          max_jobs: isTrial && trialSettings ? trialSettings.features.MAX_JOBS : extractQuotaValue(quotas?.max_jobs || prev?.max_jobs || 0),
-          max_resume_uploads: isTrial && trialSettings ? trialSettings.features.RESUME_STORAGE : extractQuotaValue((quotas?.RU ?? quotas?.resume_uploads ?? quotas?.resume_storage) || prev?.max_resume_uploads || 0),
-          max_resume_searches: isTrial && trialSettings ? trialSettings.features.RESUME_SCORING : extractQuotaValue((quotas?.RS ?? quotas?.resume_scoring) || prev?.max_resume_searches || 0),
-          max_assessments: isTrial && trialSettings ? trialSettings.features.ASSESSMENTS : extractQuotaValue((quotas?.AS ?? quotas?.assessments) || prev?.max_assessments || 0),
-          max_ai_interviews: isTrial && trialSettings ? trialSettings.features.AI_INTERVIEW : extractQuotaValue((quotas?.AIU ?? quotas?.ai_interviews ?? quotas?.ai_interview) || prev?.max_ai_interviews || 0),
+          max_seats: extractQuotaValue(quotas?.max_seats || prev?.max_seats || 0),
+          max_jobs: extractQuotaValue(quotas?.max_jobs || prev?.max_jobs || 0),
+          max_resume_uploads: extractQuotaValue((quotas?.RU ?? quotas?.resume_uploads ?? quotas?.resume_storage) || prev?.max_resume_uploads || 0),
+          max_resume_searches: extractQuotaValue((quotas?.RS ?? quotas?.resume_scoring) || prev?.max_resume_searches || 0),
+          max_assessments: extractQuotaValue((quotas?.AS ?? quotas?.assessments) || prev?.max_assessments || 0),
+          max_ai_interviews: extractQuotaValue((quotas?.AIU ?? quotas?.ai_interviews ?? quotas?.ai_interview) || prev?.max_ai_interviews || 0),
           storage_limit_gb: extractQuotaValue(quotas?.storage_gb || prev?.storage_limit_gb || 0),
         } as CompanySettings));
 
-        console.log('[CurrentPlan] isTrial:', isTrial, 'trialSettings:', trialSettings?.features);
+        console.log('[CurrentPlan] isTrial:', isTrial, 'quotas:', quotas);
 
         // Extract subscribed_price from plan_info (what user is actually paying)
         if (!isTrial && quotaData.plan_info?.subscribed_price !== undefined) {
@@ -651,34 +596,10 @@ function CurrentPlanContent() {
       // No need to call /settings/company-settings - quota-status is the single source of truth
       console.log('[CurrentPlan] Using quota-status API as single source of truth for plan data');
 
-      // Fetch tenant_id from /auth/me (using data-plane API)
-      try {
-        const token = localStorage.getItem('accessToken');
-        console.log('[CurrentPlan] Fetching tenant_id, token exists:', !!token);
-        const meResponse = await fetch(`${API_URL}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        console.log('[CurrentPlan] /auth/me response status:', meResponse.status);
-        // Handle 401 - logout and redirect
-        if (meResponse.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        if (meResponse.ok) {
-          const meData = await meResponse.json();
-          console.log('[CurrentPlan] /auth/me data:', meData);
-          if (meData.tenant_id) {
-            setTenantId(meData.tenant_id);
-            console.log('[CurrentPlan] tenant_id set:', meData.tenant_id);
-          }
-        } else {
-          console.log('[CurrentPlan] /auth/me failed:', meResponse.status, await meResponse.text());
-        }
-      } catch (err) {
-        console.error('[CurrentPlan] Error fetching tenant_id:', err);
+      // Get tenant_id from AuthContext (already fetched during login)
+      if (user?.tenantId) {
+        setTenantId(user.tenantId);
+        console.log('[CurrentPlan] tenant_id from AuthContext:', user.tenantId);
       }
 
       // Fetch plans from backend API (which proxies to external API)
@@ -1287,14 +1208,15 @@ function CurrentPlanContent() {
   const isExpiredSubscription = quotaSubscriptionStatus.toLowerCase() === 'expired' ||
                                  companySettings?.status?.toLowerCase() === 'expired';
   // Use quotaSubscriptionStatus as source of truth for status badge
-  const statusBadge = getStatusBadge(quotaSubscriptionStatus, companySettings?.payment_status, freeTrialSettings?.trial_days);
+  // Get trial days remaining from quota-status API (single source of truth)
+  const statusBadge = getStatusBadge(quotaSubscriptionStatus, companySettings?.payment_status, sharedQuotaData?.trial_info?.days_remaining);
   const StatusIcon = statusBadge.icon;
 
-  // Calculate remaining days from API dates only
-  // For trial users, calculate from trial_end_date
-  // For paid users, calculate from plan expiry date
+  // Get remaining days from quota-status API (single source of truth)
+  // For trial users: use trial_info.days_remaining from Admin API
+  // For paid users: calculate from plan expiry date
   const trialDaysRemaining = isOnTrial
-    ? (companySettings?.trial_end_date ? getDaysRemaining(companySettings.trial_end_date) : undefined)
+    ? (sharedQuotaData?.trial_info?.days_remaining ?? (companySettings?.trial_end_date ? getDaysRemaining(companySettings.trial_end_date) : undefined))
     : (companySettings?.plan_expiry_date ? getDaysRemaining(companySettings.plan_expiry_date) : undefined);
 
   // Calculate prices for payment (using actual API prices)
