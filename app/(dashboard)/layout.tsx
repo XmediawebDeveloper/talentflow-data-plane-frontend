@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Sidebar from '@/components/shared/Sidebar';
 import Header from '@/components/Header';
@@ -9,6 +9,15 @@ import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
 import { toast } from 'sonner';
 import { scoringService } from '@/lib/services/scoringService';
 import { QuotaProvider } from '@/contexts/QuotaContext';
+
+// Admin-only routes that require tenant_admin role
+const adminRoutes = [
+  '/organization',
+  '/subscription',
+  '/settings',
+  '/analytics/team-usage',
+  '/analytics/activity-logs',
+];
 
 // Storage key for scoring batch persistence
 const SCORING_BATCH_STORAGE_KEY = 'talentflow_scoring_batch';
@@ -26,17 +35,47 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, tenant, isAuthenticated, isLoading, logout } = useAuth();
+  const { user, tenant, isAuthenticated, isLoading, logout, isTenantAdmin } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
 
   console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
 
+  // Check for unauthorized error from middleware redirect
+  useEffect(() => {
+    const error = searchParams.get('error');
+    if (error === 'unauthorized') {
+      toast.error('Access Denied: You do not have permission to access that page.');
+      // Clear the error param from URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete('error');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [searchParams]);
+
+  // Redirect to login if not authenticated
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       console.log('[DASHBOARD] Not authenticated, redirecting to login');
       router.push('/login');
     }
   }, [isAuthenticated, isLoading, router]);
+
+  // Client-side authorization check for admin routes
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user) {
+      const isAdminRoute = adminRoutes.some(route =>
+        pathname === route || pathname.startsWith(`${route}/`)
+      );
+
+      if (isAdminRoute && !isTenantAdmin) {
+        console.log('[DASHBOARD] Unauthorized access to admin route:', pathname);
+        toast.error('Access Denied: Only Tenant Admins can access this page.');
+        router.push('/dashboard');
+      }
+    }
+  }, [isLoading, isAuthenticated, user, pathname, isTenantAdmin, router]);
 
   // Check for pending scoring batches on login and show notification
   useEffect(() => {

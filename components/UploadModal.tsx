@@ -959,7 +959,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           </button>
           <button
             onClick={handleValidateAndUpload}
-            disabled={isUploading || isCheckingQuota || (quotaInfo?.status === 'EXHAUSTED') || validationErrors.length > 0}
+            disabled={isUploading || isCheckingQuota || (quotaInfo?.status === 'EXHAUSTED') || selectedFiles.length === 0}
             className={`px-8 py-2.5 rounded-md transition-colors flex items-center gap-2 ${
               selectedFiles.length === 0 && !isUploading && !isCheckingQuota
                 ? 'bg-gray-400 text-white hover:bg-gray-500 cursor-pointer'
@@ -984,11 +984,11 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               </>
             ) : quotaInfo?.status === 'EXHAUSTED' ? (
               'Quota Exhausted - Upgrade Plan'
-            ) : validationErrors.length > 0 ? (
-              'Fix Errors to Upload'
             ) : selectedFiles.length === 0
               ? 'Select Files to Upload'
-              : `Upload ${selectedFiles.length} Resume${selectedFiles.length !== 1 ? 's' : ''}`
+              : validationErrors.length > 0
+                ? `Upload ${selectedFiles.length} Valid Resume${selectedFiles.length !== 1 ? 's' : ''} (${validationErrors.length} skipped)`
+                : `Upload ${selectedFiles.length} Resume${selectedFiles.length !== 1 ? 's' : ''}`
             }
           </button>
         </div>

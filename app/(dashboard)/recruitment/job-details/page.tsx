@@ -251,7 +251,7 @@ function JobDetailsContent() {
 
   const handleNavigateToAITalentMatch = (jobId: string) => {
     sessionStorage.setItem('preselectedJobId', jobId);
-    sessionStorage.setItem('selectJobOnly', 'true'); // Don't auto-start matching, just select the job
+    // Auto-start AI Talent Match process for this JD
     router.push('/recruitment/ai-talent-match');
   };
 

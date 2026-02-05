@@ -31,6 +31,10 @@ export default function JobOpeningsPage() {
     jobTitle: string;
     usageDetails: string;
   }>({ open: false, jobTitle: '', usageDetails: '' });
+  const [disableDialog, setDisableDialog] = useState<{
+    open: boolean;
+    job: Job | null;
+  }>({ open: false, job: null });
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -225,7 +229,15 @@ export default function JobOpeningsPage() {
     }
   };
 
-  const handleDisableJob = async (job: Job) => {
+  const handleDisableJob = (job: Job) => {
+    // Show confirmation dialog instead of directly disabling
+    setDisableDialog({ open: true, job });
+  };
+
+  const confirmDisableJob = async () => {
+    const job = disableDialog.job;
+    if (!job) return;
+
     try {
       await jdService.updateStatus(job.id, 'disabled');
       setJobs(prev => prev.map(j =>
@@ -234,6 +246,8 @@ export default function JobOpeningsPage() {
       toast.info(`"${job.title}" has been disabled`);
     } catch (error) {
       toast.error('Failed to disable job');
+    } finally {
+      setDisableDialog({ open: false, job: null });
     }
   };
 
@@ -355,6 +369,56 @@ export default function JobOpeningsPage() {
               className="bg-gray-900 hover:bg-gray-800 text-white"
             >
               I Understand
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Disable Job Confirmation Dialog */}
+      <AlertDialog open={disableDialog.open} onOpenChange={(open) => setDisableDialog(prev => ({ ...prev, open }))}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div className="flex-1 pt-1">
+                <AlertDialogTitle className="text-lg font-semibold text-gray-900">
+                  Disable Job Description?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="mt-2 text-sm text-gray-600">
+                  Are you sure you want to disable <span className="font-medium text-gray-800">&quot;{disableDialog.job?.title}&quot;</span>?
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="mt-4 ml-16">
+            <p className="text-sm text-gray-600 mb-3">
+              If you disable this JD, it will be removed from:
+            </p>
+            <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+              <li>Resume Scoring</li>
+              <li>Assessment Generation</li>
+              <li>AI Talent Match</li>
+            </ul>
+            <p className="mt-3 text-sm text-gray-500">
+              You can re-enable this JD later if needed.
+            </p>
+          </div>
+
+          <AlertDialogFooter className="mt-6 flex gap-3 sm:justify-end">
+            <button
+              onClick={() => setDisableDialog({ open: false, job: null })}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <AlertDialogAction
+              onClick={confirmDisableJob}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Yes, Disable
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
