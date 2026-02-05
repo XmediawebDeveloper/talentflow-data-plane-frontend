@@ -15,7 +15,9 @@ import {
   Check,
   Settings2,
   Link2,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -645,6 +647,7 @@ export default function UserManagement() {
   // Refresh trigger for SeatQuotaCard
   const [seatQuotaRefreshTrigger, setSeatQuotaRefreshTrigger] = useState(0);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // Toggle password visibility
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
@@ -1157,6 +1160,7 @@ export default function UserManagement() {
     setSelectedRoleId(null);
     setSelectedPermissionIds(new Set());
     setSelectedPermissionCodes(new Set()); // Reset permission codes
+    setShowPassword(false); // Hide password when modal closes
     setIsCreateModalOpen(false);
     // Clear email validation state
     setEmailCheckResult({ error: null, available: true });
@@ -1835,13 +1839,26 @@ export default function UserManagement() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Password <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="password"
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  placeholder="Min. 6 characters"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    placeholder="Min. 6 characters"
+                    className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1865,22 +1882,24 @@ export default function UserManagement() {
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className={`font-medium ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
-                            {role.name}
-                          </span>
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <span className={`font-medium truncate ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
+                              {role.name}
+                            </span>
+                            {isSystemRole && (
+                              <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded flex-shrink-0">
+                                System
+                              </span>
+                            )}
+                          </div>
                           {isSelected && (
-                            <div className="w-5 h-5 bg-gray-800 rounded-full flex items-center justify-center">
+                            <div className="w-5 h-5 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
                               <Check className="w-3 h-3 text-white" />
                             </div>
                           )}
                         </div>
                         {role.description && (
                           <p className="text-xs text-gray-500 mt-1 line-clamp-1">{role.description}</p>
-                        )}
-                        {isSystemRole && (
-                          <span className="absolute top-1 right-1 text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
-                            System
-                          </span>
                         )}
                       </button>
                     );
