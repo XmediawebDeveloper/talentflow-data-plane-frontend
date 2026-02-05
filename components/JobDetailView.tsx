@@ -1136,21 +1136,28 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 </button>
               )}
 
-              {/* AI Talent Match Results - COMMENTED OUT */}
-              {false && (
-              <button
-                onClick={() => {
-                  // Set flag to show results only (not run new match)
-                  sessionStorage.setItem('showResultsOnly', 'true');
-                  if (onNavigateToAITalentMatch) {
-                    onNavigateToAITalentMatch(job.id);
-                  }
-                }}
-                className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white hover:bg-gray-800 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>AI Talent Match Results</span>
-              </button>
+              {/* AI Talent Match - Disabled for Disabled JDs */}
+              {job.status !== 'Disabled' ? (
+                <button
+                  onClick={() => {
+                    if (onNavigateToAITalentMatch) {
+                      onNavigateToAITalentMatch(job.id);
+                    }
+                  }}
+                  className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white hover:bg-gray-800 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>AI Talent Match</span>
+                </button>
+              ) : (
+                <button
+                  disabled
+                  className="w-full px-4 py-2.5 text-sm bg-gray-300 text-gray-500 rounded-md cursor-not-allowed shadow-sm text-left flex items-center gap-2"
+                  title="AI Talent Match is not available for disabled JDs"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>AI Talent Match</span>
+                </button>
               )}
 
               {/* View JD History */}

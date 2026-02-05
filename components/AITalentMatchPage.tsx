@@ -195,6 +195,7 @@ export default function AITalentMatchPage({
     // Then check sessionStorage (for navigation from JD page)
     const sessionJobId = sessionStorage.getItem('preselectedJobId');
     const showResultsOnly = sessionStorage.getItem('showResultsOnly') === 'true';
+    const selectJobOnly = sessionStorage.getItem('selectJobOnly') === 'true';
 
     const preselectedJobId = urlJdId || sessionJobId;
 
@@ -206,6 +207,7 @@ export default function AITalentMatchPage({
     if (sessionJobId) {
       sessionStorage.removeItem('preselectedJobId');
       sessionStorage.removeItem('showResultsOnly');
+      sessionStorage.removeItem('selectJobOnly');
     }
 
     // Set the selected job
@@ -254,6 +256,11 @@ export default function AITalentMatchPage({
       if (!urlJdId) {
         updateUrlParams({ jdId: preselectedJobId, view: 'results' });
       }
+    } else if (selectJobOnly) {
+      // User clicked "AI Talent Match" from Quick Actions - just select the job, don't auto-start
+      // Show history view with the job pre-selected in the dropdown
+      setViewMode('history');
+      // Don't update URL params - let user decide what to do next
     } else {
       // User clicked "AI Talent Match" - ALWAYS run new match (ignore history)
       setViewMode('new');
