@@ -310,15 +310,17 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
             >
               <div className="p-6">
                 <div className="flex items-start gap-4">
-                  {/* Rank Badge */}
+                  {/* Matched Rating Badge - circular like devrms */}
                   <div className="flex-shrink-0">
-                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-lg ${
-                      index === 0 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
-                      index === 1 ? 'bg-gray-100 text-gray-700 border-2 border-gray-300' :
-                      index === 2 ? 'bg-orange-100 text-orange-700 border-2 border-orange-300' :
-                      'bg-gray-50 text-gray-600'
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg ${
+                      candidate.matchScore >= 90 ? 'bg-indigo-700' :
+                      candidate.matchScore >= 80 ? 'bg-indigo-600' :
+                      candidate.matchScore >= 70 ? 'bg-indigo-500' :
+                      candidate.matchScore >= 60 ? 'bg-purple-500' :
+                      candidate.matchScore >= 50 ? 'bg-purple-400' :
+                      'bg-gray-400'
                     }`}>
-                      #{index + 1}
+                      {Math.round(candidate.matchScore / 10)}
                     </div>
                   </div>
 

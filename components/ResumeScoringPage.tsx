@@ -14,6 +14,7 @@ import api from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { Resume as SharedResume } from '@/lib/types/types';
 
 // Types
 interface Job {
@@ -105,6 +106,7 @@ interface ResumeScoringPageProps {
   folders?: Folder[];
   scoredHistory?: ScoredResumeData[];
   onSaveScores?: (data: ScoredResumeData) => void;
+  onRefreshHistory?: () => Promise<void>;
   onNavigateToAITalentMatch?: (jobId: string) => void;
   onBack?: () => void;
   tenant?: Tenant;
@@ -121,6 +123,7 @@ export default function ResumeScoringPage({
   folders: propFolders = [],
   scoredHistory = [],
   onSaveScores,
+  onRefreshHistory,
   onNavigateToAITalentMatch,
   onBack,
   tenant,
@@ -222,6 +225,9 @@ export default function ResumeScoringPage({
 
   // Existing score alert modal state
   const [showExistingScoreAlert, setShowExistingScoreAlert] = useState(false);
+
+  // Locally uploaded resumes (from Resume Selection Modal)
+  const [uploadedResumes, setUploadedResumes] = useState<SharedResume[]>([]);
   const [existingScoreData, setExistingScoreData] = useState<{
     jdTitle: string;
     existingScores: Array<{
@@ -526,14 +532,23 @@ export default function ResumeScoringPage({
 
       console.log(`[ResumeScoringPage] Scoring complete: ${completed} succeeded, ${failed} failed`);
 
-      // Refresh page after a short delay to load the scored results
-      setTimeout(() => {
-        window.location.href = `/recruitment/resume-scoring?jd_id=${jobId}`;
-      }, 2000);
+      // Refresh the scored history to show new results without full page reload
+      if (onRefreshHistory) {
+        console.log('[ResumeScoringPage] Refreshing scored history...');
+        await onRefreshHistory();
+        console.log('[ResumeScoringPage] Scored history refreshed, updating URL');
+        // Update URL without full page reload
+        router.push(`/recruitment/resume-scoring?jd_id=${jobId}`);
+      } else {
+        // Fallback: Refresh page after a short delay
+        setTimeout(() => {
+          window.location.href = `/recruitment/resume-scoring?jd_id=${jobId}`;
+        }, 2000);
+      }
     };
 
     scoreResumes();
-  }, [pendingScoringData, startScoringJob, updateItemStatus]);
+  }, [pendingScoringData, startScoringJob, updateItemStatus, onRefreshHistory, router]);
 
   // Handle batch progress from Celery async scoring - show progress modal
   useEffect(() => {
@@ -569,8 +584,9 @@ export default function ResumeScoringPage({
   }, [batchProgress]);
 
   // Split resumes - myResumes are all user-uploaded resumes, databaseResumes are all resumes
-  const myResumes = resumes; // All resumes belong to the user (My Resumes)
-  const databaseResumes = resumes;
+  // Include locally uploaded resumes (from the modal) to keep them visible without page refresh
+  const myResumes = [...uploadedResumes, ...resumes]; // All resumes belong to the user (My Resumes)
+  const databaseResumes = [...uploadedResumes, ...resumes];
 
   const availableResumes = resumeSource === 'my-resumes' ? myResumes :
                           resumeSource === 'internal-database' ? databaseResumes :
@@ -2128,6 +2144,10 @@ export default function ResumeScoringPage({
           folders={folders}
           availableUnits={availableUnits}
           onClose={() => setShowResumeSelectionModal(false)}
+          onResumeUploaded={(resume) => {
+            // Add uploaded resume to local state so it persists in the list
+            setUploadedResumes(prev => [resume, ...prev]);
+          }}
           onScoreResumes={async (selectedIds, source, versionSelections) => {
             setShowResumeSelectionModal(false);
 

@@ -455,7 +455,7 @@ export default function AITalentMatchPage({
     const candidates: MatchedCandidateWithVersions[] = viewMode === 'results' ? matchedCandidates :
                       selectedHistoryItem ? selectedHistoryItem.matchedCandidates : [];
 
-    return candidates.filter(candidate => {
+    const filtered = candidates.filter(candidate => {
       const matchesThreshold = candidate.matchScore >= filterThreshold;
       const matchesSearch = searchQuery === '' ||
         candidate.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -465,6 +465,9 @@ export default function AITalentMatchPage({
 
       return matchesThreshold && matchesSearch;
     });
+
+    // Sort by rating descending (10 at top, 1 at bottom)
+    return filtered.sort((a, b) => (b.rank || 0) - (a.rank || 0));
   };
 
   const getMatchColor = (score: number) => {
@@ -658,7 +661,7 @@ export default function AITalentMatchPage({
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
-                  Rank
+                  Matched Rating
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
                   Candidate Name
@@ -706,14 +709,13 @@ export default function AITalentMatchPage({
                     />
                   </td>
                   <td className="px-4 py-4">
-                    <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-sm ${
-                      index === 0 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
-                      index === 1 ? 'bg-gray-100 text-gray-700 border-2 border-gray-300' :
-                      index === 2 ? 'bg-orange-100 text-orange-700 border-2 border-orange-300' :
-                      'bg-gray-50 text-gray-600 border border-gray-200'
+                    <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full font-bold text-base ${
+                      (candidate.rank || 0) >= 9 ? 'bg-green-100 text-green-700 border-2 border-green-300' :
+                      (candidate.rank || 0) >= 7 ? 'bg-blue-100 text-blue-700 border-2 border-blue-300' :
+                      (candidate.rank || 0) >= 5 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
+                      'bg-gray-100 text-gray-600 border-2 border-gray-200'
                     }`}>
-                      {index < 3 && <Star className="w-3.5 h-3.5" fill="currentColor" />}
-                      #{filteredCandidates.length - index}
+                      {candidate.rank || '-'}
                     </div>
                   </td>
                   <td className="px-4 py-4">
@@ -1297,7 +1299,7 @@ export default function AITalentMatchPage({
                     />
                   </th>
                   <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
-                    Rank
+                    Matched Rating
                   </th>
                   <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
                     Candidate Name
@@ -1345,14 +1347,13 @@ export default function AITalentMatchPage({
                       />
                     </td>
                     <td className="px-4 py-4">
-                      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-sm ${
-                        index === 0 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
-                        index === 1 ? 'bg-gray-100 text-gray-700 border-2 border-gray-300' :
-                        index === 2 ? 'bg-orange-100 text-orange-700 border-2 border-orange-300' :
-                        'bg-gray-50 text-gray-600 border border-gray-200'
+                      <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full font-bold text-base ${
+                        (candidate.rank || 0) >= 9 ? 'bg-green-100 text-green-700 border-2 border-green-300' :
+                        (candidate.rank || 0) >= 7 ? 'bg-blue-100 text-blue-700 border-2 border-blue-300' :
+                        (candidate.rank || 0) >= 5 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
+                        'bg-gray-100 text-gray-600 border-2 border-gray-200'
                       }`}>
-                        {index < 3 && <Star className="w-3.5 h-3.5" fill="currentColor" />}
-                        #{filteredCandidates.length - index}
+                        {candidate.rank || '-'}
                       </div>
                     </td>
                     <td className="px-4 py-4">
