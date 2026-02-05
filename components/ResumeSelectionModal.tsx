@@ -1,7 +1,9 @@
-import { X, FolderOpen, Database, Search, CheckSquare, Square, User, Mail, Award, Target, ChevronRight, ChevronDown, Folder, FileText, MapPin, Phone, Briefcase, AlertTriangle, Zap } from 'lucide-react';
-import { useState } from 'react';
+import { X, FolderOpen, Database, Search, CheckSquare, Square, User, Mail, Award, Target, ChevronRight, ChevronDown, Folder, FileText, MapPin, Phone, Briefcase, AlertTriangle, Zap, Upload, Loader2 } from 'lucide-react';
+import { useState, useRef } from 'react';
 import { Resume, Folder as FolderType } from '@/lib/types/types';
 import ScoringVersionSelectionModal from './ScoringVersionSelectionModal';
+import { resumeService } from '@/lib/services/resumeService';
+import { toast } from 'sonner';
 
 interface VersionSelection {
   resumeId: string;
@@ -17,6 +19,7 @@ interface ResumeSelectionModalProps {
   onClose: () => void;
   onScoreResumes: (selectedIds: string[], source: 'my-resumes' | 'database', versionSelections?: VersionSelection[]) => void;
   availableUnits?: number | null;
+  onResumeUploaded?: (resume: Resume) => void;
 }
 
 export default function ResumeSelectionModal({
@@ -26,7 +29,8 @@ export default function ResumeSelectionModal({
   folders,
   onClose,
   onScoreResumes,
-  availableUnits
+  availableUnits,
+  onResumeUploaded
 }: ResumeSelectionModalProps) {
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'database'>('my-resumes');
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -35,11 +39,101 @@ export default function ResumeSelectionModal({
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const [showVersionSelection, setShowVersionSelection] = useState(false);
   const [resumesForVersionSelection, setResumesForVersionSelection] = useState<Resume[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [localResumes, setLocalResumes] = useState<Resume[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Debug: Log folders data
   console.log('[ResumeSelectionModal] Folders received:', folders);
   console.log('[ResumeSelectionModal] MyResumes count:', myResumes.length);
   console.log('[ResumeSelectionModal] MyResumes sample:', myResumes.slice(0, 3).map(r => ({ id: r.id, name: r.name, folderId: r.folderId })));
+
+  // Combine myResumes with locally uploaded resumes
+  const allMyResumes = [...localResumes, ...myResumes];
+  const allDatabaseResumes = [...localResumes, ...databaseResumes];
+
+  // Handle file upload
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/rtf', 'text/plain'];
+    const allowedExtensions = ['.pdf', '.doc', '.docx', '.rtf', '.txt'];
+    const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+
+    if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+      toast.error('Invalid file type. Please upload PDF, DOC, DOCX, RTF, or TXT files.');
+      return;
+    }
+
+    // Validate file size (3MB max)
+    if (file.size > 3 * 1024 * 1024) {
+      toast.error('File size exceeds 3MB limit.');
+      return;
+    }
+
+    setIsUploading(true);
+    const toastId = toast.loading(`Uploading ${file.name}...`);
+
+    try {
+      // Upload the resume
+      const uploadedResume = await resumeService.upload(file);
+
+      // Convert API response to Resume type
+      const newResume: Resume = {
+        id: uploadedResume.id,
+        name: uploadedResume.candidate_name || file.name.replace(/\.[^/.]+$/, ''),
+        email: uploadedResume.email || uploadedResume.candidate_email || 'No email',
+        phone: uploadedResume.phone || 'No phone',
+        title: uploadedResume.current_title || 'N/A',
+        experience: uploadedResume.experience_years ? `${uploadedResume.experience_years} years` : 'N/A',
+        education: uploadedResume.education?.[0]?.degree || 'N/A',
+        location: uploadedResume.location || 'N/A',
+        skills: uploadedResume.skills || [],
+        source: 'Manual' as const,
+        folderId: '',
+        uploadDate: uploadedResume.created_at || new Date().toISOString(),
+        attachments: 1,
+        uploadedBy: 'Current User',
+        version: uploadedResume.version || 1,
+        versionCount: uploadedResume.version_count || 1,
+        fileName: uploadedResume.file_name,
+      };
+
+      // Add to local resumes and auto-select
+      setLocalResumes(prev => [newResume, ...prev]);
+      setSelectedResumes(prev => [newResume.id, ...prev]);
+
+      // Notify parent component
+      if (onResumeUploaded) {
+        onResumeUploaded(newResume);
+      }
+
+      toast.success(`Resume uploaded: ${newResume.name}`, { id: toastId });
+    } catch (error: any) {
+      console.error('Upload failed:', error);
+
+      // Handle duplicate error
+      if (error.message?.includes('409') || error.message?.includes('DUPLICATE')) {
+        toast.error('A resume with this email already exists.', { id: toastId });
+      } else {
+        toast.error(error.message || 'Failed to upload resume', { id: toastId });
+      }
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
 
   // Filter resumes based on active tab and selected folder
   const getFilteredResumes = () => {
@@ -47,7 +141,7 @@ export default function ResumeSelectionModal({
 
     if (activeTab === 'my-resumes') {
       if (selectedFolder === 'all') {
-        resumes = myResumes;
+        resumes = allMyResumes;
       } else {
         // Check if selected folder is the root folder
         const selectedFolderData = folders.find(f => f.id === selectedFolder);
@@ -55,13 +149,13 @@ export default function ResumeSelectionModal({
 
         if (isRootFolder) {
           // Root folder contains resumes with no folderId or folderId matching root
-          resumes = myResumes.filter(r => !r.folderId || r.folderId === selectedFolder);
+          resumes = allMyResumes.filter(r => !r.folderId || r.folderId === selectedFolder);
         } else {
-          resumes = myResumes.filter(r => r.folderId === selectedFolder);
+          resumes = allMyResumes.filter(r => r.folderId === selectedFolder);
         }
       }
     } else {
-      resumes = databaseResumes;
+      resumes = allDatabaseResumes;
     }
 
     // Apply search filter
@@ -101,7 +195,7 @@ export default function ResumeSelectionModal({
   const handleScore = () => {
     if (selectedResumes.length > 0) {
       // Get the selected resume objects
-      const allResumes = activeTab === 'my-resumes' ? myResumes : databaseResumes;
+      const allResumes = activeTab === 'my-resumes' ? allMyResumes : allDatabaseResumes;
       const selectedResumeObjects = allResumes.filter(r => selectedResumes.includes(r.id));
 
       // Debug: Log version counts
@@ -147,13 +241,13 @@ export default function ResumeSelectionModal({
   };
 
   const getResumeCount = (folderId: string) => {
-    if (folderId === 'all') return myResumes.length;
+    if (folderId === 'all') return allMyResumes.length;
     // Use folder's count from API if available, otherwise count from resumes
     const folder = folders.find(f => f.id === folderId);
     if (folder && folder.count !== undefined) {
-      return folder.count;
+      return folder.count + localResumes.filter(r => r.folderId === folderId).length;
     }
-    return myResumes.filter(r => r.folderId === folderId).length;
+    return allMyResumes.filter(r => r.folderId === folderId).length;
   };
 
   const renderFolderTree = (parentId?: string | null, level: number = 0) => {
@@ -265,7 +359,7 @@ export default function ResumeSelectionModal({
                     ? 'bg-gray-800 text-white'
                     : 'bg-gray-200 text-gray-600'
                 }`}>
-                  {myResumes.length}
+                  {allMyResumes.length}
                 </span>
               </div>
             </button>
@@ -285,7 +379,7 @@ export default function ResumeSelectionModal({
                     ? 'bg-gray-800 text-white'
                     : 'bg-gray-200 text-gray-600'
                 }`}>
-                  {databaseResumes.length}
+                  {allDatabaseResumes.length}
                 </span>
               </div>
             </button>
@@ -316,7 +410,7 @@ export default function ResumeSelectionModal({
                       ? 'bg-gray-200 text-gray-900'
                       : 'bg-gray-200 text-gray-600'
                   }`}>
-                    {myResumes.length}
+                    {allMyResumes.length}
                   </span>
                 </button>
 
@@ -343,6 +437,33 @@ export default function ResumeSelectionModal({
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                   />
                 </div>
+
+                {/* Upload Resume Button */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  accept=".pdf,.doc,.docx,.rtf,.txt"
+                  className="hidden"
+                />
+                <button
+                  onClick={handleUploadClick}
+                  disabled={isUploading}
+                  className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      Upload Resume
+                    </>
+                  )}
+                </button>
+
                 <button
                   onClick={handleSelectAll}
                   className="px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm font-medium text-gray-700 flex items-center gap-2"
