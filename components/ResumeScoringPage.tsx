@@ -106,6 +106,7 @@ interface ResumeScoringPageProps {
   folders?: Folder[];
   scoredHistory?: ScoredResumeData[];
   onSaveScores?: (data: ScoredResumeData) => void;
+  onRefreshHistory?: () => Promise<void>;
   onNavigateToAITalentMatch?: (jobId: string) => void;
   onBack?: () => void;
   tenant?: Tenant;
@@ -122,6 +123,7 @@ export default function ResumeScoringPage({
   folders: propFolders = [],
   scoredHistory = [],
   onSaveScores,
+  onRefreshHistory,
   onNavigateToAITalentMatch,
   onBack,
   tenant,
@@ -530,14 +532,23 @@ export default function ResumeScoringPage({
 
       console.log(`[ResumeScoringPage] Scoring complete: ${completed} succeeded, ${failed} failed`);
 
-      // Refresh page after a short delay to load the scored results
-      setTimeout(() => {
-        window.location.href = `/recruitment/resume-scoring?jd_id=${jobId}`;
-      }, 2000);
+      // Refresh the scored history to show new results without full page reload
+      if (onRefreshHistory) {
+        console.log('[ResumeScoringPage] Refreshing scored history...');
+        await onRefreshHistory();
+        console.log('[ResumeScoringPage] Scored history refreshed, updating URL');
+        // Update URL without full page reload
+        router.push(`/recruitment/resume-scoring?jd_id=${jobId}`);
+      } else {
+        // Fallback: Refresh page after a short delay
+        setTimeout(() => {
+          window.location.href = `/recruitment/resume-scoring?jd_id=${jobId}`;
+        }, 2000);
+      }
     };
 
     scoreResumes();
-  }, [pendingScoringData, startScoringJob, updateItemStatus]);
+  }, [pendingScoringData, startScoringJob, updateItemStatus, onRefreshHistory, router]);
 
   // Handle batch progress from Celery async scoring - show progress modal
   useEffect(() => {

@@ -85,6 +85,32 @@ export interface MyTeamsUsageSummary {
   note?: string;
 }
 
+export interface TeamMemberUsage {
+  user_id: string;
+  user_email: string;
+  user_name: string;
+  by_type: {
+    RS?: TeamUsageByType;
+    AS?: TeamUsageByType;
+    AIU?: TeamUsageByType;
+  };
+  total_consumed: number;
+  total_actions: number;
+  last_activity: string | null;
+}
+
+export interface TeamMembersUsageSummary {
+  team_id: string;
+  team_name: string;
+  reporting_scope: string;
+  period: {
+    start: string;
+    end: string;
+  };
+  members: TeamMemberUsage[];
+  total_members: number;
+}
+
 export interface CreateTeamRequest {
   name: string;
   description?: string;
@@ -283,6 +309,22 @@ class TeamService {
       return response.data.data || response.data;
     } catch (error: any) {
       console.error('Error fetching my teams usage:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get individual member usage within a team
+   * Only available for Tenant Admin
+   */
+  async getTeamMembersUsage(teamId: string, days: number = 30): Promise<TeamMembersUsageSummary> {
+    try {
+      const response = await api.get(`/unit-pool/teams/${teamId}/members/usage`, {
+        params: { days },
+      });
+      return response.data.data || response.data;
+    } catch (error: any) {
+      console.error(`Error fetching team ${teamId} members usage:`, error);
       throw error;
     }
   }

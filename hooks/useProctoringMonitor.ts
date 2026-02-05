@@ -42,23 +42,23 @@ interface ProctoringState {
   isCameraActive: boolean;
 }
 
-// Backend logging cooldown - shorter, for accurate violation tracking (in milliseconds)
+// Backend logging cooldown - very short for critical violations, accurate tracking (in milliseconds)
 const BACKEND_COOLDOWNS: Record<ProctoringEventType, number> = {
   tab_switch: 2000,
-  copy_attempt: 1000,
-  paste_attempt: 1000,
+  copy_attempt: 500,  // Reduced: log copy attempts more frequently
+  paste_attempt: 500, // Reduced: log paste attempts more frequently
   voice_detected: 10000, // Increased: only log voice every 10 seconds
   multiple_voices: 15000,
-  camera_disabled: 2000,
-  microphone_disabled: 2000,
-  camera_obstructed: 5000,
-  screenshot_attempt: 1000,
-  screen_recording_attempt: 5000,
+  camera_disabled: 1000,     // Reduced: immediate detection
+  microphone_disabled: 1000, // Reduced: immediate detection
+  camera_obstructed: 3000,   // Reduced: faster detection
+  screenshot_attempt: 500,   // Reduced: immediate detection
+  screen_recording_attempt: 2000, // Reduced: faster detection
   window_blur: 2000,
 };
 
-// Frontend warning cooldown - 60 seconds to prevent re-render spam
-const FRONTEND_WARNING_COOLDOWN = 60000; // 60 seconds for all warning pop-ups
+// Frontend warning cooldown - reduced for immediate feedback on violations
+const FRONTEND_WARNING_COOLDOWN = 3000; // 3 seconds for all warning pop-ups (immediate but not spammy)
 
 // Voice detection specific settings (Throttle + Batch optimization)
 const VOICE_CHECK_INTERVAL = 2000; // Check every 2 seconds instead of 100ms
@@ -680,24 +680,230 @@ export function useProctoringMonitor({
   // ==================== COPY/PASTE DETECTION ====================
   const setupCopyPasteDetection = useCallback(() => {
     const handleCopy = (e: ClipboardEvent) => {
+      // CRITICAL: Completely block copy - prevent default and stop all propagation
       e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      // Clear clipboard data
+      if (e.clipboardData) {
+        e.clipboardData.clearData();
+      }
+
+      // Log the violation with selected text info
       logEvent('copy_attempt', {
         selectedText: window.getSelection()?.toString()?.substring(0, 100)
       });
+
+      // Return false for extra safety (legacy support)
+      return false;
     };
 
     const handlePaste = (e: ClipboardEvent) => {
+      // CRITICAL: Completely block paste - prevent default and stop all propagation
       e.preventDefault();
-      logEvent('paste_attempt', {});
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      // Clear clipboard data to ensure nothing gets pasted
+      if (e.clipboardData) {
+        e.clipboardData.clearData();
+      }
+
+      // Log the violation
+      logEvent('paste_attempt', {
+        clipboardDataLength: e.clipboardData?.getData('text')?.length || 0
+      });
+
+      // Return false for extra safety (legacy support)
+      return false;
     };
 
+    const handleCut = (e: ClipboardEvent) => {
+      // Block cut as well (same as copy)
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      logEvent('copy_attempt', { action: 'cut' });
+      return false;
+    };
+
+    // Block context menu (right-click) which can be used for copy/paste
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      console.log('[PROCTORING] Context menu blocked');
+      return false;
+    };
+
+    // Block keyboard shortcuts for copy/paste/cut AND Alt+Tab
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Alt+Tab (switch window/tab) - CRITICAL BLOCKING
+      if (e.altKey && e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('tab_switch', { method: 'alt_tab', blocked: true });
+        console.log('[PROCTORING] Alt+Tab blocked');
+        return false;
+      }
+
+      // Alt+F4 (close window)
+      if (e.altKey && e.key === 'F4') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('window_blur', { method: 'alt_f4', blocked: true });
+        console.log('[PROCTORING] Alt+F4 blocked');
+        return false;
+      }
+
+      // Cmd+Tab (Mac - switch application)
+      if (e.metaKey && e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('tab_switch', { method: 'cmd_tab', blocked: true });
+        console.log('[PROCTORING] Cmd+Tab blocked');
+        return false;
+      }
+
+      // Ctrl+Tab (switch browser tab)
+      if (e.ctrlKey && e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('tab_switch', { method: 'ctrl_tab', blocked: true });
+        console.log('[PROCTORING] Ctrl+Tab blocked');
+        return false;
+      }
+
+      // Windows key (brings up start menu)
+      if (e.key === 'Meta' || e.key === 'OS') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('window_blur', { method: 'windows_key', blocked: true });
+        console.log('[PROCTORING] Windows key blocked');
+        return false;
+      }
+
+      // Ctrl+C or Cmd+C (copy)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('copy_attempt', { method: 'keyboard_shortcut' });
+        return false;
+      }
+
+      // Ctrl+V or Cmd+V (paste)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('paste_attempt', { method: 'keyboard_shortcut' });
+        return false;
+      }
+
+      // Ctrl+X or Cmd+X (cut)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        logEvent('copy_attempt', { method: 'keyboard_shortcut', action: 'cut' });
+        return false;
+      }
+
+      // Ctrl+A or Cmd+A (select all) - also block to prevent bulk copy
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        console.log('[PROCTORING] Select all blocked');
+        return false;
+      }
+    };
+
+    // Add all event listeners with capture phase (true) for maximum priority
     document.addEventListener('copy', handleCopy, true);
     document.addEventListener('paste', handlePaste, true);
-    console.log('[PROCTORING] Copy/paste detection started');
+    document.addEventListener('cut', handleCut, true);
+    document.addEventListener('contextmenu', handleContextMenu, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+
+    console.log('[PROCTORING] Copy/paste/cut detection started (comprehensive blocking)');
 
     return () => {
       document.removeEventListener('copy', handleCopy, true);
       document.removeEventListener('paste', handlePaste, true);
+      document.removeEventListener('cut', handleCut, true);
+      document.removeEventListener('contextmenu', handleContextMenu, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [logEvent]);
+
+  // ==================== MOUSE MOVEMENT TRACKING ====================
+  const setupMouseTracking = useCallback(() => {
+    let lastMousePosition = { x: 0, y: 0 };
+    let mouseIdleTime = 0;
+    let mouseMoveCount = 0;
+    const IDLE_THRESHOLD = 120; // 2 minutes of no mouse movement
+    const SUSPICIOUS_MOVEMENT_THRESHOLD = 5000; // Very high movement count in short time
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const currentX = e.clientX;
+      const currentY = e.clientY;
+
+      // Calculate movement distance
+      const distance = Math.sqrt(
+        Math.pow(currentX - lastMousePosition.x, 2) +
+        Math.pow(currentY - lastMousePosition.y, 2)
+      );
+
+      // Only count significant movements (not micro jitters)
+      if (distance > 10) {
+        mouseMoveCount++;
+        mouseIdleTime = 0; // Reset idle time
+      }
+
+      lastMousePosition = { x: currentX, y: currentY };
+    };
+
+    const handleMouseLeave = () => {
+      console.log('[PROCTORING] Mouse left window - potential tab switch');
+      logEvent('window_blur', { reason: 'mouse_left_window' });
+    };
+
+    // Check for suspicious patterns every 10 seconds
+    const trackingInterval = setInterval(() => {
+      mouseIdleTime += 10;
+
+      // Detect prolonged idle (might indicate user left)
+      if (mouseIdleTime >= IDLE_THRESHOLD) {
+        console.log('[PROCTORING] Mouse idle for 2+ minutes');
+        // Don't log event - just track (too many false positives)
+        mouseIdleTime = 0; // Reset to avoid spam
+      }
+
+      // Detect bot-like behavior (too many movements)
+      if (mouseMoveCount > SUSPICIOUS_MOVEMENT_THRESHOLD) {
+        console.log('[PROCTORING] Suspicious mouse activity detected');
+        mouseMoveCount = 0; // Reset counter
+      } else {
+        mouseMoveCount = 0; // Reset every interval
+      }
+    }, 10000);
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseleave', handleMouseLeave);
+    console.log('[PROCTORING] Mouse movement tracking started');
+
+    return () => {
+      clearInterval(trackingInterval);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseleave', handleMouseLeave);
     };
   }, [logEvent]);
 
@@ -738,6 +944,7 @@ export function useProctoringMonitor({
     const cleanupScreenRecording = setupScreenRecordingDetection();
     const cleanupCopyPaste = setupCopyPasteDetection();
     const cleanupTabSwitch = setupTabSwitchDetection();
+    const cleanupMouseTracking = setupMouseTracking();
 
     // Stream-dependent setups (heavy processing offloaded to Web Worker)
     if (streamRef.current) {
@@ -825,6 +1032,7 @@ export function useProctoringMonitor({
       cleanupScreenRecording();
       cleanupCopyPaste();
       cleanupTabSwitch();
+      cleanupMouseTracking();
 
       console.log('[PROCTORING] All monitoring systems stopped');
     };

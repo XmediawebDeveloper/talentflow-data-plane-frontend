@@ -50,6 +50,12 @@ export default function JDListPage() {
     if (statusParam && ['published', 'draft', 'archived', 'disabled'].includes(statusParam)) {
       setStatusFilter(statusParam);
     }
+
+    // Check if create=true parameter is present to auto-open JD creation sheet
+    const createParam = searchParams.get('create');
+    if (createParam === 'true') {
+      setShowJDSheet(true);
+    }
   }, [searchParams]);
   // JD04: Sort state
   const [sortBy, setSortBy] = useState<string>('latest');
@@ -734,12 +740,31 @@ export default function JDListPage() {
                 setShowJDSheet(false);
                 setEditingJDId(null);
               }}
-              onSuccess={() => {
+              onSuccess={(jdId) => {
                 setShowJDSheet(false);
                 setEditingJDId(null);
-                // Refresh the JD list
-                fetchJDs();
-                toast.success(editingJDId ? 'JD updated successfully' : 'JD created successfully');
+
+                // Check if returnUrl is provided - redirect back to that page
+                const returnUrl = searchParams.get('returnUrl');
+                if (returnUrl) {
+                  // If JD was published (not just saved as draft), redirect to assessment creation with JD pre-selected
+                  if (jdId) {
+                    toast.success('JD published successfully. Redirecting to create assessment...');
+                    setTimeout(() => {
+                      router.push(`${returnUrl}/create?jd_id=${jdId}`);
+                    }, 500);
+                  } else {
+                    // Draft saved - just redirect back
+                    toast.success(editingJDId ? 'JD updated successfully. Redirecting...' : 'JD saved successfully. Redirecting...');
+                    setTimeout(() => {
+                      router.push(returnUrl);
+                    }, 500);
+                  }
+                } else {
+                  // Refresh the JD list if staying on this page
+                  fetchJDs();
+                  toast.success(editingJDId ? 'JD updated successfully' : 'JD created successfully');
+                }
               }}
               isEmbedded={true}
             />

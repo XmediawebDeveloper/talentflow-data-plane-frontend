@@ -31,8 +31,9 @@ export default function CreateAssessmentPage() {
   });
 
   // Check for pre-selected JD from query params
-  const preSelectedJdId = searchParams.get('jd_id');
+  const preSelectedJdId = searchParams.get('jd_id') || searchParams.get('jobId');
   const preSelectedJdTitle = searchParams.get('jd_title');
+  const returnUrl = searchParams.get('returnUrl');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -79,16 +80,26 @@ export default function CreateAssessmentPage() {
   }, []);
 
   const handleBack = () => {
-    router.push('/recruitment/assessments');
+    // If returnUrl is provided, go back to that page
+    if (returnUrl) {
+      router.push(returnUrl);
+    } else {
+      router.push('/recruitment/assessments');
+    }
   };
 
   const handleCreateAssessment = async (assessment: any) => {
-    // Navigate back to assessments list after creation
-    router.push('/recruitment/assessments');
+    // Navigate back to returnUrl if provided, otherwise to assessments list
+    if (returnUrl) {
+      router.push(returnUrl);
+    } else {
+      router.push('/recruitment/assessments');
+    }
   };
 
   const handleNavigateToJDCreation = () => {
-    router.push('/recruitment/job-descriptions?create=true');
+    // Pass returnUrl to redirect back to assessments page after job creation
+    router.push('/recruitment/jd-list?create=true&returnUrl=/recruitment/assessments');
   };
 
   if (isLoading) {

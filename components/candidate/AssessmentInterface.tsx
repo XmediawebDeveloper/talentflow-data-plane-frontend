@@ -20,10 +20,13 @@ import {
   Check,
   HelpCircle,
   Lock,
-  Save
+  Save,
+  Monitor,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
+  candidateService,
   AssessmentInfo,
   CurrentQuestion,
   SubmitAnswerResponse
@@ -139,15 +142,396 @@ export function AssessmentInterface({
   // This prevents immediate completion due to timing/parsing issues
   const [isInitialized, setIsInitialized] = useState(false);
 
+  // Fullscreen state (only tracking, not used for pausing anymore)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Violation tracking - ESC and Alt+Tab attempts (max 3 before warning)
+  const [violationCount, setViolationCount] = useState(0);
+  const [showViolationWarning, setShowViolationWarning] = useState(false);
+  const [autoSubmitCountdown, setAutoSubmitCountdown] = useState(5); // Countdown timer for auto-submit
+  const violationCountRef = useRef(0); // Use ref for immediate access in event handlers
+
+  // Disqualification state - for actual fullscreen exit
+  const [showDisqualificationModal, setShowDisqualificationModal] = useState(false);
+  const [isDisqualified, setIsDisqualified] = useState(false);
+
   // Initialize after a brief delay to prevent immediate auto-complete
   useEffect(() => {
     const initTimeout = setTimeout(() => {
       setIsInitialized(true);
       console.log('[TIMER] Component initialized, auto-complete protection disabled');
+
+      // 1️⃣ Force Fullscreen on Assessment Start
+      enterFullscreen();
     }, 1500); // 1.5 second grace period
 
     return () => clearTimeout(initTimeout);
   }, []); // Only run once on mount
+
+  // 🛡️ PROCTORING: Force Fullscreen on Start
+  const enterFullscreen = async () => {
+    try {
+      const el = document.documentElement;
+      if (el.requestFullscreen) {
+        await el.requestFullscreen();
+        console.log('[PROCTORING] ✅ Entered fullscreen mode');
+      } else {
+        console.warn('[PROCTORING] ⚠️ Fullscreen API not supported');
+      }
+    } catch (error) {
+      console.error('[PROCTORING] ❌ Failed to enter fullscreen:', error);
+    }
+  };
+
+  // 🛡️ PROCTORING: Exit Fullscreen on Complete
+  const exitFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        console.log('[PROCTORING] ✅ Exited fullscreen mode');
+      }
+    } catch (error) {
+      console.error('[PROCTORING] ❌ Failed to exit fullscreen:', error);
+    }
+  };
+
+  // Monitor fullscreen changes - 3 WARNINGS THEN DISQUALIFICATION (unless completing normally)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!document.fullscreenElement;
+      console.log(`[LOCKDOWN] Fullscreen: ${isCurrentlyFullscreen ? 'ACTIVE' : 'INACTIVE'}`);
+      setIsFullscreen(isCurrentlyFullscreen);
+
+      // CRITICAL: If fullscreen is exited, track violation
+      // But don't track if they're completing the assessment normally
+      if (!isCurrentlyFullscreen && !isDisqualified && !showCompleteConfirm) {
+        // Track violation
+        violationCountRef.current += 1;
+        setViolationCount(violationCountRef.current);
+
+        console.warn(`[VIOLATION] Fullscreen exited - Attempt ${violationCountRef.current}/3`);
+
+        // Report to server
+        candidateService.reportProctorEvent(token, {
+          event_type: 'fullscreen_exit',
+          timestamp: new Date().toISOString(),
+          details: {
+            reason: 'User exited fullscreen mode',
+            attempt_number: violationCountRef.current,
+          },
+        }).catch(err => console.error('[VIOLATION] Failed to report fullscreen exit:', err));
+
+        // Show warning on 3rd attempt, DISQUALIFY on 4th
+        if (violationCountRef.current >= 4) {
+          console.error('[DISQUALIFICATION] 4th fullscreen exit - DISQUALIFYING CANDIDATE');
+          setIsDisqualified(true);
+          setShowDisqualificationModal(true);
+        } else if (violationCountRef.current === 3) {
+          console.error('[VIOLATION] ⚠️ 3rd VIOLATION - SHOWING FINAL WARNING');
+          setShowViolationWarning(true);
+        }
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      // Exit fullscreen on unmount
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, [token, isDisqualified, showCompleteConfirm]);
+
+  // SECURITY: Block keyboard shortcuts (F12, Ctrl+Shift+I, ESC, Alt+Tab, etc.)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // CRITICAL: Block ESC key - 3 WARNINGS THEN DISQUALIFICATION
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Track violation
+        violationCountRef.current += 1;
+        setViolationCount(violationCountRef.current);
+
+        console.warn(`[VIOLATION] ESC blocked - Attempt ${violationCountRef.current}/3`);
+
+        // Report to server
+        candidateService.reportProctorEvent(token, {
+          event_type: 'escape_key_attempt',
+          timestamp: new Date().toISOString(),
+          details: {
+            reason: 'User attempted to press ESC key (fullscreen exit attempt)',
+            attempt_number: violationCountRef.current,
+          },
+        }).catch(err => console.error('[VIOLATION] Failed to report ESC attempt:', err));
+
+        // 🛡️ 3 VIOLATIONS = AUTO-SUBMIT (NO MORE CONTINUE BUTTON)
+        if (violationCountRef.current >= 3) {
+          console.error('[PROCTORING] 💀 3 VIOLATIONS - SHOWING AUTO-SUBMIT MODAL');
+          setShowViolationWarning(true);
+          // Countdown will auto-trigger in separate useEffect
+        }
+
+        return false;
+      }
+
+      // CRITICAL: Block Alt+Tab - IMMEDIATE DISQUALIFICATION (NO WARNINGS)
+      if (e.altKey && e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!isDisqualified) {
+          console.error('[DISQUALIFICATION] Alt+Tab pressed - DISQUALIFYING CANDIDATE (NO WARNING)');
+
+          // Report to server
+          candidateService.reportProctorEvent(token, {
+            event_type: 'alt_tab_attempt',
+            timestamp: new Date().toISOString(),
+            details: {
+              reason: 'User attempted to press Alt+Tab (window switching attempt)',
+              severity: 'CRITICAL',
+            },
+          }).catch(err => console.error('[VIOLATION] Failed to report Alt+Tab attempt:', err));
+
+          // DISQUALIFY IMMEDIATELY - NO WARNINGS
+          setIsDisqualified(true);
+          setShowDisqualificationModal(true);
+        }
+
+        return false;
+      }
+
+      // Block F12 (DevTools)
+      if (e.key === 'F12') {
+        e.preventDefault();
+        console.warn('[LOCKDOWN] F12 blocked - DevTools not allowed');
+        return false;
+      }
+
+      // Block Ctrl+Shift+I (DevTools)
+      if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+        e.preventDefault();
+        console.warn('[LOCKDOWN] Ctrl+Shift+I blocked - DevTools not allowed');
+        return false;
+      }
+
+      // Block Ctrl+Shift+J (Console)
+      if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+        e.preventDefault();
+        console.warn('[LOCKDOWN] Ctrl+Shift+J blocked - Console not allowed');
+        return false;
+      }
+
+      // Block Ctrl+Shift+C (Inspect Element)
+      if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+        e.preventDefault();
+        console.warn('[LOCKDOWN] Ctrl+Shift+C blocked - Inspect not allowed');
+        return false;
+      }
+
+      // Block Ctrl+U (View Source)
+      if (e.ctrlKey && e.key === 'u') {
+        e.preventDefault();
+        console.warn('[LOCKDOWN] Ctrl+U blocked - View Source not allowed');
+        return false;
+      }
+
+      // Block Ctrl+S (Save Page)
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        console.warn('[LOCKDOWN] Ctrl+S blocked - Save Page not allowed');
+        return false;
+      }
+
+      // Block Ctrl+P (Print)
+      if (e.ctrlKey && e.key === 'p') {
+        e.preventDefault();
+        console.warn('[LOCKDOWN] Ctrl+P blocked - Print not allowed');
+        return false;
+      }
+    };
+
+    // Prevent right-click context menu
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      console.warn('[LOCKDOWN] Right-click blocked');
+      return false;
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, []);
+
+  // SECURITY: Detect DevTools opening (by checking window size changes)
+  useEffect(() => {
+    let devtoolsOpen = false;
+    const threshold = 160; // DevTools typically > 160px
+
+    const checkDevTools = () => {
+      const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+      const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+      const isOpen = widthThreshold || heightThreshold;
+
+      if (isOpen && !devtoolsOpen) {
+        devtoolsOpen = true;
+        console.warn('[LOCKDOWN] DevTools detected!');
+
+        // Report violation
+        if (token) {
+          candidateService.reportProctorEvent(token, {
+            event_type: 'devtools_detected',
+            timestamp: new Date().toISOString(),
+            details: {
+              reason: 'Developer tools detected',
+              outerWidth: window.outerWidth,
+              innerWidth: window.innerWidth,
+              outerHeight: window.outerHeight,
+              innerHeight: window.innerHeight
+            },
+          }).catch(err => console.error('[LOCKDOWN] Failed to report DevTools:', err));
+        }
+      } else if (!isOpen && devtoolsOpen) {
+        devtoolsOpen = false;
+      }
+    };
+
+    const interval = setInterval(checkDevTools, 1000);
+    return () => clearInterval(interval);
+  }, [token]);
+
+  // 🛡️ PROCTORING: Detect window blur (Alt+Tab, switching windows, clicking outside)
+  // CRITICAL: Window blur triggers IMMEDIATE DISQUALIFICATION
+  useEffect(() => {
+    const handleWindowBlur = () => {
+      // Ignore if already disqualified or if showing completion confirmation
+      if (isDisqualified || showCompleteConfirm) {
+        return;
+      }
+
+      console.error('[DISQUALIFICATION] 🚨 Window focus lost - DISQUALIFYING CANDIDATE');
+
+      // Report to server
+      if (token) {
+        candidateService.reportProctorEvent(token, {
+          event_type: 'window_focus_lost',
+          timestamp: new Date().toISOString(),
+          details: {
+            reason: 'User switched away from assessment window (Alt+Tab or window switch)',
+            severity: 'CRITICAL',
+          },
+        }).catch(err => console.error('[DISQUALIFICATION] Failed to report window blur:', err));
+      }
+
+      // DISQUALIFY IMMEDIATELY - NO WARNINGS
+      setIsDisqualified(true);
+      setShowDisqualificationModal(true);
+    };
+
+    const handleWindowFocus = () => {
+      console.log('[LOCKDOWN] Window focus regained');
+    };
+
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [token, isDisqualified, showCompleteConfirm]);
+
+  // 🛡️ PROCTORING: Auto-Submit Countdown Timer
+  useEffect(() => {
+    if (showViolationWarning && violationCountRef.current >= 3) {
+      console.log('[PROCTORING] 💀 Auto-submit countdown started: 5 seconds');
+      setAutoSubmitCountdown(5);
+
+      const countdownInterval = setInterval(() => {
+        setAutoSubmitCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownInterval);
+            console.error('[PROCTORING] 💀 AUTO-SUBMIT TRIGGERED');
+            exitFullscreen();
+            onComplete();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(countdownInterval);
+    }
+  }, [showViolationWarning, onComplete]);
+
+  // 🛡️ PROCTORING: 4️⃣ Visibility API - Detect Tab Hidden/Switching
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && !isDisqualified && !showCompleteConfirm) {
+        console.warn('[PROCTORING] ⚠️ Tab hidden detected - VIOLATION');
+
+        // Track violation
+        violationCountRef.current += 1;
+        setViolationCount(violationCountRef.current);
+
+        // Report to server
+        if (token) {
+          candidateService.reportProctorEvent(token, {
+            event_type: 'tab_hidden',
+            timestamp: new Date().toISOString(),
+            details: {
+              reason: 'User switched to another tab or minimized window',
+              attempt_number: violationCountRef.current,
+            },
+          }).catch(err => console.error('[PROCTORING] Failed to report tab hidden:', err));
+        }
+
+        // Show warning on 3rd violation - countdown will auto-trigger in separate useEffect
+        if (violationCountRef.current >= 3) {
+          console.error('[PROCTORING] 💀 3 VIOLATIONS - SHOWING AUTO-SUBMIT MODAL');
+          setShowViolationWarning(true);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [token, isDisqualified, showCompleteConfirm, onComplete]);
+
+  // 🛡️ PROCTORING: 5️⃣ Block Copy/Paste/Right-Click
+  useEffect(() => {
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      console.warn('[PROCTORING] ⚠️ Copy blocked');
+    };
+
+    const handlePaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      console.warn('[PROCTORING] ⚠️ Paste blocked');
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      console.warn('[PROCTORING] ⚠️ Right-click blocked');
+    };
+
+    document.addEventListener('copy', handleCopy);
+    document.addEventListener('paste', handlePaste);
+    document.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      document.removeEventListener('copy', handleCopy);
+      document.removeEventListener('paste', handlePaste);
+      document.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, []);
 
   // Global timer countdown - runs independently of question timer
   useEffect(() => {
@@ -158,11 +542,14 @@ export function AssessmentInterface({
       return;
     }
 
+    // Timer runs continuously - no pausing (ESC is blocked)
+
     if (globalTimeRemaining <= 0 || isGlobalTimeExpired) {
       if (!isGlobalTimeExpired) {
         console.log('[TIMER] Time expired! Triggering auto-complete');
         setIsGlobalTimeExpired(true);
         // Auto-submit entire assessment when global timer expires
+        exitFullscreen();
         onComplete();
       }
       return;
@@ -174,6 +561,7 @@ export function AssessmentInterface({
           console.log('[TIMER] Timer reached zero during countdown');
           setIsGlobalTimeExpired(true);
           // Auto-submit entire assessment
+          exitFullscreen();
           onComplete();
           return 0;
         }
@@ -187,6 +575,45 @@ export function AssessmentInterface({
       }
     };
   }, [globalTimeRemaining, isGlobalTimeExpired, onComplete, isInitialized]);
+
+  // Automatic time-based unit deduction check (every 60 seconds)
+  useEffect(() => {
+    if (!isInitialized) {
+      return;
+    }
+
+    const checkTimeDeduction = async () => {
+      try {
+        console.log('[UNIT-DEDUCTION] Checking time-based deduction thresholds...');
+        const result = await candidateService.checkTimeBasedDeduction(token);
+
+        if (result.success && result.units_deducted_now && result.units_deducted_now > 0) {
+          console.log(`[UNIT-DEDUCTION] ✓ ${result.units_deducted_now} units deducted at ${result.threshold_reached} threshold`);
+          console.log(`[UNIT-DEDUCTION] ✓ Deduction from Control Plane successful`);
+          console.log(`[UNIT-DEDUCTION] Total units consumed so far: ${result.units_deducted_so_far}`);
+          console.log(`[UNIT-DEDUCTION] Time: ${result.time_percentage}%`);
+        } else if (!result.success) {
+          console.error('[UNIT-DEDUCTION] ✗ Deduction failed:', result.message);
+          // Note: Assessment continues even if deduction fails
+          // Final validation will happen at completion
+        } else {
+          console.log(`[UNIT-DEDUCTION] No deduction needed at ${result.time_percentage}%`);
+        }
+      } catch (error) {
+        console.error('[UNIT-DEDUCTION] ✗ Error checking time deduction:', error);
+        // Don't block the assessment on deduction errors
+        // Final validation happens at completion
+      }
+    };
+
+    // Check immediately on start
+    checkTimeDeduction();
+
+    // Then check every 60 seconds
+    const deductionCheckInterval = setInterval(checkTimeDeduction, 60000); // 60 seconds
+
+    return () => clearInterval(deductionCheckInterval);
+  }, [token, isInitialized]);
 
   // Track when all questions are answered
   useEffect(() => {
@@ -403,9 +830,36 @@ export function AssessmentInterface({
     }
   };
 
-  const handleCompleteAssessment = () => {
+  const handleCompleteAssessment = async () => {
     setShowCompleteConfirm(false);
+    // Exit fullscreen when assessment completes
+    await exitFullscreen();
     onComplete();
+  };
+
+  // Handle disqualification acknowledgment - submit and exit
+  const handleDisqualificationAcknowledgment = async () => {
+    console.log('[DISQUALIFICATION] User acknowledged disqualification, submitting assessment...');
+    setShowDisqualificationModal(false);
+
+    try {
+      // Submit current answer as draft if exists
+      const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+      if (hasAnswer) {
+        console.log('[DISQUALIFICATION] Submitting current answer...');
+        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+      }
+
+      // Complete the assessment and exit fullscreen
+      console.log('[DISQUALIFICATION] Completing assessment due to disqualification...');
+      await exitFullscreen();
+      onComplete();
+    } catch (error) {
+      console.error('[DISQUALIFICATION] Error during submission:', error);
+      // Still complete even if submission fails
+      await exitFullscreen();
+      onComplete();
+    }
   };
 
   // Check if the current answer is valid based on question type
@@ -500,7 +954,129 @@ export function AssessmentInterface({
   ];
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col relative">
+      {/* DISQUALIFICATION Modal - Shows when fullscreen is exited */}
+      {showDisqualificationModal && (
+        <div className="fixed inset-0 bg-black/98 backdrop-blur-lg flex items-center justify-center z-[10000]">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-10 text-center border-8 border-red-700">
+            {/* Disqualification Icon */}
+            <div className="w-32 h-32 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-8">
+              <ShieldAlert className="w-20 h-20 text-white" />
+            </div>
+
+            {/* Title */}
+            <h2 className="text-4xl font-black text-red-600 mb-6 uppercase tracking-wider">
+              DISQUALIFIED
+            </h2>
+
+            {/* Main Message */}
+            <div className="bg-red-50 border-4 border-red-400 rounded-xl p-6 mb-6">
+              <p className="text-xl font-bold text-red-900 mb-4">
+                Critical Assessment Violation
+              </p>
+              <p className="text-base text-red-800 font-semibold">
+                You have been disqualified for violating assessment security rules.
+              </p>
+              <p className="text-sm text-red-700 mt-3">
+                Alt+Tab window switching is strictly prohibited and results in immediate disqualification.
+              </p>
+            </div>
+
+            {/* Consequence Notice */}
+            <div className="bg-gray-100 border-2 border-gray-400 rounded-xl p-6 mb-8">
+              <p className="text-lg font-bold text-gray-900 mb-3">
+                Your assessment has been terminated
+              </p>
+              <p className="text-sm text-gray-700">
+                This incident will be reported to the examiner. All answers submitted up to this point have been recorded.
+              </p>
+            </div>
+
+            {/* Acknowledge Button */}
+            <Button
+              variant="primary"
+              onClick={handleDisqualificationAcknowledgment}
+              className="w-full bg-red-700 hover:bg-red-800 text-white py-5 text-xl font-bold uppercase tracking-wider"
+            >
+              I UNDERSTAND
+            </Button>
+
+            {/* Footer Notice */}
+            <p className="text-xs text-gray-500 mt-6">
+              Click "I Understand" to submit your assessment and view your completion status.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Submit Modal - Shows on 3rd violation (NO CONTINUE BUTTON) */}
+      {showViolationWarning && (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-8 text-center border-4 border-red-600">
+            {/* Skull/Warning Icon */}
+            <div className="w-24 h-24 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+              <ShieldAlert className="w-16 h-16 text-white" />
+            </div>
+
+            {/* Title - AUTO-SUBMITTING */}
+            <h2 className="text-3xl font-bold text-red-600 mb-4 uppercase">
+              💀 3 VIOLATIONS - AUTO-SUBMITTING 💀
+            </h2>
+
+            {/* Violation Count */}
+            <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 mb-4">
+              <p className="text-6xl font-bold text-red-600 mb-2">{violationCount}</p>
+              <p className="text-sm font-semibold text-red-800">VIOLATIONS DETECTED</p>
+            </div>
+
+            {/* Main Message */}
+            <div className="bg-red-100 border-2 border-red-400 rounded-xl p-6 mb-6">
+              <p className="text-xl font-bold text-red-900 mb-3">
+                Maximum Violations Reached
+              </p>
+              <p className="text-base text-red-800 font-semibold">
+                You have violated assessment security rules 3 times.
+              </p>
+            </div>
+
+            {/* Violations List */}
+            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 mb-6 text-left">
+              <p className="font-bold text-yellow-900 mb-2 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                VIOLATIONS RECORDED
+              </p>
+              <ul className="text-sm text-yellow-800 space-y-1">
+                <li>✗ ESC key attempts (fullscreen exit)</li>
+                <li>✗ Tab switching detected</li>
+                <li>✗ Window focus violations</li>
+              </ul>
+            </div>
+
+            {/* Countdown Timer - NO CONTINUE BUTTON */}
+            <div className="bg-red-600 text-white rounded-xl p-8 mb-6">
+              <p className="text-5xl font-black mb-4 tabular-nums">
+                {autoSubmitCountdown}
+              </p>
+              <p className="text-xl font-bold uppercase tracking-wider">
+                AUTO-SUBMITTING IN {autoSubmitCountdown} SECOND{autoSubmitCountdown !== 1 ? 'S' : ''}...
+              </p>
+            </div>
+
+            {/* Final Notice */}
+            <div className="bg-gray-100 border-2 border-gray-400 rounded-xl p-4">
+              <p className="text-sm text-gray-700 font-semibold">
+                Your assessment will be automatically submitted. All answers up to this point have been recorded and will be evaluated.
+              </p>
+            </div>
+
+            {/* Footer Warning */}
+            <p className="text-xs text-gray-600 mt-4">
+              This incident will be reported to the examiner.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Proctoring Device Disabled Blocker Overlay */}
       {isDeviceDisabled && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100]">
@@ -572,25 +1148,31 @@ export function AssessmentInterface({
         </div>
       )}
 
+      {/* Old fullscreen prompt modal removed - ESC is now blocked completely */}
+
       {/* Sticky Header Container */}
       <div className="sticky top-0 z-50">
         {/* Main Header */}
         <header className="bg-white border-b border-gray-200 px-4 py-3">
           <div className="w-full px-2 lg:px-6 flex items-center justify-between">
             {/* Logo & Title */}
-            <div className="flex items-center gap-4">
-              <Image
-                src="/talent_flow_logo.png"
-                alt="TalentFlow"
-                width={120}
-                height={30}
-                className="h-8 w-auto"
-                priority
-                unoptimized
-              />
-              <div className="hidden sm:block">
-                <h1 className="font-semibold text-gray-800">{assessmentInfo.assessment_title}</h1>
-                <p className="text-sm text-gray-500">{assessmentInfo.candidate_name}</p>
+            <div className="flex items-center gap-3">
+              {/* TalentFlow Logo - Always Visible */}
+              <div className="flex-shrink-0">
+                <Image
+                  src="/logos/talent_flow_logo.png"
+                  alt="TalentFlow"
+                  width={140}
+                  height={35}
+                  className="h-7 sm:h-8 w-auto"
+                  unoptimized
+                  priority
+                />
+              </div>
+              {/* Assessment Info - Hidden on very small screens */}
+              <div className="hidden md:block">
+                <h1 className="font-semibold text-gray-800 text-sm lg:text-base">{assessmentInfo.assessment_title}</h1>
+                <p className="text-xs lg:text-sm text-gray-500">{assessmentInfo.candidate_name}</p>
               </div>
             </div>
 
