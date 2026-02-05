@@ -19,12 +19,11 @@ interface QuotaData {
     plan_id?: number;
     plan_name?: string;
     plan_tier?: string;
-    subscribed_price?: number;
-    current_plan_price?: number;
-    billing_period?: string;
+    subscribed_price?: number;  // Tenant-specific: what this tenant actually pays
+    billing_period?: string;    // MONTHLY or ANNUAL
     billing_interval?: string;
-    plan_quotas?: Record<string, number>;
-    allocated_quotas?: Record<string, number>;
+    allocated_quotas?: Record<string, number>;  // Tenant-specific: quotas allocated to this tenant
+    isolation_type?: 'SCHEMA' | 'DATABASE' | 'DEDICATED' | string | null;
   };
   billing_period?: {
     start?: string;

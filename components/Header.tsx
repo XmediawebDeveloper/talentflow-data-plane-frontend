@@ -100,6 +100,9 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     showNotificationsRef.current = showNotifications;
   }, [showNotifications]);
 
+  // Track if initial notification count fetch has been done (to prevent duplicate fetches)
+  const initialFetchDoneRef = useRef(false);
+
   // Handle new notification from WebSocket - stable callback
   const handleNewNotification = useCallback((notification: any) => {
     console.log('[Header] New notification via WebSocket:', notification);
@@ -141,13 +144,22 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     }
   }, [showNotifications, fetchNotifications]);
 
+  // Initial fetch: Only fetch once on mount when user is available
+  useEffect(() => {
+    if (user && !initialFetchDoneRef.current) {
+      initialFetchDoneRef.current = true;
+      fetchNotificationCount();
+      console.log('[Header] Initial notification count fetch');
+    }
+  }, [user, fetchNotificationCount]);
+
   // Fallback polling: Only when WebSocket is not connected
   useEffect(() => {
-    fetchNotificationCount(); // Fetch immediately on mount
-
-    // Only poll if WebSocket is not connected
-    if (wsConnected) {
-      console.log('[Header] WebSocket connected - polling disabled');
+    // Skip if no user or WebSocket is connected
+    if (!user || wsConnected) {
+      if (wsConnected) {
+        console.log('[Header] WebSocket connected - polling disabled');
+      }
       return;
     }
 
