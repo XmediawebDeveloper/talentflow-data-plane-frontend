@@ -99,7 +99,42 @@ export interface EmailCheckResponse {
   error: string | null;
 }
 
+export interface SyncResult {
+  success: boolean;
+  tenant_id?: string;
+  local_count: number;
+  admin_count: number;
+  max_seats?: number;
+  plan_name?: string;
+  synced_users?: number;
+  synced: boolean;
+  sync_method?: 'set-count' | 'individual';
+  message?: string;
+  error?: string;
+  upgrade_required?: boolean;
+}
+
 export const userService = {
+  /**
+   * Sync local users with Admin API to reconcile counts.
+   * Call this before loading users to ensure Admin API has accurate data.
+   */
+  async syncUsers(): Promise<SyncResult> {
+    try {
+      const response = await api.post<SyncResult>('/users/sync');
+      return response.data;
+    } catch (error) {
+      console.error('Error syncing users with Admin API:', error);
+      return {
+        success: false,
+        local_count: 0,
+        admin_count: 0,
+        synced: false,
+        error: handleApiError(error),
+      };
+    }
+  },
+
   /**
    * List all users in the tenant
    */

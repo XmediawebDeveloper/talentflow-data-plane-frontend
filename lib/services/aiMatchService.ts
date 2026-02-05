@@ -69,6 +69,7 @@ export interface MatchedCandidate {
   resumeId: string;
   aiScore?: number;
   concerns?: string[];
+  rank?: number;  // Rating (1-10 scale)
 }
 
 // Transform backend response to frontend format
@@ -97,6 +98,7 @@ function transformResultToCandidate(result: AIMatchResultItem): MatchedCandidate
     aiScore: result.ai_score,
     concerns: result.concerns,
     attachmentCount: 1,
+    rank: result.rank,  // Rating (1-10 scale) from backend
   };
 }
 

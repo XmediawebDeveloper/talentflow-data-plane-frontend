@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { handleUnauthorized } from '@/lib/services/api';
 import {
   X,
   Users,
@@ -32,11 +33,24 @@ interface AddSeatsModalProps {
 }
 
 interface SeatPricing {
-  price_per_seat: number;
+  addon_id?: number;
+  addon_name?: string;
+  units_per_package: number;  // e.g., 5 seats per package
+  price_per_package: number;  // e.g., ₹49 per package
   currency: string;
-  min_seats: number;
-  max_seats: number;
+  max_packages?: number;
 }
+
+// Helper to get currency symbol
+const getCurrencySymbol = (currency: string): string => {
+  switch (currency?.toUpperCase()) {
+    case 'INR': return '₹';
+    case 'USD': return '$';
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    default: return currency || '₹';
+  }
+};
 
 export default function AddSeatsModal({
   isOpen,
@@ -46,7 +60,7 @@ export default function AddSeatsModal({
   planName,
   onSuccess
 }: AddSeatsModalProps) {
-  const [seatsToAdd, setSeatsToAdd] = useState(1);
+  const [quantity, setQuantity] = useState(1);  // Number of packages to buy
   const [isLoading, setIsLoading] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [pricing, setPricing] = useState<SeatPricing | null>(null);
@@ -55,7 +69,7 @@ export default function AddSeatsModal({
   useEffect(() => {
     if (isOpen) {
       loadPricing();
-      setSeatsToAdd(1);
+      setQuantity(1);
       setError(null);
     }
   }, [isOpen]);
@@ -63,51 +77,78 @@ export default function AddSeatsModal({
   const loadPricing = async () => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/addons/seat-pricing`, {
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      // Fetch from same /addons API as usage-quotas page
+      const response = await fetch(`${API_URL}/addons?active_only=true&public_only=true`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
 
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const result = await response.json();
+      console.log('[AddSeatsModal] Addons response:', response.status, result);
+
       if (response.ok) {
-        const data = await response.json();
-        setPricing(data.data || data);
-      } else {
-        // Use default pricing if API not available
-        setPricing({
-          price_per_seat: 10,
-          currency: 'USD',
-          min_seats: 1,
-          max_seats: 50,
+        const addons = result.data || result || [];
+
+        // Find seat addon (same logic as usage-quotas page)
+        const seatAddon = addons.find((addon: any) => {
+          const name = (addon.name || addon.addon_name || '').toLowerCase();
+          return name.includes('seat') || name.includes('max_seats');
         });
+
+        if (seatAddon) {
+          console.log('[AddSeatsModal] Found seat addon (raw):', JSON.stringify(seatAddon, null, 2));
+          const units = seatAddon.credit_amount || seatAddon.min_quantity || 1;
+          const price = seatAddon.price || seatAddon.unit_price || 0;
+          console.log('[AddSeatsModal] Extracted: units=', units, 'price=', price);
+          setPricing({
+            units_per_package: units,
+            price_per_package: price,
+            currency: seatAddon.currency || 'INR',
+            addon_id: seatAddon.id,
+            addon_name: seatAddon.name || seatAddon.addon_name,
+            max_packages: seatAddon.max_quantity || 50,
+          });
+        } else {
+          console.error('[AddSeatsModal] No seat addon found in:', addons.map((a: any) => a.name));
+          setError('Seat addon not available');
+          setPricing(null);
+        }
+      } else {
+        console.error('[AddSeatsModal] Addons API error:', result);
+        setError('Failed to load pricing. Please try again.');
+        setPricing(null);
       }
     } catch (err) {
-      console.error('Failed to load seat pricing:', err);
-      // Use default pricing
-      setPricing({
-        price_per_seat: 10,
-        currency: 'USD',
-        min_seats: 1,
-        max_seats: 50,
-      });
+      console.error('Failed to load addons:', err);
+      setError('Failed to load pricing. Please try again.');
+      setPricing(null);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handlePurchase = async () => {
-    if (seatsToAdd < 1) {
-      setError('Please select at least 1 seat to add');
+    if (quantity < 1 || !pricing) {
+      setError('Please select at least 1 package');
       return;
     }
 
     setIsPurchasing(true);
     setError(null);
 
+    // Calculate total seats being added
+    const totalSeats = quantity * pricing.units_per_package;
+
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
       const response = await fetch(`${API_URL}/addons/purchase-seats`, {
         method: 'POST',
         headers: {
@@ -115,9 +156,14 @@ export default function AddSeatsModal({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          quantity: seatsToAdd,
+          quantity: totalSeats,  // Send total seats to add
         }),
       });
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       const data = await response.json();
 
@@ -125,7 +171,7 @@ export default function AddSeatsModal({
         throw new Error(data.detail?.message || data.detail || 'Failed to purchase seats');
       }
 
-      toast.success(`Successfully added ${seatsToAdd} seat${seatsToAdd > 1 ? 's' : ''} to your account!`);
+      toast.success(`Successfully added ${totalSeats} seat${totalSeats > 1 ? 's' : ''} to your account!`);
       onSuccess?.();
       onClose();
     } catch (err: any) {
@@ -136,19 +182,25 @@ export default function AddSeatsModal({
     }
   };
 
-  const incrementSeats = () => {
-    if (pricing && seatsToAdd < pricing.max_seats) {
-      setSeatsToAdd(prev => prev + 1);
+  const incrementQuantity = () => {
+    const maxPackages = pricing?.max_packages || 50;
+    if (quantity < maxPackages) {
+      setQuantity(prev => prev + 1);
     }
   };
 
-  const decrementSeats = () => {
-    if (seatsToAdd > 1) {
-      setSeatsToAdd(prev => prev - 1);
+  const decrementQuantity = () => {
+    if (quantity > 1) {
+      setQuantity(prev => prev - 1);
     }
   };
 
-  const totalPrice = pricing ? (seatsToAdd * pricing.price_per_seat).toFixed(2) : '0.00';
+  // Calculate totals from API data
+  const unitsPerPackage = pricing?.units_per_package || 0;
+  const pricePerPackage = pricing?.price_per_package || 0;
+  const totalSeats = quantity * unitsPerPackage;
+  const totalPrice = (quantity * pricePerPackage).toFixed(2);
+  const currency = pricing?.currency || 'INR';
 
   if (!isOpen) return null;
 
@@ -204,15 +256,15 @@ export default function AddSeatsModal({
                 )}
               </div>
 
-              {/* Seat Selector */}
+              {/* Package Selector */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Number of seats to add
+                  Number of packages to buy
                 </label>
                 <div className="flex items-center justify-center gap-4">
                   <button
-                    onClick={decrementSeats}
-                    disabled={seatsToAdd <= 1}
+                    onClick={decrementQuantity}
+                    disabled={quantity <= 1}
                     className="w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <Minus className="w-5 h-5" />
@@ -221,37 +273,41 @@ export default function AddSeatsModal({
                     <input
                       type="number"
                       min={1}
-                      max={pricing?.max_seats || 50}
-                      value={seatsToAdd}
-                      onChange={(e) => setSeatsToAdd(Math.max(1, Math.min(pricing?.max_seats || 50, parseInt(e.target.value) || 1)))}
+                      max={pricing?.max_packages || 50}
+                      value={quantity}
+                      onChange={(e) => setQuantity(Math.max(1, Math.min(pricing?.max_packages || 50, parseInt(e.target.value) || 1)))}
                       className="w-full text-center text-3xl font-bold text-gray-900 border-0 focus:ring-0 bg-transparent"
                     />
-                    <span className="text-sm text-gray-500">seat{seatsToAdd > 1 ? 's' : ''}</span>
+                    <span className="text-sm text-gray-500">package{quantity > 1 ? 's' : ''}</span>
                   </div>
                   <button
-                    onClick={incrementSeats}
-                    disabled={pricing ? seatsToAdd >= pricing.max_seats : false}
+                    onClick={incrementQuantity}
+                    disabled={pricing ? quantity >= (pricing.max_packages || 50) : false}
                     className="w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <Plus className="w-5 h-5" />
                   </button>
                 </div>
+                {pricing && (
+                  <p className="text-center text-sm text-gray-500 mt-2">
+                    = {totalSeats} seat{totalSeats !== 1 ? 's' : ''} total
+                  </p>
+                )}
               </div>
 
               {/* Pricing */}
               {pricing && (
                 <div className="bg-blue-50 rounded-xl p-4 mb-6">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-blue-700">Price per seat</span>
+                    <span className="text-sm text-blue-700">Package</span>
                     <span className="text-sm font-medium text-blue-900">
-                      ${pricing.price_per_seat.toFixed(2)} {pricing.currency}/month
+                      {unitsPerPackage} seats for {getCurrencySymbol(currency)}{pricePerPackage}
                     </span>
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-blue-200">
-                    <span className="text-base font-medium text-blue-800">Total</span>
+                    <span className="text-base font-medium text-blue-800">Total ({totalSeats} seats)</span>
                     <span className="text-2xl font-bold text-blue-900">
-                      ${totalPrice}
-                      <span className="text-sm font-normal text-blue-700">/month</span>
+                      {getCurrencySymbol(currency)}{totalPrice}
                     </span>
                   </div>
                 </div>
@@ -284,7 +340,7 @@ export default function AddSeatsModal({
                 </button>
                 <button
                   onClick={handlePurchase}
-                  disabled={isPurchasing || seatsToAdd < 1}
+                  disabled={isPurchasing || quantity < 1 || !pricing}
                   className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
                   {isPurchasing ? (
@@ -295,7 +351,7 @@ export default function AddSeatsModal({
                   ) : (
                     <>
                       <ShoppingCart className="w-4 h-4" />
-                      Add {seatsToAdd} Seat{seatsToAdd > 1 ? 's' : ''}
+                      Add {totalSeats} Seat{totalSeats !== 1 ? 's' : ''}
                     </>
                   )}
                 </button>

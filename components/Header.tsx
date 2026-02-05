@@ -35,7 +35,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [activeNotificationTab, setActiveNotificationTab] = useState<'all' | 'unread'>('all');
 
   // Use shared quota context instead of separate API call
-  const { quotaData, loading: loadingQuota, error: quotaError, refetch: fetchQuotaStatus } = useQuota();
+  const { quotaData, loading: loadingQuota, error: quotaError, hasPermission: hasQuotaPermission, refetch: fetchQuotaStatus } = useQuota();
 
   // Listen for plan changes and unit consumption to refresh quota data
   useEffect(() => {
@@ -350,39 +350,41 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           </button>
         )}
 
-        {/* Plan & Unit Balance Display - Moved before icons */}
-        <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl">
-          <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm border border-gray-200">
-            <CreditCard className="w-5 h-5 text-gray-600" />
-          </div>
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <span className="text-sm font-semibold text-gray-900 truncate max-w-[140px]" title={loadingQuota ? 'Loading...' : planName}>
-              {loadingQuota ? 'Loading...' : planName}
-            </span>
-            {!loadingQuota && !quotaError && !isPendingStatus && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-bold text-gray-700">{totalUnits.remaining.toLocaleString()}</span>
-                <span className="text-xs text-gray-500">units left</span>
+        {/* Plan & Unit Balance Display - Moved before icons - Only show if user has permission */}
+        {hasQuotaPermission && (
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl">
+            <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm border border-gray-200">
+              <CreditCard className="w-5 h-5 text-gray-600" />
+            </div>
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-sm font-semibold text-gray-900 truncate max-w-[140px]" title={loadingQuota ? 'Loading...' : planName}>
+                {loadingQuota ? 'Loading...' : planName}
+              </span>
+              {!loadingQuota && !quotaError && !isPendingStatus && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-bold text-gray-700">{totalUnits.remaining.toLocaleString()}</span>
+                  <span className="text-xs text-gray-500">units left</span>
+                </div>
+              )}
+              {isPendingStatus && (
+                <span className="text-xs text-orange-600 font-medium">
+                  {tenantStatus}
+                </span>
+              )}
+            </div>
+            {!loadingQuota && !quotaError && !isPendingStatus && totalUnits.limit > 0 && (
+              <div className="w-16 h-2 bg-white/60 rounded-full overflow-hidden border border-gray-200">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    usagePercentage > 90 ? 'bg-red-500' :
+                    usagePercentage > 70 ? 'bg-yellow-500' : 'bg-gray-600'
+                  }`}
+                  style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                />
               </div>
             )}
-            {isPendingStatus && (
-              <span className="text-xs text-orange-600 font-medium">
-                {tenantStatus}
-              </span>
-            )}
           </div>
-          {!loadingQuota && !quotaError && !isPendingStatus && totalUnits.limit > 0 && (
-            <div className="w-16 h-2 bg-white/60 rounded-full overflow-hidden border border-gray-200">
-              <div
-                className={`h-full rounded-full transition-all ${
-                  usagePercentage > 90 ? 'bg-red-500' :
-                  usagePercentage > 70 ? 'bg-yellow-500' : 'bg-gray-600'
-                }`}
-                style={{ width: `${Math.min(usagePercentage, 100)}%` }}
-              />
-            </div>
-          )}
-        </div>
+        )}
 
         {/* FIX-010: Help & Support with Tooltip */}
         <div className="relative">

@@ -1,6 +1,6 @@
 'use client';
 
-import { TrendingUp, TrendingDown, Zap, Target, Video, ClipboardCheck, Calendar, Clock, DollarSign, ChevronDown, Download, Filter, Search, X, BarChart3, PieChart, AlertCircle, CheckCircle2, Loader2, AlertTriangle, ArrowUpRight, Plus, Send, Briefcase, Sparkles, ShoppingCart } from 'lucide-react';
+import { TrendingUp, Zap, Calendar, Clock, DollarSign, X, AlertCircle, CheckCircle2, Loader2, AlertTriangle, ArrowUpRight, Plus, Send, Sparkles, ShoppingCart } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import QuotaDisplay from './QuotaDisplay';
 import { useQuota } from '@/contexts/QuotaContext';
@@ -23,18 +23,6 @@ interface Addon {
   max_quantity?: number;
   is_active?: boolean;
   is_public?: boolean;
-}
-
-export interface UsageRecord {
-  id: string;
-  module: 'Resume Upload' | 'Resume Scoring' | 'AI Interview' | 'Assessment';
-  operation: string;
-  unitsConsumed: number;
-  timestamp: Date;
-  details: string;
-  status: 'completed' | 'failed';
-  jobTitle?: string;
-  candidateCount?: number;
 }
 
 interface QuotaInfo {
@@ -105,14 +93,9 @@ const quotaTypeToModuleMap: Record<string, string> = {
 
 export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   // Use shared QuotaContext instead of making duplicate API calls
-  const { quotaData: contextQuotaData, loading: quotaLoading, error: quotaError, refetch: refetchQuota } = useQuota();
+  const { quotaData: contextQuotaData, loading: quotaLoading, error: quotaError, hasPermission, refetch: refetchQuota } = useQuota();
 
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
-  const [selectedModule, setSelectedModule] = useState<'all' | 'Resume Upload' | 'Resume Scoring' | 'AI Interview' | 'Assessment'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [usageHistory, setUsageHistory] = useState<any[]>([]);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showRecordModal, setShowRecordModal] = useState(false);
   const [recordingUsage, setRecordingUsage] = useState(false);
@@ -137,9 +120,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
-  // Fetch usage history and addons on mount
+  // Fetch addons on mount
   useEffect(() => {
-    fetchUsageHistory();
     fetchAddons();
   }, []);
 
@@ -203,16 +185,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       const data = await response.json();
 
       if (response.ok) {
-        // Add to local history for immediate feedback
-        const newRecord = {
-          id: `local-${Date.now()}`,
-          quota_type: request.quota_type,
-          amount: request.amount || 1,
-          operation_type: request.operation_type || quotaTypeToModuleMap[request.quota_type],
-          resource_id: request.resource_id,
-          created_at: new Date().toISOString(),
-        };
-        setUsageHistory(prev => [newRecord, ...prev]);
         return true;
       } else {
         setRecordError(data.detail || data.message || 'Failed to record usage');
@@ -242,38 +214,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     }
 
     setRecordingUsage(false);
-  };
-
-  // Fetch usage history only (quota data comes from context)
-  const fetchUsageHistory = async () => {
-    setHistoryLoading(true);
-    try {
-      const token = localStorage.getItem('accessToken');
-      if (!token) {
-        console.warn('[UsageDashboard] No access token found');
-        setHistoryLoading(false);
-        return;
-      }
-
-      const historyResponse = await fetch(`${API_BASE}/usage/history?limit=50`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (historyResponse.ok) {
-        const historyData = await historyResponse.json();
-        console.log('[UsageDashboard] Usage history data:', historyData);
-        const records = historyData.data?.records || historyData.records || historyData.data || [];
-        setUsageHistory(Array.isArray(records) ? records : []);
-      }
-    } catch (error) {
-      console.error('[UsageDashboard] Error fetching usage history:', error);
-    } finally {
-      setHistoryLoading(false);
-    }
   };
 
   // Derive quotaSummary from context data
@@ -306,10 +246,12 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         const remaining = isUnlimited ? -1 : (q.total_remaining !== undefined ? (typeof q.total_remaining === 'number' ? q.total_remaining : 0) : (typeof sub.remaining === 'number' ? sub.remaining : 0));
         const usagePercentage = isUnlimited ? 0 : (limit > 0 ? (used / limit) * 100 : 0);
 
-        const status = q.status || 'OK';
         const hasQuota = limit > 0;
-        const isLow = hasQuota && (status === 'WARNING' || status === 'CRITICAL' || usagePercentage >= 80);
-        const isExhausted = hasQuota && (status === 'EXCEEDED' || (remaining <= 0 && !isUnlimited));
+        // Calculate exhausted/low based on total_remaining (includes addon credits), not just subscription status
+        // A quota is only exhausted when total_remaining <= 0 (no subscription OR addon credits left)
+        const isExhausted = hasQuota && !isUnlimited && remaining <= 0;
+        // A quota is low when usage >= 80% of total limit (subscription + addon)
+        const isLow = hasQuota && !isUnlimited && !isExhausted && usagePercentage >= 80;
 
         quotasList.push({
           quota_type: quotaType,
@@ -327,6 +269,18 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     const hasLowQuotas = quotasList.some(q => q.is_low || q.is_exhausted);
     const lowQuotaTypes = quotasList.filter(q => q.is_low || q.is_exhausted).map(q => q.name);
 
+    // Debug: log quota status
+    console.log('[UsageDashboard] Quota summary:', quotasList.map(q => ({
+      name: q.name,
+      used: q.used,
+      limit: q.limit,
+      remaining: q.remaining,
+      percentage: q.percentage_used.toFixed(1) + '%',
+      is_low: q.is_low,
+      is_exhausted: q.is_exhausted,
+    })));
+    console.log('[UsageDashboard] Has low quotas:', hasLowQuotas, 'Low types:', lowQuotaTypes);
+
     return {
       has_low_quotas: hasLowQuotas,
       low_quota_types: lowQuotaTypes,
@@ -340,30 +294,49 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   const subscriptionSummary = useMemo((): SubscriptionSummary | null => {
     if (!contextQuotaData) return null;
 
-    const basePrice = contextQuotaData.plan_info?.subscribed_price ?? contextQuotaData.plan_info?.current_plan_price ?? 0;
+    const isTrial = contextQuotaData.is_trial || false;
+    const basePrice = isTrial ? 0 : (contextQuotaData.plan_info?.subscribed_price ?? contextQuotaData.plan_info?.current_plan_price ?? 0);
     const billingInterval = contextQuotaData.plan_info?.billing_period?.toLowerCase() || contextQuotaData.plan_info?.billing_interval?.toLowerCase() || 'month';
+
+    // For trial: use trial_info.trial_end_date and trial_info.days_remaining from Admin API
+    // For paid: use billing_period.end from Admin API
+    let daysRemaining: number | null = null;
+    let endDate: string | undefined;
+
+    if (isTrial) {
+      // Use trial_info from Admin API (source of truth for trial)
+      daysRemaining = contextQuotaData.trial_info?.days_remaining ?? null;
+      endDate = contextQuotaData.trial_info?.trial_end_date;
+    } else {
+      // Use billing_period for paid plans
+      endDate = contextQuotaData.billing_period?.end;
+      daysRemaining = endDate
+        ? Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+        : null;
+    }
 
     return {
       tenant_id: contextQuotaData.tenant_id || '',
       tenant_name: contextQuotaData.tenant_id || '',
       status: contextQuotaData.subscription_status || 'active',
-      is_trial: contextQuotaData.is_trial || false,
+      is_trial: isTrial,
+      trial_days_remaining: isTrial ? daysRemaining : undefined,
       plan: {
         id: contextQuotaData.plan_info?.plan_id || 0,
         name: contextQuotaData.plan_name || 'Professional',
         price: basePrice,
         billing_interval: billingInterval,
       },
-      subscription: contextQuotaData.billing_period ? {
+      subscription: {
         id: 0,
-        status: 'active',
+        status: isTrial ? 'trialing' : 'active',
         billing_interval: billingInterval,
-        start_date: contextQuotaData.billing_period.start || '',
-        current_period_start: contextQuotaData.billing_period.start || '',
-        current_period_end: contextQuotaData.billing_period.end || '',
-        days_until_renewal: contextQuotaData.billing_period.end ? Math.ceil((new Date(contextQuotaData.billing_period.end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 30,
+        start_date: isTrial ? (contextQuotaData.trial_info?.trial_start_date || '') : (contextQuotaData.billing_period?.start || ''),
+        current_period_start: contextQuotaData.billing_period?.start || '',
+        current_period_end: endDate || '',
+        days_until_renewal: daysRemaining ?? 0,
         price: basePrice,
-      } : null,
+      },
       isolation_type: contextQuotaData.isolation_type || null,
     };
   }, [contextQuotaData]);
@@ -418,6 +391,11 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   }, 0) || 0;
   const usagePercentage = monthlyQuota > 0 ? (totalUnitsConsumed / monthlyQuota) * 100 : 0;
 
+  // Hide the entire dashboard if user doesn't have permission
+  if (!hasPermission) {
+    return null;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/30 flex items-center justify-center">
@@ -429,129 +407,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     );
   }
 
-  const moduleToQuotaType: Record<string, string> = {
-    'Resume Upload': 'RU',
-    'Resume Scoring': 'RS',
-    'Assessment': 'AS',
-    'AI Interview': 'AIU',
-  };
-
-  // Transform API history to display format
-  const transformedHistory = usageHistory.map((record: any) => ({
-    id: record.id,
-    module: quotaTypeToModuleMap[record.quota_type] || record.quota_type,
-    operation: record.operation_type || quotaTypeToModuleMap[record.quota_type] || 'Usage',
-    unitsConsumed: record.amount || 1,
-    timestamp: new Date(record.created_at),
-    details: record.resource_id ? `Resource: ${record.resource_id}` : 'Usage recorded',
-    status: 'completed' as const,
-  }));
-
-  // Filter records - use real API data
-  const filteredRecords = transformedHistory.filter((record: any) => {
-    const matchesModule = selectedModule === 'all' || record.module === selectedModule;
-    const matchesSearch = searchQuery === '' ||
-      record.operation.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.details.toLowerCase().includes(searchQuery.toLowerCase());
-
-    return matchesModule && matchesSearch;
-  });
-
-  const getModuleIcon = (module: string) => {
-    switch (module) {
-      case 'Resume Upload':
-        return <Zap className="w-4 h-4" />;
-      case 'Resume Scoring':
-        return <Target className="w-4 h-4" />;
-      case 'AI Interview':
-        return <Video className="w-4 h-4" />;
-      case 'Assessment':
-        return <ClipboardCheck className="w-4 h-4" />;
-      case 'Max Jobs':
-        return <Briefcase className="w-4 h-4" />;
-      default:
-        return <Zap className="w-4 h-4" />;
-    }
-  };
-
-  const getModuleColor = (module: string) => {
-    switch (module) {
-      case 'Resume Upload':
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-      case 'Resume Scoring':
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-      case 'AI Interview':
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-      case 'Assessment':
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-      case 'Max Jobs':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
-
   const handleUpgradeClick = () => {
     window.location.href = '/subscription/current-plan';
-  };
-
-  const handleExportReport = () => {
-    // Get data to export (use filtered records if filters are applied, otherwise all)
-    const dataToExport = filteredRecords.length > 0 ? filteredRecords : transformedHistory;
-
-    if (dataToExport.length === 0) {
-      alert('No usage data to export');
-      return;
-    }
-
-    // Helper function to escape CSV field (wrap in quotes if needed)
-    const escapeCSV = (field: any): string => {
-      const str = String(field);
-      // If field contains comma, quote, or newline, wrap in quotes and escape existing quotes
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
-
-    // CSV headers
-    const headers = ['Date', 'Time', 'Module', 'Operation', 'Details', 'Units Used', 'Status'];
-
-    // Convert records to CSV rows
-    const rows = dataToExport.map((record: any) => {
-      const date = record.timestamp.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      }).replace(',', ''); // Remove comma from date like "Dec 29, 2025" -> "Dec 29 2025"
-      const time = record.timestamp.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      return [
-        escapeCSV(date),
-        escapeCSV(time),
-        escapeCSV(record.module),
-        escapeCSV(record.operation),
-        escapeCSV(record.details),
-        escapeCSV(record.unitsConsumed),
-        escapeCSV(record.status)
-      ].join(',');
-    });
-
-    // Combine headers and rows
-    const csvContent = [headers.join(','), ...rows].join('\n');
-
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `usage-report-${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   // Handle addon buy click
@@ -652,13 +509,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 <TrendingUp className="w-4 h-4" />
                 Upgrade Plan
               </button>
-              <button
-                onClick={handleExportReport}
-                className="px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Export Report
-              </button>
               {onBack && (
                 <button
                   onClick={onBack}
@@ -710,7 +560,24 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               </div>
 
               <div className="text-right">
-                {subscriptionSummary.subscription && (
+                {subscriptionSummary.is_trial ? (
+                  /* Free Trial - show expiry, no price */
+                  <>
+                    {subscriptionSummary.subscription?.days_until_renewal !== undefined && subscriptionSummary.subscription.days_until_renewal > 0 ? (
+                      <div className="text-xl font-bold text-orange-600">
+                        Expires in {subscriptionSummary.subscription.days_until_renewal} days
+                      </div>
+                    ) : (
+                      <div className="text-xl font-bold text-red-600">
+                        Trial Expired
+                      </div>
+                    )}
+                    <p className="text-sm text-gray-500 mt-1">
+                      Upgrade to continue using all features
+                    </p>
+                  </>
+                ) : subscriptionSummary.subscription ? (
+                  /* Paid Plan - show price and renewal */
                   <>
                     <div className="text-2xl font-bold text-gray-900">
                       ₹{subscriptionSummary.subscription.price?.toFixed(2) || subscriptionSummary.plan?.price?.toFixed(2) || '0.00'}
@@ -718,13 +585,13 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         /{subscriptionSummary.subscription.billing_interval || 'month'}
                       </span>
                     </div>
-                    {subscriptionSummary.subscription.days_until_renewal !== undefined && (
+                    {subscriptionSummary.subscription.days_until_renewal !== undefined && subscriptionSummary.subscription.days_until_renewal > 0 && (
                       <p className="text-sm text-gray-500 mt-1">
                         Renews in {subscriptionSummary.subscription.days_until_renewal} days
                       </p>
                     )}
                   </>
-                )}
+                ) : null}
                 {subscriptionSummary.isolation_type && (
                   <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 text-xs font-medium text-gray-800 bg-gray-100 rounded-full">
                     {subscriptionSummary.isolation_type === 'DEDICATED' ? 'Dedicated Server' :
@@ -883,162 +750,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             </div>
           </div>
         )}
-
-        {/* Recent Activity Section */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <BarChart3 className="w-5 h-5 text-gray-700" />
-              <h3 className="text-lg text-gray-900 font-medium">Recent Activity</h3>
-            </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 text-sm"
-            >
-              <Filter className="w-4 h-4" />
-              Filters
-              <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-
-          {/* Filters */}
-          {showFilters && (
-            <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Search Activity
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search by job, candidate, operation..."
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                    />
-                    {searchQuery && (
-                      <button
-                        onClick={() => setSearchQuery('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2"
-                      >
-                        <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Filter by Module
-                  </label>
-                  <select
-                    value={selectedModule}
-                    onChange={(e) => setSelectedModule(e.target.value as any)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                  >
-                    <option value="all">All Modules</option>
-                    <option value="Resume Upload">Resume Upload</option>
-                    <option value="Resume Scoring">Resume Scoring</option>
-                    <option value="AI Interview">AI Interview</option>
-                    <option value="Assessment">Assessment</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Activity Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b-2 border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Timestamp</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Module</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Operation</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Details</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Units Used</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRecords.map((record, index) => (
-                  <tr 
-                    key={record.id}
-                    className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                    }`}
-                  >
-                    <td className="py-4 px-4">
-                      <div className="text-sm text-gray-900">
-                        {record.timestamp.toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {record.timestamp.toLocaleTimeString('en-US', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${getModuleColor(record.module)}`}>
-                        {getModuleIcon(record.module)}
-                        {record.module}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="text-sm font-medium text-gray-900">{record.operation}</div>
-                      {record.jobTitle && (
-                        <div className="text-xs text-gray-500 mt-0.5">{record.jobTitle}</div>
-                      )}
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="text-sm text-gray-700 max-w-md">{record.details}</div>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 border border-gray-200 rounded-lg">
-                        <Zap className="w-3.5 h-3.5 text-gray-700" />
-                        <span className="text-sm font-bold text-gray-800">{record.unitsConsumed}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      {record.status === 'completed' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-green-100 text-green-700 border border-green-200">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Completed
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-red-100 text-red-700 border border-red-200">
-                          <X className="w-3 h-3" />
-                          Failed
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {filteredRecords.length === 0 && (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                  <BarChart3 className="w-8 h-8 text-gray-400" />
-                </div>
-                <h3 className="text-lg text-gray-900 mb-2">No Activity Found</h3>
-                <p className="text-gray-600">
-                  {searchQuery || selectedModule !== 'all'
-                    ? 'No activity matches your current filters.'
-                    : 'No usage activity recorded yet. Activity will appear here as you use the platform.'}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* Add-ons Section */}
