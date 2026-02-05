@@ -1,7 +1,7 @@
 'use client'
 
-import { Search, Filter, X, ChevronDown, SlidersHorizontal, Calendar, MapPin, Building2, Clock, GraduationCap, Briefcase, HelpCircle, Info, ChevronRight, Upload, Users } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Search, X, ChevronDown, SlidersHorizontal, Calendar, MapPin, Building2, Clock, GraduationCap, Briefcase, ChevronRight, Upload, Users } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 
 interface SearchFilterBarProps {
@@ -23,17 +23,14 @@ export default function SearchFilterBarCompact({
 }: SearchFilterBarProps) {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
-  const [showSearchTips, setShowSearchTips] = useState(false);
   const [tempFilters, setTempFilters] = useState(filters);
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
+  const [showMoreSkills, setShowMoreSkills] = useState(false);
+  const filterPanelRef = useRef<HTMLDivElement>(null);
 
-  // Team mode disabled for now
-  const teamMembers: any[] = [];
-  const isTeamMode = false;
-  
   // Accordion states for collapsible sections
-  const [expandedSections, setExpandedSections] = useState<string[]>(['primary']);
-  
+  const [expandedSections, setExpandedSections] = useState<string[]>([]);
+
   // Debounce search to improve performance
   const debouncedSearch = useDebounce(localSearchQuery, 300);
 
@@ -45,11 +42,24 @@ export default function SearchFilterBarCompact({
     setTempFilters(filters);
   }, [filters]);
 
+  // Close filter panel on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (filterPanelRef.current && !filterPanelRef.current.contains(event.target as Node)) {
+        setShowAdvancedFilters(false);
+      }
+    };
+
+    if (showAdvancedFilters) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showAdvancedFilters]);
+
   const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
     if (key === 'skills' && Array.isArray(value)) return value.length > 0;
     if (key === 'experienceRange') return value && (value.min !== undefined || value.max !== undefined);
     if (key === 'uploadDateRange') return value && (value.start || value.end);
-    if (key === 'lastUpdatedRange') return value && (value.start || value.end);
     return value !== null && value !== undefined && value !== '';
   }).length;
 
@@ -80,29 +90,33 @@ export default function SearchFilterBarCompact({
   };
 
   const toggleSection = (section: string) => {
-    setExpandedSections(prev => 
-      prev.includes(section) 
+    setExpandedSections(prev =>
+      prev.includes(section)
         ? prev.filter(s => s !== section)
         : [...prev, section]
     );
   };
 
-  const availableSkills = [
-    'React', 'JavaScript', 'TypeScript', 'Python', 'Java',
-    'Node.js', 'Angular', 'Vue.js', 'AWS', 'Docker',
-    'Kubernetes', 'SQL', 'MongoDB', 'REST API', 'GraphQL'
+  // Skills list - first 8 shown, rest behind "+more"
+  const allSkills = [
+    'React', 'JavaScript', 'TypeScript', 'Python', 'Java', 'Node.js', 'Angular', 'Vue.js',
+    'AWS', 'Docker', 'Kubernetes', 'SQL', 'MongoDB', 'REST API', 'GraphQL'
   ];
+  const visibleSkills = allSkills.slice(0, 8);
+  const moreSkills = allSkills.slice(8);
 
   const educationLevels = [
+    'Any',
     'High School',
     'Associate Degree',
-    'Bachelor\'s Degree',
-    'Master\'s Degree',
+    "Bachelor's Degree",
+    "Master's Degree",
     'Doctorate (PhD)',
     'Professional Certification'
   ];
 
   const noticePeriods = [
+    'Any',
     'Immediate',
     '15 Days',
     '30 Days',
@@ -112,86 +126,135 @@ export default function SearchFilterBarCompact({
   ];
 
   const sourceTypes = [
-    'Manual Upload',
-    'LinkedIn',
-    'Job Board',
-    'Referral',
-    'Career Site',
-    'Employee Database',
-    'TalentFlow AI',
-    'Other'
+    { value: '', label: 'Any Source' },
+    { value: 'manual_upload', label: 'Manual Upload' },
+    { value: 'bulk_upload', label: 'Bulk Upload' },
+    { value: 'api_import', label: 'API Import' },
+    { value: 'ai_match', label: 'AI Match' },
+    { value: 'LinkedIn', label: 'LinkedIn' },
+    { value: 'Job Board', label: 'Job Board' },
+    { value: 'Referral', label: 'Referral' },
+    { value: 'Career Site', label: 'Career Site' },
+    { value: 'Employee Database', label: 'Employee Database' },
+    { value: 'TalentFlow AI', label: 'TalentFlow AI' },
+    { value: 'Other', label: 'Other' }
+  ];
+
+  // Team members (placeholder - in real app, fetch from API)
+  const teamMembers = [
+    { id: '', name: 'Any Team Member' }
   ];
 
   // Active filter chips
   const getActiveFilterChips = () => {
-    const chips: Array<{ label: string; onRemove: () => void }> = [];
-    
+    const chips: Array<{ label: string; key: string; onRemove: () => void }> = [];
+
     if (filters.skills?.length > 0) {
-      chips.push({
-        label: `${filters.skills.length} Skill${filters.skills.length !== 1 ? 's' : ''}`,
-        onRemove: () => onFiltersChange({ ...filters, skills: [] })
+      filters.skills.forEach((skill: string) => {
+        chips.push({
+          label: skill,
+          key: `skill-${skill}`,
+          onRemove: () => onFiltersChange({
+            ...filters,
+            skills: filters.skills.filter((s: string) => s !== skill)
+          })
+        });
       });
     }
-    
-    if (filters.experienceRange?.min || filters.experienceRange?.max) {
-      const min = filters.experienceRange.min || 0;
-      const max = filters.experienceRange.max || '∞';
+
+    if (filters.experienceRange?.min !== undefined || filters.experienceRange?.max !== undefined) {
+      const min = filters.experienceRange.min ?? 0;
+      const max = filters.experienceRange.max ?? '∞';
       chips.push({
-        label: `${min}-${max} years exp`,
+        label: `${min}-${max} years`,
+        key: 'experience',
         onRemove: () => onFiltersChange({ ...filters, experienceRange: null })
       });
     }
-    
-    if (filters.education) {
+
+    if (filters.education && filters.education !== 'Any') {
       chips.push({
         label: filters.education,
+        key: 'education',
         onRemove: () => onFiltersChange({ ...filters, education: null })
       });
     }
-    
+
     if (filters.location) {
       chips.push({
-        label: `📍 ${filters.location}`,
+        label: filters.location,
+        key: 'location',
         onRemove: () => onFiltersChange({ ...filters, location: null })
       });
     }
-    
-    if (filters.noticePeriod) {
+
+    if (filters.currentCompany) {
+      chips.push({
+        label: `Company: ${filters.currentCompany}`,
+        key: 'currentCompany',
+        onRemove: () => onFiltersChange({ ...filters, currentCompany: null })
+      });
+    }
+
+    if (filters.previousCompany) {
+      chips.push({
+        label: `Prev: ${filters.previousCompany}`,
+        key: 'previousCompany',
+        onRemove: () => onFiltersChange({ ...filters, previousCompany: null })
+      });
+    }
+
+    if (filters.noticePeriod && filters.noticePeriod !== 'Any') {
       chips.push({
         label: `Notice: ${filters.noticePeriod}`,
+        key: 'noticePeriod',
         onRemove: () => onFiltersChange({ ...filters, noticePeriod: null })
       });
     }
-    
-    if (filters.uploadedBy) {
-      chips.push({
-        label: `👤 ${filters.uploadedBy}`,
-        onRemove: () => onFiltersChange({ ...filters, uploadedBy: null })
-      });
-    }
-    
+
     if (filters.sourceType) {
+      const sourceLabel = sourceTypes.find(s => s.value === filters.sourceType)?.label || filters.sourceType;
       chips.push({
-        label: `📥 ${filters.sourceType}`,
+        label: sourceLabel,
+        key: 'sourceType',
         onRemove: () => onFiltersChange({ ...filters, sourceType: null })
       });
     }
-    
+
+    if (filters.uploadedBy) {
+      chips.push({
+        label: `By: ${filters.uploadedBy}`,
+        key: 'uploadedBy',
+        onRemove: () => onFiltersChange({ ...filters, uploadedBy: null })
+      });
+    }
+
+    if (filters.uploadDateRange?.start || filters.uploadDateRange?.end) {
+      const start = filters.uploadDateRange?.start || '';
+      const end = filters.uploadDateRange?.end || '';
+      chips.push({
+        label: `Date: ${start}${start && end ? ' - ' : ''}${end}`,
+        key: 'uploadDateRange',
+        onRemove: () => onFiltersChange({ ...filters, uploadDateRange: null })
+      });
+    }
+
     return chips;
   };
 
   return (
-    <div className="bg-gray-50 p-4 rounded-t-lg">
-      <div className="flex gap-3">
+    <div className="bg-white border-b border-gray-200">
+      {/* Main Search Bar */}
+      <div className="p-4 flex gap-3 items-center">
         {/* Global Search Bar */}
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by name, email, phone, or skills..."
+            placeholder="Search by name, email, phone, skills, title, or company..."
             value={localSearchQuery}
             onChange={(e) => setLocalSearchQuery(e.target.value)}
-            className="w-full h-10 pl-10 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+            className="w-full h-10 pl-10 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 hover:bg-white"
           />
           {localSearchQuery && (
             <button
@@ -199,50 +262,357 @@ export default function SearchFilterBarCompact({
                 setLocalSearchQuery('');
                 onSearchChange('');
               }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-100 rounded-full p-1 transition-colors"
+              className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-200 rounded-full p-1 transition-colors"
             >
-              <X className="w-4 h-4 text-gray-500 hover:text-gray-700" />
+              <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
             </button>
           )}
           {localSearchQuery && localSearchQuery !== debouncedSearch && (
-            <div className="absolute right-12 top-1/2 -translate-y-1/2">
-              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="absolute right-10 top-1/2 -translate-y-1/2">
+              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
         </div>
 
-        {/* Advanced Filters Button */}
-        <button
-          onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-          className={`flex items-center gap-2 h-10 px-4 border rounded-md transition-colors ${
-            activeFilterCount > 0
-              ? 'border-blue-600 bg-blue-50 text-blue-600'
-              : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          <SlidersHorizontal className="w-4 h-4" />
-          <span className="hidden sm:inline">Filters</span>
-          {activeFilterCount > 0 && (
-            <span className="bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-              {activeFilterCount}
-            </span>
+        {/* Filter Button */}
+        <div className="relative" ref={filterPanelRef}>
+          <button
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className={`flex items-center gap-2 h-10 px-4 rounded-lg font-medium text-sm transition-all ${
+              activeFilterCount > 0
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+            }`}
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            <span>Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="bg-white text-blue-600 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          {/* Filter Panel - Matching Screenshot Layout */}
+          {showAdvancedFilters && (
+            <div className="absolute right-0 top-12 w-[700px] bg-white rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden">
+              <div className="max-h-[600px] overflow-y-auto">
+                {/* Skills and Experience Row */}
+                <div className="p-5 border-b border-gray-100">
+                  <div className="grid grid-cols-2 gap-8">
+                    {/* Skills */}
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-3">
+                        <Briefcase className="w-4 h-4 text-blue-600" />
+                        Skills
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {visibleSkills.map(skill => (
+                          <button
+                            key={skill}
+                            onClick={() => handleSkillToggle(skill)}
+                            className={`px-3 py-1.5 text-sm rounded-full border transition-all ${
+                              (tempFilters.skills || []).includes(skill)
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                            }`}
+                          >
+                            {skill}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => setShowMoreSkills(!showMoreSkills)}
+                          className="px-3 py-1.5 text-sm rounded-full border border-blue-300 text-blue-600 hover:bg-blue-50"
+                        >
+                          +{moreSkills.length} more
+                        </button>
+                      </div>
+                      {showMoreSkills && (
+                        <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-gray-100">
+                          {moreSkills.map(skill => (
+                            <button
+                              key={skill}
+                              onClick={() => handleSkillToggle(skill)}
+                              className={`px-3 py-1.5 text-sm rounded-full border transition-all ${
+                                (tempFilters.skills || []).includes(skill)
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                              }`}
+                            >
+                              {skill}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Experience */}
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-3">
+                        <Clock className="w-4 h-4 text-blue-600" />
+                        Experience
+                      </label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { label: '0-2y', min: 0, max: 2 },
+                          { label: '2-5y', min: 2, max: 5 },
+                          { label: '5-10y', min: 5, max: 10 },
+                          { label: '10+y', min: 10, max: 50 },
+                        ].map(range => (
+                          <button
+                            key={range.label}
+                            onClick={() => setTempFilters({
+                              ...tempFilters,
+                              experienceRange: { min: range.min, max: range.max }
+                            })}
+                            className={`px-3 py-2 text-sm rounded-lg border transition-all ${
+                              tempFilters.experienceRange?.min === range.min && tempFilters.experienceRange?.max === range.max
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                            }`}
+                          >
+                            {range.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Location & Education Section */}
+                <div className="border-b border-gray-100">
+                  <button
+                    onClick={() => toggleSection('location-education')}
+                    className="w-full px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                      <MapPin className="w-4 h-4 text-gray-500" />
+                      <span>Location & Education</span>
+                      {(tempFilters.location || (tempFilters.education && tempFilters.education !== 'Any')) && (
+                        <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Active</span>
+                      )}
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.includes('location-education') ? 'rotate-180' : ''}`} />
+                  </button>
+                  {expandedSections.includes('location-education') && (
+                    <div className="px-5 pb-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1.5">Location</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., San Francisco"
+                            value={tempFilters.location || ''}
+                            onChange={(e) => setTempFilters({ ...tempFilters, location: e.target.value || null })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1.5">Education</label>
+                          <select
+                            value={tempFilters.education || 'Any'}
+                            onChange={(e) => setTempFilters({ ...tempFilters, education: e.target.value === 'Any' ? null : e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                          >
+                            {educationLevels.map(level => (
+                              <option key={level} value={level}>{level}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Company & Notice Period Section */}
+                <div className="border-b border-gray-100">
+                  <button
+                    onClick={() => toggleSection('company-notice')}
+                    className="w-full px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                      <Building2 className="w-4 h-4 text-gray-500" />
+                      <span>Company & Notice Period</span>
+                      {(tempFilters.currentCompany || tempFilters.previousCompany || (tempFilters.noticePeriod && tempFilters.noticePeriod !== 'Any')) && (
+                        <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Active</span>
+                      )}
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.includes('company-notice') ? 'rotate-180' : ''}`} />
+                  </button>
+                  {expandedSections.includes('company-notice') && (
+                    <div className="px-5 pb-4">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1.5">Current Company</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., Google"
+                            value={tempFilters.currentCompany || ''}
+                            onChange={(e) => setTempFilters({ ...tempFilters, currentCompany: e.target.value || null })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1.5">Previous Company</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., Amazon"
+                            value={tempFilters.previousCompany || ''}
+                            onChange={(e) => setTempFilters({ ...tempFilters, previousCompany: e.target.value || null })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1.5">Notice Period</label>
+                        <select
+                          value={tempFilters.noticePeriod || 'Any'}
+                          onChange={(e) => setTempFilters({ ...tempFilters, noticePeriod: e.target.value === 'Any' ? null : e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                        >
+                          {noticePeriods.map(period => (
+                            <option key={period} value={period}>{period}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Date Filters Section */}
+                <div className="border-b border-gray-100">
+                  <button
+                    onClick={() => toggleSection('dates')}
+                    className="w-full px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                      <Calendar className="w-4 h-4 text-gray-500" />
+                      <span>Date Filters</span>
+                      {(tempFilters.uploadDateRange?.start || tempFilters.uploadDateRange?.end) && (
+                        <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Active</span>
+                      )}
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.includes('dates') ? 'rotate-180' : ''}`} />
+                  </button>
+                  {expandedSections.includes('dates') && (
+                    <div className="px-5 pb-4">
+                      <label className="block text-xs text-gray-600 mb-1.5">Upload Date Range</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <input
+                          type="date"
+                          value={tempFilters.uploadDateRange?.start || ''}
+                          onChange={(e) => setTempFilters({
+                            ...tempFilters,
+                            uploadDateRange: { ...tempFilters.uploadDateRange, start: e.target.value || null }
+                          })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                          placeholder="dd-mm-yyyy"
+                        />
+                        <input
+                          type="date"
+                          value={tempFilters.uploadDateRange?.end || ''}
+                          onChange={(e) => setTempFilters({
+                            ...tempFilters,
+                            uploadDateRange: { ...tempFilters.uploadDateRange, end: e.target.value || null }
+                          })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                          placeholder="dd-mm-yyyy"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Uploaded By & Source Type Section */}
+                <div className="border-b border-gray-100">
+                  <button
+                    onClick={() => toggleSection('upload-source')}
+                    className="w-full px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                      <Upload className="w-4 h-4 text-gray-500" />
+                      <span>Uploaded By & Source Type</span>
+                      {(tempFilters.uploadedBy || tempFilters.sourceType) && (
+                        <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Active</span>
+                      )}
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.includes('upload-source') ? 'rotate-180' : ''}`} />
+                  </button>
+                  {expandedSections.includes('upload-source') && (
+                    <div className="px-5 pb-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1.5">Uploaded By</label>
+                          <select
+                            value={tempFilters.uploadedBy || ''}
+                            onChange={(e) => setTempFilters({ ...tempFilters, uploadedBy: e.target.value || null })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                          >
+                            {teamMembers.map(member => (
+                              <option key={member.id} value={member.id}>{member.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1.5">Source Type</label>
+                          <select
+                            value={tempFilters.sourceType || ''}
+                            onChange={(e) => setTempFilters({ ...tempFilters, sourceType: e.target.value || null })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                          >
+                            {sourceTypes.map(source => (
+                              <option key={source.value} value={source.value}>{source.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between px-5 py-4 bg-gray-50 border-t border-gray-200">
+                <div className="text-sm text-blue-600">
+                  {activeFilterCount > 0 ? (
+                    <span>{activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} applied</span>
+                  ) : (
+                    <span className="text-gray-500">No filters applied</span>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleClearFilters}
+                    className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+                  >
+                    Clear All
+                  </button>
+                  <button
+                    onClick={handleApplyFilters}
+                    className="px-6 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    Apply Filters
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
-        </button>
+        </div>
 
         {/* Sort Dropdown */}
         <div className="relative">
           <button
             onClick={() => setShowSort(!showSort)}
-            className="flex items-center gap-2 h-10 px-4 border border-gray-300 bg-white rounded-md hover:bg-gray-50"
+            className="flex items-center gap-2 h-10 px-4 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
           >
-            <span className="text-sm text-gray-700">Sort</span>
+            <span className="text-sm text-gray-700 font-medium">Sort</span>
             <ChevronDown className="w-4 h-4 text-gray-500" />
           </button>
 
           {showSort && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowSort(false)}></div>
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20">
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
                 {[
                   { value: 'latest', label: 'Latest Upload' },
                   { value: 'lastUpdated', label: 'Recently Updated' },
@@ -257,8 +627,8 @@ export default function SearchFilterBarCompact({
                       onSortChange(option.value);
                       setShowSort(false);
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
-                      sortBy === option.value ? 'text-blue-600 bg-blue-50' : 'text-gray-700'
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${
+                      sortBy === option.value ? 'text-blue-600 bg-blue-50 font-medium' : 'text-gray-700'
                     }`}
                   >
                     {option.label}
@@ -271,12 +641,13 @@ export default function SearchFilterBarCompact({
       </div>
 
       {/* Active Filter Chips */}
-      {activeFilterCount > 0 && !showAdvancedFilters && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {getActiveFilterChips().map((chip, index) => (
+      {activeFilterCount > 0 && (
+        <div className="px-4 pb-4 flex flex-wrap gap-2 items-center">
+          <span className="text-sm text-gray-500 mr-1">Active filters:</span>
+          {getActiveFilterChips().map((chip) => (
             <div
-              key={index}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-sm"
+              key={chip.key}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-sm border border-blue-200"
             >
               <span>{chip.label}</span>
               <button
@@ -289,328 +660,11 @@ export default function SearchFilterBarCompact({
           ))}
           <button
             onClick={handleClearFilters}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-full text-sm transition-colors"
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-full text-sm transition-colors ml-2"
           >
             <X className="w-3 h-3" />
             Clear all
           </button>
-        </div>
-      )}
-
-      {/* Compact Advanced Filters Panel */}
-      {showAdvancedFilters && (
-        <div className="mt-4 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
-          {/* Primary Filters - Always Visible */}
-          <div className="p-4 bg-blue-50 border-b border-blue-100">
-            <div className="grid grid-cols-2 gap-4">
-              {/* Skills Filter - Compact */}
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-900 mb-2">
-                  <Briefcase className="w-4 h-4 text-blue-600" />
-                  Skills
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {availableSkills.slice(0, 8).map(skill => (
-                    <button
-                      key={skill}
-                      onClick={() => handleSkillToggle(skill)}
-                      className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                        (tempFilters.skills || []).includes(skill)
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white text-gray-700 border border-gray-300 hover:border-blue-400'
-                      }`}
-                    >
-                      {skill}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => toggleSection('more-skills')}
-                    className="px-2.5 py-1 text-xs text-blue-600 hover:bg-blue-100 rounded-full border border-blue-300"
-                  >
-                    +{availableSkills.length - 8} more
-                  </button>
-                </div>
-                {(tempFilters.skills || []).length > 0 && (
-                  <div className="mt-1.5 text-xs text-blue-600">
-                    {tempFilters.skills.length} selected
-                  </div>
-                )}
-              </div>
-
-              {/* Experience Range - Compact */}
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-900 mb-2">
-                  <Clock className="w-4 h-4 text-blue-600" />
-                  Experience
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[
-                    { label: '0-2y', min: 0, max: 2 },
-                    { label: '2-5y', min: 2, max: 5 },
-                    { label: '5-10y', min: 5, max: 10 },
-                    { label: '10+y', min: 10, max: 50 },
-                  ].map(range => (
-                    <button
-                      key={range.label}
-                      onClick={() => setTempFilters({
-                        ...tempFilters,
-                        experienceRange: { min: range.min, max: range.max }
-                      })}
-                      className={`px-2 py-1.5 text-xs rounded-md transition-colors ${
-                        tempFilters.experienceRange?.min === range.min && tempFilters.experienceRange?.max === range.max
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white text-gray-700 border border-gray-300 hover:border-blue-400'
-                      }`}
-                    >
-                      {range.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* More Skills Section - Collapsible */}
-          {expandedSections.includes('more-skills') && (
-            <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-              <div className="flex flex-wrap gap-1.5">
-                {availableSkills.slice(8).map(skill => (
-                  <button
-                    key={skill}
-                    onClick={() => handleSkillToggle(skill)}
-                    className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                      (tempFilters.skills || []).includes(skill)
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-700 border border-gray-300 hover:border-blue-400'
-                    }`}
-                  >
-                    {skill}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Secondary Filters - Collapsible Accordion */}
-          <div>
-            {/* Location & Education Section */}
-            <button
-              onClick={() => toggleSection('location-education')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-200"
-            >
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                <MapPin className="w-4 h-4 text-gray-500" />
-                <span>Location & Education</span>
-                {(filters.location || filters.education) && (
-                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Active</span>
-                )}
-              </div>
-              <ChevronRight className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.includes('location-education') ? 'rotate-90' : ''}`} />
-            </button>
-            {expandedSections.includes('location-education') && (
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1.5">Location</label>
-                    <input
-                      type="text"
-                      placeholder="e.g., San Francisco"
-                      value={tempFilters.location || ''}
-                      onChange={(e) => setTempFilters({ ...tempFilters, location: e.target.value })}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1.5">Education</label>
-                    <select
-                      value={tempFilters.education || ''}
-                      onChange={(e) => setTempFilters({ ...tempFilters, education: e.target.value || null })}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    >
-                      <option value="">Any</option>
-                      {educationLevels.map(level => (
-                        <option key={level} value={level}>{level}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Company & Notice Period Section */}
-            <button
-              onClick={() => toggleSection('company-notice')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-200"
-            >
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                <Building2 className="w-4 h-4 text-gray-500" />
-                <span>Company & Notice Period</span>
-                {(filters.currentCompany || filters.previousCompany || filters.noticePeriod) && (
-                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Active</span>
-                )}
-              </div>
-              <ChevronRight className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.includes('company-notice') ? 'rotate-90' : ''}`} />
-            </button>
-            {expandedSections.includes('company-notice') && (
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1.5">Current Company</label>
-                    <input
-                      type="text"
-                      placeholder="e.g., Google"
-                      value={tempFilters.currentCompany || ''}
-                      onChange={(e) => setTempFilters({ ...tempFilters, currentCompany: e.target.value })}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1.5">Previous Company</label>
-                    <input
-                      type="text"
-                      placeholder="e.g., Amazon"
-                      value={tempFilters.previousCompany || ''}
-                      onChange={(e) => setTempFilters({ ...tempFilters, previousCompany: e.target.value })}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs text-gray-600 mb-1.5">Notice Period</label>
-                    <select
-                      value={tempFilters.noticePeriod || ''}
-                      onChange={(e) => setTempFilters({ ...tempFilters, noticePeriod: e.target.value || null })}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    >
-                      <option value="">Any</option>
-                      {noticePeriods.map(period => (
-                        <option key={period} value={period}>{period}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Date Filters Section */}
-            <button
-              onClick={() => toggleSection('dates')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-200"
-            >
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                <Calendar className="w-4 h-4 text-gray-500" />
-                <span>Date Filters</span>
-                {(filters.uploadDateRange || filters.lastUpdatedRange) && (
-                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Active</span>
-                )}
-              </div>
-              <ChevronRight className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.includes('dates') ? 'rotate-90' : ''}`} />
-            </button>
-            {expandedSections.includes('dates') && (
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1.5">Upload Date Range</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="date"
-                        value={tempFilters.uploadDateRange?.start || ''}
-                        onChange={(e) => setTempFilters({
-                          ...tempFilters,
-                          uploadDateRange: { ...tempFilters.uploadDateRange, start: e.target.value }
-                        })}
-                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                        placeholder="From"
-                      />
-                      <input
-                        type="date"
-                        value={tempFilters.uploadDateRange?.end || ''}
-                        onChange={(e) => setTempFilters({
-                          ...tempFilters,
-                          uploadDateRange: { ...tempFilters.uploadDateRange, end: e.target.value }
-                        })}
-                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                        placeholder="To"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Uploaded By & Source Type Section */}
-            <button
-              onClick={() => toggleSection('upload-source')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-200"
-            >
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                <Upload className="w-4 h-4 text-gray-500" />
-                <span>Uploaded By & Source Type</span>
-                {(filters.uploadedBy || filters.sourceType) && (
-                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Active</span>
-                )}
-              </div>
-              <ChevronRight className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.includes('upload-source') ? 'rotate-90' : ''}`} />
-            </button>
-            {expandedSections.includes('upload-source') && (
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1.5">Uploaded By</label>
-                    <select
-                      value={tempFilters.uploadedBy || ''}
-                      onChange={(e) => setTempFilters({ ...tempFilters, uploadedBy: e.target.value || null })}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    >
-                      <option value="">Any Team Member</option>
-                      {teamMembers.map(member => (
-                        <option key={member.id} value={member.name}>{member.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1.5">Source Type</label>
-                    <select
-                      value={tempFilters.sourceType || ''}
-                      onChange={(e) => setTempFilters({ ...tempFilters, sourceType: e.target.value || null })}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    >
-                      <option value="">Any Source</option>
-                      {sourceTypes.map(source => (
-                        <option key={source} value={source}>{source}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
-            <div className="text-sm text-gray-600">
-              {activeFilterCount > 0 ? (
-                <span className="text-blue-600 font-medium">
-                  {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active
-                </span>
-              ) : (
-                <span>No filters applied</span>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleClearFilters}
-                className="px-4 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
-              >
-                Clear All
-              </button>
-              <button
-                onClick={handleApplyFilters}
-                className="px-6 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                Apply Filters
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>

@@ -14,6 +14,7 @@ import api from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { Resume as SharedResume } from '@/lib/types/types';
 
 // Types
 interface Job {
@@ -224,6 +225,9 @@ export default function ResumeScoringPage({
 
   // Existing score alert modal state
   const [showExistingScoreAlert, setShowExistingScoreAlert] = useState(false);
+
+  // Locally uploaded resumes (from Resume Selection Modal)
+  const [uploadedResumes, setUploadedResumes] = useState<SharedResume[]>([]);
   const [existingScoreData, setExistingScoreData] = useState<{
     jdTitle: string;
     existingScores: Array<{
@@ -580,8 +584,9 @@ export default function ResumeScoringPage({
   }, [batchProgress]);
 
   // Split resumes - myResumes are all user-uploaded resumes, databaseResumes are all resumes
-  const myResumes = resumes; // All resumes belong to the user (My Resumes)
-  const databaseResumes = resumes;
+  // Include locally uploaded resumes (from the modal) to keep them visible without page refresh
+  const myResumes = [...uploadedResumes, ...resumes]; // All resumes belong to the user (My Resumes)
+  const databaseResumes = [...uploadedResumes, ...resumes];
 
   const availableResumes = resumeSource === 'my-resumes' ? myResumes :
                           resumeSource === 'internal-database' ? databaseResumes :
@@ -2139,6 +2144,10 @@ export default function ResumeScoringPage({
           folders={folders}
           availableUnits={availableUnits}
           onClose={() => setShowResumeSelectionModal(false)}
+          onResumeUploaded={(resume) => {
+            // Add uploaded resume to local state so it persists in the list
+            setUploadedResumes(prev => [resume, ...prev]);
+          }}
           onScoreResumes={async (selectedIds, source, versionSelections) => {
             setShowResumeSelectionModal(false);
 

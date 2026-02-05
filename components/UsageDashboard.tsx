@@ -4,6 +4,7 @@ import { TrendingUp, Zap, Calendar, Clock, DollarSign, X, AlertCircle, CheckCirc
 import { useState, useEffect, useMemo } from 'react';
 import QuotaDisplay from './QuotaDisplay';
 import { useQuota } from '@/contexts/QuotaContext';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Addon interface
 interface Addon {
@@ -94,6 +95,8 @@ const quotaTypeToModuleMap: Record<string, string> = {
 export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   // Use shared QuotaContext instead of making duplicate API calls
   const { quotaData: contextQuotaData, loading: quotaLoading, error: quotaError, hasPermission, refetch: refetchQuota } = useQuota();
+  // Get user from AuthContext (already fetched during login)
+  const { user } = useAuth();
 
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -295,7 +298,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     if (!contextQuotaData) return null;
 
     const isTrial = contextQuotaData.is_trial || false;
-    const basePrice = isTrial ? 0 : (contextQuotaData.plan_info?.subscribed_price ?? contextQuotaData.plan_info?.current_plan_price ?? 0);
+    const basePrice = isTrial ? 0 : (contextQuotaData.plan_info?.subscribed_price ?? 0);
     const billingInterval = contextQuotaData.plan_info?.billing_period?.toLowerCase() || contextQuotaData.plan_info?.billing_interval?.toLowerCase() || 'month';
 
     // For trial: use trial_info.trial_end_date and trial_info.days_remaining from Admin API
@@ -435,13 +438,13 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         return;
       }
 
-      // Get tenant ID
-      const meResponse = await fetch(`${API_BASE}/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!meResponse.ok) throw new Error('Failed to get user info');
-      const meData = await meResponse.json();
-      const tenantId = meData.tenant_id;
+      // Get tenant ID from AuthContext (already fetched during login)
+      const tenantId = user?.tenantId;
+      if (!tenantId) {
+        setAddonPurchaseError('User session not found. Please log in again.');
+        setPurchasingAddon(false);
+        return;
+      }
 
       // Purchase addon via API
       const response = await fetch(`${API_BASE}/addons/purchase`, {
