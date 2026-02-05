@@ -9,7 +9,7 @@ const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
 const DEFAULT_COLUMNS = [
   { id: 'candidateName', label: 'Candidate Name', enabled: true },
-  { id: 'jobTitle', label: 'Job Title', enabled: false }, // Enabled in global view
+  { id: 'jobTitle', label: 'Job Title', enabled: true }, // Always show job title
   { id: 'email', label: 'Email', enabled: true },
   { id: 'phone', label: 'Phone', enabled: true },
   { id: 'matchStatus', label: 'Match Status', enabled: true },

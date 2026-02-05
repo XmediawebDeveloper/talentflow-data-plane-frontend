@@ -243,6 +243,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           strengths: item.strengths || [],
           gaps: item.gaps || [],
           title: item.current_title,
+          jobTitle: job.title,  // Show the JD title (job they applied for)
           currentCompany: item.current_company,
           location: item.location,
           // Extended scoring data
