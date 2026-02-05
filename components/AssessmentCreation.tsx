@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, ChevronDown, ChevronUp, Lock } from 'lucide-react';
+import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -44,7 +44,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   const [step, setStepState] = useState<'select-jd' | 'configure' | 'preview'>(urlStep || 'select-jd');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const duration = 30; // LOCKED: Duration is fixed at 30 minutes (not editable)
+  const [duration, setDuration] = useState(30); // Assessment duration in minutes (15-180)
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<any>(null);
 
@@ -171,7 +171,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         setEditingAssessment(assessment);
 
         // Pre-populate form fields with existing assessment data
-        setDuration(assessment.duration_minutes || 30);
+        // Note: Duration is always fixed at 30 minutes (backend value ignored for now)
+        setDuration(30);
         setProctoringEnabled(assessment.proctoring_enabled ?? true);
 
         // Update sections with existing data
@@ -624,7 +625,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   const handleDurationChange = (value: number) => {
-    setDuration(Math.max(15, Math.min(120, value)));
+    // Duration is locked at 30 minutes - this function is kept for compatibility
+    setDuration(30);
   };
 
   const handleProctoringToggle = () => {
@@ -1621,8 +1623,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 <div className="flex items-center gap-2 mb-4">
                   <Clock className="w-5 h-5 text-gray-700" />
                   <h3 className="font-medium text-gray-900">Assessment Duration</h3>
-                  <Lock className="w-4 h-4 text-gray-500" />
-                  <span className="text-xs text-gray-500">(Fixed)</span>
+                  <span className="text-xs text-gray-500 ml-2">(Fixed at 30 minutes)</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <input
