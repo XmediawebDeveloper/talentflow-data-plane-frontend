@@ -55,6 +55,29 @@ const clearTenantFromStorage = () => {
   }
 };
 
+// Helper to check if token is expired
+const isTokenExpired = (): boolean => {
+  if (typeof window === 'undefined') return false;
+
+  const token = localStorage.getItem('accessToken');
+  if (!token) return false;
+
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+    const payload = JSON.parse(atob(parts[1]));
+
+    // Check if token is expired (with 30 second buffer)
+    if (payload.exp && (payload.exp * 1000) < Date.now() + 30000) {
+      console.log('[AUTH] Token expired or expiring soon');
+      return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+};
+
 // RBAC Helper functions
 const isViewerRole = (role: UserRole): boolean => role === 'viewer';
 const isBillingManagerRole = (role: UserRole): boolean => role === 'billing_manager';
@@ -235,6 +258,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedUser = getUserFromStorage();
       const storedTenant = getTenantFromStorage();
       if (storedUser && authService.isAuthenticated()) {
+        // Check if token is expired before restoring session
+        if (isTokenExpired()) {
+          console.log('[AUTH] Token expired, clearing session');
+          clearTokens();
+          clearUserFromStorage();
+          clearTenantFromStorage();
+          setIsLoading(false);
+          return;
+        }
+
         console.log('[AUTH] Restored user from localStorage:', storedUser.email);
         setUser(storedUser);
         // Use stored tenant if available, otherwise use mock as fallback

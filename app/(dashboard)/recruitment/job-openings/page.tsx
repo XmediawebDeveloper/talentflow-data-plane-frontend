@@ -37,7 +37,7 @@ export default function JobOpeningsPage() {
   }>({ open: false, job: null });
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user, isTenantAdmin } = useAuth();
 
   // Sync filter with URL parameter
   useEffect(() => {
@@ -317,9 +317,9 @@ export default function JobOpeningsPage() {
         onUpdateJobStatus={handleUpdateJobStatus}
         onEditJob={handleEditJob}
         onPublishJob={handlePublishJob}
-        onDisableJob={handleDisableJob}
+        onDisableJob={isTenantAdmin ? handleDisableJob : undefined}
         onRepublishJob={handleRepublishJob}
-        onArchiveJob={handleArchiveJob}
+        onArchiveJob={isTenantAdmin ? handleArchiveJob : undefined}
         onUnarchiveJob={handleUnarchiveJob}
         onDeleteJob={handleDeleteJob}
         quotaInfo={quotaInfo}

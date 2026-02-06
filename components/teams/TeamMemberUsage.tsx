@@ -356,9 +356,9 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
       ) : (
         <div className="bg-gray-50 rounded-xl p-8 text-center">
           <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700 mb-2">No Usage Data</h3>
+          <h3 className="text-lg font-semibold text-gray-700 mb-2">No Team Members</h3>
           <p className="text-gray-600">
-            No member usage data available for the selected period.
+            This team has no members yet. Add members to see their usage data.
           </p>
         </div>
       )}

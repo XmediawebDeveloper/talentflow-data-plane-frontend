@@ -71,9 +71,11 @@ export function middleware(request: NextRequest) {
     if (payload?.exp && payload.exp * 1000 < Date.now()) {
       console.log('[MIDDLEWARE] Token expired, redirecting to login');
       const response = NextResponse.redirect(new URL('/login', request.url));
-      // Clear the expired cookie
+      // Clear the expired cookies with proper path
       response.cookies.delete('accessToken');
       response.cookies.delete('refreshToken');
+      response.cookies.set('accessToken', '', { path: '/', maxAge: 0 });
+      response.cookies.set('refreshToken', '', { path: '/', maxAge: 0 });
       return response;
     }
   }
