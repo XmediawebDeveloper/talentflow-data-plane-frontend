@@ -140,8 +140,8 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
 
         {/* Help Text */}
         <p className="text-sm text-gray-500 mt-6 text-center">
-          You can exit fullscreen anytime by pressing <kbd className="px-2 py-1 bg-gray-100 border border-gray-300 rounded text-xs font-mono">Esc</kbd>,
-          but you'll be prompted to return to continue.
+          Fullscreen mode will remain active during the assessment. Exiting fullscreen will be tracked as a violation.
+          After 3 violations, your assessment will be auto-submitted.
         </p>
       </div>
     </div>
@@ -408,14 +408,14 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
               // Try to complete the assessment and get results
               const result = await candidateService.completeAssessment(token);
               if (!isMountedRef.current) return;
-              setAssessmentResult(result);
+              setResults(result);
               setStepSafe('completed');
             } catch (completeError) {
               console.log('[DEBUG] Could not complete - trying to get results directly');
               try {
                 const result = await candidateService.getResults(token);
                 if (!isMountedRef.current) return;
-                setAssessmentResult(result);
+                setResults(result);
                 setStepSafe('completed');
               } catch {
                 // Show time expired message
@@ -994,7 +994,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       // NEW: Show completion message - scoring runs in background
       return (
         <CompletedScreen
-          assessmentTitle={assessmentInfo?.title}
+          assessmentTitle={assessmentInfo?.assessment_title}
           candidateName={assessmentInfo?.candidate_name}
         />
       );
