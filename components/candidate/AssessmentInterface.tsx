@@ -195,40 +195,44 @@ export function AssessmentInterface({
     }
   };
 
-  // Monitor fullscreen changes - 3 WARNINGS THEN DISQUALIFICATION (unless completing normally)
+  // Monitor fullscreen changes - IMMEDIATE FINISH ON EXIT (unless completing normally)
   useEffect(() => {
-    const handleFullscreenChange = () => {
+    const handleFullscreenChange = async () => {
       const isCurrentlyFullscreen = !!document.fullscreenElement;
       console.log(`[LOCKDOWN] Fullscreen: ${isCurrentlyFullscreen ? 'ACTIVE' : 'INACTIVE'}`);
       setIsFullscreen(isCurrentlyFullscreen);
 
-      // CRITICAL: If fullscreen is exited, track violation
-      // But don't track if they're completing the assessment normally
+      // CRITICAL: If fullscreen is exited, IMMEDIATELY FINISH ASSESSMENT
+      // But don't trigger if they're completing the assessment normally
       if (!isCurrentlyFullscreen && !isDisqualified && !showCompleteConfirm) {
-        // Track violation
-        violationCountRef.current += 1;
-        setViolationCount(violationCountRef.current);
-
-        console.warn(`[VIOLATION] Fullscreen exited - Attempt ${violationCountRef.current}/3`);
+        console.error('[DISQUALIFICATION] Fullscreen exited - FINISHING ASSESSMENT IMMEDIATELY');
 
         // Report to server
         candidateService.reportProctorEvent(token, {
           event_type: 'fullscreen_exit',
           timestamp: new Date().toISOString(),
           details: {
-            reason: 'User exited fullscreen mode',
-            attempt_number: violationCountRef.current,
+            reason: 'User exited fullscreen mode - Assessment auto-submitted',
+            severity: 'CRITICAL',
           },
         }).catch(err => console.error('[VIOLATION] Failed to report fullscreen exit:', err));
 
-        // Show warning on 3rd attempt, DISQUALIFY on 4th
-        if (violationCountRef.current >= 4) {
-          console.error('[DISQUALIFICATION] 4th fullscreen exit - DISQUALIFYING CANDIDATE');
-          setIsDisqualified(true);
-          setShowDisqualificationModal(true);
-        } else if (violationCountRef.current === 3) {
-          console.error('[VIOLATION] ⚠️ 3rd VIOLATION - SHOWING FINAL WARNING');
-          setShowViolationWarning(true);
+        // IMMEDIATELY DISQUALIFY AND SUBMIT
+        setIsDisqualified(true);
+
+        // Auto-submit current answer and complete assessment
+        try {
+          const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+          if (hasAnswer) {
+            console.log('[AUTO-SUBMIT] Submitting current answer...');
+            await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+          }
+          console.log('[AUTO-SUBMIT] Completing assessment due to fullscreen exit...');
+          onComplete();
+        } catch (error) {
+          console.error('[AUTO-SUBMIT] Error during submission:', error);
+          // Complete anyway even if submission fails
+          onComplete();
         }
       }
     };
@@ -242,63 +246,90 @@ export function AssessmentInterface({
         document.exitFullscreen().catch(() => {});
       }
     };
-  }, [token, isDisqualified, showCompleteConfirm]);
+  }, [token, isDisqualified, showCompleteConfirm, answer, currentQuestion, onAnswerSubmit, onComplete]);
 
   // SECURITY: Block keyboard shortcuts (F12, Ctrl+Shift+I, ESC, Alt+Tab, etc.)
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // CRITICAL: Block ESC key - 3 WARNINGS THEN DISQUALIFICATION
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      // CRITICAL: Block ESC key - IMMEDIATE FINISH ASSESSMENT
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
 
-        // Track violation
-        violationCountRef.current += 1;
-        setViolationCount(violationCountRef.current);
+        if (!isDisqualified) {
+          console.error('[DISQUALIFICATION] ESC pressed - FINISHING ASSESSMENT IMMEDIATELY');
 
-        console.warn(`[VIOLATION] ESC blocked - Attempt ${violationCountRef.current}/3`);
+          // Report to server
+          candidateService.reportProctorEvent(token, {
+            event_type: 'escape_key_attempt',
+            timestamp: new Date().toISOString(),
+            details: {
+              reason: 'User pressed ESC key - Assessment auto-submitted',
+              severity: 'CRITICAL',
+            },
+          }).catch(err => console.error('[VIOLATION] Failed to report ESC attempt:', err));
 
-        // Report to server
-        candidateService.reportProctorEvent(token, {
-          event_type: 'escape_key_attempt',
-          timestamp: new Date().toISOString(),
-          details: {
-            reason: 'User attempted to press ESC key (fullscreen exit attempt)',
-            attempt_number: violationCountRef.current,
-          },
-        }).catch(err => console.error('[VIOLATION] Failed to report ESC attempt:', err));
+          // IMMEDIATELY DISQUALIFY AND SUBMIT
+          setIsDisqualified(true);
 
-        // 🛡️ 3 VIOLATIONS = AUTO-SUBMIT (NO MORE CONTINUE BUTTON)
-        if (violationCountRef.current >= 3) {
-          console.error('[PROCTORING] 💀 3 VIOLATIONS - SHOWING AUTO-SUBMIT MODAL');
-          setShowViolationWarning(true);
-          // Countdown will auto-trigger in separate useEffect
+          // Auto-submit current answer and complete assessment
+          try {
+            const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+            if (hasAnswer) {
+              console.log('[AUTO-SUBMIT] Submitting current answer...');
+              await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+            }
+            console.log('[AUTO-SUBMIT] Completing assessment due to ESC key...');
+            await exitFullscreen();
+            onComplete();
+          } catch (error) {
+            console.error('[AUTO-SUBMIT] Error during submission:', error);
+            // Complete anyway even if submission fails
+            await exitFullscreen();
+            onComplete();
+          }
         }
 
         return false;
       }
 
-      // CRITICAL: Block Alt+Tab - IMMEDIATE DISQUALIFICATION (NO WARNINGS)
+      // CRITICAL: Block Alt+Tab - IMMEDIATE FINISH ASSESSMENT
       if (e.altKey && e.key === 'Tab') {
         e.preventDefault();
         e.stopPropagation();
 
         if (!isDisqualified) {
-          console.error('[DISQUALIFICATION] Alt+Tab pressed - DISQUALIFYING CANDIDATE (NO WARNING)');
+          console.error('[DISQUALIFICATION] Alt+Tab pressed - FINISHING ASSESSMENT IMMEDIATELY');
 
           // Report to server
           candidateService.reportProctorEvent(token, {
             event_type: 'alt_tab_attempt',
             timestamp: new Date().toISOString(),
             details: {
-              reason: 'User attempted to press Alt+Tab (window switching attempt)',
+              reason: 'User pressed Alt+Tab (window switching) - Assessment auto-submitted',
               severity: 'CRITICAL',
             },
           }).catch(err => console.error('[VIOLATION] Failed to report Alt+Tab attempt:', err));
 
-          // DISQUALIFY IMMEDIATELY - NO WARNINGS
+          // IMMEDIATELY DISQUALIFY AND SUBMIT
           setIsDisqualified(true);
-          setShowDisqualificationModal(true);
+
+          // Auto-submit current answer and complete assessment
+          try {
+            const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+            if (hasAnswer) {
+              console.log('[AUTO-SUBMIT] Submitting current answer...');
+              await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+            }
+            console.log('[AUTO-SUBMIT] Completing assessment due to Alt+Tab...');
+            await exitFullscreen();
+            onComplete();
+          } catch (error) {
+            console.error('[AUTO-SUBMIT] Error during submission:', error);
+            // Complete anyway even if submission fails
+            await exitFullscreen();
+            onComplete();
+          }
         }
 
         return false;
@@ -368,7 +399,7 @@ export function AssessmentInterface({
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, []);
+  }, [token, isDisqualified, answer, currentQuestion, onAnswerSubmit, onComplete, exitFullscreen]);
 
   // SECURITY: Detect DevTools opening (by checking window size changes)
   useEffect(() => {
@@ -731,20 +762,20 @@ export function AssessmentInterface({
     }
   };
 
-  // Navigate to previous question (submit and lock answer)
+  // Navigate to previous question (save as draft, editable)
   const handlePrevious = async () => {
     if (isNavigating || currentQuestion.question_number <= 1) return;
     setIsNavigating(true);
 
     try {
-      // Submit and lock current answer if there's any answer
+      // Save current answer as DRAFT (editable, can change later)
       const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
       if (hasAnswer && !isCurrentAnswerLocked) {
-        // Submit with is_draft: false to lock the answer
-        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
+        // Submit with is_draft: true to keep answer editable
+        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
         setAnswerStatuses(prev => {
           const newMap = new Map(prev);
-          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: true });
+          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: false });
           return newMap;
         });
       }
@@ -758,20 +789,20 @@ export function AssessmentInterface({
     }
   };
 
-  // Navigate to next question (submit and lock answer)
+  // Navigate to next question (save as draft, editable)
   const handleNext = async () => {
     if (isNavigating || isLastQuestion) return;
     setIsNavigating(true);
 
     try {
-      // Submit and lock current answer if there's any answer
+      // Save current answer as DRAFT (editable, can change later)
       const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
       if (hasAnswer && !isCurrentAnswerLocked) {
-        // Submit with is_draft: false to lock the answer
-        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
+        // Submit with is_draft: true to keep answer editable
+        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
         setAnswerStatuses(prev => {
           const newMap = new Map(prev);
-          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: true });
+          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: false });
           return newMap;
         });
       }

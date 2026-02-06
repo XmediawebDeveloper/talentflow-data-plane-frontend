@@ -1,7 +1,7 @@
 "use client";
 
 import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, DollarSign, List, LayoutGrid, Loader, Square, CheckSquare, ChevronRight } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
 import ResumeSelectionModal from './ResumeSelectionModal';
@@ -358,6 +358,7 @@ export default function ResumeScoringPage({
               failed: historyItem.totalScored - historyItem.scoredResumes.length,
             };
             setJobProgressData([jobProgress]);
+            shownJobsRef.current.add(historyItem.jobId);  // Mark as shown to prevent reopening on close
             setShowJobProgressModal(true);
           }
         } else {
@@ -402,11 +403,22 @@ export default function ResumeScoringPage({
     fetchQuota();
   }, []);
 
+  // Track jobs that have already started scoring to prevent duplicate scoring
+  const scoringStartedRef = useRef<Set<string>>(new Set());
+
   // Handle pending scoring from my-resumes page - start scoring and show progress modal
   useEffect(() => {
     if (!pendingScoringData) return;
 
     const { jobId, jobTitle, resumeIds, resumeNames } = pendingScoringData;
+
+    // Prevent duplicate scoring - check if this job has already started
+    if (scoringStartedRef.current.has(jobId)) {
+      console.log('[ResumeScoringPage] Scoring already started for job:', jobId, '- skipping');
+      return;
+    }
+    scoringStartedRef.current.add(jobId);
+
     console.log('[ResumeScoringPage] Starting pending scoring for job:', jobTitle, 'with', resumeIds.length, 'resumes');
 
     // Create initial items array with candidate names - all start as queued
@@ -428,6 +440,7 @@ export default function ResumeScoringPage({
       items: initialItems,
     };
     setJobProgressData([initialProgress]);
+    shownJobsRef.current.add(jobId);  // Mark as shown to prevent reopening on close
     setShowJobProgressModal(true);
 
     // Also start tracking in persistent context (survives page refresh)
@@ -550,12 +563,34 @@ export default function ResumeScoringPage({
     scoreResumes();
   }, [pendingScoringData, startScoringJob, updateItemStatus, onRefreshHistory, router]);
 
+  // Track completed job IDs to prevent flickering from stale polling data
+  const completedJobsRef = useRef<Set<string>>(new Set());
+
+  // Track jobs that modal has already been shown for - prevents reopening after user closes
+  const shownJobsRef = useRef<Set<string>>(new Set());
+
   // Handle batch progress from Celery async scoring - show progress modal
   useEffect(() => {
     if (!batchProgress) return;
 
-    console.log('[ResumeScoringPage] Batch progress update:', batchProgress);
-    console.log('[ResumeScoringPage] Batch items count:', batchProgress.items?.length || 0);
+    // Skip update if this job was already marked as complete
+    if (completedJobsRef.current.has(batchProgress.jobId)) {
+      console.log('[ResumeScoringPage] Skipping batch progress update - job already completed');
+      return;
+    }
+
+    // Check if this update shows completion
+    const isComplete = batchProgress.queued === 0 &&
+                       batchProgress.processing === 0 &&
+                       (batchProgress.completed + batchProgress.failed) === batchProgress.total &&
+                       batchProgress.total > 0;
+
+    // Mark job as complete to prevent future updates
+    if (isComplete) {
+      completedJobsRef.current.add(batchProgress.jobId);
+    }
+
+    console.log('[ResumeScoringPage] Batch progress update:', batchProgress, 'isComplete:', isComplete);
 
     // Map items from batchProgress
     const items = (batchProgress.items || []).map(item => ({
@@ -578,9 +613,14 @@ export default function ResumeScoringPage({
       items: items,
     };
 
-    console.log('[ResumeScoringPage] Setting jobProgressData with items:', items.length);
     setJobProgressData([progress]);
-    setShowJobProgressModal(true);
+
+    // Only show modal for NEW jobs, not for updates to jobs already shown
+    // This prevents the modal from reopening after user closes it
+    if (!shownJobsRef.current.has(batchProgress.jobId)) {
+      shownJobsRef.current.add(batchProgress.jobId);
+      setShowJobProgressModal(true);
+    }
   }, [batchProgress]);
 
   // Split resumes - myResumes are all user-uploaded resumes, databaseResumes are all resumes
@@ -1013,7 +1053,10 @@ export default function ResumeScoringPage({
                         errorReason: undefined,
                         scoredDateTime: new Date(),
                         matchResult: scoredResume
-                          ? (scoredResume.overall_score >= 85 ? 'Exact Match'
+                          ? (scoredResume.match_status === 'exact_match' || scoredResume.match_status === 'Exact Match' ? 'Exact Match'
+                             : scoredResume.match_status === 'partial_match' || scoredResume.match_status === 'Partial Match' ? 'Partial Match'
+                             : scoredResume.match_status === 'no_match' || scoredResume.match_status === 'No Match' ? 'No Match'
+                             : scoredResume.overall_score >= 85 ? 'Exact Match'
                              : scoredResume.overall_score >= 70 ? 'Partial Match'
                              : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
                           : undefined,
@@ -1236,8 +1279,12 @@ export default function ResumeScoringPage({
                       source: item.source === 'my-resumes' ? 'My Resumes' : 'Internal DB' as 'My Resumes' | 'Internal DB',
                       status: 'Scored successfully' as const,
                       scoredDateTime: new Date(item.scoredAt),
-                      matchResult: (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match' :
-                                   (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match' : 'No Match' as 'Exact Match' | 'Partial Match' | 'No Match',
+                      matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
+                                   : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
+                                   : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
+                                   : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
+                                   : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
+                                   : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
                       score: resume.overall_score || resume.scorePercentage || 0,
                     }))
                   );
@@ -1949,7 +1996,10 @@ export default function ResumeScoringPage({
                         errorReason: undefined,
                         scoredDateTime: new Date(),
                         matchResult: scoredResume
-                          ? (scoredResume.overall_score >= 85 ? 'Exact Match'
+                          ? (scoredResume.match_status === 'exact_match' || scoredResume.match_status === 'Exact Match' ? 'Exact Match'
+                             : scoredResume.match_status === 'partial_match' || scoredResume.match_status === 'Partial Match' ? 'Partial Match'
+                             : scoredResume.match_status === 'no_match' || scoredResume.match_status === 'No Match' ? 'No Match'
+                             : scoredResume.overall_score >= 85 ? 'Exact Match'
                              : scoredResume.overall_score >= 70 ? 'Partial Match'
                              : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
                           : undefined,
@@ -2340,7 +2390,10 @@ export default function ResumeScoringPage({
                       status: 'Scored successfully' as const,
                       errorReason: undefined,
                       scoredDateTime: new Date(),
-                      matchResult: scoreResult.overall_score >= 85 ? 'Exact Match' as const
+                      matchResult: scoreResult.match_status === 'exact_match' || scoreResult.match_status === 'Exact Match' ? 'Exact Match' as const
+                                 : scoreResult.match_status === 'partial_match' || scoreResult.match_status === 'Partial Match' ? 'Partial Match' as const
+                                 : scoreResult.match_status === 'no_match' || scoreResult.match_status === 'No Match' ? 'No Match' as const
+                                 : scoreResult.overall_score >= 85 ? 'Exact Match' as const
                                  : scoreResult.overall_score >= 70 ? 'Partial Match' as const
                                  : 'No Match' as const,
                       score: scoreResult.overall_score
@@ -2375,6 +2428,10 @@ export default function ResumeScoringPage({
       <ScoringJobProgressModal
         isOpen={showJobProgressModal}
         onClose={() => {
+          // Mark all current jobs as shown to prevent modal from reopening
+          jobProgressData.forEach(job => {
+            shownJobsRef.current.add(job.jobId);
+          });
           setShowJobProgressModal(false);
           setIsJobProgressMinimized(false);
         }}

@@ -83,8 +83,18 @@ export function useNotificationWebSocket({
         return;
       }
 
+      // Prevent multiple simultaneous connections
+      if (wsRef.current?.readyState === WebSocket.CONNECTING ||
+          wsRef.current?.readyState === WebSocket.OPEN) {
+        console.log('[WebSocket] Already connecting or connected, skipping');
+        return;
+      }
+
+      // Mark as connecting to prevent duplicate attempts
+      isConnectingRef.current = true;
+
       try {
-        const wsUrl = `${WS_BASE_URL}/ws/notifications?token=${encodeURIComponent(token)}`;
+        const wsUrl = `${WS_BASE_URL}/api/v1/ws/notifications?token=${encodeURIComponent(token)}`;
         console.log('[WebSocket] Connecting to:', wsUrl.replace(token, '***'));
 
         const ws = new WebSocket(wsUrl);
@@ -143,6 +153,7 @@ export function useNotificationWebSocket({
         ws.onerror = (error) => {
           console.error('[WebSocket] Error:', error);
           setConnectionError('WebSocket connection error');
+          // Note: onclose will be called after onerror, so state cleanup happens there
         };
 
         ws.onclose = (event) => {
@@ -156,6 +167,9 @@ export function useNotificationWebSocket({
             pingIntervalRef.current = null;
           }
 
+          // Clear the old WebSocket reference
+          wsRef.current = null;
+
           // Don't reconnect if we're cleaning up
           if (isCleaningUpRef.current) {
             return;
@@ -164,11 +178,15 @@ export function useNotificationWebSocket({
           // Attempt reconnection if not intentionally closed
           if (event.code !== 1000 && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
             reconnectAttemptsRef.current++;
-            console.log(`[WebSocket] Reconnecting in ${RECONNECT_DELAY}ms (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
+            // Use longer delay for server restart (1012) or service unavailable (1013)
+            const delay = (event.code === 1012 || event.code === 1013)
+              ? RECONNECT_DELAY * 2
+              : RECONNECT_DELAY;
+            console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
 
             reconnectTimeoutRef.current = setTimeout(() => {
               connect();
-            }, RECONNECT_DELAY);
+            }, delay);
           } else if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
             setConnectionError('Max reconnection attempts reached. Falling back to polling.');
           }

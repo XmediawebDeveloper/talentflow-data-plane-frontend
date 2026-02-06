@@ -19,6 +19,7 @@ interface ScoreBreakdownItem {
   eligible?: boolean;
   is_summary?: boolean;
   percentage?: number;
+  raw_percentage?: number;
   key?: string;
 }
 
@@ -154,8 +155,8 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     // Extract summary data if available
     if (requiredSummary || preferredSummary || finalSummary) {
       summaryData = {
-        requiredPercentage: requiredSummary?.percentage || 0,
-        preferredPercentage: preferredSummary?.percentage || 0,
+        requiredPercentage: requiredSummary?.raw_percentage ?? requiredSummary?.percentage ?? 0,
+        preferredPercentage: preferredSummary?.raw_percentage ?? preferredSummary?.percentage ?? 0,
         finalPercentage: finalSummary?.percentage || resume.scorePercentage,
         requiredTotal: requiredSummary?.rating || 0,
         requiredMax: requiredSummary?.max_rating || 20,
