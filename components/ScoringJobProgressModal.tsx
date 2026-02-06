@@ -45,6 +45,32 @@ export default function ScoringJobProgressModal({
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const startTimeRef = useRef<Date | null>(null);
 
+  // Track completed jobs to prevent flickering from stale data
+  const completedJobsRef = useRef<Map<string, JobScoringProgress>>(new Map());
+
+  // Stabilize job progress data - once a job is complete, use cached data
+  const stableJobProgressData = jobProgressData.map(job => {
+    const isJobComplete = job.queued === 0 &&
+                          job.inProgress === 0 &&
+                          (job.completed + job.failed) === job.total &&
+                          job.total > 0;
+
+    // If job is complete, cache it and always use cached version
+    if (isJobComplete) {
+      if (!completedJobsRef.current.has(job.jobId)) {
+        completedJobsRef.current.set(job.jobId, job);
+      }
+      return completedJobsRef.current.get(job.jobId)!;
+    }
+
+    // If job was previously marked complete but now shows as not complete (stale data), use cached
+    if (completedJobsRef.current.has(job.jobId)) {
+      return completedJobsRef.current.get(job.jobId)!;
+    }
+
+    return job;
+  });
+
   // Handle retry for a failed item
   const handleRetry = async (resumeId: string, jobId: string) => {
     if (!onRetryFailed || retryingItems.has(resumeId)) return;
@@ -62,8 +88,8 @@ export default function ScoringJobProgressModal({
   };
 
   // Calculate if scoring is still in progress (has queued or processing items)
-  const overallQueued = jobProgressData.reduce((sum, job) => sum + job.queued, 0);
-  const overallInProgress = jobProgressData.reduce((sum, job) => sum + job.inProgress, 0);
+  const overallQueued = stableJobProgressData.reduce((sum, job) => sum + job.queued, 0);
+  const overallInProgress = stableJobProgressData.reduce((sum, job) => sum + job.inProgress, 0);
   const isScoringInProgress = overallQueued > 0 || overallInProgress > 0;
 
   // Initialize start time when modal opens - only for active scoring
@@ -115,15 +141,19 @@ export default function ScoringJobProgressModal({
   if (!isOpen) return null;
 
   // Calculate overall totals (overallQueued and overallInProgress already calculated above for useEffect)
-  const overallTotal = jobProgressData.reduce((sum, job) => sum + job.total, 0);
-  const overallCompleted = jobProgressData.reduce((sum, job) => sum + job.completed, 0);
-  const overallFailed = jobProgressData.reduce((sum, job) => sum + job.failed, 0);
-  const overallPercentage = overallTotal > 0 ? Math.round(((overallCompleted + overallFailed) / overallTotal) * 100) : 0;
+  const overallTotal = stableJobProgressData.reduce((sum, job) => sum + job.total, 0);
+  const overallCompleted = stableJobProgressData.reduce((sum, job) => sum + job.completed, 0);
+  const overallFailed = stableJobProgressData.reduce((sum, job) => sum + job.failed, 0);
+  // Calculate percentage: completed items count as 100%, processing items count as 50%
+  // This shows progress during processing instead of staying at 0%
+  const overallPercentage = overallTotal > 0
+    ? Math.round(((overallCompleted + overallFailed + (overallInProgress * 0.5)) / overallTotal) * 100)
+    : 0;
   const isAllComplete = !isScoringInProgress;
 
   // Get all resume items from all jobs
-  const allItems: ResumeProgressItem[] = jobProgressData.flatMap(job => job.items || []);
-  const jobTitle = jobProgressData[0]?.jobTitle || 'Job';
+  const allItems: ResumeProgressItem[] = stableJobProgressData.flatMap(job => job.items || []);
+  const jobTitle = stableJobProgressData[0]?.jobTitle || 'Job';
 
   // Minimized floating indicator
   if (isMinimized) {
@@ -149,7 +179,7 @@ export default function ScoringJobProgressModal({
         </div>
         <div className="w-12 h-1.5 bg-gray-700 rounded-full overflow-hidden flex-shrink-0">
           <div
-            className={`h-full transition-all duration-300 ${isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+            className={`h-full transition-[width] duration-300 ease-out ${isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
             style={{ width: `${overallPercentage}%` }}
           />
         </div>
@@ -232,7 +262,7 @@ export default function ScoringJobProgressModal({
             <div className="hidden md:flex items-center gap-2">
               <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-500 ${isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+                  className={`h-full transition-[width] duration-300 ease-out ${isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
                   style={{ width: `${overallPercentage}%` }}
                 />
               </div>
@@ -274,7 +304,7 @@ export default function ScoringJobProgressModal({
           <div className="flex md:hidden items-center gap-2 w-full sm:w-auto">
             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
-                className={`h-full transition-all duration-500 ${isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+                className={`h-full transition-[width] duration-300 ease-out ${isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
                 style={{ width: `${overallPercentage}%` }}
               />
             </div>
@@ -371,7 +401,7 @@ export default function ScoringJobProgressModal({
                   {/* Retry button for failed items */}
                   {item.status === 'failed' && onRetryFailed && (
                     <button
-                      onClick={() => handleRetry(item.resumeId, jobProgressData[0]?.jobId || '')}
+                      onClick={() => handleRetry(item.resumeId, stableJobProgressData[0]?.jobId || '')}
                       disabled={retryingItems.has(item.resumeId)}
                       className={`flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs font-medium transition-colors flex-shrink-0 ${
                         retryingItems.has(item.resumeId)
