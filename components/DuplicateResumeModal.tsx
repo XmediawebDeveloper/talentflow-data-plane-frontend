@@ -3,6 +3,9 @@
 import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, FolderOpen, HardDrive, ChevronLeft, ChevronRight, Check, Ban } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 
+// Maximum number of versions allowed per resume
+const MAX_VERSIONS_PER_RESUME = 5;
+
 export interface ExistingResume {
   id: string;
   candidate_name: string;
@@ -13,6 +16,7 @@ export interface ExistingResume {
   file_size: number;
   file_name: string;
   version: number;
+  version_count?: number; // Total number of versions for this candidate
 }
 
 export interface DuplicateFile {
@@ -100,8 +104,17 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
     });
   };
 
+  // Check if version limit is reached for the current resume
+  const isVersionLimitReached = useMemo(() => {
+    if (!currentDuplicate?.existingResume) return false;
+    const versionCount = currentDuplicate.existingResume.version_count || currentDuplicate.existingResume.version || 1;
+    return versionCount >= MAX_VERSIONS_PER_RESUME;
+  }, [currentDuplicate]);
+
   const handleSelectAction = (action: 'discard' | 'overwrite' | 'version') => {
     if (!currentVersion) return;
+    // Prevent selecting 'version' if limit is reached
+    if (action === 'version' && isVersionLimitReached) return;
     setSelectedAction(action);
     const newResolutions = new Map(resolutions);
     newResolutions.set(currentVersion.originalIndex, action);
@@ -454,36 +467,66 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
             {/* Option 3: Save as Version */}
             <button
               onClick={() => handleSelectAction('version')}
+              disabled={isVersionLimitReached}
               className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
-                selectedAction === 'version'
+                isVersionLimitReached
+                  ? 'border-gray-300 bg-gray-100 opacity-60 cursor-not-allowed'
+                  : selectedAction === 'version'
                   ? 'border-green-500 bg-green-50'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
               <div className="flex items-start gap-4">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  selectedAction === 'version' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'
+                  isVersionLimitReached
+                    ? 'bg-gray-300 text-gray-500'
+                    : selectedAction === 'version' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'
                 }`}>
-                  <GitBranch className="w-5 h-5" />
+                  {isVersionLimitReached ? <Ban className="w-5 h-5" /> : <GitBranch className="w-5 h-5" />}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <h5 className="font-semibold text-gray-900">3. Save as New Version</h5>
-                      <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">Recommended</span>
+                      <h5 className={`font-semibold ${isVersionLimitReached ? 'text-gray-500' : 'text-gray-900'}`}>
+                        3. Save as New Version
+                      </h5>
+                      {!isVersionLimitReached && (
+                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">Recommended</span>
+                      )}
+                      {isVersionLimitReached && (
+                        <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded">Limit Reached</span>
+                      )}
                     </div>
-                    {selectedAction === 'version' && (
+                    {selectedAction === 'version' && !isVersionLimitReached && (
                       <Check className="w-5 h-5 text-green-500" />
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Keep both resumes. New resume stored as a versioned update. Recommended for tracking changes.
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
-                    <span>• Old resume: <span className="text-green-600">Kept</span></span>
-                    <span>• New resume: <span className="text-green-600">Saved as v{currentDuplicate.existingResume.version + 1}</span></span>
-                    <span>• Consumes: <span className="text-orange-600">1 upload unit</span></span>
-                  </div>
+                  {isVersionLimitReached ? (
+                    <div className="mt-2">
+                      <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm text-red-900 font-medium">Version Limit Exceeded</p>
+                          <p className="text-xs text-red-700 mt-1">
+                            Maximum {MAX_VERSIONS_PER_RESUME} versions allowed per candidate.
+                            Current: {currentDuplicate.existingResume.version_count || currentDuplicate.existingResume.version || 1} versions.
+                            Please choose "Overwrite Existing Resume" or "Discard New Resume" instead.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Keep both resumes. New resume stored as a versioned update. Recommended for tracking changes.
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+                        <span>• Old resume: <span className="text-green-600">Kept</span></span>
+                        <span>• New resume: <span className="text-green-600">Saved as v{currentDuplicate.existingResume.version + 1}</span></span>
+                        <span>• Consumes: <span className="text-orange-600">1 upload unit</span></span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </button>

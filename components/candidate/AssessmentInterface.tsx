@@ -207,58 +207,24 @@ export function AssessmentInterface({
       console.log(`[LOCKDOWN] Fullscreen: ${isCurrentlyFullscreen ? 'ACTIVE' : 'INACTIVE'}`);
       setIsFullscreen(isCurrentlyFullscreen);
 
-      // If fullscreen is exited, track as violation (3-strike system)
-      // Don't trigger if they're completing the assessment normally
+      // VIOLATIONS DISABLED: Just log fullscreen changes, no penalties
       if (!isCurrentlyFullscreen && !isDisqualified && !showCompleteConfirm) {
-        console.warn('[PROCTORING] ⚠️ Fullscreen exited - VIOLATION');
+        console.log('[PROCTORING] Fullscreen exited - logging only (no penalties)');
 
-        // Track violation
-        violationCountRef.current += 1;
-        setViolationCount(violationCountRef.current);
-
-        // Report to server
+        // Report to server for record-keeping only
         candidateService.reportProctorEvent(token, {
           event_type: 'fullscreen_exit',
           timestamp: new Date().toISOString(),
           details: {
             reason: 'User exited fullscreen mode',
-            severity: 'HIGH',
-            violation_count: violationCountRef.current,
+            severity: 'INFO',
           },
         }).catch(err => console.error('[VIOLATION] Failed to report fullscreen exit:', err));
 
-        // Show warning modal after 1st violation
-        if (violationCountRef.current >= 1) {
-          setShowViolationWarning(true);
-        }
-
-        // After 3 violations, auto-complete assessment
-        if (violationCountRef.current >= 3) {
-          console.error('[DISQUALIFICATION] 3 fullscreen exits - FINISHING ASSESSMENT');
-          setIsDisqualified(true);
-
-          // Auto-submit current answer and complete assessment
-          try {
-            const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
-            if (hasAnswer) {
-              console.log('[AUTO-SUBMIT] Submitting current answer...');
-              await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
-            }
-            console.log('[AUTO-SUBMIT] Completing assessment due to multiple fullscreen exits...');
-            onComplete();
-          } catch (error) {
-            console.error('[AUTO-SUBMIT] Error during submission:', error);
-            // Complete anyway even if submission fails
-            onComplete();
-          }
-        } else {
-          // Less than 3 violations - prompt user to re-enter fullscreen
-          console.log(`[PROCTORING] Warning ${violationCountRef.current}/3 - prompting to re-enter fullscreen`);
-          // Try to re-enter fullscreen after a brief delay
-          setTimeout(() => {
-            enterFullscreen();
-          }, 1000);
-        }
+        // COMMENTED OUT: No violation tracking, no warnings, no auto-complete
+        // violationCountRef.current += 1;
+        // setViolationCount(violationCountRef.current);
+        // setShowViolationWarning(true);
       }
     };
 
@@ -273,68 +239,11 @@ export function AssessmentInterface({
     };
   }, [token, isDisqualified, showCompleteConfirm, answer, currentQuestion, onAnswerSubmit, onComplete]);
 
-  // SECURITY: Block keyboard shortcuts (F12, Ctrl+Shift+I, ESC, Alt+Tab, etc.)
+  // SECURITY: Block developer tools shortcuts (F12, Ctrl+Shift+I)
+  // NOTE: ESC and Alt+Tab are NO LONGER blocked here to prevent false positives
+  // Fullscreen enforcement is handled by the fullscreen change handler (3-strike system)
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      // Block ESC key - Track as violation but don't auto-complete
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (!isDisqualified && !showCompleteConfirm) {
-          console.warn('[PROCTORING] ⚠️ ESC key blocked - VIOLATION');
-
-          // Track violation
-          violationCountRef.current += 1;
-          setViolationCount(violationCountRef.current);
-
-          // Report to server
-          candidateService.reportProctorEvent(token, {
-            event_type: 'escape_key_attempt',
-            timestamp: new Date().toISOString(),
-            details: {
-              reason: 'User pressed ESC key',
-              severity: 'HIGH',
-              violation_count: violationCountRef.current,
-            },
-          }).catch(err => console.error('[VIOLATION] Failed to report ESC attempt:', err));
-
-          // Show warning modal
-          setShowViolationWarning(true);
-        }
-
-        return false;
-      }
-
-      // Block Alt+Tab - Track as violation but don't auto-complete
-      if (e.altKey && e.key === 'Tab') {
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (!isDisqualified && !showCompleteConfirm) {
-          console.warn('[PROCTORING] ⚠️ Alt+Tab blocked - VIOLATION');
-
-          // Track violation
-          violationCountRef.current += 1;
-          setViolationCount(violationCountRef.current);
-
-          // Report to server
-          candidateService.reportProctorEvent(token, {
-            event_type: 'alt_tab_attempt',
-            timestamp: new Date().toISOString(),
-            details: {
-              reason: 'User pressed Alt+Tab (window switching)',
-              severity: 'HIGH',
-              violation_count: violationCountRef.current,
-            },
-          }).catch(err => console.error('[VIOLATION] Failed to report Alt+Tab attempt:', err));
-
-          // Show warning modal
-          setShowViolationWarning(true);
-        }
-
-        return false;
-      }
 
       // Block F12 (DevTools)
       if (e.key === 'F12') {
@@ -400,7 +309,7 @@ export function AssessmentInterface({
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [token, isDisqualified, answer, currentQuestion, onAnswerSubmit, onComplete, exitFullscreen]);
+  }, []); // Empty deps - only register once on mount
 
   // SECURITY: Detect DevTools opening (by checking window size changes)
   useEffect(() => {
@@ -439,48 +348,13 @@ export function AssessmentInterface({
     return () => clearInterval(interval);
   }, [token]);
 
-  // 🛡️ PROCTORING: Detect window blur (Alt+Tab, switching windows, clicking outside)
-  // CRITICAL: Window blur triggers IMMEDIATE DISQUALIFICATION
-  useEffect(() => {
-    const handleWindowBlur = () => {
-      // Ignore if already disqualified or if showing completion confirmation
-      if (isDisqualified || showCompleteConfirm) {
-        return;
-      }
+  // 🛡️ PROCTORING: Window blur/focus is now handled by useProctoringMonitor hook
+  // No immediate disqualification - proctoring monitor logs events for review
+  // Fullscreen enforcement is the primary security measure (3-strike system)
 
-      console.error('[DISQUALIFICATION] 🚨 Window focus lost - DISQUALIFYING CANDIDATE');
-
-      // Report to server
-      if (token) {
-        candidateService.reportProctorEvent(token, {
-          event_type: 'window_focus_lost',
-          timestamp: new Date().toISOString(),
-          details: {
-            reason: 'User switched away from assessment window (Alt+Tab or window switch)',
-            severity: 'CRITICAL',
-          },
-        }).catch(err => console.error('[DISQUALIFICATION] Failed to report window blur:', err));
-      }
-
-      // DISQUALIFY IMMEDIATELY - NO WARNINGS
-      setIsDisqualified(true);
-      setShowDisqualificationModal(true);
-    };
-
-    const handleWindowFocus = () => {
-      console.log('[LOCKDOWN] Window focus regained');
-    };
-
-    window.addEventListener('blur', handleWindowBlur);
-    window.addEventListener('focus', handleWindowFocus);
-
-    return () => {
-      window.removeEventListener('blur', handleWindowBlur);
-      window.removeEventListener('focus', handleWindowFocus);
-    };
-  }, [token, isDisqualified, showCompleteConfirm]);
-
-  // 🛡️ PROCTORING: Auto-Submit Countdown Timer
+  // 🛡️ PROCTORING: Auto-Submit Countdown Timer - DISABLED
+  // COMMENTED OUT: No auto-submit based on violations
+  /*
   useEffect(() => {
     if (showViolationWarning && violationCountRef.current >= 3) {
       console.log('[PROCTORING] 💀 Auto-submit countdown started: 5 seconds');
@@ -491,7 +365,7 @@ export function AssessmentInterface({
           if (prev <= 1) {
             clearInterval(countdownInterval);
             console.error('[PROCTORING] 💀 AUTO-SUBMIT TRIGGERED');
-            setIsDisqualified(true); // Set before exitFullscreen to prevent double-trigger
+            setIsDisqualified(true);
             exitFullscreen();
             onComplete();
             return 0;
@@ -503,40 +377,33 @@ export function AssessmentInterface({
       return () => clearInterval(countdownInterval);
     }
   }, [showViolationWarning, onComplete]);
+  */
 
-  // 🛡️ PROCTORING: 4️⃣ Visibility API - Detect Tab Hidden/Switching
+  // 🛡️ PROCTORING: 4️⃣ Visibility API - DISABLED
+  // COMMENTED OUT: No violation tracking for tab switching
+  /*
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && !isDisqualified && !showCompleteConfirm) {
-        console.warn('[PROCTORING] ⚠️ Tab hidden detected - VIOLATION');
+        console.log('[PROCTORING] Tab hidden detected - logging only (no penalties)');
 
-        // Track violation
-        violationCountRef.current += 1;
-        setViolationCount(violationCountRef.current);
-
-        // Report to server
+        // Report to server for record-keeping only
         if (token) {
           candidateService.reportProctorEvent(token, {
             event_type: 'tab_hidden',
             timestamp: new Date().toISOString(),
             details: {
               reason: 'User switched to another tab or minimized window',
-              attempt_number: violationCountRef.current,
             },
           }).catch(err => console.error('[PROCTORING] Failed to report tab hidden:', err));
-        }
-
-        // Show warning on 3rd violation - countdown will auto-trigger in separate useEffect
-        if (violationCountRef.current >= 3) {
-          console.error('[PROCTORING] 💀 3 VIOLATIONS - SHOWING AUTO-SUBMIT MODAL');
-          setShowViolationWarning(true);
         }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [token, isDisqualified, showCompleteConfirm, onComplete]);
+  }, [token, isDisqualified, showCompleteConfirm]);
+  */
 
   // 🛡️ PROCTORING: 5️⃣ Block Copy/Paste/Right-Click
   useEffect(() => {

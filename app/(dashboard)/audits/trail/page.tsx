@@ -369,7 +369,7 @@ export default function AuditTrailPage() {
       const token = localStorage.getItem('accessToken');
       const params = new URLSearchParams({
         page: '1',
-        page_size: '1000',
+        page_size: '100',
       });
 
       if (actionFilter) params.append('action', actionFilter);
