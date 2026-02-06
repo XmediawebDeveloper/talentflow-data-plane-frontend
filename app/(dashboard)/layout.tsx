@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Sidebar from '@/components/shared/Sidebar';
 import Header from '@/components/Header';
 import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
@@ -30,6 +30,22 @@ interface StoredScoringBatch {
   status: 'in_progress' | 'completed';
 }
 
+function SearchParamsErrorHandler() {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const error = searchParams.get('error');
+    if (error === 'unauthorized') {
+      toast.error('Access Denied: You do not have permission to access that page.');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('error');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [searchParams]);
+
+  return null;
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -37,22 +53,9 @@ export default function DashboardLayout({
 }) {
   const { user, tenant, isAuthenticated, isLoading, logout, isTenantAdmin } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const pathname = usePathname();
 
   console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
-
-  // Check for unauthorized error from middleware redirect
-  useEffect(() => {
-    const error = searchParams.get('error');
-    if (error === 'unauthorized') {
-      toast.error('Access Denied: You do not have permission to access that page.');
-      // Clear the error param from URL
-      const url = new URL(window.location.href);
-      url.searchParams.delete('error');
-      window.history.replaceState({}, '', url.toString());
-    }
-  }, [searchParams]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -207,6 +210,9 @@ export default function DashboardLayout({
 
   return (
     <QuotaProvider>
+      <Suspense fallback={null}>
+        <SearchParamsErrorHandler />
+      </Suspense>
       <div className="flex h-screen bg-gray-50">
         <Sidebar user={user || undefined} tenant={tenant || undefined} />
 
