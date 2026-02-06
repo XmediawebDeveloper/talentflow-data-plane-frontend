@@ -316,7 +316,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
         )}
         <span className="text-gray-600">
           {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
-            ? new Date(resume.scoredDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            ? `${new Date(new Date(resume.scoredDate).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, ${new Date(new Date(resume.scoredDate).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
             : 'N/A'}
         </span>
         <span className="text-gray-600">by {resume.scoredBy || 'System'}</span>
@@ -438,9 +438,9 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
           </div>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <div className="text-2xl font-bold text-gray-900">
-              {(criteriaScores.reduce((sum, c) => sum + c.rating, 0) / criteriaScores.length).toFixed(1)}
+              {criteriaScores.filter(c => c.criteriaType === 'Preferred').length}
             </div>
-            <div className="text-sm font-medium text-gray-800 mt-1">Average Rating</div>
+            <div className="text-sm font-medium text-gray-800 mt-1">Preferred Criteria</div>
           </div>
         </div>
       )}

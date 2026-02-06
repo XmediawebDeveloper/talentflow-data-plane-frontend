@@ -2124,12 +2124,12 @@ export default function UserManagement() {
                 </div>
               </div>
 
-              {/* Role Permissions - Read-only display of what the selected role has */}
+              {/* Role Permissions - Editable checkboxes */}
               {editSelectedRoleId && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-medium text-gray-700">
-                      Role Permissions
+                      Permissions
                     </label>
                     <span className="text-xs text-gray-500">
                       {editSelectedPermissionCodes.size} permissions assigned
@@ -2141,64 +2141,192 @@ export default function UserManagement() {
                       <span className="ml-2 text-sm text-gray-500">Loading...</span>
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-[250px] overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                    <div className="space-y-4 max-h-[350px] overflow-y-auto border border-gray-200 rounded-lg p-3 bg-white">
                       {CUSTOM_PERMISSION_CATEGORIES.map(category => {
-                        // Check if any permission in this category is selected
-                        const hasAnyPermission = () => {
-                          if (category.actions) {
-                            if (category.actions.some(a => editSelectedPermissionCodes.has(a.code))) return true;
+                        // Toggle a permission by code - syncs both IDs and codes
+                        const toggleByCode = (code: string) => {
+                          const perm = allPermissions.find(p => p.code === code);
+                          if (perm) {
+                            toggleEditPermission(perm.id);
                           }
-                          if (category.subCategories) {
-                            for (const sub of category.subCategories) {
-                              if (sub.actions.some(a => editSelectedPermissionCodes.has(a.code))) return true;
+                          setEditSelectedPermissionCodes(prev => {
+                            const newSet = new Set(prev);
+                            if (newSet.has(code)) {
+                              newSet.delete(code);
+                              // Also remove viewCode if no actions left in category
+                              if (category.viewCode) {
+                                const allActions = [
+                                  ...(category.actions || []),
+                                  ...(category.subCategories?.flatMap(s => s.actions) || []),
+                                ];
+                                const hasOtherSelected = allActions.some(a => a.code !== code && newSet.has(a.code));
+                                if (!hasOtherSelected) {
+                                  newSet.delete(category.viewCode);
+                                  const viewPerm = allPermissions.find(p => p.code === category.viewCode);
+                                  if (viewPerm) toggleEditPermission(viewPerm.id);
+                                }
+                              }
+                            } else {
+                              newSet.add(code);
+                              // Auto-enable viewCode when any action is selected
+                              if (category.viewCode && !newSet.has(category.viewCode)) {
+                                newSet.add(category.viewCode);
+                                const viewPerm = allPermissions.find(p => p.code === category.viewCode);
+                                if (viewPerm && !editSelectedPermissionIds.has(viewPerm.id)) {
+                                  toggleEditPermission(viewPerm.id);
+                                }
+                              }
+                              // Handle dependencies
+                              const deps = getPermissionDependencies(code);
+                              deps.forEach(depCode => {
+                                if (!newSet.has(depCode)) {
+                                  newSet.add(depCode);
+                                  const depPerm = allPermissions.find(p => p.code === depCode);
+                                  if (depPerm && !editSelectedPermissionIds.has(depPerm.id)) {
+                                    toggleEditPermission(depPerm.id);
+                                  }
+                                }
+                              });
                             }
-                          }
-                          return false;
+                            return newSet;
+                          });
                         };
 
-                        // Only show categories that have at least one permission
-                        if (!hasAnyPermission()) return null;
+                        // Render actions as checkboxes
+                        const renderActions = (actions: CustomPermissionAction[], prefix?: string) => (
+                          <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-1.5">
+                            {actions.map(action => {
+                              const isChecked = editSelectedPermissionCodes.has(action.code);
+                              return (
+                                <label
+                                  key={action.code}
+                                  className="flex items-center gap-1.5 cursor-pointer text-sm"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => toggleByCode(action.code)}
+                                    className="w-3.5 h-3.5 rounded border-gray-300 text-gray-800 focus:ring-gray-500 cursor-pointer"
+                                  />
+                                  <span className={isChecked ? 'text-gray-900' : 'text-gray-500'}>
+                                    {prefix ? `${prefix}: ` : ''}{action.label}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        );
 
-                        // Collect all selected actions for this category
-                        const selectedActions: string[] = [];
-                        if (category.actions) {
-                          category.actions.filter(a => editSelectedPermissionCodes.has(a.code)).forEach(a => selectedActions.push(a.label));
-                        }
-                        if (category.subCategories) {
-                          category.subCategories.forEach(sub => {
-                            sub.actions.filter(a => editSelectedPermissionCodes.has(a.code)).forEach(a => {
-                              selectedActions.push(`${sub.name}: ${a.label}`);
-                            });
-                          });
-                        }
+                        // Check if view code is enabled (category is active)
+                        const isCategoryActive = category.viewCode
+                          ? editSelectedPermissionCodes.has(category.viewCode) ||
+                            (category.actions?.some(a => editSelectedPermissionCodes.has(a.code)) ?? false) ||
+                            (category.subCategories?.some(s => s.actions.some(a => editSelectedPermissionCodes.has(a.code))) ?? false)
+                          : true;
 
                         return (
-                          <div key={category.id} className="flex items-start gap-2">
-                            <div className="flex-shrink-0 w-5 h-5 bg-green-100 rounded flex items-center justify-center mt-0.5">
-                              <Check className="w-3 h-3 text-green-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-gray-900">
-                                {category.name}
-                                {category.isMenuToggle && (
-                                  <span className="ml-2 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
-                                    Menu Access
-                                  </span>
+                          <div key={category.id} className="border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                {category.viewCode && (
+                                  <input
+                                    type="checkbox"
+                                    checked={isCategoryActive}
+                                    onChange={() => {
+                                      if (isCategoryActive) {
+                                        // Uncheck all in this category
+                                        const allCodes = [
+                                          category.viewCode,
+                                          ...(category.actions?.map(a => a.code) || []),
+                                          ...(category.subCategories?.flatMap(s => [s.viewCode, ...s.actions.map(a => a.code)].filter(Boolean)) || []),
+                                        ].filter(Boolean) as string[];
+                                        setEditSelectedPermissionCodes(prev => {
+                                          const newSet = new Set(prev);
+                                          allCodes.forEach(c => newSet.delete(c));
+                                          return newSet;
+                                        });
+                                        allCodes.forEach(c => {
+                                          const p = allPermissions.find(pm => pm.code === c);
+                                          if (p && editSelectedPermissionIds.has(p.id)) toggleEditPermission(p.id);
+                                        });
+                                      } else {
+                                        // Enable view code
+                                        toggleByCode(category.viewCode!);
+                                      }
+                                    }}
+                                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500 cursor-pointer"
+                                  />
                                 )}
-                              </div>
-                              <div className="text-xs text-gray-500 mt-0.5">
-                                {selectedActions.join(' • ')}
-                              </div>
+                                <span className="text-sm font-medium text-gray-900">{category.name}</span>
+                              </label>
+                              {category.isMenuToggle && isCategoryActive && (
+                                <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+                                  Menu Access
+                                </span>
+                              )}
                             </div>
+
+                            {/* Direct actions */}
+                            {category.actions && category.actions.length > 0 && (
+                              renderActions(category.actions)
+                            )}
+
+                            {/* Sub-categories */}
+                            {category.subCategories && category.subCategories.map(sub => {
+                              const isSubActive = sub.viewCode
+                                ? editSelectedPermissionCodes.has(sub.viewCode) || sub.actions.some(a => editSelectedPermissionCodes.has(a.code))
+                                : sub.actions.some(a => editSelectedPermissionCodes.has(a.code));
+
+                              return (
+                                <div key={sub.name} className="ml-5 mt-2">
+                                  <div className="flex items-center gap-2">
+                                    {sub.viewCode && (
+                                      <input
+                                        type="checkbox"
+                                        checked={isSubActive}
+                                        onChange={() => {
+                                          if (isSubActive) {
+                                            const subCodes = [sub.viewCode, ...sub.actions.map(a => a.code)].filter(Boolean) as string[];
+                                            setEditSelectedPermissionCodes(prev => {
+                                              const newSet = new Set(prev);
+                                              subCodes.forEach(c => newSet.delete(c));
+                                              return newSet;
+                                            });
+                                            subCodes.forEach(c => {
+                                              const p = allPermissions.find(pm => pm.code === c);
+                                              if (p && editSelectedPermissionIds.has(p.id)) toggleEditPermission(p.id);
+                                            });
+                                          } else {
+                                            // Enable sub viewCode
+                                            if (sub.viewCode) {
+                                              const perm = allPermissions.find(p => p.code === sub.viewCode);
+                                              if (perm && !editSelectedPermissionIds.has(perm.id)) toggleEditPermission(perm.id);
+                                              setEditSelectedPermissionCodes(prev => new Set([...prev, sub.viewCode!]));
+                                            }
+                                            // Also enable parent viewCode
+                                            if (category.viewCode && !editSelectedPermissionCodes.has(category.viewCode)) {
+                                              const perm = allPermissions.find(p => p.code === category.viewCode);
+                                              if (perm && !editSelectedPermissionIds.has(perm.id)) toggleEditPermission(perm.id);
+                                              setEditSelectedPermissionCodes(prev => new Set([...prev, category.viewCode!]));
+                                            }
+                                          }
+                                        }}
+                                        className="w-3.5 h-3.5 rounded border-gray-300 text-gray-800 focus:ring-gray-500 cursor-pointer"
+                                      />
+                                    )}
+                                    <span className="text-xs font-medium text-gray-700">{sub.name}</span>
+                                  </div>
+                                  {renderActions(sub.actions)}
+                                </div>
+                              );
+                            })}
                           </div>
                         );
                       })}
 
-                      {/* Show message if no custom permissions found */}
                       {editSelectedPermissionCodes.size === 0 && (
                         <div className="text-center py-3 text-gray-500 text-sm">
-                          No permissions assigned to this role.
-                          <span className="block text-xs mt-1">Configure in Role Management.</span>
+                          No permissions assigned. Select permissions above.
                         </div>
                       )}
                     </div>

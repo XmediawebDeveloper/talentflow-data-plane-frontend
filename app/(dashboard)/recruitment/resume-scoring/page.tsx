@@ -49,6 +49,11 @@ export default function ResumeScoringRoute() {
     jobTitle: string;
     resumeIds: string[];
     resumeNames: string[];
+    alreadyScoredItems?: Array<{
+      resumeId: string;
+      candidateName: string;
+      score: number;
+    }>;
   } | null>(null);
   const [pendingBatchId, setPendingBatchId] = useState<string | null>(null);
   const [batchProgress, setBatchProgress] = useState<{

@@ -68,6 +68,7 @@ export function ExistingScoreAlertModal({
 }: ExistingScoreAlertModalProps) {
   const existingCount = existingScores.length;
   const isSingleResume = totalChecked === 1;
+  const allAlreadyScored = existingCount === totalChecked;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -75,16 +76,25 @@ export function ExistingScoreAlertModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-amber-600">
             <AlertTriangle className="w-5 h-5" />
-            {isSingleResume ? 'Resume Already Scored' : 'Some Resumes Already Scored'}
+            {allAlreadyScored
+              ? (isSingleResume ? 'Resume Already Scored' : 'All Resumes Already Scored')
+              : 'Some Resumes Already Scored'}
           </DialogTitle>
         </DialogHeader>
 
         <div className="py-4">
           <p className="text-sm text-gray-600 mb-4">
-            {isSingleResume ? (
-              <>
-                This resume has already been scored against <span className="font-medium">{jdTitle}</span>.
-              </>
+            {allAlreadyScored ? (
+              isSingleResume ? (
+                <>
+                  This resume has already been scored against <span className="font-medium">{jdTitle}</span>. You can view the existing score below.
+                </>
+              ) : (
+                <>
+                  All <span className="font-medium">{existingCount}</span> selected resumes have already been
+                  scored against <span className="font-medium">{jdTitle}</span>. You can view the existing scores below.
+                </>
+              )
             ) : (
               <>
                 <span className="font-medium">{existingCount}</span> of{' '}
@@ -144,38 +154,29 @@ export function ExistingScoreAlertModal({
         <DialogFooter className="flex flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={onClose} className="flex items-center gap-2">
             <X className="w-4 h-4" />
-            Cancel
+            {allAlreadyScored ? 'Close' : 'Cancel'}
           </Button>
 
-          {isSingleResume && existingScores.length === 1 && (
+          {allAlreadyScored && existingScores.length === 1 && (
             <Button
-              variant="outline"
               onClick={() => onViewExisting(existingScores[0].score_id)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900"
             >
               <Eye className="w-4 h-4" />
               View Existing Score
             </Button>
           )}
 
-          {!isSingleResume && newCount > 0 && onProceedWithNewOnly && (
+          {!allAlreadyScored && newCount > 0 && onProceedWithNewOnly && (
             <Button
-              variant="outline"
               onClick={onProceedWithNewOnly}
-              className="flex items-center gap-2 text-green-600 border-green-300 hover:bg-green-50"
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
             >
               <Target className="w-4 h-4" />
               Score New Only ({newCount})
             </Button>
           )}
 
-          <Button
-            onClick={onProceedWithRescoring}
-            className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700"
-          >
-            <RefreshCw className="w-4 h-4" />
-            {isSingleResume ? 'Re-score Anyway' : `Re-score All (${totalChecked})`}
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
