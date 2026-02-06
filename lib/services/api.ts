@@ -213,6 +213,21 @@ api.interceptors.response.use(
 
     // If 401 and not already retrying, try to refresh token
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Skip token refresh/logout for auth endpoints (login, signup, forgot-password, etc.)
+      // These endpoints return 401 for invalid credentials, not expired sessions
+      const isAuthEndpoint = originalRequest.url?.includes('/auth/login') ||
+                             originalRequest.url?.includes('/auth/signup') ||
+                             originalRequest.url?.includes('/auth/forgot-password') ||
+                             originalRequest.url?.includes('/auth/reset-password') ||
+                             originalRequest.url?.includes('/auth/verify-2fa-login') ||
+                             originalRequest.url?.includes('/signup/');
+
+      if (isAuthEndpoint) {
+        // For auth endpoints, just reject the error without redirecting
+        // Let the component handle the error display
+        return Promise.reject(error);
+      }
+
       originalRequest._retry = true;
 
       try {

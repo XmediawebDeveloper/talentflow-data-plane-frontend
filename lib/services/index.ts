@@ -7,8 +7,8 @@
 export { default as api, setTokens, getTokens, clearTokens, handleApiError } from './api';
 
 // Auth
-export { authService } from './authService';
-export type { User, LoginRequest, LoginResponse } from './authService';
+export { authService, isTwoFactorRequired } from './authService';
+export type { User, LoginRequest, LoginResponse, TwoFactorRequiredResponse, LoginResult } from './authService';
 
 // Job Descriptions
 export { jdService } from './jdService';

@@ -522,11 +522,26 @@ export default function AdminDashboard({
                   {filteredRecentActivity.map((activity) => {
                     // Build details display based on activity type
                     const getDetailsDisplay = () => {
-                      const details = activity.details;
-                      if (!details) return '-';
+                      const details = activity.details || {};
 
                       // Normalize action to lowercase for comparison
                       const actionLower = activity.action?.toLowerCase() || '';
+
+                      // Login/Logout activities - show email and IP
+                      if (actionLower.includes('login') || actionLower.includes('logout')) {
+                        const parts: string[] = [];
+                        const email = details.email || activity.user_email;
+                        if (email) parts.push(email);
+                        if (activity.ip_address) parts.push(`IP: ${activity.ip_address}`);
+                        if (parts.length > 0) return parts.join(' • ');
+                        return 'Session activity';
+                      }
+
+                      // Team activities - show team name
+                      if (actionLower.includes('team')) {
+                        if (details.team_name) return `Team: ${details.team_name}`;
+                        if (details.name) return `Team: ${details.name}`;
+                      }
 
                       // JD activities (jd_create, jd_publish, etc.)
                       if (actionLower.includes('jd_') || actionLower.includes('job')) {
@@ -578,8 +593,26 @@ export default function AdminDashboard({
                         return email || '-';
                       }
 
-                      // Default fallback
-                      return details.title || details.name || details.candidate_name || '-';
+                      // Folder activities
+                      if (actionLower.includes('folder')) {
+                        if (details.folder_name) return `Folder: ${details.folder_name}`;
+                        if (details.name) return `Folder: ${details.name}`;
+                      }
+
+                      // Role activities
+                      if (actionLower.includes('role')) {
+                        if (details.role_name) return `Role: ${details.role_name}`;
+                        if (details.name) return `Role: ${details.name}`;
+                      }
+
+                      // Subscription/Plan activities
+                      if (actionLower.includes('subscription') || actionLower.includes('plan')) {
+                        if (details.plan_name) return `Plan: ${details.plan_name}`;
+                        if (details.name) return details.name;
+                      }
+
+                      // Default fallback - check common fields
+                      return details.title || details.name || details.email || details.candidate_name || '-';
                     };
 
                     const detailsDisplay = getDetailsDisplay();

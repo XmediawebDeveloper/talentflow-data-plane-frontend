@@ -9,6 +9,7 @@ import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/ser
 
 // Helper to store/retrieve user from localStorage
 const USER_STORAGE_KEY = 'talentflow_user';
+const TENANT_STORAGE_KEY = 'talentflow_tenant';
 
 const saveUserToStorage = (user: User) => {
   if (typeof window !== 'undefined') {
@@ -32,6 +33,28 @@ const clearUserFromStorage = () => {
   }
 };
 
+const saveTenantToStorage = (tenant: Tenant) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(TENANT_STORAGE_KEY, JSON.stringify(tenant));
+  }
+};
+
+const getTenantFromStorage = (): Tenant | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(TENANT_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearTenantFromStorage = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(TENANT_STORAGE_KEY);
+  }
+};
+
 // RBAC Helper functions
 const isViewerRole = (role: UserRole): boolean => role === 'viewer';
 const isBillingManagerRole = (role: UserRole): boolean => role === 'billing_manager';
@@ -44,7 +67,7 @@ interface AuthContextType {
   tenant: Tenant | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (user: User) => void;
+  login: (user: User, tenantName?: string) => void;
   logout: () => void;
   updateUser: (user: User) => void;
   // RBAC01-07: Extended role and permission helpers
@@ -210,10 +233,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // First, try to restore from localStorage (fast path)
       const storedUser = getUserFromStorage();
+      const storedTenant = getTenantFromStorage();
       if (storedUser && authService.isAuthenticated()) {
         console.log('[AUTH] Restored user from localStorage:', storedUser.email);
         setUser(storedUser);
-        setTenant(mockTenant);
+        // Use stored tenant if available, otherwise use mock as fallback
+        setTenant(storedTenant || mockTenant);
         setIsLoading(false);
 
         // Optionally validate with API in background (don't block UI)
@@ -242,6 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.warn('[AUTH] Subscription inactive, clearing session');
             clearTokens();
             clearUserFromStorage();
+            clearTenantFromStorage();
             setUser(null);
             setTenant(null);
             // Don't redirect - let the modal handle it
@@ -268,6 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('[AUTH] Session restore failed:', error);
           clearTokens();
           clearUserFromStorage();
+          clearTenantFromStorage();
         }
       } else {
         console.log('[AUTH] No token found, skipping session restore');
@@ -278,11 +305,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     restoreSession();
   }, []);
 
-  const login = (userData: User) => {
-    console.log('[AUTH] Login called for:', userData.email);
+  const login = (userData: User, tenantName?: string) => {
+    console.log('[AUTH] Login called for:', userData.email, 'tenant:', tenantName);
     setUser(userData);
-    setTenant(mockTenant);
+
+    // Create tenant object from login response
+    const tenantData: Tenant = {
+      ...mockTenant, // Use mock as base for structure
+      id: userData.tenantId,
+      name: tenantName || mockTenant.name,
+    };
+    setTenant(tenantData);
     saveUserToStorage(userData);
+    saveTenantToStorage(tenantData);
   };
 
   const logout = () => {
@@ -291,6 +326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTenant(null);
     clearTokens();
     clearUserFromStorage();
+    clearTenantFromStorage();
     router.push('/login');
   };
 
