@@ -21,9 +21,11 @@ export interface RecentActivity {
   action: string;
   action_display: string;
   user_name: string | null;
+  user_email?: string | null;
   entity_type: string | null;
   entity_id: string | null;
   details: Record<string, any> | null;
+  ip_address?: string | null;
   time_ago: string;
   created_at: string;
 }

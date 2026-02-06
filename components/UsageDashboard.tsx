@@ -92,6 +92,68 @@ const quotaTypeToModuleMap: Record<string, string> = {
   'max_seats': 'Max Users',
 };
 
+// Helper function to calculate remaining time from end date
+// Returns: { isExpired, days, hours, minutes, displayText }
+function calculateRemainingTime(endDateString: string | undefined): {
+  isExpired: boolean;
+  days: number;
+  hours: number;
+  minutes: number;
+  displayText: string;
+} {
+  if (!endDateString) {
+    return { isExpired: true, days: 0, hours: 0, minutes: 0, displayText: 'Expired' };
+  }
+
+  const now = new Date();
+  const endDate = new Date(endDateString);
+  const diffMs = endDate.getTime() - now.getTime();
+
+  // If difference is negative or zero, it's expired
+  if (diffMs <= 0) {
+    return { isExpired: true, days: 0, hours: 0, minutes: 0, displayText: 'Expired' };
+  }
+
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  // More than 1 day remaining
+  if (diffDays > 0) {
+    return {
+      isExpired: false,
+      days: diffDays,
+      hours: diffHours % 24,
+      minutes: diffMinutes % 60,
+      displayText: `${diffDays} day${diffDays > 1 ? 's' : ''} left`
+    };
+  }
+
+  // Less than a day but hours remaining
+  const remainingHours = diffHours;
+  const remainingMinutes = diffMinutes % 60;
+
+  if (remainingHours > 0) {
+    const minutePart = remainingMinutes > 0 ? ` ${remainingMinutes}m` : '';
+    return {
+      isExpired: false,
+      days: 0,
+      hours: remainingHours,
+      minutes: remainingMinutes,
+      displayText: `${remainingHours}h${minutePart} left`
+    };
+  }
+
+  // Only minutes remaining
+  return {
+    isExpired: false,
+    days: 0,
+    hours: 0,
+    minutes: remainingMinutes,
+    displayText: `${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''} left`
+  };
+}
+
 export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   // Use shared QuotaContext instead of making duplicate API calls
   const { quotaData: contextQuotaData, loading: quotaLoading, error: quotaError, hasPermission, refetch: refetchQuota } = useQuota();
@@ -568,9 +630,14 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         {subscriptionSummary.plan?.name || 'No Plan'}
                       </h2>
                       {subscriptionSummary.is_trial && (
-                        <span className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-200 rounded-full animate-pulse">
-                          TRIAL {subscriptionSummary.trial_days_remaining ? `• ${subscriptionSummary.trial_days_remaining} days left` : ''}
-                        </span>
+                        (() => {
+                          const remaining = calculateRemainingTime(subscriptionSummary.subscription?.current_period_end);
+                          return (
+                            <span className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-200 rounded-full animate-pulse">
+                              TRIAL {!remaining.isExpired ? `• ${remaining.displayText}` : '• Expired'}
+                            </span>
+                          );
+                        })()
                       )}
                     </div>
                     <div className="flex items-center gap-3 mb-3">
@@ -602,38 +669,53 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
                 <div className="text-right bg-gray-50 rounded-xl p-4 min-w-[200px]">
                   {subscriptionSummary.is_trial ? (
-                    /* Free Trial - show expiry, no price */
-                    <>
-                      {subscriptionSummary.subscription?.days_until_renewal !== undefined && subscriptionSummary.subscription.days_until_renewal > 0 ? (
-                        <div className="text-2xl font-bold text-gray-800">
-                          {subscriptionSummary.subscription.days_until_renewal}
-                          <span className="text-sm font-normal text-gray-500 ml-1">days left</span>
-                        </div>
-                      ) : (
-                        <div className="text-xl font-bold text-gray-700">
-                          Trial Expired
-                        </div>
-                      )}
-                      <p className="text-xs text-gray-500 mt-2">
-                        Upgrade to continue using all features
-                      </p>
-                    </>
+                    /* Free Trial - show expiry with proper time calculation */
+                    (() => {
+                      const remaining = calculateRemainingTime(subscriptionSummary.subscription?.current_period_end);
+                      return (
+                        <>
+                          {!remaining.isExpired ? (
+                            <div className="text-2xl font-bold text-gray-800">
+                              {remaining.displayText}
+                            </div>
+                          ) : (
+                            <div className="text-xl font-bold text-gray-700">
+                              Trial Expired
+                            </div>
+                          )}
+                          <p className="text-xs text-gray-500 mt-2">
+                            Upgrade to continue using all features
+                          </p>
+                        </>
+                      );
+                    })()
                   ) : subscriptionSummary.subscription ? (
-                    /* Paid Plan - show price and renewal */
-                    <>
-                      <div className="text-3xl font-bold text-gray-900">
-                        ₹{subscriptionSummary.subscription.price?.toFixed(0) || subscriptionSummary.plan?.price?.toFixed(0) || '0'}
-                        <span className="text-sm font-normal text-gray-500">
-                          /{subscriptionSummary.subscription.billing_interval || 'mo'}
-                        </span>
-                      </div>
-                      {subscriptionSummary.subscription.days_until_renewal !== undefined && subscriptionSummary.subscription.days_until_renewal > 0 && (
-                        <p className="text-xs text-gray-500 mt-2 flex items-center justify-end gap-1">
-                          <Calendar className="w-3 h-3" />
-                          Renews in {subscriptionSummary.subscription.days_until_renewal} days
-                        </p>
-                      )}
-                    </>
+                    /* Paid Plan - show price and renewal with proper time calculation */
+                    (() => {
+                      const remaining = calculateRemainingTime(subscriptionSummary.subscription?.current_period_end);
+                      return (
+                        <>
+                          <div className="text-3xl font-bold text-gray-900">
+                            ₹{subscriptionSummary.subscription.price?.toFixed(0) || subscriptionSummary.plan?.price?.toFixed(0) || '0'}
+                            <span className="text-sm font-normal text-gray-500">
+                              /{subscriptionSummary.subscription.billing_interval || 'mo'}
+                            </span>
+                          </div>
+                          {!remaining.isExpired && (
+                            <p className="text-xs text-gray-500 mt-2 flex items-center justify-end gap-1">
+                              <Calendar className="w-3 h-3" />
+                              Renews in {remaining.displayText}
+                            </p>
+                          )}
+                          {remaining.isExpired && (
+                            <p className="text-xs text-red-500 mt-2 flex items-center justify-end gap-1">
+                              <AlertTriangle className="w-3 h-3" />
+                              Plan Expired
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()
                   ) : null}
                 </div>
               </div>

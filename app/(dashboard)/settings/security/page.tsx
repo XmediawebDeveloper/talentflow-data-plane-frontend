@@ -1,11 +1,32 @@
 'use client';
 
-import { Lock, Shield, Smartphone, Clock, MapPin, Save, Check, Loader2, X, AlertTriangle } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Lock, Shield, Smartphone, Clock, MapPin, Save, Check, Loader2, X, AlertTriangle, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { userSettingsApi, sessionsApi, Session, UserSettings } from '@/lib/services/settingsService';
+import { clearTokens } from '@/lib/services/api';
 import { toast } from 'sonner';
 
+// Password strength validation
+const getPasswordStrength = (password: string) => {
+  let strength = 0;
+  const checks = {
+    length: password.length >= 8,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    number: /[0-9]/.test(password),
+    special: /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(password),
+  };
+
+  Object.values(checks).forEach(check => {
+    if (check) strength++;
+  });
+
+  return { strength, checks };
+};
+
 export default function SecurityPage() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [settings, setSettings] = useState<Partial<UserSettings>>({
@@ -21,6 +42,16 @@ export default function SecurityPage() {
   });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordChanged, setPasswordChanged] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Password strength validation (live feedback)
+  const { strength: passwordStrength, checks: passwordChecks } = useMemo(
+    () => getPasswordStrength(passwordForm.newPassword),
+    [passwordForm.newPassword]
+  );
+  const passwordsMatch = passwordForm.newPassword && passwordForm.confirmPassword && passwordForm.newPassword === passwordForm.confirmPassword;
 
   // 2FA state
   const [is2FALoading, setIs2FALoading] = useState(false);
@@ -28,9 +59,15 @@ export default function SecurityPage() {
   const [twoFASecret, setTwoFASecret] = useState('');
   const [twoFAQRCode, setTwoFAQRCode] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
+  const [showDisable2FADialog, setShowDisable2FADialog] = useState(false);
+  const [disable2FACode, setDisable2FACode] = useState('');
 
   // Session timeout state
   const [isSavingTimeout, setIsSavingTimeout] = useState(false);
+
+  // Session revoke state
+  const [isRevokingSession, setIsRevokingSession] = useState(false);
+  const [showRevokeAllDialog, setShowRevokeAllDialog] = useState(false);
 
   // Load data on mount
   useEffect(() => {
@@ -69,7 +106,14 @@ export default function SecurityPage() {
       return;
     }
 
-    if (passwordForm.newPassword.length < 8) {
+    // Validate password strength
+    const { strength, checks } = getPasswordStrength(passwordForm.newPassword);
+    if (strength < 3) {
+      toast.error('Password is too weak. Please meet at least 3 requirements.');
+      return;
+    }
+
+    if (!checks.length) {
       toast.error('New password must be at least 8 characters');
       return;
     }
@@ -80,14 +124,20 @@ export default function SecurityPage() {
         passwordForm.currentPassword,
         passwordForm.newPassword
       );
-      setPasswordChanged(true);
-      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      toast.success('Password changed successfully');
-      setTimeout(() => setPasswordChanged(false), 3000);
+      toast.success('Password changed successfully. Please login with your new password.');
+
+      // Clear tokens and redirect to login
+      clearTokens();
+      localStorage.removeItem('user');
+      sessionStorage.clear();
+
+      // Short delay to show toast before redirect
+      setTimeout(() => {
+        router.push('/login');
+      }, 1500);
     } catch (error: any) {
       console.error('Error changing password:', error);
       toast.error(error.message || 'Failed to change password');
-    } finally {
       setIsChangingPassword(false);
     }
   };
@@ -128,19 +178,28 @@ export default function SecurityPage() {
     }
   };
 
-  const handleDisable2FA = async () => {
-    if (!confirm('Are you sure you want to disable two-factor authentication?')) {
+  const handleDisable2FA = () => {
+    // Show dialog to enter OTP code
+    setDisable2FACode('');
+    setShowDisable2FADialog(true);
+  };
+
+  const confirmDisable2FA = async () => {
+    if (!disable2FACode || disable2FACode.length !== 6) {
+      toast.error('Please enter a valid 6-digit code');
       return;
     }
 
     setIs2FALoading(true);
     try {
-      await userSettingsApi.disable2FA();
+      await userSettingsApi.disable2FA(disable2FACode);
       setSettings({ ...settings, two_factor_enabled: false });
+      setShowDisable2FADialog(false);
+      setDisable2FACode('');
       toast.success('Two-factor authentication disabled');
     } catch (error: any) {
       console.error('Error disabling 2FA:', error);
-      toast.error(error.message || 'Failed to disable 2FA');
+      toast.error(error.message || 'Invalid verification code');
     } finally {
       setIs2FALoading(false);
     }
@@ -173,18 +232,22 @@ export default function SecurityPage() {
     }
   };
 
-  const handleRevokeAllOtherSessions = async () => {
-    if (!confirm('Are you sure you want to revoke all other sessions?')) {
-      return;
-    }
+  const handleRevokeAllOtherSessions = () => {
+    setShowRevokeAllDialog(true);
+  };
 
+  const confirmRevokeAllOtherSessions = async () => {
+    setIsRevokingSession(true);
     try {
       await sessionsApi.revokeOthers();
       setSessions(sessions.filter(s => s.is_current));
+      setShowRevokeAllDialog(false);
       toast.success('All other sessions revoked');
     } catch (error) {
       console.error('Error revoking sessions:', error);
       toast.error('Failed to revoke sessions');
+    } finally {
+      setIsRevokingSession(false);
     }
   };
 
@@ -236,38 +299,123 @@ export default function SecurityPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-              <input
-                type="password"
-                value={passwordForm.currentPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                placeholder="Enter current password"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none"
-              />
+              <div className="relative">
+                <input
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={passwordForm.currentPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                  placeholder="Enter current password"
+                  className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-              <input
-                type="password"
-                value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                placeholder="Enter new password"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none"
-              />
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                  placeholder="Enter new password"
+                  className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none transition-colors ${
+                    passwordForm.newPassword
+                      ? passwordStrength === 5
+                        ? 'border-green-500'
+                        : passwordStrength >= 3
+                        ? 'border-yellow-500'
+                        : 'border-red-500'
+                      : 'border-gray-300'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-              <input
-                type="password"
-                value={passwordForm.confirmPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                placeholder="Confirm new password"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none"
-              />
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                  placeholder="Confirm new password"
+                  className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none transition-colors ${
+                    passwordForm.confirmPassword
+                      ? passwordsMatch
+                        ? 'border-green-500'
+                        : 'border-red-500'
+                      : 'border-gray-300'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
+
+            {/* Password Requirements - Live Validation */}
+            {(passwordForm.newPassword || passwordForm.confirmPassword) && (
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <p className="text-sm font-semibold text-gray-700 mb-3">Password Requirements:</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: 'At least 8 characters', check: passwordChecks.length },
+                    { label: 'One uppercase letter', check: passwordChecks.uppercase },
+                    { label: 'One lowercase letter', check: passwordChecks.lowercase },
+                    { label: 'One number', check: passwordChecks.number },
+                    { label: 'One special character', check: passwordChecks.special },
+                    { label: 'Passwords match', check: passwordsMatch },
+                  ].map((req, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <CheckCircle className={`w-4 h-4 transition-colors ${req.check ? 'text-green-500' : 'text-gray-300'}`} />
+                      <span className={`text-sm transition-colors ${req.check ? 'text-green-600' : 'text-gray-500'}`}>
+                        {req.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {/* Strength Bar */}
+                <div className="mt-3">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-gray-500">Password Strength</span>
+                    <span className={`text-xs font-semibold ${
+                      passwordStrength <= 2 ? 'text-red-500' : passwordStrength <= 3 ? 'text-yellow-500' : passwordStrength <= 4 ? 'text-blue-500' : 'text-green-500'
+                    }`}>
+                      {passwordStrength === 0 ? 'Too Weak' : passwordStrength <= 2 ? 'Weak' : passwordStrength <= 3 ? 'Fair' : passwordStrength <= 4 ? 'Good' : 'Strong'}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        passwordStrength <= 2 ? 'bg-red-500' : passwordStrength <= 3 ? 'bg-yellow-500' : passwordStrength <= 4 ? 'bg-blue-500' : 'bg-green-500'
+                      }`}
+                      style={{ width: `${(passwordStrength / 5) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <button
               onClick={handleChangePassword}
-              disabled={isChangingPassword}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50"
+              disabled={isChangingPassword || (passwordForm.newPassword && passwordStrength < 3)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isChangingPassword ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -385,6 +533,71 @@ export default function SecurityPage() {
               </div>
             </div>
           )}
+
+          {/* Disable 2FA Confirmation Dialog */}
+          {showDisable2FADialog && (
+            <div className="mt-4 p-6 bg-red-50 rounded-lg border border-red-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-medium text-gray-900">Disable Two-Factor Authentication</h3>
+                <button
+                  onClick={() => {
+                    setShowDisable2FADialog(false);
+                    setDisable2FACode('');
+                  }}
+                  className="p-1 hover:bg-red-100 rounded"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-yellow-800">
+                    Disabling 2FA will make your account less secure. You'll only need your password to sign in.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">
+                    Enter the 6-digit code from your authenticator app to confirm:
+                  </p>
+                  <input
+                    type="text"
+                    value={disable2FACode}
+                    onChange={(e) => setDisable2FACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none text-center text-2xl tracking-widest"
+                    maxLength={6}
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowDisable2FADialog(false);
+                      setDisable2FACode('');
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDisable2FA}
+                    disabled={is2FALoading || disable2FACode.length !== 6}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {is2FALoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Shield className="w-4 h-4" />
+                    )}
+                    Disable 2FA
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Session Timeout */}
@@ -450,7 +663,10 @@ export default function SecurityPage() {
                       <p className="font-medium text-gray-900">{session.device_info || 'Unknown Device'}</p>
                       <div className="flex items-center gap-2 text-sm text-gray-500">
                         <MapPin className="w-3 h-3" />
-                        {session.location || session.ip_address || 'Unknown Location'}
+                        {session.location || 'Unknown Location'}
+                        {session.ip_address && (
+                          <span className="text-gray-400">({session.ip_address})</span>
+                        )}
                         <span>•</span>
                         {session.is_current ? 'Current session' : formatLastActive(session.last_active_at)}
                       </div>
@@ -472,7 +688,62 @@ export default function SecurityPage() {
               ))}
             </div>
           )}
+
         </div>
+
+        {/* Revoke All Other Sessions Popup Modal */}
+        {showRevokeAllDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => setShowRevokeAllDialog(false)}
+            />
+
+            {/* Modal */}
+            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 animate-in fade-in zoom-in duration-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Revoke All Other Sessions</h3>
+                <button
+                  onClick={() => setShowRevokeAllDialog(false)}
+                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-start gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-yellow-800">
+                    This will sign you out from all other devices and browsers. Only your current session will remain active.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setShowRevokeAllDialog(false)}
+                    className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmRevokeAllOtherSessions}
+                    disabled={isRevokingSession}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 font-medium"
+                  >
+                    {isRevokingSession ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Shield className="w-4 h-4" />
+                    )}
+                    Revoke All
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );

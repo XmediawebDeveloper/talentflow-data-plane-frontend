@@ -109,11 +109,18 @@ export default function Dashboard({
 
   // Fetch Recent Activities
   const fetchRecentActivities = useCallback(async () => {
+    console.log('[Dashboard] fetchRecentActivities called');
     setLoadingActivities(true);
     try {
       const token = localStorage.getItem('accessToken');
-      if (!token) return;
+      console.log('[Dashboard] Token exists:', !!token);
+      if (!token) {
+        console.log('[Dashboard] No token, skipping fetch');
+        setLoadingActivities(false);
+        return;
+      }
 
+      console.log('[Dashboard] Fetching from:', `${API_URL}/audits/recent?limit=5`);
       const response = await fetch(`${API_URL}/audits/recent?limit=5`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -121,11 +128,14 @@ export default function Dashboard({
         },
       });
 
+      console.log('[Dashboard] Response status:', response.status);
       if (!response.ok) {
         if (response.status === 401) {
           handleUnauthorized();
           return;
         }
+        const errorText = await response.text();
+        console.error('[Dashboard] Error response:', errorText);
         throw new Error('Failed to fetch activities');
       }
 
@@ -133,7 +143,7 @@ export default function Dashboard({
       console.log('[Dashboard] Recent activities API response:', JSON.stringify(data, null, 2));
       setRecentActivities(data || []);
     } catch (error) {
-      console.error('Failed to fetch recent activities:', error);
+      console.error('[Dashboard] Failed to fetch recent activities:', error);
     } finally {
       setLoadingActivities(false);
     }
@@ -328,6 +338,7 @@ export default function Dashboard({
 
   // Fetch recent activities on mount
   useEffect(() => {
+    console.log('[Dashboard] useEffect triggered for fetchRecentActivities');
     fetchRecentActivities();
   }, [fetchRecentActivities]);
 
