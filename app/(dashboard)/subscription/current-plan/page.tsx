@@ -362,7 +362,7 @@ const formatQuotaValue = (value: number | string | undefined | null | Record<str
 function CurrentPlanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { logout, user } = useAuth();
+  const { logout, user, isBillingManager } = useAuth();
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
@@ -1700,8 +1700,8 @@ function CurrentPlanContent() {
           </div>
         )}
 
-        {/* Available Plans */}
-        {plans.length > 0 && (
+        {/* Available Plans - Hidden for Billing Manager (RBAC03) */}
+        {!isBillingManager && plans.length > 0 && (
           <>
             <div className="mb-6">
               <h2 className="text-lg font-semibold text-gray-900 text-center">
