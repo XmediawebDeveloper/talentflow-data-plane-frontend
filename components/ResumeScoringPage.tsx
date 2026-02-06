@@ -268,8 +268,10 @@ export default function ResumeScoringPage({
         source: item.source || 'database',
         status: item.status || 'completed',
         errorReason: item.error_message || item.error_reason || '',
-        experience: item.experience,
-        education: item.education,
+        experience: item.experience_years ? `${item.experience_years} years` : (Array.isArray(item.experience) ? `${item.experience.length} positions` : item.experience),
+        experienceDetails: Array.isArray(item.experience) ? item.experience : [],
+        education: Array.isArray(item.education) ? (item.education[0]?.degree || `${item.education.length} degrees`) : item.education,
+        educationDetails: Array.isArray(item.education) ? item.education : [],
         certifications: item.certifications,
         aiSummary: item.ai_summary,
         strengths: item.strengths,
@@ -860,6 +862,30 @@ export default function ResumeScoringPage({
     );
   }
 
+  // View Candidate Scoring Detail Page from Global View (no selectedHistoryItem)
+  if (viewMode === 'candidateView' && selectedCandidateForView && !selectedHistoryItem) {
+    const candidateJdId = selectedCandidateForView.jdId || 'global';
+    const candidateJobTitle = selectedCandidateForView.jobTitle || 'All Jobs';
+    return (
+      <CandidateScoringDetailPage
+        resume={selectedCandidateForView}
+        jobTitle={candidateJobTitle}
+        jobId={candidateJdId}
+        onBack={() => {
+          setSelectedCandidateForView(null);
+          setViewMode('history');
+          // Go back to global view
+          router.push(`/recruitment/resume-scoring`, { scroll: false });
+        }}
+        onMinimize={() => {
+          setSelectedCandidateForView(null);
+          setViewMode('history');
+          router.push(`/recruitment/resume-scoring`, { scroll: false });
+        }}
+      />
+    );
+  }
+
   // View History Details
   if (viewMode === 'details' && selectedHistoryItem) {
     const scoredResumesData = convertToScoredResumesFormat(selectedHistoryItem);
@@ -1349,6 +1375,9 @@ export default function ResumeScoringPage({
                 onViewCandidate={(resume) => {
                   setSelectedCandidateForView(resume);
                   setViewMode('candidateView');
+                  // Update URL with jd_id and score_id for shareable link & browser history
+                  const jdId = resume.jdId || 'global';
+                  router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}`, { scroll: false });
                 }}
                 selectedResumes={selectedScoredResumes}
                 onSelectResume={(id) => {

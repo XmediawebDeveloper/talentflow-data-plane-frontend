@@ -856,8 +856,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             {/* JD15: Action Buttons - For Disabled jobs */}
             {job.status === 'Disabled' && (
               <div className="flex items-center gap-2">
-                {/* JD15: Enable button - Only visible to Owners */}
-                {onEnable && isTenantAdmin && (
+                {/* JD15: Enable button - COMMENTED OUT */}
+                {false && onEnable && isTenantAdmin && (
                   <button
                     onClick={() => onEnable(job)}
                     className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all flex items-center gap-2"

@@ -689,7 +689,16 @@ export default function ScoredResumesTable({
                   if (col.id === 'candidateName') {
                     return (
                       <td key={col.id} className="py-3 px-4">
-                        <div className="text-sm text-gray-900">{resume.candidateName}</div>
+                        {onViewCandidate ? (
+                          <button
+                            onClick={() => onViewCandidate(resume)}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
+                          >
+                            {resume.candidateName}
+                          </button>
+                        ) : (
+                          <div className="text-sm text-gray-900">{resume.candidateName}</div>
+                        )}
                       </td>
                     );
                   }

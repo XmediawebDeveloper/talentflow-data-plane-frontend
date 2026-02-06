@@ -375,7 +375,7 @@ export default function ResumeTable({
                       {onViewDetails ? (
                         <button
                           onClick={() => onViewDetails(resume)}
-                          className="text-sm text-gray-900 hover:text-blue-600 hover:underline text-left transition-colors"
+                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
                         >
                           {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
                         </button>
