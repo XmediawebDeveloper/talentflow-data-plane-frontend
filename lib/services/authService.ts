@@ -91,23 +91,69 @@ export interface LoginResponse {
   pending_payment_redirect?: string;
 }
 
+// 2FA Required Response - returned when user has 2FA enabled
+export interface TwoFactorRequiredResponse {
+  requires_2fa: true;
+  temp_token: string;
+  message: string;
+  user_email: string;
+}
+
+// Union type for login result
+export type LoginResult = LoginResponse | TwoFactorRequiredResponse;
+
+// Type guard to check if response requires 2FA
+export function isTwoFactorRequired(response: LoginResult): response is TwoFactorRequiredResponse {
+  return 'requires_2fa' in response && response.requires_2fa === true;
+}
+
 export const authService = {
   /**
    * Login with email and password
+   * Returns LoginResponse on success, or TwoFactorRequiredResponse if 2FA is required
    */
-  async login(data: LoginRequest): Promise<LoginResponse> {
+  async login(data: LoginRequest): Promise<LoginResult> {
     try {
       console.log('[AUTH] Attempting login for:', data.email);
-      const response = await api.post<LoginResponse>('/auth/login', data);
+      const response = await api.post<LoginResult>('/auth/login', data);
       console.log('[AUTH] Login response status:', response.status);
       console.log('[AUTH] Login response data:', response.data);
-      const { tokens } = response.data;
+
+      // Check if 2FA is required
+      if (isTwoFactorRequired(response.data)) {
+        console.log('[AUTH] 2FA required for user:', response.data.user_email);
+        return response.data;
+      }
+
+      // Normal login - set tokens
+      const loginResponse = response.data as LoginResponse;
+      const { tokens } = loginResponse;
       setTokens(tokens.access_token, tokens.refresh_token);
-      return response.data;
+      return loginResponse;
     } catch (error: any) {
       console.error('[AUTH] Login error:', error);
       console.error('[AUTH] Error response:', error.response?.data);
       console.error('[AUTH] Error status:', error.response?.status);
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Verify 2FA code during login
+   */
+  async verify2FALogin(tempToken: string, otpCode: string): Promise<LoginResponse> {
+    try {
+      console.log('[AUTH] Verifying 2FA code');
+      const response = await api.post<LoginResponse>('/auth/verify-2fa-login', {
+        temp_token: tempToken,
+        otp_code: otpCode,
+      });
+      console.log('[AUTH] 2FA verification successful');
+      const { tokens } = response.data;
+      setTokens(tokens.access_token, tokens.refresh_token);
+      return response.data;
+    } catch (error: any) {
+      console.error('[AUTH] 2FA verification error:', error);
       throw new Error(handleApiError(error));
     }
   },

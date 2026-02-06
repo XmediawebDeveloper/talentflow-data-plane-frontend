@@ -18,15 +18,40 @@ import {
   Sparkles,
   Loader2,
   Edit2,
-  Trash2
+  Trash2,
+  LogIn,
+  LogOut,
+  Plus,
+  Settings,
+  FolderOpen,
+  CreditCard,
+  Upload,
+  Send,
+  Activity
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { assessmentService } from '@/lib/services';
 import { toast } from 'sonner';
+import { handleUnauthorized } from '@/lib/services/api';
 
 import { User, Tenant, getRemainingUnits } from '@/lib/types/tenant';
 import UnitsWarningBanner from './UnitsWarningBanner';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
+interface AuditLog {
+  id: string;
+  user_name: string;
+  user_email: string | null;
+  action: string;
+  action_label: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  details: Record<string, any>;
+  ip_address: string | null;
+  created_at: string;
+}
 
 interface DashboardProps {
   onNavigateToJobs?: () => void;
@@ -75,8 +100,189 @@ export default function Dashboard({
     units_consumed: 0,
   });
 
+  // Recent Activity State
+  const [recentActivities, setRecentActivities] = useState<AuditLog[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState(true);
+
   // Permission checks
   const canCreateJD = user?.is_tenant_admin || user?.permissions?.canCreateJD;
+
+  // Fetch Recent Activities
+  const fetchRecentActivities = useCallback(async () => {
+    console.log('[Dashboard] fetchRecentActivities called');
+    setLoadingActivities(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      console.log('[Dashboard] Token exists:', !!token);
+      if (!token) {
+        console.log('[Dashboard] No token, skipping fetch');
+        setLoadingActivities(false);
+        return;
+      }
+
+      console.log('[Dashboard] Fetching from:', `${API_URL}/audits/recent?limit=5`);
+      const response = await fetch(`${API_URL}/audits/recent?limit=5`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('[Dashboard] Response status:', response.status);
+      if (!response.ok) {
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        const errorText = await response.text();
+        console.error('[Dashboard] Error response:', errorText);
+        throw new Error('Failed to fetch activities');
+      }
+
+      const data = await response.json();
+      console.log('[Dashboard] Recent activities API response:', JSON.stringify(data, null, 2));
+      setRecentActivities(data || []);
+    } catch (error) {
+      console.error('[Dashboard] Failed to fetch recent activities:', error);
+    } finally {
+      setLoadingActivities(false);
+    }
+  }, []);
+
+  // Helper function to get activity details
+  const getActivityDetails = (log: AuditLog): string => {
+    // Debug logging
+    console.log('[Dashboard] Processing log:', {
+      action: log.action,
+      details: log.details,
+      user_email: log.user_email,
+      ip_address: log.ip_address
+    });
+
+    // Parse details if it's a string (sometimes JSON comes as string)
+    let details: Record<string, any> = {};
+    if (log.details) {
+      if (typeof log.details === 'string') {
+        try {
+          details = JSON.parse(log.details);
+        } catch {
+          details = {};
+        }
+      } else {
+        details = log.details;
+      }
+    }
+
+    // Normalize action to lowercase for comparison
+    const actionLower = (log.action || '').toLowerCase();
+
+    // For login/logout actions - show email and IP
+    if (actionLower.includes('login') || actionLower.includes('logout')) {
+      const parts: string[] = [];
+      // Try to get email from details or from user_email field
+      const email = details.email || log.user_email;
+      if (email) parts.push(email);
+      if (log.ip_address) parts.push(`IP: ${log.ip_address}`);
+      if (parts.length > 0) return parts.join(' • ');
+      return 'Session activity';
+    }
+
+    // For team actions - show team name
+    if (actionLower.includes('team')) {
+      if (details.team_name) return `Team: ${details.team_name}`;
+      if (details.name) return `Team: ${details.name}`;
+    }
+
+    // Check for common detail fields
+    if (details.name) return details.name;
+    if (details.title) return details.title;
+    if (details.email) return details.email;
+    if (details.team_name) return `Team: ${details.team_name}`;
+    if (details.folder_name) return `Folder: ${details.folder_name}`;
+    if (details.role_name) return `Role: ${details.role_name}`;
+    if (details.jd_title) return details.jd_title;
+    if (details.resume_name) return details.resume_name;
+    if (details.assessment_name) return details.assessment_name;
+    if (details.plan_name) return `Plan: ${details.plan_name}`;
+    if (details.addon_name) return `Add-on: ${details.addon_name}`;
+    if (details.reason) return details.reason;
+
+    // Check entity type for context
+    if (log.entity_type) {
+      const entityLabel = log.entity_type.replace(/_/g, ' ');
+      return entityLabel.charAt(0).toUpperCase() + entityLabel.slice(1);
+    }
+
+    // Return any key-value from details
+    const detailKeys = Object.keys(details);
+    if (detailKeys.length > 0) {
+      const key = detailKeys[0];
+      const value = details[key];
+      if (typeof value === 'string' && value.length > 0) return value;
+      if (typeof value === 'object' && value?.name) return value.name;
+    }
+
+    // Fallback - use user_email if available
+    if (log.user_email) return log.user_email;
+
+    // Last resort - extract from action_label
+    if (log.action_label) {
+      // For "User logged in" type actions, show the user's email from user_name if it looks like email
+      if (log.user_name && log.user_name.includes('@')) {
+        return log.user_name;
+      }
+      // Otherwise just indicate the action type
+      return log.action_label.includes('logged') ? 'Session' : 'Activity';
+    }
+
+    return '-';
+  };
+
+  // Helper function to get action icon
+  const getActionIcon = (action: string): React.ElementType => {
+    const actionLower = (action || '').toLowerCase();
+    if (actionLower.includes('login')) return LogIn;
+    if (actionLower.includes('logout')) return LogOut;
+    if (actionLower.includes('create') || actionLower.includes('upload')) return Plus;
+    if (actionLower.includes('update') || actionLower.includes('change')) return Edit2;
+    if (actionLower.includes('delete') || actionLower.includes('remove')) return Trash2;
+    if (actionLower.includes('invite')) return Send;
+    if (actionLower.includes('settings')) return Settings;
+    if (actionLower.includes('folder')) return FolderOpen;
+    if (actionLower.includes('subscription') || actionLower.includes('payment')) return CreditCard;
+    if (actionLower.includes('resume')) return FileText;
+    if (actionLower.includes('jd') || actionLower.includes('job')) return Briefcase;
+    if (actionLower.includes('user') || actionLower.includes('team')) return Users;
+    if (actionLower.includes('assessment')) return FileText;
+    return Activity;
+  };
+
+  // Helper function to get action color
+  const getActionColor = (action: string): { bg: string; text: string } => {
+    const actionLower = (action || '').toLowerCase();
+    if (actionLower.includes('login')) return { bg: 'bg-gray-100', text: 'text-gray-800' };
+    if (actionLower.includes('logout')) return { bg: 'bg-gray-100', text: 'text-gray-500' };
+    if (actionLower.includes('create') || actionLower.includes('upload')) return { bg: 'bg-green-100', text: 'text-green-600' };
+    if (actionLower.includes('update') || actionLower.includes('change')) return { bg: 'bg-gray-100', text: 'text-gray-800' };
+    if (actionLower.includes('delete') || actionLower.includes('remove')) return { bg: 'bg-red-100', text: 'text-red-600' };
+    return { bg: 'bg-gray-100', text: 'text-gray-800' };
+  };
+
+  // Helper function to format relative time
+  const getRelativeTime = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  };
 
   // Fetch JDs and Assessment Stats from API
   useEffect(() => {
@@ -129,6 +335,13 @@ export default function Dashboard({
 
     fetchData();
   }, []);
+
+  // Fetch recent activities on mount
+  useEffect(() => {
+    console.log('[Dashboard] useEffect triggered for fetchRecentActivities');
+    fetchRecentActivities();
+  }, [fetchRecentActivities]);
+
   return (
     <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
       <div className="max-w-7xl mx-auto">
@@ -601,79 +814,64 @@ export default function Dashboard({
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-gray-900">Recent Activity</h2>
-                <button className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1">
+                <a href="/audits/activity" className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1">
                   View all
                   <ArrowRight className="w-4 h-4" />
-                </button>
+                </a>
               </div>
             </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {[
-                  {
-                    icon: Users,
-                    color: 'blue',
-                    title: 'New candidate applied',
-                    description: 'Sarah Williams applied for Senior Java Developer',
-                    time: '5 minutes ago',
-                  },
-                  {
-                    icon: Video,
-                    color: 'gray',
-                    title: 'AI Interview completed',
-                    description: 'Michael Chen - Product Manager position',
-                    time: '1 hour ago',
-                  },
-                  {
-                    icon: FileText,
-                    color: 'green',
-                    title: 'Assessment submitted',
-                    description: 'Emily Rodriguez completed Technical Assessment',
-                    time: '2 hours ago',
-                  },
-                  {
-                    icon: Briefcase,
-                    color: 'yellow',
-                    title: 'New job posted',
-                    description: 'DevOps Engineer position is now live',
-                    time: '3 hours ago',
-                  },
-                  {
-                    icon: Users,
-                    color: 'blue',
-                    title: 'Candidate shortlisted',
-                    description: 'David Kim moved to final round for Backend Developer',
-                    time: '5 hours ago',
-                  },
-                ].map((activity, index) => {
-                  const Icon = activity.icon;
-                  const bgColor = {
-                    blue: 'bg-gray-100',
-                    gray: 'bg-gray-100',
-                    green: 'bg-green-100',
-                    yellow: 'bg-yellow-100',
-                  }[activity.color];
-                  const iconColor = {
-                    blue: 'text-gray-800',
-                    gray: 'text-gray-800',
-                    green: 'text-green-600',
-                    yellow: 'text-yellow-600',
-                  }[activity.color];
+            <div className="p-0">
+              {loadingActivities ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                  <span className="ml-2 text-gray-600 text-sm">Loading activities...</span>
+                </div>
+              ) : recentActivities.length === 0 ? (
+                <div className="text-center py-8">
+                  <Activity className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 text-sm">No recent activity</p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {recentActivities.map((log) => {
+                      const Icon = getActionIcon(log.action);
+                      const colors = getActionColor(log.action);
+                      const details = getActivityDetails(log);
 
-                  return (
-                    <div key={index} className="flex items-start gap-4">
-                      <div className={`w-10 h-10 rounded-lg ${bgColor} flex items-center justify-center flex-shrink-0`}>
-                        <Icon className={`w-5 h-5 ${iconColor}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-900 mb-1">{activity.title}</div>
-                        <div className="text-sm text-gray-600">{activity.description}</div>
-                        <div className="text-xs text-gray-500 mt-1">{activity.time}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      return (
+                        <tr key={log.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-8 h-8 rounded-lg ${colors.bg} flex items-center justify-center flex-shrink-0`}>
+                                <Icon className={`w-4 h-4 ${colors.text}`} />
+                              </div>
+                              <span className="text-sm text-gray-900">{log.action_label}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-sm text-gray-600">{details}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-gray-900">{log.user_name}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-gray-500">{getRelativeTime(log.created_at)}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
 

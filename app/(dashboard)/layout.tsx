@@ -6,6 +6,7 @@ import { useEffect, useState, Suspense } from 'react';
 import Sidebar from '@/components/shared/Sidebar';
 import Header from '@/components/Header';
 import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
+import { SessionTimeoutProvider } from '@/components/SessionTimeoutProvider';
 import { toast } from 'sonner';
 import { scoringService } from '@/lib/services/scoringService';
 import { QuotaProvider } from '@/contexts/QuotaContext';
@@ -210,28 +211,30 @@ export default function DashboardLayout({
 
   return (
     <QuotaProvider>
-      <Suspense fallback={null}>
-        <SearchParamsErrorHandler />
-      </Suspense>
-      <div className="flex h-screen bg-gray-50">
-        <Sidebar user={user || undefined} tenant={tenant || undefined} />
+      <SessionTimeoutProvider>
+        <Suspense fallback={null}>
+          <SearchParamsErrorHandler />
+        </Suspense>
+        <div className="flex h-screen bg-gray-50">
+          <Sidebar user={user || undefined} tenant={tenant || undefined} />
 
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <Header
-            user={user}
-            tenant={tenant}
-            onLogout={logout}
-            onOpenSettings={() => router.push('/settings')}
-          />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <Header
+              user={user}
+              tenant={tenant}
+              onLogout={logout}
+              onOpenSettings={() => router.push('/settings')}
+            />
 
-          <div className="flex-1 overflow-y-auto">
-            {children}
+            <div className="flex-1 overflow-y-auto">
+              {children}
+            </div>
           </div>
-        </div>
 
-        {/* Global subscription inactive modal - shown on all dashboard pages */}
-        <SubscriptionInactiveModal />
-      </div>
+          {/* Global subscription inactive modal - shown on all dashboard pages */}
+          <SubscriptionInactiveModal />
+        </div>
+      </SessionTimeoutProvider>
     </QuotaProvider>
   );
 }

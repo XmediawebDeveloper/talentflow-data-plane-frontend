@@ -393,6 +393,14 @@ export default function MyResumesPage() {
     fetchUploadHistory();
   }, []);
 
+  // Refetch when filters or folder selection changes
+  useEffect(() => {
+    // Skip initial render (fetchData is already called above)
+    if (resumes.length > 0) {
+      fetchData(appliedSearchQuery, filters, selectedFolder);
+    }
+  }, [filters, selectedFolder]);
+
   // Handle deep link from notifications
   useEffect(() => {
     const resumeIdFromUrl = searchParams.get('resume_id');
@@ -479,11 +487,66 @@ export default function MyResumesPage() {
     setIsUploadHistoryMinimized(false);
   };
 
-  const fetchData = async () => {
+  const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string) => {
     setLoading(true);
     try {
+      // Build search params for backend API
+      const searchParams: any = {
+        source: 'my-resumes',
+        page_size: 100, // API maximum limit
+      };
+
+      // Add folder filter if not viewing all
+      if (folderId && folderId !== 'all') {
+        searchParams.folder_id = folderId;
+      }
+
+      // Add search query
+      if (searchTerm && searchTerm.trim()) {
+        searchParams.search = searchTerm.trim();
+      }
+
+      // Add filter parameters
+      if (currentFilters) {
+        if (currentFilters.skills && currentFilters.skills.length > 0) {
+          searchParams.skills = currentFilters.skills.join(',');
+        }
+        if (currentFilters.experienceRange) {
+          if (currentFilters.experienceRange.min !== undefined) {
+            searchParams.experience_min = currentFilters.experienceRange.min;
+          }
+          if (currentFilters.experienceRange.max !== undefined) {
+            searchParams.experience_max = currentFilters.experienceRange.max;
+          }
+        }
+        if (currentFilters.location) {
+          searchParams.location = currentFilters.location;
+        }
+        if (currentFilters.education) {
+          searchParams.education = currentFilters.education;
+        }
+        if (currentFilters.currentCompany) {
+          searchParams.current_company = currentFilters.currentCompany;
+        }
+        if (currentFilters.previousCompany) {
+          searchParams.previous_company = currentFilters.previousCompany;
+        }
+        if (currentFilters.noticePeriod) {
+          searchParams.notice_period = currentFilters.noticePeriod;
+        }
+        if (currentFilters.uploadDateFrom) {
+          searchParams.upload_date_from = currentFilters.uploadDateFrom;
+        }
+        if (currentFilters.uploadDateTo) {
+          searchParams.upload_date_to = currentFilters.uploadDateTo;
+        }
+        if (currentFilters.sourceType) {
+          searchParams.source_type = currentFilters.sourceType;
+        }
+      }
+
       const [resumeResponse, folderResponse] = await Promise.all([
-        resumeService.list({ source: 'my-resumes', page_size: 100 }),
+        resumeService.list(searchParams),
         folderService.list().catch(() => []),
       ]);
 
@@ -1404,6 +1467,7 @@ export default function MyResumesPage() {
                   file_size: existingResume.file_size || 0,
                   file_name: existingResume.file_name || '',
                   version: existingResume.version || 1,
+                  version_count: existingResume.version_count || existingResume.version || 1,
                 },
                 contentDifferences: contentDifferences,
                 isDuplicate: isExactDuplicate,
@@ -1611,7 +1675,9 @@ export default function MyResumesPage() {
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
     setAppliedSearchQuery(query);
-  }, []);
+    // Trigger backend search
+    fetchData(query, filters, selectedFolder);
+  }, [filters, selectedFolder]);
 
   // Client-side search helper - searches across all text fields including phone and skills
   const matchesSearch = useCallback((resume: Resume, query: string): boolean => {
