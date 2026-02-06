@@ -1,7 +1,7 @@
 'use client';
 
-import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, FolderOpen, HardDrive, ChevronLeft, ChevronRight, Check } from 'lucide-react';
-import { useState } from 'react';
+import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, FolderOpen, HardDrive, ChevronLeft, ChevronRight, Check, Ban } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 
 export interface ExistingResume {
   id: string;
@@ -29,12 +29,60 @@ interface DuplicateResumeModalProps {
 }
 
 export default function DuplicateResumeModal({ duplicates, onClose, onResolve }: DuplicateResumeModalProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  // Separate exact duplicates from versions (content changes)
+  const { exactDuplicates, versionsWithChanges } = useMemo(() => {
+    const exact: { file: DuplicateFile; originalIndex: number }[] = [];
+    const versions: { file: DuplicateFile; originalIndex: number }[] = [];
+
+    duplicates.forEach((dup, index) => {
+      if (dup.isDuplicate) {
+        exact.push({ file: dup, originalIndex: index });
+      } else {
+        versions.push({ file: dup, originalIndex: index });
+      }
+    });
+
+    return { exactDuplicates: exact, versionsWithChanges: versions };
+  }, [duplicates]);
+
+  // Only show modal for versions with changes (exact duplicates are auto-rejected)
+  const hasOnlyExactDuplicates = versionsWithChanges.length === 0;
+
+  const [currentVersionIndex, setCurrentVersionIndex] = useState(0);
   const [resolutions, setResolutions] = useState<Map<number, 'discard' | 'overwrite' | 'version'>>(new Map());
   const [selectedAction, setSelectedAction] = useState<'discard' | 'overwrite' | 'version' | null>(null);
 
-  const currentDuplicate = duplicates[currentIndex];
-  const isExactDuplicate = currentDuplicate?.isDuplicate;
+  // Auto-resolve exact duplicates as 'discard' on mount
+  useEffect(() => {
+    if (exactDuplicates.length > 0) {
+      const autoResolutions = new Map(resolutions);
+      exactDuplicates.forEach(({ originalIndex }) => {
+        autoResolutions.set(originalIndex, 'discard');
+      });
+      setResolutions(autoResolutions);
+    }
+  }, [exactDuplicates]);
+
+  // If only exact duplicates, auto-close after showing message
+  useEffect(() => {
+    if (hasOnlyExactDuplicates && exactDuplicates.length > 0) {
+      // Auto-resolve all exact duplicates as discarded
+      const autoResolutions = exactDuplicates.map(({ originalIndex }) => ({
+        fileIndex: originalIndex,
+        action: 'discard' as const
+      }));
+
+      // Show blocked message briefly, then auto-resolve
+      const timer = setTimeout(() => {
+        onResolve(autoResolutions);
+      }, 3000); // 3 seconds to read the message
+
+      return () => clearTimeout(timer);
+    }
+  }, [hasOnlyExactDuplicates, exactDuplicates, onResolve]);
+
+  const currentVersion = versionsWithChanges[currentVersionIndex];
+  const currentDuplicate = currentVersion?.file;
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -53,41 +101,36 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
   };
 
   const handleSelectAction = (action: 'discard' | 'overwrite' | 'version') => {
+    if (!currentVersion) return;
     setSelectedAction(action);
     const newResolutions = new Map(resolutions);
-    newResolutions.set(currentIndex, action);
+    newResolutions.set(currentVersion.originalIndex, action);
     setResolutions(newResolutions);
   };
 
   const handleNext = () => {
-    if (currentIndex < duplicates.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-      setSelectedAction(resolutions.get(currentIndex + 1) || null);
+    if (currentVersionIndex < versionsWithChanges.length - 1) {
+      const nextIndex = currentVersionIndex + 1;
+      setCurrentVersionIndex(nextIndex);
+      setSelectedAction(resolutions.get(versionsWithChanges[nextIndex].originalIndex) || null);
     }
   };
 
   const handlePrevious = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-      setSelectedAction(resolutions.get(currentIndex - 1) || null);
+    if (currentVersionIndex > 0) {
+      const prevIndex = currentVersionIndex - 1;
+      setCurrentVersionIndex(prevIndex);
+      setSelectedAction(resolutions.get(versionsWithChanges[prevIndex].originalIndex) || null);
     }
   };
 
   const handleConfirm = () => {
-    // If current selection not saved, save it
-    if (selectedAction && !resolutions.has(currentIndex)) {
-      resolutions.set(currentIndex, selectedAction);
+    // Save current selection if not already saved
+    if (currentVersion && selectedAction && !resolutions.has(currentVersion.originalIndex)) {
+      resolutions.set(currentVersion.originalIndex, selectedAction);
     }
 
-    // Check if all duplicates have resolutions
-    const allResolved = duplicates.every((_, index) => resolutions.has(index));
-    if (!allResolved) {
-      // Set current selection if exists
-      if (selectedAction) {
-        resolutions.set(currentIndex, selectedAction);
-      }
-    }
-
+    // Build resolution array (exact duplicates are already auto-discarded)
     const resolutionArray = Array.from(resolutions.entries()).map(([fileIndex, action]) => ({
       fileIndex,
       action
@@ -96,7 +139,98 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
     onResolve(resolutionArray);
   };
 
-  const allResolved = duplicates.every((_, index) => resolutions.has(index) || (index === currentIndex && selectedAction));
+  // Check if all versions with changes have been resolved (exact duplicates are auto-resolved)
+  const allVersionsResolved = versionsWithChanges.every(({ originalIndex }) =>
+    resolutions.has(originalIndex) ||
+    (currentVersion && originalIndex === currentVersion.originalIndex && selectedAction)
+  );
+
+  // Show blocked message for exact duplicates only
+  if (hasOnlyExactDuplicates) {
+    return (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+          {/* Header */}
+          <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-red-50 to-red-100">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+                <Ban className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-1">
+                  Upload Blocked
+                </h2>
+                <p className="text-sm text-gray-600">
+                  {exactDuplicates.length === 1
+                    ? 'This resume is an exact duplicate and cannot be uploaded.'
+                    : `${exactDuplicates.length} resumes are exact duplicates and cannot be uploaded.`}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-6">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl mb-4">
+              <h4 className="font-medium text-red-900 mb-2 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Duplicate Resume{exactDuplicates.length > 1 ? 's' : ''} Rejected
+              </h4>
+              <p className="text-sm text-red-700 mb-3">
+                The following file{exactDuplicates.length > 1 ? 's contain' : ' contains'} identical information to existing resume{exactDuplicates.length > 1 ? 's' : ''} in the system:
+              </p>
+              <ul className="space-y-2">
+                {exactDuplicates.map(({ file, originalIndex }) => (
+                  <li key={originalIndex} className="flex items-center gap-2 text-sm text-red-800">
+                    <FileText className="w-4 h-4 text-red-500" />
+                    <span className="font-medium">{file.file.name}</span>
+                    <span className="text-red-600">→ matches {file.existingResume.candidate_name}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="text-xs text-gray-600">
+                <span className="font-medium">Note:</span> Exact duplicates are automatically blocked to prevent data redundancy.
+                The existing candidate records remain unchanged. This window will close automatically.
+              </p>
+            </div>
+
+            {/* Auto-close countdown */}
+            <div className="mt-4 flex items-center justify-center">
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                <span>Closing automatically...</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
+            <button
+              onClick={() => {
+                // Resolve all as discarded immediately
+                const autoResolutions = exactDuplicates.map(({ originalIndex }) => ({
+                  fileIndex: originalIndex,
+                  action: 'discard' as const
+                }));
+                onResolve(autoResolutions);
+              }}
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium"
+            >
+              Close Now
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if no versions to show
+  if (!currentDuplicate) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
@@ -109,12 +243,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900 mb-1">
-                {isExactDuplicate ? 'Duplicate Resume Detected' : 'Resume Update Detected'}
+                Resume Update Detected
               </h2>
               <p className="text-sm text-gray-600">
-                {isExactDuplicate
-                  ? 'This candidate already exists with identical information.'
-                  : 'This candidate already exists in the system. Choose how to handle this update.'}
+                This candidate already exists in the system. Choose how to handle this update.
               </p>
             </div>
           </div>
@@ -125,16 +257,19 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
 
         {/* File Counter */}
         <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">
-            File {currentIndex + 1} of {duplicates.length}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-gray-700">
+              Resume {currentVersionIndex + 1} of {versionsWithChanges.length}
+            </span>
+            {exactDuplicates.length > 0 && (
+              <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">
+                {exactDuplicates.length} duplicate{exactDuplicates.length > 1 ? 's' : ''} auto-blocked
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
-            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-              isExactDuplicate
-                ? 'bg-red-100 text-red-700'
-                : 'bg-amber-100 text-amber-700'
-            }`}>
-              {isExactDuplicate ? 'Exact Duplicate' : 'Content Changes Detected'}
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+              Content Changes Detected
             </span>
           </div>
         </div>
@@ -226,8 +361,8 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
             </div>
           </div>
 
-          {/* Content Differences - Only show for non-exact duplicates */}
-          {!isExactDuplicate && currentDuplicate.contentDifferences.length > 0 && (
+          {/* Content Differences */}
+          {currentDuplicate.contentDifferences.length > 0 && (
             <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
               <h4 className="font-medium text-amber-900 mb-3 flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
@@ -241,20 +376,6 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                   </li>
                 ))}
               </ul>
-            </div>
-          )}
-
-          {/* Exact Duplicate Warning */}
-          {isExactDuplicate && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
-              <h4 className="font-medium text-red-900 mb-2 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                Exact Duplicate - Cannot Upload
-              </h4>
-              <p className="text-sm text-red-700">
-                This resume contains identical information (same name, email, and content) as the existing resume.
-                Uploading duplicate resumes is not allowed. Please discard this file.
-              </p>
             </div>
           )}
 
@@ -296,87 +417,83 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
               </div>
             </button>
 
-            {/* Option 2: Overwrite - Only for non-exact duplicates */}
-            {!isExactDuplicate && (
-              <button
-                onClick={() => handleSelectAction('overwrite')}
-                className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
-                  selectedAction === 'overwrite'
-                    ? 'border-orange-500 bg-orange-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="flex items-start gap-4">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    selectedAction === 'overwrite' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    <RefreshCw className="w-5 h-5" />
+            {/* Option 2: Overwrite */}
+            <button
+              onClick={() => handleSelectAction('overwrite')}
+              className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
+                selectedAction === 'overwrite'
+                  ? 'border-orange-500 bg-orange-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-start gap-4">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  selectedAction === 'overwrite' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h5 className="font-semibold text-gray-900">2. Overwrite Existing Resume</h5>
+                    {selectedAction === 'overwrite' && (
+                      <Check className="w-5 h-5 text-orange-500" />
+                    )}
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h5 className="font-semibold text-gray-900">2. Overwrite Existing Resume</h5>
-                      {selectedAction === 'overwrite' && (
-                        <Check className="w-5 h-5 text-orange-500" />
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Replace old resume with new one. Original will be permanently deleted.
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
-                      <span>• Old resume: <span className="text-red-600">Deleted</span></span>
-                      <span>• New resume: <span className="text-green-600">Saved</span></span>
-                      <span>• Consumes: <span className="text-orange-600">1 upload unit</span></span>
-                    </div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Replace old resume with new one. Original will be permanently deleted.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+                    <span>• Old resume: <span className="text-red-600">Deleted</span></span>
+                    <span>• New resume: <span className="text-green-600">Saved</span></span>
+                    <span>• Consumes: <span className="text-orange-600">1 upload unit</span></span>
                   </div>
                 </div>
-              </button>
-            )}
+              </div>
+            </button>
 
-            {/* Option 3: Save as Version - Only for non-exact duplicates */}
-            {!isExactDuplicate && (
-              <button
-                onClick={() => handleSelectAction('version')}
-                className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
-                  selectedAction === 'version'
-                    ? 'border-green-500 bg-green-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="flex items-start gap-4">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    selectedAction === 'version' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    <GitBranch className="w-5 h-5" />
+            {/* Option 3: Save as Version */}
+            <button
+              onClick={() => handleSelectAction('version')}
+              className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
+                selectedAction === 'version'
+                  ? 'border-green-500 bg-green-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-start gap-4">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  selectedAction === 'version' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  <GitBranch className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h5 className="font-semibold text-gray-900">3. Save as New Version</h5>
+                      <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">Recommended</span>
+                    </div>
+                    {selectedAction === 'version' && (
+                      <Check className="w-5 h-5 text-green-500" />
+                    )}
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <h5 className="font-semibold text-gray-900">3. Save as New Version</h5>
-                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">Recommended</span>
-                      </div>
-                      {selectedAction === 'version' && (
-                        <Check className="w-5 h-5 text-green-500" />
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Keep both resumes. New resume stored as a versioned update. Recommended for tracking changes.
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
-                      <span>• Old resume: <span className="text-green-600">Kept</span></span>
-                      <span>• New resume: <span className="text-green-600">Saved as v{currentDuplicate.existingResume.version + 1}</span></span>
-                      <span>• Consumes: <span className="text-orange-600">1 upload unit</span></span>
-                    </div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Keep both resumes. New resume stored as a versioned update. Recommended for tracking changes.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+                    <span>• Old resume: <span className="text-green-600">Kept</span></span>
+                    <span>• New resume: <span className="text-green-600">Saved as v{currentDuplicate.existingResume.version + 1}</span></span>
+                    <span>• Consumes: <span className="text-orange-600">1 upload unit</span></span>
                   </div>
                 </div>
-              </button>
-            )}
+              </div>
+            </button>
           </div>
 
           {/* Note */}
           <div className="mt-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
             <p className="text-xs text-gray-600">
               <span className="font-medium">Note:</span> All actions are fully audit logged.
-              {!isExactDuplicate && ' Overwriting or saving as a new version will consume 1 resume upload unit from your quota.'}
+              Overwriting or saving as a new version will consume 1 resume upload unit from your quota.
             </p>
           </div>
         </div>
@@ -387,7 +504,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrevious}
-              disabled={currentIndex === 0}
+              disabled={currentVersionIndex === 0}
               className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -395,7 +512,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
             </button>
             <button
               onClick={handleNext}
-              disabled={currentIndex === duplicates.length - 1}
+              disabled={currentVersionIndex === versionsWithChanges.length - 1}
               className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
             >
               Next
@@ -405,13 +522,13 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
 
           {/* Progress */}
           <div className="flex items-center gap-2">
-            {duplicates.map((_, index) => (
+            {versionsWithChanges.map(({ originalIndex }, index) => (
               <div
-                key={index}
+                key={originalIndex}
                 className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                  resolutions.has(index) || (index === currentIndex && selectedAction)
+                  resolutions.has(originalIndex) || (index === currentVersionIndex && selectedAction)
                     ? 'bg-green-500'
-                    : index === currentIndex
+                    : index === currentVersionIndex
                     ? 'bg-gray-800'
                     : 'bg-gray-300'
                 }`}
@@ -432,7 +549,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
               disabled={!selectedAction}
               className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
             >
-              {allResolved ? 'Confirm All' : 'Continue'}
+              {allVersionsResolved ? 'Confirm All' : 'Continue'}
             </button>
           </div>
         </div>

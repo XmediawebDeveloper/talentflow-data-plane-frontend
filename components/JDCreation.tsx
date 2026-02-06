@@ -1135,24 +1135,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               console.log('[TalentFlow] Extracted params from stream:', response.extracted_params);
               processExtractedParams(response.extracted_params);
 
-              // Show what was extracted
-              const params = response.extracted_params;
-              const extractedItems: string[] = [];
-              if (params.must_have_skills?.length > 0) extractedItems.push(`${params.must_have_skills.length} skills`);
-              if (params.salary_min || params.salary_max) extractedItems.push(`salary: ₹${params.salary_min || 0} - ₹${params.salary_max || 0}`);
-              if (params.experience_min || params.experience_max) extractedItems.push(`${params.experience_min || 0}-${params.experience_max || '+'} yrs exp`);
-
-              if (extractedItems.length > 0) {
-                toast.success({
-                  title: 'JD Generated Successfully',
-                  description: `Extracted: ${extractedItems.join(', ')}`,
-                });
-              } else {
-                toast.success({
-                  title: 'JD Generated Successfully',
-                  description: 'Click "Next" to add job details.',
-                });
-              }
+              toast.success({
+                title: 'JD Generated Successfully',
+                description: 'Job details have been auto-filled. Click "Next" to review.',
+              });
             } else {
               toast.success({
                 title: 'JD Generated Successfully',
