@@ -556,6 +556,7 @@ export default function AITalentMatchPage({
 
     return (
       <>
+
       <main className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-white">
         {/* Header Section - Sticky */}
         <div className="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm p-6">
@@ -584,16 +585,14 @@ export default function AITalentMatchPage({
                     <ArrowLeft className="w-5 h-5" />
                     Back to Matched Jobs
                   </button>
-                  {/* Show Run AI Match button for all jobs except disabled */}
+                  {/* Run AI Match button */}
                   {canRunAIMatch && (
                     <button
                       onClick={() => {
                         const jobId = selectedJob || selectedHistoryItem?.jobId;
                         if (jobId) {
-                          isMatchingInProgress.current = true;
-                          setSelectedJob(jobId);
+                          handleRunAIMatch(jobId);
                           setSelectedCandidates([]);
-                          setShowMatchingPanel(true);
                         }
                       }}
                       className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2"
@@ -894,6 +893,7 @@ export default function AITalentMatchPage({
         <AITalentMatchProgressPanel
           jobTitle={selectedJobData?.title || selectedHistoryItem?.jobTitle || 'Job Description'}
           jobId={selectedJob}
+
           onComplete={handleMatchingComplete}
           onError={(error) => {
             setMatchError(error);
@@ -1494,6 +1494,7 @@ export default function AITalentMatchPage({
   // View: New Match (Job Selection)
   return (
     <>
+
       <AITalentMatchPageJobsList
         jobs={jobs}
         matchHistory={matchHistory}
@@ -1509,6 +1510,7 @@ export default function AITalentMatchPage({
         <AITalentMatchProgressPanel
           jobTitle={selectedJobData?.title || 'Job Description'}
           jobId={selectedJob}
+
           onComplete={handleMatchingComplete}
           onError={(error) => {
             setMatchError(error);

@@ -1,12 +1,12 @@
 'use client';
 
-import { X, Target, Clock, Loader, CheckCircle2, XCircle, Minus, Maximize2, User, FileText, RotateCcw, Timer } from 'lucide-react';
+import { X, Target, Clock, Loader, CheckCircle2, XCircle, AlertCircle, Minus, Maximize2, User, FileText, RotateCcw, Timer } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 export interface ResumeProgressItem {
   resumeId: string;
   candidateName: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
   score?: number;
   errorMessage?: string;
 }
@@ -153,6 +153,7 @@ export default function ScoringJobProgressModal({
 
   // Get all resume items from all jobs
   const allItems: ResumeProgressItem[] = stableJobProgressData.flatMap(job => job.items || []);
+  const alreadyScoredCount = allItems.filter(item => item.status === 'already_scored').length;
   const jobTitle = stableJobProgressData[0]?.jobTitle || 'Job';
 
   // Minimized floating indicator
@@ -198,6 +199,8 @@ export default function ScoringJobProgressModal({
         return <CheckCircle2 className="w-4 h-4 text-green-500" />;
       case 'failed':
         return <XCircle className="w-4 h-4 text-red-500" />;
+      case 'already_scored':
+        return <AlertCircle className="w-4 h-4 text-amber-500" />;
       default:
         return <Clock className="w-4 h-4 text-gray-400" />;
     }
@@ -213,6 +216,8 @@ export default function ScoringJobProgressModal({
         return 'bg-green-50 border-green-200';
       case 'failed':
         return 'bg-red-50 border-red-200';
+      case 'already_scored':
+        return 'bg-amber-50 border-amber-200';
       default:
         return 'bg-gray-50 border-gray-200';
     }
@@ -228,6 +233,8 @@ export default function ScoringJobProgressModal({
         return 'Scored';
       case 'failed':
         return 'Failed';
+      case 'already_scored':
+        return 'Already Scored';
       default:
         return status;
     }
@@ -313,6 +320,12 @@ export default function ScoringJobProgressModal({
 
           {/* Stats */}
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+            {alreadyScoredCount > 0 && (
+              <div className="flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                <span className="text-xs sm:text-sm text-gray-600">Duplicate: <span className="font-semibold text-amber-600">{alreadyScoredCount}</span></span>
+              </div>
+            )}
             <div className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-gray-400" />
               <span className="text-xs sm:text-sm text-gray-600">Queue: <span className="font-semibold text-gray-900">{overallQueued}</span></span>
@@ -323,7 +336,7 @@ export default function ScoringJobProgressModal({
             </div>
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-              <span className="text-xs sm:text-sm text-gray-600">Done: <span className="font-semibold text-green-600">{overallCompleted}</span></span>
+              <span className="text-xs sm:text-sm text-gray-600">Done: <span className="font-semibold text-green-600">{overallCompleted - alreadyScoredCount}</span></span>
             </div>
             <div className="flex items-center gap-1.5">
               <XCircle className="w-3.5 h-3.5 text-red-500" />
@@ -350,6 +363,7 @@ export default function ScoringJobProgressModal({
                     item.status === 'processing' ? 'border-l-blue-500' :
                     item.status === 'completed' ? 'border-l-green-500' :
                     item.status === 'failed' ? 'border-l-red-500' :
+                    item.status === 'already_scored' ? 'border-l-amber-500' :
                     'border-l-gray-300'
                   }`}
                 >
@@ -358,12 +372,14 @@ export default function ScoringJobProgressModal({
                     item.status === 'processing' ? 'bg-blue-100' :
                     item.status === 'completed' ? 'bg-green-100' :
                     item.status === 'failed' ? 'bg-red-100' :
+                    item.status === 'already_scored' ? 'bg-amber-100' :
                     'bg-gray-100'
                   }`}>
                     <User className={`w-4 h-4 sm:w-5 sm:h-5 ${
                       item.status === 'processing' ? 'text-blue-600' :
                       item.status === 'completed' ? 'text-green-600' :
                       item.status === 'failed' ? 'text-red-600' :
+                      item.status === 'already_scored' ? 'text-amber-600' :
                       'text-gray-500'
                     }`} />
                   </div>
@@ -385,16 +401,22 @@ export default function ScoringJobProgressModal({
                       item.status === 'processing' ? 'text-blue-600' :
                       item.status === 'completed' ? 'text-green-600' :
                       item.status === 'failed' ? 'text-red-600' :
+                      item.status === 'already_scored' ? 'text-amber-600' :
                       'text-gray-500'
                     }`}>
                       {getStatusText(item.status)}
                     </span>
                   </div>
 
-                  {/* Score if completed */}
+                  {/* Score if completed or already scored */}
                   {item.status === 'completed' && item.score !== undefined && (
                     <div className="flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 bg-green-100 rounded-full flex-shrink-0">
                       <span className="text-xs sm:text-sm font-bold text-green-700">{item.score}%</span>
+                    </div>
+                  )}
+                  {item.status === 'already_scored' && item.score !== undefined && (
+                    <div className="flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 bg-amber-100 rounded-full flex-shrink-0">
+                      <span className="text-xs sm:text-sm font-bold text-amber-700">{item.score}%</span>
                     </div>
                   )}
 

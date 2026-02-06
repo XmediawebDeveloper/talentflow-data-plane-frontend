@@ -221,7 +221,7 @@ function DraggableCardResumeRow({
       </div>
       {/* Candidate Name */}
       <div className="flex items-center min-w-0">
-        <span className="font-medium text-gray-900 text-sm truncate">{resume.name}</span>
+        <span className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-sm truncate cursor-pointer">{resume.name}</span>
       </div>
       {/* Email */}
       <div className="text-sm text-gray-600 truncate">{resume.email || '-'}</div>
@@ -1617,25 +1617,54 @@ export default function MyResumesPage() {
   const matchesSearch = useCallback((resume: Resume, query: string): boolean => {
     if (!query) return true;
 
-    const searchTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 0);
+    // Split by spaces, commas, or both - and clean up each term
+    const searchTerms = query
+      .toLowerCase()
+      .split(/[\s,]+/)  // Split by spaces or commas
+      .map(term => term.trim())
+      .filter(term => term.length > 0);
+
     if (searchTerms.length === 0) return true;
+
+    // Normalize phone number for searching (remove all non-alphanumeric chars)
+    const normalizePhone = (phone: string | undefined) => {
+      if (!phone) return '';
+      return phone.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    };
 
     // Create searchable text from all relevant fields
     const searchableFields = [
       resume.name,
       resume.email,
       resume.phone,
+      normalizePhone(resume.phone), // Also add normalized phone
       resume.title,
       resume.location,
       resume.currentCompany,
       resume.previousCompany,
+      resume.experience,
+      resume.education,
       ...(resume.skills || []),
+      ...(resume.technicalSkills || []),
+      ...(resume.softSkills || []),
     ].filter(Boolean).map(field => field?.toLowerCase() || '');
 
     const searchableText = searchableFields.join(' ');
 
-    // Check if any search term matches (partial matching)
-    return searchTerms.some(term => searchableText.includes(term));
+    // Normalize search term for phone matching (remove special chars)
+    const normalizeSearchTerm = (term: string) => {
+      // If term looks like a phone number (has digits), normalize it
+      if (/\d/.test(term)) {
+        return term.replace(/[^a-zA-Z0-9]/g, '');
+      }
+      return term;
+    };
+
+    // Check if ALL search terms match (AND logic for multiple terms)
+    return searchTerms.every(term => {
+      const normalizedTerm = normalizeSearchTerm(term);
+      return searchableText.includes(term) || searchableText.includes(normalizedTerm);
+    });
   }, []);
 
   // Filter and sort resumes client-side
@@ -1650,6 +1679,110 @@ export default function MyResumesPage() {
     // Apply search filter (name, email, phone, skills, keywords)
     if (appliedSearchQuery) {
       filtered = filtered.filter(resume => matchesSearch(resume, appliedSearchQuery));
+    }
+
+    // Apply filters from filter bar
+    if (filters && Object.keys(filters).length > 0) {
+      // Filter by skills (all selected skills must be present)
+      if (filters.skills && filters.skills.length > 0) {
+        filtered = filtered.filter(resume => {
+          const resumeSkills = [
+            ...(resume.skills || []),
+            ...(resume.technicalSkills || []),
+            ...(resume.softSkills || [])
+          ].map(s => s.toLowerCase());
+          return filters.skills.every((skill: string) =>
+            resumeSkills.some(rs => rs.includes(skill.toLowerCase()))
+          );
+        });
+      }
+
+      // Filter by experience range
+      if (filters.experienceRange) {
+        filtered = filtered.filter(resume => {
+          // Parse experience string to get years (e.g., "5 years", "3-5 years", "5+ years")
+          const expStr = resume.experience || '';
+          const expMatch = expStr.match(/(\d+)/);
+          if (!expMatch) return true; // If no experience data, include by default
+          const years = parseInt(expMatch[1], 10);
+          const { min, max } = filters.experienceRange;
+          if (min !== undefined && min !== null && years < min) return false;
+          if (max !== undefined && max !== null && years > max) return false;
+          return true;
+        });
+      }
+
+      // Filter by education
+      if (filters.education) {
+        filtered = filtered.filter(resume => {
+          const edu = (resume.education || '').toLowerCase();
+          return edu.includes(filters.education.toLowerCase());
+        });
+      }
+
+      // Filter by location
+      if (filters.location) {
+        filtered = filtered.filter(resume => {
+          const loc = (resume.location || '').toLowerCase();
+          return loc.includes(filters.location.toLowerCase());
+        });
+      }
+
+      // Filter by current company
+      if (filters.currentCompany) {
+        filtered = filtered.filter(resume => {
+          const company = (resume.currentCompany || '').toLowerCase();
+          return company.includes(filters.currentCompany.toLowerCase());
+        });
+      }
+
+      // Filter by previous company
+      if (filters.previousCompany) {
+        filtered = filtered.filter(resume => {
+          const company = (resume.previousCompany || '').toLowerCase();
+          return company.includes(filters.previousCompany.toLowerCase());
+        });
+      }
+
+      // Filter by notice period
+      if (filters.noticePeriod) {
+        filtered = filtered.filter(resume => {
+          const notice = (resume.noticePeriod || '').toLowerCase();
+          return notice.includes(filters.noticePeriod.toLowerCase());
+        });
+      }
+
+      // Filter by source type
+      if (filters.sourceType) {
+        filtered = filtered.filter(resume => {
+          return resume.source === filters.sourceType;
+        });
+      }
+
+      // Filter by uploaded by
+      if (filters.uploadedBy) {
+        filtered = filtered.filter(resume => {
+          const uploader = (resume.uploadedBy || '').toLowerCase();
+          return uploader.includes(filters.uploadedBy.toLowerCase());
+        });
+      }
+
+      // Filter by upload date range
+      if (filters.uploadDateRange) {
+        filtered = filtered.filter(resume => {
+          const uploadDate = new Date(resume.uploadDate);
+          if (filters.uploadDateRange.start) {
+            const startDate = new Date(filters.uploadDateRange.start);
+            if (uploadDate < startDate) return false;
+          }
+          if (filters.uploadDateRange.end) {
+            const endDate = new Date(filters.uploadDateRange.end);
+            endDate.setHours(23, 59, 59, 999); // Include entire end day
+            if (uploadDate > endDate) return false;
+          }
+          return true;
+        });
+      }
     }
 
     // Sort resumes
@@ -1667,7 +1800,7 @@ export default function MyResumesPage() {
       default:
         return sorted;
     }
-  }, [resumes, selectedFolder, appliedSearchQuery, sortBy, matchesSearch]);
+  }, [resumes, selectedFolder, appliedSearchQuery, sortBy, matchesSearch, filters]);
 
   // Stats (all resumes returned are user's own resumes)
   const totalResumes = resumes.length;

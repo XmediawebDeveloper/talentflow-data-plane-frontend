@@ -19,8 +19,7 @@ export default function AITalentMatchProgressPanel({
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const selectedModel = 'bge-small-en-v1.5';  // Use recommended model directly
-  // const selectedModel = 'all-MiniLM-L12-v2';  // Use recommended model directly
+  const selectedModel = 'bge-small-en-v1.5';  // 384d - must match stored resume embeddings
 
   const hasStarted = useRef(false);
 

@@ -171,12 +171,17 @@ export function AssessmentInterface({
   // 🛡️ PROCTORING: Force Fullscreen on Start
   const enterFullscreen = async () => {
     try {
-      const el = document.documentElement;
-      if (el.requestFullscreen) {
-        await el.requestFullscreen();
-        console.log('[PROCTORING] ✅ Entered fullscreen mode');
+      // Only enter fullscreen if not already in fullscreen
+      if (!document.fullscreenElement) {
+        const el = document.documentElement;
+        if (el.requestFullscreen) {
+          await el.requestFullscreen();
+          console.log('[PROCTORING] ✅ Entered fullscreen mode');
+        } else {
+          console.warn('[PROCTORING] ⚠️ Fullscreen API not supported');
+        }
       } else {
-        console.warn('[PROCTORING] ⚠️ Fullscreen API not supported');
+        console.log('[PROCTORING] Already in fullscreen mode');
       }
     } catch (error) {
       console.error('[PROCTORING] ❌ Failed to enter fullscreen:', error);
@@ -202,37 +207,57 @@ export function AssessmentInterface({
       console.log(`[LOCKDOWN] Fullscreen: ${isCurrentlyFullscreen ? 'ACTIVE' : 'INACTIVE'}`);
       setIsFullscreen(isCurrentlyFullscreen);
 
-      // CRITICAL: If fullscreen is exited, IMMEDIATELY FINISH ASSESSMENT
-      // But don't trigger if they're completing the assessment normally
+      // If fullscreen is exited, track as violation (3-strike system)
+      // Don't trigger if they're completing the assessment normally
       if (!isCurrentlyFullscreen && !isDisqualified && !showCompleteConfirm) {
-        console.error('[DISQUALIFICATION] Fullscreen exited - FINISHING ASSESSMENT IMMEDIATELY');
+        console.warn('[PROCTORING] ⚠️ Fullscreen exited - VIOLATION');
+
+        // Track violation
+        violationCountRef.current += 1;
+        setViolationCount(violationCountRef.current);
 
         // Report to server
         candidateService.reportProctorEvent(token, {
           event_type: 'fullscreen_exit',
           timestamp: new Date().toISOString(),
           details: {
-            reason: 'User exited fullscreen mode - Assessment auto-submitted',
-            severity: 'CRITICAL',
+            reason: 'User exited fullscreen mode',
+            severity: 'HIGH',
+            violation_count: violationCountRef.current,
           },
         }).catch(err => console.error('[VIOLATION] Failed to report fullscreen exit:', err));
 
-        // IMMEDIATELY DISQUALIFY AND SUBMIT
-        setIsDisqualified(true);
+        // Show warning modal after 1st violation
+        if (violationCountRef.current >= 1) {
+          setShowViolationWarning(true);
+        }
 
-        // Auto-submit current answer and complete assessment
-        try {
-          const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
-          if (hasAnswer) {
-            console.log('[AUTO-SUBMIT] Submitting current answer...');
-            await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+        // After 3 violations, auto-complete assessment
+        if (violationCountRef.current >= 3) {
+          console.error('[DISQUALIFICATION] 3 fullscreen exits - FINISHING ASSESSMENT');
+          setIsDisqualified(true);
+
+          // Auto-submit current answer and complete assessment
+          try {
+            const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+            if (hasAnswer) {
+              console.log('[AUTO-SUBMIT] Submitting current answer...');
+              await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+            }
+            console.log('[AUTO-SUBMIT] Completing assessment due to multiple fullscreen exits...');
+            onComplete();
+          } catch (error) {
+            console.error('[AUTO-SUBMIT] Error during submission:', error);
+            // Complete anyway even if submission fails
+            onComplete();
           }
-          console.log('[AUTO-SUBMIT] Completing assessment due to fullscreen exit...');
-          onComplete();
-        } catch (error) {
-          console.error('[AUTO-SUBMIT] Error during submission:', error);
-          // Complete anyway even if submission fails
-          onComplete();
+        } else {
+          // Less than 3 violations - prompt user to re-enter fullscreen
+          console.log(`[PROCTORING] Warning ${violationCountRef.current}/3 - prompting to re-enter fullscreen`);
+          // Try to re-enter fullscreen after a brief delay
+          setTimeout(() => {
+            enterFullscreen();
+          }, 1000);
         }
       }
     };
@@ -251,85 +276,61 @@ export function AssessmentInterface({
   // SECURITY: Block keyboard shortcuts (F12, Ctrl+Shift+I, ESC, Alt+Tab, etc.)
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      // CRITICAL: Block ESC key - IMMEDIATE FINISH ASSESSMENT
+      // Block ESC key - Track as violation but don't auto-complete
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
 
-        if (!isDisqualified) {
-          console.error('[DISQUALIFICATION] ESC pressed - FINISHING ASSESSMENT IMMEDIATELY');
+        if (!isDisqualified && !showCompleteConfirm) {
+          console.warn('[PROCTORING] ⚠️ ESC key blocked - VIOLATION');
+
+          // Track violation
+          violationCountRef.current += 1;
+          setViolationCount(violationCountRef.current);
 
           // Report to server
           candidateService.reportProctorEvent(token, {
             event_type: 'escape_key_attempt',
             timestamp: new Date().toISOString(),
             details: {
-              reason: 'User pressed ESC key - Assessment auto-submitted',
-              severity: 'CRITICAL',
+              reason: 'User pressed ESC key',
+              severity: 'HIGH',
+              violation_count: violationCountRef.current,
             },
           }).catch(err => console.error('[VIOLATION] Failed to report ESC attempt:', err));
 
-          // IMMEDIATELY DISQUALIFY AND SUBMIT
-          setIsDisqualified(true);
-
-          // Auto-submit current answer and complete assessment
-          try {
-            const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
-            if (hasAnswer) {
-              console.log('[AUTO-SUBMIT] Submitting current answer...');
-              await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
-            }
-            console.log('[AUTO-SUBMIT] Completing assessment due to ESC key...');
-            await exitFullscreen();
-            onComplete();
-          } catch (error) {
-            console.error('[AUTO-SUBMIT] Error during submission:', error);
-            // Complete anyway even if submission fails
-            await exitFullscreen();
-            onComplete();
-          }
+          // Show warning modal
+          setShowViolationWarning(true);
         }
 
         return false;
       }
 
-      // CRITICAL: Block Alt+Tab - IMMEDIATE FINISH ASSESSMENT
+      // Block Alt+Tab - Track as violation but don't auto-complete
       if (e.altKey && e.key === 'Tab') {
         e.preventDefault();
         e.stopPropagation();
 
-        if (!isDisqualified) {
-          console.error('[DISQUALIFICATION] Alt+Tab pressed - FINISHING ASSESSMENT IMMEDIATELY');
+        if (!isDisqualified && !showCompleteConfirm) {
+          console.warn('[PROCTORING] ⚠️ Alt+Tab blocked - VIOLATION');
+
+          // Track violation
+          violationCountRef.current += 1;
+          setViolationCount(violationCountRef.current);
 
           // Report to server
           candidateService.reportProctorEvent(token, {
             event_type: 'alt_tab_attempt',
             timestamp: new Date().toISOString(),
             details: {
-              reason: 'User pressed Alt+Tab (window switching) - Assessment auto-submitted',
-              severity: 'CRITICAL',
+              reason: 'User pressed Alt+Tab (window switching)',
+              severity: 'HIGH',
+              violation_count: violationCountRef.current,
             },
           }).catch(err => console.error('[VIOLATION] Failed to report Alt+Tab attempt:', err));
 
-          // IMMEDIATELY DISQUALIFY AND SUBMIT
-          setIsDisqualified(true);
-
-          // Auto-submit current answer and complete assessment
-          try {
-            const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
-            if (hasAnswer) {
-              console.log('[AUTO-SUBMIT] Submitting current answer...');
-              await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
-            }
-            console.log('[AUTO-SUBMIT] Completing assessment due to Alt+Tab...');
-            await exitFullscreen();
-            onComplete();
-          } catch (error) {
-            console.error('[AUTO-SUBMIT] Error during submission:', error);
-            // Complete anyway even if submission fails
-            await exitFullscreen();
-            onComplete();
-          }
+          // Show warning modal
+          setShowViolationWarning(true);
         }
 
         return false;
@@ -490,6 +491,7 @@ export function AssessmentInterface({
           if (prev <= 1) {
             clearInterval(countdownInterval);
             console.error('[PROCTORING] 💀 AUTO-SUBMIT TRIGGERED');
+            setIsDisqualified(true); // Set before exitFullscreen to prevent double-trigger
             exitFullscreen();
             onComplete();
             return 0;
