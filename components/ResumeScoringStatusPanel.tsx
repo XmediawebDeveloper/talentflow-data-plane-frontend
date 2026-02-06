@@ -255,7 +255,10 @@ export default function ResumeScoringStatusPanel({
           // Update global context with success
           updateItemStatus(jobId, itemId, 'Scored successfully', {
             score: result.overall_score,
-            matchResult: result.overall_score >= 85 ? 'Exact Match' :
+            matchResult: result.match_status === 'exact_match' || result.match_status === 'Exact Match' ? 'Exact Match' :
+                         result.match_status === 'partial_match' || result.match_status === 'Partial Match' ? 'Partial Match' :
+                         result.match_status === 'no_match' || result.match_status === 'No Match' ? 'No Match' :
+                         result.overall_score >= 85 ? 'Exact Match' :
                          result.overall_score >= 70 ? 'Partial Match' : 'No Match',
             scoredDateTime: new Date().toISOString(),
           });

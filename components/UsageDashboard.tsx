@@ -242,9 +242,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         const sub = q.subscription || {};
         const addon = q.addon || {};
         const isUnlimited = sub.limit === 'unlimited' || sub.limit === -1;
-        const addonRemaining = addon.remaining || 0;
+        const addonPurchased = addon.total_purchased || 0;
         const baseLimit = isUnlimited ? -1 : (typeof sub.limit === 'number' ? sub.limit : 0);
-        const limit = isUnlimited ? -1 : (baseLimit + addonRemaining);
+        const limit = isUnlimited ? -1 : (baseLimit + addonPurchased);
         const used = sub.used || 0;
         const remaining = isUnlimited ? -1 : (q.total_remaining !== undefined ? (typeof q.total_remaining === 'number' ? q.total_remaining : 0) : (typeof sub.remaining === 'number' ? sub.remaining : 0));
         const usagePercentage = isUnlimited ? 0 : (limit > 0 ? (used / limit) * 100 : 0);

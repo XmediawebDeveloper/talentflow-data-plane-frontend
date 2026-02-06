@@ -274,7 +274,7 @@ function DraggableCardResumeRow({
       {/* Files */}
       <div className="flex items-center gap-1 text-sm text-gray-600">
         <FileText className="w-4 h-4" />
-        <span>{resume.attachments || 1}</span>
+        <span>{resume.attachments}</span>
       </div>
       {/* Actions */}
       <div className="flex items-center gap-1">
@@ -501,7 +501,7 @@ export default function MyResumesPage() {
         source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
         folderId: r.folder_id || '',
         uploadDate: r.created_at,
-        attachments: r.version_count || 1,
+        attachments: r.version_count || r.version || 1,
         uploadedBy: r.uploaded_by_name || 'Unknown',
         currentCompany: r.current_company,
         previousCompany: r.previous_company,
@@ -1566,7 +1566,7 @@ export default function MyResumesPage() {
     source: 'Manual',
     folderId: r.folder_id || '',
     uploadDate: r.created_at,
-    attachments: r.version_count || 1,
+    attachments: r.version_count || r.version || 1,
     uploadedBy: r.uploaded_by_name || 'Unknown',
     currentCompany: r.current_company,
     previousCompany: r.previous_company,

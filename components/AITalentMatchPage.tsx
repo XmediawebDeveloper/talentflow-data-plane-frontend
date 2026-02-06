@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, PlayCircle, Paperclip } from 'lucide-react';
+import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, PlayCircle, Paperclip, Cpu } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -112,6 +112,13 @@ export default function AITalentMatchPage({
   const [historyDateTo, setHistoryDateTo] = useState('');
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
   
+  // Embedding model selection (384d models only - compatible with stored vectors)
+  const EMBEDDING_MODELS = [
+    { id: 'bge-small-en-v1.5', name: 'BGE Small', desc: 'Recommended' },
+    { id: 'all-MiniLM-L6-v2', name: 'MiniLM L6', desc: 'Fast' },
+  ];
+  const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState('bge-small-en-v1.5');
+
   // Matching progress
   const [showMatchingPanel, setShowMatchingPanel] = useState(false);
   const [matchedCandidates, setMatchedCandidates] = useState<MatchedCandidateWithVersions[]>([]);
@@ -584,23 +591,37 @@ export default function AITalentMatchPage({
                     <ArrowLeft className="w-5 h-5" />
                     Back to Matched Jobs
                   </button>
-                  {/* Show Run AI Match button for all jobs except disabled */}
+                  {/* Model selector + Run AI Match button */}
                   {canRunAIMatch && (
-                    <button
-                      onClick={() => {
-                        const jobId = selectedJob || selectedHistoryItem?.jobId;
-                        if (jobId) {
-                          isMatchingInProgress.current = true;
-                          setSelectedJob(jobId);
-                          setSelectedCandidates([]);
-                          setShowMatchingPanel(true);
-                        }
-                      }}
-                      className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      Run AI Match
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+                        <Cpu className="w-3.5 h-3.5 text-gray-500" />
+                        <select
+                          value={selectedEmbeddingModel}
+                          onChange={(e) => setSelectedEmbeddingModel(e.target.value)}
+                          className="text-xs bg-transparent border-none outline-none cursor-pointer text-gray-700 font-medium"
+                        >
+                          {EMBEDDING_MODELS.map((m) => (
+                            <option key={m.id} value={m.id}>{m.name} ({m.desc})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const jobId = selectedJob || selectedHistoryItem?.jobId;
+                          if (jobId) {
+                            isMatchingInProgress.current = true;
+                            setSelectedJob(jobId);
+                            setSelectedCandidates([]);
+                            setShowMatchingPanel(true);
+                          }
+                        }}
+                        className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        Run AI Match
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -894,6 +915,7 @@ export default function AITalentMatchPage({
         <AITalentMatchProgressPanel
           jobTitle={selectedJobData?.title || selectedHistoryItem?.jobTitle || 'Job Description'}
           jobId={selectedJob}
+          embeddingModel={selectedEmbeddingModel}
           onComplete={handleMatchingComplete}
           onError={(error) => {
             setMatchError(error);
@@ -948,18 +970,32 @@ export default function AITalentMatchPage({
             )}
             */}
             
-            <button
-              onClick={() => {
-                setViewMode('new');
-                setSelectedJob('');
-                setSelectedCandidates([]);
-                router.push('/recruitment/ai-talent-match', { scroll: false });
-              }}
-              className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
-            >
-              <Sparkles className="w-4 h-4" />
-              Run AI Match
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-3 py-2.5 bg-white/10 border border-gray-300 rounded-lg">
+                <Cpu className="w-3.5 h-3.5 text-gray-500" />
+                <select
+                  value={selectedEmbeddingModel}
+                  onChange={(e) => setSelectedEmbeddingModel(e.target.value)}
+                  className="text-xs bg-transparent border-none outline-none cursor-pointer text-gray-700 font-medium"
+                >
+                  {EMBEDDING_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name} ({m.desc})</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={() => {
+                  setViewMode('new');
+                  setSelectedJob('');
+                  setSelectedCandidates([]);
+                  router.push('/recruitment/ai-talent-match', { scroll: false });
+                }}
+                className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
+              >
+                <Sparkles className="w-4 h-4" />
+                Run AI Match
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1509,6 +1545,7 @@ export default function AITalentMatchPage({
         <AITalentMatchProgressPanel
           jobTitle={selectedJobData?.title || 'Job Description'}
           jobId={selectedJob}
+          embeddingModel={selectedEmbeddingModel}
           onComplete={handleMatchingComplete}
           onError={(error) => {
             setMatchError(error);

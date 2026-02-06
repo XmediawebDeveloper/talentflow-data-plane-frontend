@@ -49,6 +49,11 @@ export default function ResumeScoringRoute() {
     jobTitle: string;
     resumeIds: string[];
     resumeNames: string[];
+    alreadyScoredItems?: Array<{
+      resumeId: string;
+      candidateName: string;
+      score: number;
+    }>;
   } | null>(null);
   const [pendingBatchId, setPendingBatchId] = useState<string | null>(null);
   const [batchProgress, setBatchProgress] = useState<{
@@ -317,12 +322,19 @@ export default function ResumeScoringRoute() {
           scoresByJd.set(jdId, { jdTitle: item.jd_title || 'Unknown Job', scores: [] });
         }
 
-        // Convert score to display format (70+ = Exact Match, 50+ = Partial Match)
+        // Convert score to display format - use backend match_status as source of truth
         const matchScore = Math.round(item.overall_score || 0);
         let matchStatus = 'No Match';
-        if (item.match_status === 'exact_match' || item.match_status === 'Exact Match' || matchScore >= 70) {
+        if (item.match_status === 'exact_match' || item.match_status === 'Exact Match') {
           matchStatus = 'Exact Match';
-        } else if (item.match_status === 'partial_match' || item.match_status === 'Partial Match' || matchScore >= 50) {
+        } else if (item.match_status === 'partial_match' || item.match_status === 'Partial Match') {
+          matchStatus = 'Partial Match';
+        } else if (item.match_status === 'no_match' || item.match_status === 'No Match') {
+          matchStatus = 'No Match';
+        } else if (matchScore >= 70) {
+          // Fallback: score-based only when backend doesn't provide match_status
+          matchStatus = 'Exact Match';
+        } else if (matchScore >= 50) {
           matchStatus = 'Partial Match';
         }
 

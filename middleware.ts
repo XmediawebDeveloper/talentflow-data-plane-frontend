@@ -16,15 +16,6 @@ const publicRoutes = [
   '/assessment', // Candidate assessment portal (public)
 ];
 
-// Define admin-only routes (tenant_admin required)
-const adminRoutes = [
-  '/organization',
-  '/subscription',
-  '/settings',
-  '/analytics/team-usage',
-  '/analytics/activity-logs',
-];
-
 // Define protected dashboard routes (authentication required)
 const protectedRoutes = [
   '/dashboard',
@@ -36,7 +27,7 @@ const protectedRoutes = [
 ];
 
 // Helper to decode JWT payload (without verification - just to read claims)
-function decodeJwtPayload(token: string): { role?: string; exp?: number } | null {
+function decodeJwtPayload(token: string): { exp?: number } | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
@@ -60,11 +51,6 @@ export function middleware(request: NextRequest) {
     pathname === route || pathname.startsWith(`${route}/`)
   );
 
-  // Check if route is admin-only
-  const isAdminRoute = adminRoutes.some(route =>
-    pathname === route || pathname.startsWith(`${route}/`)
-  );
-
   // Get auth token from cookie
   const token = request.cookies.get('accessToken')?.value;
 
@@ -77,7 +63,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Validate token if present
+  // Validate token expiry if present
   if (token) {
     const payload = decodeJwtPayload(token);
 
@@ -90,17 +76,12 @@ export function middleware(request: NextRequest) {
       response.cookies.delete('refreshToken');
       return response;
     }
-
-    // Check admin routes - only tenant_admin can access
-    if (isAdminRoute && payload?.role !== 'tenant_admin') {
-      console.log('[MIDDLEWARE] Unauthorized access to admin route:', pathname, 'role:', payload?.role);
-      // Redirect non-admins to dashboard with error
-      const url = request.nextUrl.clone();
-      url.pathname = '/dashboard';
-      url.searchParams.set('error', 'unauthorized');
-      return NextResponse.redirect(url);
-    }
   }
+
+  // Authorization (role/permission-based route access) is handled client-side
+  // by AuthProvider + usePermissions hooks, which check user.permissions from
+  // the backend API. tenant_admin bypasses all permissions; other roles are
+  // granted access based on their explicitly assigned permissions.
 
   // If logged in and trying to access auth pages, redirect to dashboard
   if (token && (pathname === '/login' || pathname === '/signup')) {

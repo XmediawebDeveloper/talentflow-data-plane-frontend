@@ -9,7 +9,6 @@ import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import ScoringJobProgressModal, { JobScoringProgress } from './ScoringJobProgressModal';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
-import ExistingScoreAlertModal from './ExistingScoreAlertModal';
 import api from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
@@ -74,11 +73,18 @@ interface ScoredResumeData {
   };
 }
 
+interface AlreadyScoredItem {
+  resumeId: string;
+  candidateName: string;
+  score: number;
+}
+
 interface PendingScoringData {
   jobId: string;
   jobTitle: string;
   resumeIds: string[];
   resumeNames: string[];
+  alreadyScoredItems?: AlreadyScoredItem[];
 }
 
 interface BatchProgressItem {
@@ -223,27 +229,8 @@ export default function ResumeScoringPage({
   const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
 
-  // Existing score alert modal state
-  const [showExistingScoreAlert, setShowExistingScoreAlert] = useState(false);
-
   // Locally uploaded resumes (from Resume Selection Modal)
   const [uploadedResumes, setUploadedResumes] = useState<SharedResume[]>([]);
-  const [existingScoreData, setExistingScoreData] = useState<{
-    jdTitle: string;
-    existingScores: Array<{
-      resume_id: string;
-      score_id: string;
-      candidate_name: string;
-      candidate_email: string;
-      overall_score: number;
-      match_status: string;
-      scored_at: string | null;
-    }>;
-    totalChecked: number;
-    newCount: number;
-    pendingResumeIds: string[];
-    pendingSource: 'my-resumes' | 'database';
-  } | null>(null);
 
   // Fetch all scored resumes for global view
   const fetchGlobalScoredResumes = async () => {
@@ -348,8 +335,16 @@ export default function ResumeScoringPage({
           }
 
           // If show_progress is requested, open the job progress modal
-          if (initialShowProgress) {
+          // Skip if pendingScoringData exists - that useEffect handles progress with already_scored items
+          if (initialShowProgress && !pendingScoringData) {
             console.log('[ResumeScoringPage] Show progress requested, opening progress modal');
+            // Build items from scored resumes history
+            const progressItems = (historyItem.scoredResumes || []).map((r: any) => ({
+              resumeId: r.id || r.resumeId || '',
+              candidateName: r.candidateName || r.candidate_name || 'Unknown',
+              status: 'completed' as const,
+              score: r.overallScore ?? r.overall_score ?? 0,
+            }));
             const jobProgress: JobScoringProgress = {
               jobId: historyItem.jobId,
               jobTitle: historyItem.jobTitle,
@@ -358,9 +353,10 @@ export default function ResumeScoringPage({
               inProgress: 0,
               completed: historyItem.scoredResumes.length,
               failed: historyItem.totalScored - historyItem.scoredResumes.length,
+              items: progressItems,
             };
             setJobProgressData([jobProgress]);
-            shownJobsRef.current.add(historyItem.jobId);  // Mark as shown to prevent reopening on close
+            shownJobsRef.current.add(historyItem.jobId);
             setShowJobProgressModal(true);
           }
         } else {
@@ -371,7 +367,7 @@ export default function ResumeScoringPage({
         }
       }
     }
-  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd]);
+  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData]);
 
   // Timeout for waiting state - don't wait forever for history to load
   useEffect(() => {
@@ -412,7 +408,7 @@ export default function ResumeScoringPage({
   useEffect(() => {
     if (!pendingScoringData) return;
 
-    const { jobId, jobTitle, resumeIds, resumeNames } = pendingScoringData;
+    const { jobId, jobTitle, resumeIds, resumeNames, alreadyScoredItems = [] } = pendingScoringData;
 
     // Prevent duplicate scoring - check if this job has already started
     if (scoringStartedRef.current.has(jobId)) {
@@ -421,28 +417,40 @@ export default function ResumeScoringPage({
     }
     scoringStartedRef.current.add(jobId);
 
-    console.log('[ResumeScoringPage] Starting pending scoring for job:', jobTitle, 'with', resumeIds.length, 'resumes');
+    const totalItems = resumeIds.length + alreadyScoredItems.length;
+    console.log('[ResumeScoringPage] Starting pending scoring for job:', jobTitle, 'with', resumeIds.length, 'new resumes,', alreadyScoredItems.length, 'already scored');
 
-    // Create initial items array with candidate names - all start as queued
-    const initialItems = resumeIds.map((resumeId, index) => ({
+    // Build already-scored items for the progress modal
+    const alreadyScoredProgressItems: { resumeId: string; candidateName: string; status: 'already_scored'; score?: number }[] =
+      alreadyScoredItems.map(item => ({
+        resumeId: item.resumeId,
+        candidateName: item.candidateName,
+        status: 'already_scored' as const,
+        score: item.score,
+      }));
+
+    // Create initial items array with candidate names - new ones start as queued
+    const initialNewItems = resumeIds.map((resumeId, index) => ({
       resumeId,
       candidateName: resumeNames[index] || `Resume ${index + 1}`,
       status: 'queued' as const,
     }));
 
+    const allInitialItems = [...alreadyScoredProgressItems, ...initialNewItems];
+
     // Initialize progress modal immediately with items
     const initialProgress: JobScoringProgress = {
       jobId,
       jobTitle,
-      total: resumeIds.length,
+      total: totalItems,
       queued: resumeIds.length,
       inProgress: 0,
-      completed: 0,
+      completed: alreadyScoredItems.length,
       failed: 0,
-      items: initialItems,
+      items: allInitialItems,
     };
     setJobProgressData([initialProgress]);
-    shownJobsRef.current.add(jobId);  // Mark as shown to prevent reopening on close
+    shownJobsRef.current.add(jobId);
     setShowJobProgressModal(true);
 
     // Also start tracking in persistent context (survives page refresh)
@@ -456,8 +464,8 @@ export default function ResumeScoringPage({
     }));
     startScoringJob(jobId, jobTitle, progressItems);
 
-    // Track item statuses for the modal
-    const itemStatuses: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed'; score?: number; errorMessage?: string }[] =
+    // Track item statuses for the modal (only new items to score)
+    const newItemStatuses: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed'; score?: number; errorMessage?: string }[] =
       resumeIds.map((resumeId, index) => ({
         resumeId,
         candidateName: resumeNames[index] || `Resume ${index + 1}`,
@@ -466,7 +474,7 @@ export default function ResumeScoringPage({
 
     // Start scoring resumes
     const scoreResumes = async () => {
-      let completed = 0;
+      let completed = alreadyScoredItems.length;
       let failed = 0;
 
       for (let i = 0; i < resumeIds.length; i++) {
@@ -474,18 +482,18 @@ export default function ResumeScoringPage({
         const itemId = `${jobId}-${resumeId}`;
 
         // Update item status to processing
-        itemStatuses[i].status = 'processing';
+        newItemStatuses[i].status = 'processing';
 
         // Update progress - move from queued to in progress
         setJobProgressData([{
           jobId,
           jobTitle,
-          total: resumeIds.length,
+          total: totalItems,
           queued: resumeIds.length - i - 1,
           inProgress: 1,
           completed,
           failed,
-          items: [...itemStatuses],
+          items: [...alreadyScoredProgressItems, ...newItemStatuses],
         }]);
 
         // Update persistent context
@@ -497,8 +505,8 @@ export default function ResumeScoringPage({
           console.log(`[ResumeScoringPage] Scored resume ${i + 1}/${resumeIds.length}`);
 
           // Update item status to completed with score
-          itemStatuses[i].status = 'completed';
-          itemStatuses[i].score = result?.overall_score || result?.score || 0;
+          newItemStatuses[i].status = 'completed';
+          newItemStatuses[i].score = result?.overall_score || result?.score || 0;
 
           // Update persistent context with success
           updateItemStatus(jobId, itemId, 'Scored successfully', {
@@ -511,8 +519,8 @@ export default function ResumeScoringPage({
           failed++;
 
           // Update item status to failed
-          itemStatuses[i].status = 'failed';
-          itemStatuses[i].errorMessage = err instanceof Error ? err.message : 'Scoring failed';
+          newItemStatuses[i].status = 'failed';
+          newItemStatuses[i].errorMessage = err instanceof Error ? err.message : 'Scoring failed';
 
           // Update persistent context with failure
           updateItemStatus(jobId, itemId, 'Failed', {
@@ -524,12 +532,12 @@ export default function ResumeScoringPage({
         setJobProgressData([{
           jobId,
           jobTitle,
-          total: resumeIds.length,
+          total: totalItems,
           queued: resumeIds.length - i - 1,
           inProgress: 0,
           completed,
           failed,
-          items: [...itemStatuses],
+          items: [...alreadyScoredProgressItems, ...newItemStatuses],
         }]);
       }
 
@@ -537,15 +545,15 @@ export default function ResumeScoringPage({
       setJobProgressData([{
         jobId,
         jobTitle,
-        total: resumeIds.length,
+        total: totalItems,
         queued: 0,
         inProgress: 0,
         completed,
         failed,
-        items: [...itemStatuses],
+        items: [...alreadyScoredProgressItems, ...newItemStatuses],
       }]);
 
-      console.log(`[ResumeScoringPage] Scoring complete: ${completed} succeeded, ${failed} failed`);
+      console.log(`[ResumeScoringPage] Scoring complete: ${completed} succeeded (${alreadyScoredItems.length} already scored), ${failed} failed`);
 
       // Refresh the scored history to show new results without full page reload
       if (onRefreshHistory) {
@@ -917,12 +925,15 @@ export default function ResumeScoringPage({
                   <div className="flex items-center gap-4 text-sm text-gray-600">
                     <span className="flex items-center gap-1">
                       <Clock className="w-4 h-4" />
-                      {new Date(selectedHistoryItem.scoredAt).toLocaleDateString('en-US', {
+                      {new Date(new Date(selectedHistoryItem.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
+                        year: 'numeric'
+                      })}{' '}
+                      {new Date(new Date(selectedHistoryItem.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
                       })}
                     </span>
                     <span className="flex items-center gap-1">
@@ -1079,7 +1090,10 @@ export default function ResumeScoringPage({
                         errorReason: undefined,
                         scoredDateTime: new Date(),
                         matchResult: scoredResume
-                          ? (scoredResume.overall_score >= 85 ? 'Exact Match'
+                          ? (scoredResume.match_status === 'exact_match' || scoredResume.match_status === 'Exact Match' ? 'Exact Match'
+                             : scoredResume.match_status === 'partial_match' || scoredResume.match_status === 'Partial Match' ? 'Partial Match'
+                             : scoredResume.match_status === 'no_match' || scoredResume.match_status === 'No Match' ? 'No Match'
+                             : scoredResume.overall_score >= 85 ? 'Exact Match'
                              : scoredResume.overall_score >= 70 ? 'Partial Match'
                              : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
                           : undefined,
@@ -1302,8 +1316,12 @@ export default function ResumeScoringPage({
                       source: item.source === 'my-resumes' ? 'My Resumes' : 'Internal DB' as 'My Resumes' | 'Internal DB',
                       status: 'Scored successfully' as const,
                       scoredDateTime: new Date(item.scoredAt),
-                      matchResult: (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match' :
-                                   (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match' : 'No Match' as 'Exact Match' | 'Partial Match' | 'No Match',
+                      matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
+                                   : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
+                                   : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
+                                   : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
+                                   : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
+                                   : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
                       score: resume.overall_score || resume.scorePercentage || 0,
                     }))
                   );
@@ -1634,10 +1652,15 @@ export default function ResumeScoringPage({
                       <div className="flex items-center gap-6 text-sm">
                         <span className="flex items-center gap-1.5 text-gray-600">
                           <Clock className="w-4 h-4" />
-                          {new Date(item.scoredAt).toLocaleDateString('en-US', {
+                          {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleDateString('en-US', {
                             month: 'short',
                             day: 'numeric',
                             year: 'numeric'
+                          })}{', '}
+                          {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
                           })}
                         </span>
                         <span className="flex items-center gap-1.5 text-gray-600">
@@ -1755,10 +1778,15 @@ export default function ResumeScoringPage({
                           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 mb-3">
                             <span className="flex items-center gap-1.5">
                               <Clock className="w-4 h-4" />
-                              Scored {new Date(item.scoredAt).toLocaleDateString('en-US', {
+                              Scored {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleDateString('en-US', {
                                 month: 'short',
                                 day: 'numeric',
                                 year: 'numeric'
+                              })}{', '}
+                              {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleTimeString('en-US', {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true
                               })}
                             </span>
                             <span className="flex items-center gap-1.5">
@@ -2018,7 +2046,10 @@ export default function ResumeScoringPage({
                         errorReason: undefined,
                         scoredDateTime: new Date(),
                         matchResult: scoredResume
-                          ? (scoredResume.overall_score >= 85 ? 'Exact Match'
+                          ? (scoredResume.match_status === 'exact_match' || scoredResume.match_status === 'Exact Match' ? 'Exact Match'
+                             : scoredResume.match_status === 'partial_match' || scoredResume.match_status === 'Partial Match' ? 'Partial Match'
+                             : scoredResume.match_status === 'no_match' || scoredResume.match_status === 'No Match' ? 'No Match'
+                             : scoredResume.overall_score >= 85 ? 'Exact Match'
                              : scoredResume.overall_score >= 70 ? 'Partial Match'
                              : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
                           : undefined,
@@ -2105,8 +2136,8 @@ export default function ResumeScoringPage({
 
   // New Scoring Flow
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-gray-50 to-white">
-      <div className="max-w-3xl mx-auto">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
+      <div className="max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-4">
@@ -2136,8 +2167,8 @@ export default function ResumeScoringPage({
         </div>
       </div>
 
-      {/* Job Selection Dropdown */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      {/* Job Selection */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-3">
           Select Job Description
         </label>
@@ -2172,28 +2203,28 @@ export default function ResumeScoringPage({
         {/* Selected Job Details */}
         {selectedJobData && (
           <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Briefcase className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <h3 className="font-medium text-gray-900">{selectedJobData.title}</h3>
-                  <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm text-gray-500 mt-0.5">
                     <span className="flex items-center gap-1">
                       <MapPin className="w-3.5 h-3.5" />
                       {selectedJobData.location || 'Remote'}
                     </span>
-                    <span>•</span>
+                    <span className="hidden sm:inline">•</span>
                     <span>{selectedJobData.department}</span>
-                    <span>•</span>
+                    <span className="hidden sm:inline">•</span>
                     <span>{selectedJobData.applicants} applicants</span>
                   </div>
                 </div>
               </div>
               <button
                 onClick={() => setShowResumeSelectionModal(true)}
-                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium flex items-center gap-2"
+                className="w-full sm:w-auto px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium flex items-center justify-center gap-2"
               >
                 <Target className="w-4 h-4" />
                 Select Resumes
@@ -2227,22 +2258,46 @@ export default function ResumeScoringPage({
               toast.dismiss('check-existing');
 
               if (checkResult.existing_count > 0) {
-                // Show alert modal with existing scores
-                setExistingScoreData({
-                  jdTitle: selectedJobData.title,
-                  existingScores: checkResult.existing_scores,
-                  totalChecked: checkResult.total_checked,
-                  newCount: checkResult.new_count,
-                  pendingResumeIds: selectedIds,
-                  pendingSource: source,
-                });
-                setShowExistingScoreAlert(true);
+                // Build already-scored items for progress display
+                const alreadyScoredItems = checkResult.existing_scores.map((s: any) => ({
+                  resumeId: s.resume_id,
+                  candidateName: s.candidate_name || 'Unknown',
+                  score: s.overall_score || 0,
+                }));
+
+                // Filter out already-scored, keep only new ones
+                const existingResumeIds = new Set(checkResult.existing_scores.map((s: any) => s.resume_id));
+                const newResumeIds = selectedIds.filter(id => !existingResumeIds.has(id));
+                const selectedResumesData = resumes.filter(r => newResumeIds.includes(r.id));
+                let newResumeNames: string[];
+                if (newResumeIds.length > 0) {
+                  if (versionSelections && versionSelections.length > 0) {
+                    const versionMap = new Map(versionSelections.map(v => [v.resumeId || v.id, v.candidateName || 'Unknown']));
+                    newResumeNames = newResumeIds.map(id => versionMap.get(id) || 'Unknown');
+                  } else {
+                    newResumeNames = selectedResumesData.map(r => r.name || r.candidateName || r.candidate_name || 'Unknown');
+                  }
+                } else {
+                  newResumeNames = [];
+                }
+
+                // Use redirect flow for both all-scored and partial cases
+                const pendingData = {
+                  jobId: selectedJob,
+                  jobTitle: selectedJobData.title,
+                  resumeIds: newResumeIds,
+                  resumeNames: newResumeNames,
+                  alreadyScoredItems,
+                };
+                sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
+                window.location.href = `/recruitment/resume-scoring?jd_id=${selectedJob}&start_scoring=true&show_progress=true`;
                 return;
               }
             } catch (error) {
               console.error('Failed to check existing scores:', error);
               toast.dismiss('check-existing');
-              // Continue with scoring if check fails
+              toast.error('Failed to verify existing scores. Please try again.');
+              return; // Don't proceed if check fails
             }
 
             // Get resume names - use versionSelections if available, otherwise fall back to resumes list
@@ -2270,63 +2325,6 @@ export default function ResumeScoringPage({
             // Use window.location.href for full page reload so useEffect runs and reads sessionStorage
             window.location.href = `/recruitment/resume-scoring?jd_id=${selectedJob}&start_scoring=true&show_progress=true`;
           }}
-        />
-      )}
-
-      {/* Existing Score Alert Modal */}
-      {showExistingScoreAlert && existingScoreData && (
-        <ExistingScoreAlertModal
-          isOpen={showExistingScoreAlert}
-          onClose={() => {
-            setShowExistingScoreAlert(false);
-            setExistingScoreData(null);
-          }}
-          jdTitle={existingScoreData.jdTitle}
-          existingScores={existingScoreData.existingScores}
-          totalChecked={existingScoreData.totalChecked}
-          newCount={existingScoreData.newCount}
-          onViewExisting={(scoreId) => {
-            setShowExistingScoreAlert(false);
-            setExistingScoreData(null);
-            // Navigate to the scored candidate view
-            router.push(`/recruitment/resume-scoring?jd_id=${selectedJob}&score_id=${scoreId}`);
-          }}
-          onProceedWithRescoring={() => {
-            setShowExistingScoreAlert(false);
-            // Proceed with all selected resumes (re-score)
-            const selectedResumesData = resumes.filter(r =>
-              existingScoreData.pendingResumeIds.includes(r.id)
-            );
-            // Store pending scoring data and redirect to resume-scoring page with progress view
-            const pendingData = {
-              jobId: selectedJob,
-              jobTitle: selectedJobData?.title || '',
-              resumeIds: existingScoreData.pendingResumeIds,
-              resumeNames: selectedResumesData.map(r => r.name || r.candidateName || r.candidate_name || 'Unknown'),
-            };
-            sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
-            setExistingScoreData(null);
-            // Use window.location.href for full page reload so useEffect runs and reads sessionStorage
-            window.location.href = `/recruitment/resume-scoring?jd_id=${selectedJob}&start_scoring=true&show_progress=true`;
-          }}
-          onProceedWithNewOnly={existingScoreData.newCount > 0 ? () => {
-            setShowExistingScoreAlert(false);
-            // Filter out already scored resumes
-            const existingResumeIds = new Set(existingScoreData.existingScores.map(s => s.resume_id));
-            const newResumeIds = existingScoreData.pendingResumeIds.filter(id => !existingResumeIds.has(id));
-            const selectedResumesData = resumes.filter(r => newResumeIds.includes(r.id));
-            // Store pending scoring data and redirect to resume-scoring page with progress view
-            const pendingData = {
-              jobId: selectedJob,
-              jobTitle: selectedJobData?.title || '',
-              resumeIds: newResumeIds,
-              resumeNames: selectedResumesData.map(r => r.name || r.candidateName || r.candidate_name || 'Unknown'),
-            };
-            sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
-            setExistingScoreData(null);
-            // Use window.location.href for full page reload so useEffect runs and reads sessionStorage
-            window.location.href = `/recruitment/resume-scoring?jd_id=${selectedJob}&start_scoring=true&show_progress=true`;
-          } : undefined}
         />
       )}
 
@@ -2409,7 +2407,10 @@ export default function ResumeScoringPage({
                       status: 'Scored successfully' as const,
                       errorReason: undefined,
                       scoredDateTime: new Date(),
-                      matchResult: scoreResult.overall_score >= 85 ? 'Exact Match' as const
+                      matchResult: scoreResult.match_status === 'exact_match' || scoreResult.match_status === 'Exact Match' ? 'Exact Match' as const
+                                 : scoreResult.match_status === 'partial_match' || scoreResult.match_status === 'Partial Match' ? 'Partial Match' as const
+                                 : scoreResult.match_status === 'no_match' || scoreResult.match_status === 'No Match' ? 'No Match' as const
+                                 : scoreResult.overall_score >= 85 ? 'Exact Match' as const
                                  : scoreResult.overall_score >= 70 ? 'Partial Match' as const
                                  : 'No Match' as const,
                       score: scoreResult.overall_score
