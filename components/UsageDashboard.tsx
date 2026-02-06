@@ -1,6 +1,6 @@
 'use client';
 
-import { TrendingUp, Zap, Calendar, Clock, DollarSign, X, AlertCircle, CheckCircle2, Loader2, AlertTriangle, ArrowUpRight, Plus, Send, Sparkles, ShoppingCart } from 'lucide-react';
+import { TrendingUp, Zap, Calendar, Clock, DollarSign, X, AlertCircle, CheckCircle2, Loader2, AlertTriangle, ArrowUpRight, Plus, Send, Sparkles, ShoppingCart, RefreshCw, ChevronRight, BarChart3, Package, CreditCard, Info } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import QuotaDisplay from './QuotaDisplay';
 import { useQuota } from '@/contexts/QuotaContext';
@@ -401,10 +401,16 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/30 flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-700" />
-          <span className="text-lg text-gray-600">Loading usage data...</span>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100/50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-20 h-20 bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-gray-300/50 animate-pulse">
+            <BarChart3 className="w-10 h-10 text-white" />
+          </div>
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Loader2 className="w-5 h-5 animate-spin text-gray-600" />
+            <span className="text-lg font-semibold text-gray-700">Loading Usage Data</span>
+          </div>
+          <p className="text-sm text-gray-500">Fetching your quota information...</p>
         </div>
       </div>
     );
@@ -488,34 +494,47 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/30">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100/50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="bg-white border-b border-gray-200/80 shadow-sm sticky top-0 z-10 backdrop-blur-sm bg-white/95">
+        <div className="max-w-7xl mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
-                <Zap className="w-6 h-6 text-white" />
+            <div className="flex items-center gap-5">
+              <div className="w-14 h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300/50 ring-4 ring-gray-100">
+                <BarChart3 className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl text-gray-900">Usage & Quotas Dashboard</h1>
-                <p className="text-sm text-gray-600 mt-0.5">
-                  Track your quota consumption across Resume Storage, Scoring, Assessments, and AI Interviews
+                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Usage & Quotas</h1>
+                <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    Real-time tracking
+                  </span>
+                  <span className="text-gray-300">•</span>
+                  <span>Resume Storage, Scoring, Assessments & AI Interviews</span>
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <button
+                onClick={() => refetchQuota()}
+                className="p-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all hover:scale-105"
+                title="Refresh data"
+              >
+                <RefreshCw className="w-5 h-5" />
+              </button>
+              <button
                 onClick={handleUpgradeClick}
-                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium flex items-center gap-2"
+                className="px-5 py-2.5 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all font-medium flex items-center gap-2 shadow-lg shadow-gray-300/30 hover:shadow-xl hover:shadow-gray-300/40 hover:-translate-y-0.5"
               >
                 <TrendingUp className="w-4 h-4" />
                 Upgrade Plan
+                <ChevronRight className="w-4 h-4" />
               </button>
               {onBack && (
                 <button
                   onClick={onBack}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                  className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-medium"
                 >
                   Back
                 </button>
@@ -528,224 +547,310 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Subscription Summary Card */}
         {subscriptionSummary && (
-          <div className="mb-8 bg-white rounded-xl shadow-md border border-gray-200 p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
-                  <Zap className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      {subscriptionSummary.plan?.name || 'No Plan'}
-                    </h2>
-                    {subscriptionSummary.is_trial && (
-                      <span className="px-2 py-1 text-xs font-bold text-orange-600 bg-orange-100 rounded-full">
-                        TRIAL {subscriptionSummary.trial_days_remaining ? `(${subscriptionSummary.trial_days_remaining} days left)` : ''}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mb-2">
-                    <span className={`px-2 py-1 text-xs font-bold rounded-full ${
-                      subscriptionSummary.status === 'active'
-                        ? 'text-green-600 bg-green-100'
-                        : subscriptionSummary.status === 'trialing'
-                        ? 'text-gray-600 bg-gray-100'
-                        : 'text-gray-600 bg-gray-100'
-                    }`}>
-                      {subscriptionSummary.status?.toUpperCase() || 'UNKNOWN'}
-                    </span>
-                  </div>
-                  {subscriptionSummary.plan?.description && (
-                    <p className="text-sm text-gray-500">{subscriptionSummary.plan.description}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="text-right">
-                {subscriptionSummary.is_trial ? (
-                  /* Free Trial - show expiry, no price */
-                  <>
-                    {subscriptionSummary.subscription?.days_until_renewal !== undefined && subscriptionSummary.subscription.days_until_renewal > 0 ? (
-                      <div className="text-xl font-bold text-orange-600">
-                        Expires in {subscriptionSummary.subscription.days_until_renewal} days
-                      </div>
-                    ) : (
-                      <div className="text-xl font-bold text-red-600">
-                        Trial Expired
-                      </div>
-                    )}
-                    <p className="text-sm text-gray-500 mt-1">
-                      Upgrade to continue using all features
-                    </p>
-                  </>
-                ) : subscriptionSummary.subscription ? (
-                  /* Paid Plan - show price and renewal */
-                  <>
-                    <div className="text-2xl font-bold text-gray-900">
-                      ₹{subscriptionSummary.subscription.price?.toFixed(2) || subscriptionSummary.plan?.price?.toFixed(2) || '0.00'}
-                      <span className="text-sm font-normal text-gray-500">
-                        /{subscriptionSummary.subscription.billing_interval || 'month'}
-                      </span>
-                    </div>
-                    {subscriptionSummary.subscription.days_until_renewal !== undefined && subscriptionSummary.subscription.days_until_renewal > 0 && (
-                      <p className="text-sm text-gray-500 mt-1">
-                        Renews in {subscriptionSummary.subscription.days_until_renewal} days
-                      </p>
-                    )}
-                  </>
-                ) : null}
-                {subscriptionSummary.isolation_type && (
-                  <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 text-xs font-medium text-gray-800 bg-gray-100 rounded-full">
-                    {subscriptionSummary.isolation_type === 'DEDICATED' ? 'Dedicated Server' :
-                     subscriptionSummary.isolation_type === 'DATABASE' ? 'Dedicated Database' :
-                     subscriptionSummary.isolation_type === 'SCHEMA' ? 'Schema Isolation' :
-                     subscriptionSummary.isolation_type}
-                  </span>
-                )}
+          <div className="mb-8 bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
+            {/* Card Header with gradient */}
+            <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <CreditCard className="w-4 h-4" />
+                <span>Current Subscription</span>
               </div>
             </div>
 
-            {/* Plan Features */}
-            {subscriptionSummary.plan?.features && Object.keys(subscriptionSummary.plan.features).length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Plan Features</h4>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(subscriptionSummary.plan.features).map(([key, value]) => (
-                    <span
-                      key={key}
-                      className="px-3 py-1 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-full"
-                    >
-                      {key.replace(/_/g, ' ')}: {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
-                    </span>
-                  ))}
+            <div className="p-6">
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-5">
+                  <div className="w-14 h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300/50">
+                    <Zap className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3 mb-2">
+                      <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
+                        {subscriptionSummary.plan?.name || 'No Plan'}
+                      </h2>
+                      {subscriptionSummary.is_trial && (
+                        <span className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-200 rounded-full animate-pulse">
+                          TRIAL {subscriptionSummary.trial_days_remaining ? `• ${subscriptionSummary.trial_days_remaining} days left` : ''}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className={`px-3 py-1 text-xs font-bold rounded-full inline-flex items-center gap-1.5 ${
+                        subscriptionSummary.status === 'active'
+                          ? 'text-gray-700 bg-gray-200'
+                          : subscriptionSummary.status === 'trialing'
+                          ? 'text-gray-600 bg-gray-100'
+                          : 'text-gray-600 bg-gray-100'
+                      }`}>
+                        <span className={`w-2 h-2 rounded-full ${subscriptionSummary.status === 'active' ? 'bg-gray-600' : 'bg-gray-400'}`}></span>
+                        {subscriptionSummary.status?.toUpperCase() || 'UNKNOWN'}
+                      </span>
+                      {subscriptionSummary.isolation_type && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-full">
+                          <Package className="w-3 h-3" />
+                          {subscriptionSummary.isolation_type === 'DEDICATED' ? 'Dedicated Server' :
+                           subscriptionSummary.isolation_type === 'DATABASE' ? 'Dedicated Database' :
+                           subscriptionSummary.isolation_type === 'SCHEMA' ? 'Schema Isolation' :
+                           subscriptionSummary.isolation_type}
+                        </span>
+                      )}
+                    </div>
+                    {subscriptionSummary.plan?.description && (
+                      <p className="text-sm text-gray-500">{subscriptionSummary.plan.description}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-right bg-gray-50 rounded-xl p-4 min-w-[200px]">
+                  {subscriptionSummary.is_trial ? (
+                    /* Free Trial - show expiry, no price */
+                    <>
+                      {subscriptionSummary.subscription?.days_until_renewal !== undefined && subscriptionSummary.subscription.days_until_renewal > 0 ? (
+                        <div className="text-2xl font-bold text-gray-800">
+                          {subscriptionSummary.subscription.days_until_renewal}
+                          <span className="text-sm font-normal text-gray-500 ml-1">days left</span>
+                        </div>
+                      ) : (
+                        <div className="text-xl font-bold text-gray-700">
+                          Trial Expired
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 mt-2">
+                        Upgrade to continue using all features
+                      </p>
+                    </>
+                  ) : subscriptionSummary.subscription ? (
+                    /* Paid Plan - show price and renewal */
+                    <>
+                      <div className="text-3xl font-bold text-gray-900">
+                        ₹{subscriptionSummary.subscription.price?.toFixed(0) || subscriptionSummary.plan?.price?.toFixed(0) || '0'}
+                        <span className="text-sm font-normal text-gray-500">
+                          /{subscriptionSummary.subscription.billing_interval || 'mo'}
+                        </span>
+                      </div>
+                      {subscriptionSummary.subscription.days_until_renewal !== undefined && subscriptionSummary.subscription.days_until_renewal > 0 && (
+                        <p className="text-xs text-gray-500 mt-2 flex items-center justify-end gap-1">
+                          <Calendar className="w-3 h-3" />
+                          Renews in {subscriptionSummary.subscription.days_until_renewal} days
+                        </p>
+                      )}
+                    </>
+                  ) : null}
                 </div>
               </div>
-            )}
+
+              {/* Plan Features */}
+              {subscriptionSummary.plan?.features && Object.keys(subscriptionSummary.plan.features).length > 0 && (
+                <div className="mt-6 pt-6 border-t border-gray-100">
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Plan Features</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(subscriptionSummary.plan.features).map(([key, value]) => (
+                      <span
+                        key={key}
+                        className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        {key.replace(/_/g, ' ')}: {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* Quota Summary Cards */}
         {quotaSummary && (
           <div className="mb-8">
+            {/* Section Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-gray-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Quota Overview</h2>
+                  <p className="text-sm text-gray-500">Monitor your resource consumption</p>
+                </div>
+              </div>
+              {quotaSummary.billing_period && (
+                <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+                  <Calendar className="w-4 h-4" />
+                  <span>Billing Period: {new Date(quotaSummary.billing_period.start).toLocaleDateString()} - {new Date(quotaSummary.billing_period.end).toLocaleDateString()}</span>
+                </div>
+              )}
+            </div>
+
             {/* Low Quota Warning */}
             {quotaSummary.has_low_quotas && (
-              <div className="bg-gray-100 border-2 border-gray-300 rounded-xl p-4 mb-6 shadow-sm">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                    <AlertTriangle className="w-5 h-5 text-gray-600" />
+              <div className="bg-gradient-to-r from-gray-100 to-gray-50 border-2 border-gray-300 rounded-2xl p-5 mb-6 shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="w-6 h-6 text-gray-600" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Quota Running Low!</h3>
-                    <p className="text-sm text-gray-600">Purchase add-on Units to continue using these features.</p>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-gray-900 text-lg">Quota Running Low!</h3>
+                    <p className="text-sm text-gray-600 mt-1">Some quotas are below 20%. Purchase add-on units to continue using these features without interruption.</p>
+                    {/* Show each low quota with its own Add Credits button */}
+                    <div className="flex flex-wrap gap-2 mt-4">
+                      {quotaSummary.quotas
+                        ?.filter((q: QuotaInfo) => q.is_low || q.is_exhausted)
+                        .map((quota: QuotaInfo) => {
+                          // Map quota_type to addon name pattern for matching
+                          const quotaToAddonMap: Record<string, string> = {
+                            'RU': 'resume upload',
+                            'RS': 'resume scoring',
+                            'AS': 'assessment',
+                            'AIU': 'ai interview',
+                            'max_seats': 'max seats',
+                          };
+                          const addonPattern = quotaToAddonMap[quota.quota_type] || '';
+
+                          // Find matching addon
+                          const matchingAddon = addons.find(addon =>
+                            (addon.name || addon.addon_name || '').toLowerCase().includes(addonPattern)
+                          );
+
+                          return (
+                            <button
+                              key={quota.quota_type}
+                              onClick={() => {
+                                if (subscriptionSummary?.is_trial) {
+                                  setAddonPurchaseError('Addon purchases are only available for paid plans. Please upgrade from your free trial.');
+                                  return;
+                                }
+                                if (matchingAddon) {
+                                  handleBuyAddon(matchingAddon);
+                                } else {
+                                  const addonsSection = document.querySelector('[data-section="addons"]');
+                                  if (addonsSection) {
+                                    addonsSection.scrollIntoView({ behavior: 'smooth' });
+                                  }
+                                }
+                              }}
+                              title={subscriptionSummary?.is_trial ? "Upgrade to a paid plan to purchase addons" : ""}
+                              className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
+                                subscriptionSummary?.is_trial
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : quota.is_exhausted
+                                    ? 'bg-gray-900 text-white hover:bg-gray-800'
+                                    : 'bg-gray-700 text-white hover:bg-gray-600'
+                              }`}
+                            >
+                              <Plus className="w-4 h-4" />
+                              Add {quota.name}
+                              {quota.is_exhausted && !subscriptionSummary?.is_trial && (
+                                <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">Exhausted</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                    </div>
                   </div>
-                </div>
-                {/* Show each low quota with its own Add Credits button */}
-                <div className="flex flex-wrap gap-2 ml-[52px]">
-                  {quotaSummary.quotas
-                    ?.filter((q: QuotaInfo) => q.is_low || q.is_exhausted)
-                    .map((quota: QuotaInfo) => {
-                      // Map quota_type to addon name pattern for matching
-                      const quotaToAddonMap: Record<string, string> = {
-                        'RU': 'resume upload',
-                        'RS': 'resume scoring',
-                        'AS': 'assessment',
-                        'AIU': 'ai interview',
-                        'max_seats': 'max seats',
-                      };
-                      const addonPattern = quotaToAddonMap[quota.quota_type] || '';
-
-                      // Find matching addon
-                      const matchingAddon = addons.find(addon =>
-                        (addon.name || addon.addon_name || '').toLowerCase().includes(addonPattern)
-                      );
-
-                      return (
-                        <button
-                          key={quota.quota_type}
-                          onClick={() => {
-                            if (subscriptionSummary?.is_trial) {
-                              // Show upgrade message for trial users
-                              setAddonPurchaseError('Addon purchases are only available for paid plans. Please upgrade from your free trial.');
-                              return;
-                            }
-                            if (matchingAddon) {
-                              handleBuyAddon(matchingAddon);
-                            } else {
-                              // Scroll to addons section if no matching addon found
-                              const addonsSection = document.querySelector('[data-section="addons"]');
-                              if (addonsSection) {
-                                addonsSection.scrollIntoView({ behavior: 'smooth' });
-                              }
-                            }
-                          }}
-                          title={subscriptionSummary?.is_trial ? "Upgrade to a paid plan to purchase addons" : ""}
-                          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
-                            subscriptionSummary?.is_trial
-                              ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                              : quota.is_exhausted
-                                ? 'bg-gray-900 text-white hover:bg-gray-800'
-                                : 'bg-gray-700 text-white hover:bg-gray-600'
-                          }`}
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          {quota.name}
-                          {quota.is_exhausted && !subscriptionSummary?.is_trial && <span className="text-xs opacity-80">(Exhausted)</span>}
-                        </button>
-                      );
-                    })}
                 </div>
               </div>
             )}
 
             {/* Quota Cards Grid - Dynamic */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 mb-6">
               {quotaSummary.quotas?.filter((quota: QuotaInfo) => quota.quota_type !== 'storage_gb').map((quota: QuotaInfo) => {
-                // Grey theme for all quota types
-                const c = { bg: 'bg-gray-50', text: 'text-gray-900', border: 'border-gray-200' };
                 const isUnlimited = quota.limit === -1 || quota.remaining === -1;
+
+                // Icon mapping for quota types
+                const quotaIcons: Record<string, React.ReactNode> = {
+                  'RU': <Package className="w-5 h-5" />,
+                  'RS': <BarChart3 className="w-5 h-5" />,
+                  'AS': <CheckCircle2 className="w-5 h-5" />,
+                  'AIU': <Sparkles className="w-5 h-5" />,
+                  'max_seats': <Zap className="w-5 h-5" />,
+                };
 
                 return (
                   <div
                     key={quota.quota_type}
-                    className={`${c.bg} ${c.border} border-2 rounded-xl p-4 transition-all hover:shadow-md ${
-                      quota.is_exhausted ? 'ring-2 ring-gray-400' : quota.is_low ? 'ring-2 ring-gray-400' : ''
+                    className={`bg-white border-2 rounded-2xl p-5 transition-all hover:shadow-lg hover:-translate-y-1 group ${
+                      quota.is_exhausted
+                        ? 'border-gray-400 shadow-md'
+                        : quota.is_low
+                          ? 'border-gray-300 shadow-sm'
+                          : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-gray-600">{quota.name}</span>
+                    {/* Card Header */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                          quota.is_exhausted
+                            ? 'bg-gray-800 text-white'
+                            : quota.is_low
+                              ? 'bg-gray-200 text-gray-700'
+                              : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
+                        }`}>
+                          {quotaIcons[quota.quota_type] || <Zap className="w-5 h-5" />}
+                        </div>
+                        <span className="text-sm font-semibold text-gray-700">{quota.name}</span>
+                      </div>
                       {isUnlimited && (
-                        <span className="text-xs font-bold text-gray-600 bg-gray-200 px-2 py-0.5 rounded-full">
-                          UNLIMITED
+                        <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">
+                          ∞ UNLIMITED
                         </span>
                       )}
                       {!isUnlimited && quota.is_exhausted && (
-                        <span className="text-xs font-bold text-gray-100 bg-gray-800 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-bold text-white bg-gray-800 px-2.5 py-1 rounded-full animate-pulse">
                           EXHAUSTED
                         </span>
                       )}
                       {!isUnlimited && quota.is_low && !quota.is_exhausted && (
-                        <span className="text-xs font-bold text-gray-700 bg-gray-300 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-bold text-gray-700 bg-gray-200 px-2.5 py-1 rounded-full">
                           LOW
                         </span>
                       )}
                     </div>
-                    <div className={`text-3xl font-bold ${c.text}`}>
-                      {isUnlimited ? '∞' : quota.used}
-                      <span className="text-sm font-normal text-gray-500">
-                        /{isUnlimited ? '∞' : quota.limit}
-                      </span>
+
+                    {/* Usage Numbers */}
+                    <div className="mb-4">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-4xl font-bold text-gray-900 tracking-tight">
+                          {isUnlimited ? '∞' : quota.used}
+                        </span>
+                        <span className="text-lg text-gray-400 font-medium">
+                          / {isUnlimited ? '∞' : quota.limit}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">units used</p>
                     </div>
-                    <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-2">
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden mb-3">
                       <div
-                        className={`h-full rounded-full transition-all ${
-                          isUnlimited ? 'bg-gray-500' : quota.is_exhausted ? 'bg-gray-800' : quota.is_low ? 'bg-gray-600' : 'bg-gray-500'
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          isUnlimited
+                            ? 'bg-gradient-to-r from-gray-400 to-gray-500'
+                            : quota.is_exhausted
+                              ? 'bg-gradient-to-r from-gray-700 to-gray-900'
+                              : quota.is_low
+                                ? 'bg-gradient-to-r from-gray-500 to-gray-600'
+                                : 'bg-gradient-to-r from-gray-400 to-gray-500'
                         }`}
                         style={{ width: isUnlimited ? '100%' : `${Math.min(quota.percentage_used, 100)}%` }}
                       />
                     </div>
-                    <div className="mt-1 text-xs text-gray-500">
-                      {quota.remaining} remaining {isUnlimited ? '' : `(${(100 - quota.percentage_used).toFixed(1)}% left)`}
+
+                    {/* Footer Stats */}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className={`font-medium ${quota.is_exhausted ? 'text-gray-800' : 'text-gray-600'}`}>
+                        {isUnlimited ? 'Unlimited usage' : `${quota.remaining} remaining`}
+                      </span>
+                      {!isUnlimited && (
+                        <span className={`font-semibold px-2 py-0.5 rounded-full ${
+                          quota.is_exhausted
+                            ? 'bg-gray-800 text-white'
+                            : quota.is_low
+                              ? 'bg-gray-200 text-gray-700'
+                              : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {(100 - quota.percentage_used).toFixed(0)}% left
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -756,45 +861,54 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       </div>
 
       {/* Add-ons Section */}
-      <div className="max-w-7xl mx-auto px-6 py-8" data-section="addons">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-gray-600" />
+      <div className="max-w-7xl mx-auto px-6 pb-12" data-section="addons">
+        <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
+          {/* Section Header */}
+          <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl flex items-center justify-center shadow-lg shadow-gray-300/30">
+                  <Sparkles className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Add-on Units</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">Purchase additional units to extend your quota limits instantly</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Add-on Units</h2>
-                <p className="text-sm text-gray-600">Purchase additional Units to extend your quota limits</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
+                <Info className="w-3.5 h-3.5" />
+                <span>Valid until plan expiry</span>
               </div>
             </div>
           </div>
 
           <div className="p-6">
             {addonsLoading && (
-              <div className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
-                <p className="mt-3 text-gray-500">Loading add-ons...</p>
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
+                  <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+                </div>
+                <p className="text-gray-500 font-medium">Loading add-ons...</p>
               </div>
             )}
 
             {!addonsLoading && addons.length === 0 && (
-              <div className="text-center py-8">
-                <div className="w-14 h-14 mx-auto mb-3 bg-gray-100 rounded-full flex items-center justify-center">
-                  <Sparkles className="w-7 h-7 text-gray-400" />
+              <div className="text-center py-12">
+                <div className="w-20 h-20 mx-auto mb-4 bg-gray-100 rounded-2xl flex items-center justify-center">
+                  <Sparkles className="w-10 h-10 text-gray-300" />
                 </div>
-                <p className="text-gray-500">No add-ons available at the moment.</p>
+                <p className="text-gray-500 font-medium">No add-ons available at the moment.</p>
+                <p className="text-sm text-gray-400 mt-1">Check back later for new offerings</p>
               </div>
             )}
 
             {!addonsLoading && addons.length > 0 && (
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Reorder addons: Extra Max Jobs before Extra Max Seats */}
                 {[...addons]
                   .sort((a, b) => {
                     const nameA = (a.name || a.addon_name || '').toLowerCase();
                     const nameB = (b.name || b.addon_name || '').toLowerCase();
-                    // Extra Max Jobs should come before Extra Max Seats
                     if (nameA.includes('max jobs') && nameB.includes('max seats')) return -1;
                     if (nameA.includes('max seats') && nameB.includes('max jobs')) return 1;
                     return 0;
@@ -804,54 +918,88 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   const displayName = (addon.name || addon.addon_name || 'Credit Pack')
                     .replace(/\s*-?\s*Pro$/i, '')
                     .trim();
-                  return (
-                  <div
-                    key={addon.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-gray-400 transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
-                        <Zap className="w-5 h-5 text-gray-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900">
-                          {displayName}
-                        </h3>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-6">
-                      <div className="text-right">
-                        <div className="text-xl font-bold text-gray-900">
-                          {addon.credit_amount || addon.min_quantity || 0}
+                  // Icon mapping for addon types
+                  const getAddonIcon = (name: string) => {
+                    const lowerName = name.toLowerCase();
+                    if (lowerName.includes('resume') && lowerName.includes('upload')) return <Package className="w-6 h-6" />;
+                    if (lowerName.includes('resume') && lowerName.includes('scor')) return <BarChart3 className="w-6 h-6" />;
+                    if (lowerName.includes('assessment')) return <CheckCircle2 className="w-6 h-6" />;
+                    if (lowerName.includes('ai') || lowerName.includes('interview')) return <Sparkles className="w-6 h-6" />;
+                    if (lowerName.includes('seat')) return <Zap className="w-6 h-6" />;
+                    return <Zap className="w-6 h-6" />;
+                  };
+
+                  return (
+                    <div
+                      key={addon.id}
+                      className="group bg-gradient-to-br from-gray-50 to-white rounded-2xl border-2 border-gray-200 p-5 transition-all hover:border-gray-300 hover:shadow-lg hover:-translate-y-1"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-4">
+                          <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center text-gray-600 group-hover:bg-gray-200 transition-colors">
+                            {getAddonIcon(displayName)}
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-gray-900 text-lg">
+                              {displayName}
+                            </h3>
+                            <div className="flex items-center gap-3 mt-2">
+                              <div className="flex items-center gap-1.5 bg-gray-100 px-3 py-1.5 rounded-lg">
+                                <Zap className="w-4 h-4 text-gray-600" />
+                                <span className="text-lg font-bold text-gray-900">{addon.credit_amount || addon.min_quantity || 0}</span>
+                                <span className="text-xs text-gray-500">units</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-500">Units</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xl font-bold text-gray-700">
-                          ₹{addon.price || addon.unit_price || 0}
+
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-gray-900">
+                            ₹{(addon.price || addon.unit_price || 0).toLocaleString()}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">one-time purchase</p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleBuyAddon(addon)}
-                        disabled={!subscriptionSummary || subscriptionSummary.is_trial}
-                        title={subscriptionSummary?.is_trial ? "Upgrade to a paid plan to purchase addons" : ""}
-                        className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                          !subscriptionSummary || subscriptionSummary.is_trial
-                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            : 'bg-gray-800 text-white hover:bg-gray-700'
-                        }`}
-                      >
-                        <ShoppingCart className="w-4 h-4" />
-                        {!subscriptionSummary || subscriptionSummary.is_trial ? 'Upgrade First' : 'Buy'}
-                      </button>
+
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <button
+                          onClick={() => handleBuyAddon(addon)}
+                          disabled={!subscriptionSummary || subscriptionSummary.is_trial}
+                          title={subscriptionSummary?.is_trial ? "Upgrade to a paid plan to purchase addons" : ""}
+                          className={`w-full px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                            !subscriptionSummary || subscriptionSummary.is_trial
+                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-700 hover:to-gray-800 shadow-lg shadow-gray-300/30 hover:shadow-xl hover:shadow-gray-300/40'
+                          }`}
+                        >
+                          <ShoppingCart className="w-5 h-5" />
+                          {!subscriptionSummary || subscriptionSummary.is_trial ? 'Upgrade Plan to Purchase' : 'Purchase Now'}
+                          {(!subscriptionSummary || !subscriptionSummary.is_trial) && <ChevronRight className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
+                  );
                 })}
               </div>
             )}
           </div>
+
+          {/* Footer Info */}
+          {!addonsLoading && addons.length > 0 && (
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100">
+              <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-gray-400" />
+                  Instant activation
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-gray-400" />
+                  Secure payment
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1006,70 +1154,86 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
       {/* Addon Purchase Modal */}
       {showAddonModal && selectedAddon && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
-                    <ShoppingCart className="w-5 h-5 text-gray-600" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Purchase Add-on</h2>
-                    <p className="text-sm text-gray-600">Add Units to your quota</p>
-                  </div>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="relative px-6 py-5 bg-gradient-to-r from-gray-800 to-gray-900">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/10 backdrop-blur rounded-xl flex items-center justify-center">
+                  <ShoppingCart className="w-6 h-6 text-white" />
                 </div>
-                <button
-                  onClick={() => {
-                    setShowAddonModal(false);
-                    setAddonPurchaseError(null);
-                    setAddonPurchaseSuccess(null);
-                  }}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
+                <div>
+                  <h2 className="text-xl font-bold text-white">Purchase Add-on</h2>
+                  <p className="text-sm text-gray-300">Add units to your quota instantly</p>
+                </div>
               </div>
+              <button
+                onClick={() => {
+                  setShowAddonModal(false);
+                  setAddonPurchaseError(null);
+                  setAddonPurchaseSuccess(null);
+                }}
+                className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-5">
               {/* Success Message */}
               {addonPurchaseSuccess && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                  <p className="text-sm text-green-700">{addonPurchaseSuccess}</p>
+                <div className="p-4 bg-gray-100 border-2 border-gray-300 rounded-xl flex items-start gap-3 animate-in slide-in-from-top duration-200">
+                  <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
+                    <CheckCircle2 className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">Purchase Successful!</p>
+                    <p className="text-sm text-gray-600 mt-0.5">{addonPurchaseSuccess}</p>
+                  </div>
                 </div>
               )}
 
               {/* Error Message */}
               {addonPurchaseError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                  <p className="text-sm text-red-700">{addonPurchaseError}</p>
+                <div className="p-4 bg-gray-100 border-2 border-gray-300 rounded-xl flex items-start gap-3">
+                  <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <AlertCircle className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">Purchase Failed</p>
+                    <p className="text-sm text-gray-600 mt-0.5">{addonPurchaseError}</p>
+                  </div>
                 </div>
               )}
 
-              {/* Addon Details */}
-              <div className="bg-gray-100 border border-gray-300 rounded-xl p-4">
-                <h3 className="font-semibold text-gray-900">
-                  {(selectedAddon.name || selectedAddon.addon_name || 'Credit Pack').replace(/\s*-?\s*Pro$/i, '').trim()}
-                </h3>
+              {/* Addon Details Card */}
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200 rounded-2xl p-5">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-sm border border-gray-200">
+                    <Zap className="w-7 h-7 text-gray-700" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-lg">
+                      {(selectedAddon.name || selectedAddon.addon_name || 'Credit Pack').replace(/\s*-?\s*Pro$/i, '').trim()}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      {selectedAddon.credit_amount || 0} units per pack
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Quantity Selector */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Quantity
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Select Quantity
                 </label>
-                <p className="text-xs text-gray-500 mb-2">
-                  {selectedAddon.credit_amount || 0} Units for ₹{selectedAddon.price || selectedAddon.unit_price || 0}
-                </p>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
                   <button
                     onClick={() => setAddonQuantity(Math.max(1, addonQuantity - 1))}
-                    className="w-10 h-10 border border-gray-300 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors font-medium"
+                    className="w-12 h-12 border-2 border-gray-300 rounded-xl flex items-center justify-center hover:bg-gray-100 hover:border-gray-400 transition-all font-bold text-xl text-gray-600"
                   >
-                    -
+                    −
                   </button>
                   <input
                     type="number"
@@ -1077,45 +1241,56 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     max={100}
                     value={addonQuantity}
                     onChange={(e) => setAddonQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-20 text-center px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 font-semibold"
+                    className="w-24 text-center px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 font-bold text-2xl"
                   />
                   <button
                     onClick={() => setAddonQuantity(Math.min(100, addonQuantity + 1))}
-                    className="w-10 h-10 border border-gray-300 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors font-medium"
+                    className="w-12 h-12 border-2 border-gray-300 rounded-xl flex items-center justify-center hover:bg-gray-100 hover:border-gray-400 transition-all font-bold text-xl text-gray-600"
                   >
                     +
                   </button>
+                  <div className="flex-1 text-right">
+                    <span className="text-xs text-gray-500">Price per pack</span>
+                    <p className="font-bold text-gray-900">₹{selectedAddon.price || selectedAddon.unit_price || 0}</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Summary */}
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Base unit</span>
-                  <span className="font-medium">{selectedAddon.credit_amount || 0} Units = ₹{selectedAddon.price || selectedAddon.unit_price || 0}</span>
+              {/* Order Summary */}
+              <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-gray-200 bg-gray-100">
+                  <h4 className="font-semibold text-gray-700 text-sm">Order Summary</h4>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Quantity</span>
-                  <span className="font-medium">x{addonQuantity}</span>
-                </div>
-                <hr className="border-gray-200" />
-                <div className="flex justify-between items-center bg-gray-200 p-2 rounded-lg -mx-2">
-                  <span className="text-gray-800 font-medium">Units to be added</span>
-                  <span className="text-2xl font-bold text-gray-900">
-                    +{(selectedAddon.credit_amount || 0) * addonQuantity}
-                  </span>
-                </div>
-                <hr className="border-gray-200" />
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-900">Total Price</span>
-                  <span className="text-xl font-bold text-gray-900">
-                    ₹{((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity).toLocaleString()}
-                  </span>
+                <div className="p-5 space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Pack size</span>
+                    <span className="font-medium text-gray-900">{selectedAddon.credit_amount || 0} units</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Quantity</span>
+                    <span className="font-medium text-gray-900">×{addonQuantity}</span>
+                  </div>
+                  <div className="h-px bg-gray-200 my-3"></div>
+                  <div className="flex justify-between items-center bg-gray-800 text-white p-4 rounded-xl -mx-1">
+                    <div>
+                      <span className="text-sm text-gray-300">Units to be added</span>
+                      <p className="text-3xl font-bold">+{(selectedAddon.credit_amount || 0) * addonQuantity}</p>
+                    </div>
+                    <Zap className="w-10 h-10 text-gray-400" />
+                  </div>
+                  <div className="h-px bg-gray-200 my-3"></div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-900">Total Amount</span>
+                    <span className="text-3xl font-bold text-gray-900">
+                      ₹{((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
               <div className="flex gap-3">
                 <button
                   onClick={() => {
@@ -1123,24 +1298,24 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     setAddonPurchaseError(null);
                     setAddonPurchaseSuccess(null);
                   }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors"
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-100 hover:border-gray-400 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handlePurchaseAddon}
                   disabled={purchasingAddon || !!addonPurchaseSuccess}
-                  className="flex-1 px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-xl font-semibold hover:from-gray-700 hover:to-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-gray-300/30"
                 >
                   {purchasingAddon ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-5 h-5 animate-spin" />
                       Processing...
                     </>
                   ) : (
                     <>
-                      <ShoppingCart className="w-4 h-4" />
-                      Purchase Now
+                      <CreditCard className="w-5 h-5" />
+                      Confirm Purchase
                     </>
                   )}
                 </button>
