@@ -1,11 +1,12 @@
 'use client';
 
 import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, PlayCircle, Paperclip } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import AITalentMatchPageJobsList from './AITalentMatchPageJobsList';
 import ResumeVersionsModal from './ResumeVersionsModal';
+import Pagination from './Pagination';
 import { recordUsage } from '@/lib/services/usageTrackingService';
 import { MatchedCandidate } from '@/lib/services/aiMatchService';
 import api from '@/lib/services/api';
@@ -66,6 +67,10 @@ export default function AITalentMatchPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterThreshold, setFilterThreshold] = useState(0);
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
+
+  // Pagination state for match results
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Track if we're in an active matching session to prevent URL effect interference
   const isMatchingInProgress = useRef(false);
@@ -470,6 +475,40 @@ export default function AITalentMatchPage({
     return filtered.sort((a, b) => (b.rank || 0) - (a.rank || 0));
   };
 
+  // Memoized filtered candidates for pagination calculations
+  const filteredCandidatesMemo = useMemo(() => getFilteredCandidates(), [
+    viewMode, matchedCandidates, selectedHistoryItem, filterThreshold, searchQuery
+  ]);
+
+  // Calculate pagination values
+  const totalFilteredCandidates = filteredCandidatesMemo.length;
+  const totalPages = Math.ceil(totalFilteredCandidates / itemsPerPage);
+
+  // Get paginated candidates - maintains ranking order across pages
+  const getPaginatedCandidates = (): MatchedCandidateWithVersions[] => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredCandidatesMemo.slice(startIndex, endIndex);
+  };
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterThreshold, selectedHistoryItem, viewMode]);
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Scroll to top of results
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Handle items per page change
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
+
   const getMatchColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
     if (score >= 70) return 'text-gray-800';
@@ -509,7 +548,8 @@ export default function AITalentMatchPage({
 
   // View: History Details
   if (viewMode === 'details' && selectedHistoryItem) {
-    const filteredCandidates = getFilteredCandidates();
+    const filteredCandidates = filteredCandidatesMemo;
+    const paginatedCandidates = getPaginatedCandidates();
     const excellentCount = selectedHistoryItem.matchedCandidates.filter(c => c.matchScore >= 85).length;
     const goodCount = selectedHistoryItem.matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
     const moderateCount = selectedHistoryItem.matchedCandidates.filter(c => c.matchScore < 70).length;
@@ -693,7 +733,7 @@ export default function AITalentMatchPage({
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredCandidates.map((candidate, index) => (
+              {paginatedCandidates.map((candidate, index) => (
                 <tr
                   key={candidate.id}
                   className={`hover:bg-gray-50 transition-colors ${
@@ -782,6 +822,18 @@ export default function AITalentMatchPage({
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {totalFilteredCandidates > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalFilteredCandidates}
+            itemsPerPage={itemsPerPage}
+            onPageChange={handlePageChange}
+            onItemsPerPageChange={handleItemsPerPageChange}
+          />
+        )}
       </main>
 
       {/* Resume Versions Modal */}
@@ -1129,7 +1181,8 @@ export default function AITalentMatchPage({
 
   // View: Results (After Matching)
   if (viewMode === 'results') {
-    const filteredCandidates = getFilteredCandidates();
+    const filteredCandidates = filteredCandidatesMemo;
+    const paginatedCandidates = getPaginatedCandidates();
     const excellentCount = matchedCandidates.filter(c => c.matchScore >= 85).length;
     const goodCount = matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
     const moderateCount = matchedCandidates.filter(c => c.matchScore < 70).length;
@@ -1331,7 +1384,7 @@ export default function AITalentMatchPage({
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredCandidates.map((candidate, index) => (
+                {paginatedCandidates.map((candidate, index) => (
                   <tr
                     key={candidate.id}
                     className={`hover:bg-gray-50 transition-colors ${
@@ -1419,6 +1472,18 @@ export default function AITalentMatchPage({
                 ))}
               </tbody>
             </table>
+
+            {/* Pagination Controls */}
+            {totalFilteredCandidates > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalFilteredCandidates}
+                itemsPerPage={itemsPerPage}
+                onPageChange={handlePageChange}
+                onItemsPerPageChange={handleItemsPerPageChange}
+              />
+            )}
           </div>
           )}
         </div>

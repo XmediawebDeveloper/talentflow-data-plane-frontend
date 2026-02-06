@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles } from 'lucide-react';
-import { DndProvider } from 'react-dnd';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical } from 'lucide-react';
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import ResumeTable from '@/components/ResumeTable';
 import StatsCards from '@/components/StatsCards';
@@ -70,6 +70,259 @@ const formatDateTimeIST = (dateString: string | null | undefined): string => {
   }
 };
 
+// Drag item type for resumes (must match ResumeTable and FolderTree)
+const RESUME_DRAG_TYPE = 'RESUME';
+
+interface DragItem {
+  id: string;
+  ids: string[];
+}
+
+// Droppable folder card for card view
+interface DroppableFolderCardProps {
+  folder: FolderType;
+  resumeCount: number;
+  hasSubfolders: boolean;
+  isArchived: boolean;
+  isRoot: boolean;
+  onNavigate: (folderId: string) => void;
+  onMoveToFolder?: (resumeIds: string[], folderId: string) => void;
+}
+
+function DroppableFolderCard({
+  folder,
+  resumeCount,
+  hasSubfolders,
+  isArchived,
+  isRoot,
+  onNavigate,
+  onMoveToFolder,
+}: DroppableFolderCardProps) {
+  const [{ isOver, canDrop }, drop] = useDrop<DragItem, void, { isOver: boolean; canDrop: boolean }>({
+    accept: RESUME_DRAG_TYPE,
+    drop: (item) => {
+      const resumeIds = item.ids && item.ids.length > 0 ? item.ids : [item.id];
+      if (onMoveToFolder) {
+        onMoveToFolder(resumeIds, folder.id);
+      }
+    },
+    // Cannot drop on Root folder
+    canDrop: () => !(folder.name.toLowerCase() === 'root' && !folder.parentId),
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+      canDrop: monitor.canDrop(),
+    }),
+  });
+
+  const isDropTarget = isOver && canDrop;
+
+  return (
+    <div
+      ref={drop as unknown as React.Ref<HTMLDivElement>}
+      className={`bg-white border rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all ${
+        isDropTarget
+          ? 'border-blue-500 border-2 border-dashed bg-blue-50'
+          : isArchived
+            ? 'border-amber-200 hover:border-amber-400'
+            : isRoot
+              ? 'border-green-200 hover:border-green-400'
+              : 'border-gray-200 hover:border-blue-300'
+      }`}
+      onClick={() => onNavigate(folder.id)}
+    >
+      <div className="flex items-center gap-3 p-4">
+        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+          isArchived
+            ? 'bg-amber-100'
+            : isRoot
+              ? 'bg-green-100'
+              : 'bg-blue-100'
+        }`}>
+          {isArchived ? (
+            <Archive className="w-6 h-6 text-amber-600" />
+          ) : (
+            <Folder className={`w-6 h-6 ${isRoot ? 'text-green-600' : 'text-blue-600'}`} />
+          )}
+        </div>
+        <div className="flex-1">
+          <h3 className="font-semibold text-gray-900">
+            {isRoot ? 'Root (Default)' : folder.name}
+          </h3>
+          <p className="text-sm text-gray-500">
+            {hasSubfolders && `${folder.children!.length} subfolder${folder.children!.length !== 1 ? 's' : ''} • `}
+            {resumeCount} resume{resumeCount !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <ChevronRight className="w-5 h-5 text-gray-400" />
+      </div>
+    </div>
+  );
+}
+
+// Draggable resume row for card view
+interface DraggableCardResumeRowProps {
+  resume: Resume;
+  selectedResumes: string[];
+  isLast: boolean;
+  onSelect: (id: string) => void;
+  onQuickView: (resume: Resume) => void;
+  onDelete: (id: string) => void;
+  onViewDetails: (resume: Resume) => void;
+}
+
+function DraggableCardResumeRow({
+  resume,
+  selectedResumes,
+  isLast,
+  onSelect,
+  onQuickView,
+  onDelete,
+  onViewDetails,
+}: DraggableCardResumeRowProps) {
+  const [{ isDragging }, drag, preview] = useDrag<DragItem, void, { isDragging: boolean }>({
+    type: RESUME_DRAG_TYPE,
+    item: () => ({
+      id: resume.id,
+      ids: selectedResumes.includes(resume.id) ? selectedResumes : [resume.id],
+    }),
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  });
+
+  return (
+    <div
+      ref={preview as unknown as React.Ref<HTMLDivElement>}
+      className={`grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center ${
+        !isLast ? 'border-b border-gray-100' : ''
+      } ${selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''} ${isDragging ? 'opacity-50' : ''}`}
+      onClick={() => onViewDetails(resume)}
+    >
+      {/* Drag Handle */}
+      <div
+        ref={drag as unknown as React.Ref<HTMLDivElement>}
+        className="cursor-grab hover:bg-gray-100 rounded p-1 flex items-center justify-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="w-4 h-4 text-gray-400" />
+      </div>
+      {/* Checkbox */}
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          checked={selectedResumes.includes(resume.id)}
+          onChange={(e) => {
+            e.stopPropagation();
+            onSelect(resume.id);
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+        />
+      </div>
+      {/* Candidate Name */}
+      <div className="flex items-center min-w-0">
+        <span className="font-medium text-gray-900 text-sm truncate">{resume.name}</span>
+      </div>
+      {/* Email */}
+      <div className="text-sm text-gray-600 truncate">{resume.email || '-'}</div>
+      {/* Phone */}
+      <div className="text-sm text-gray-600 truncate">{resume.phone || '-'}</div>
+      {/* Skills */}
+      <div className="flex flex-wrap gap-1.5 max-w-[200px]">
+        {resume.skills && resume.skills.length > 0 ? (
+          <>
+            {resume.skills.slice(0, 3).map((skill, idx) => (
+              <span
+                key={idx}
+                className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 truncate max-w-[90px]"
+                title={skill}
+              >
+                {skill}
+              </span>
+            ))}
+            {resume.skills.length > 3 && (
+              <span
+                className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors"
+                title={resume.skills.slice(3).join(', ')}
+              >
+                +{resume.skills.length - 3}
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="text-xs text-gray-400 italic">No skills</span>
+        )}
+      </div>
+      {/* Experience */}
+      <div className="text-sm text-gray-600">{resume.experience || '-'}</div>
+      {/* Source */}
+      <div>
+        <span className={`px-2 py-1 rounded text-xs font-medium ${
+          resume.source === 'TalentFlow'
+            ? 'bg-purple-100 text-purple-700'
+            : 'bg-gray-100 text-gray-700'
+        }`}>
+          {resume.source || 'Manual'}
+        </span>
+      </div>
+      {/* Upload Date */}
+      <div className="text-sm text-gray-600">
+        {formatDateIST(resume.uploadDate)}
+      </div>
+      {/* Uploaded By */}
+      <div className="text-sm text-gray-600 truncate">{resume.uploadedBy || '-'}</div>
+      {/* Files */}
+      <div className="flex items-center gap-1 text-sm text-gray-600">
+        <FileText className="w-4 h-4" />
+        <span>{resume.attachments}</span>
+      </div>
+      {/* Actions */}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onQuickView(resume);
+          }}
+          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+          title="Quick View"
+        >
+          <Eye className="w-4 h-4" />
+        </button>
+        <button
+          onClick={async (e) => {
+            e.stopPropagation();
+            try {
+              const blob = await resumeService.download(resume.id);
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = resume.fileName || `${resume.name}.${resume.fileType || 'pdf'}`;
+              a.click();
+              window.URL.revokeObjectURL(url);
+            } catch (err) {
+              toast.error('Failed to download');
+            }
+          }}
+          className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+          title="Download"
+        >
+          <Download className="w-4 h-4" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(resume.id);
+          }}
+          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+          title="Delete"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function MyResumesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -85,6 +338,7 @@ export default function MyResumesPage() {
   const [folderTreeWidth, setFolderTreeWidth] = useState(240);
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
   const [cardViewFolder, setCardViewFolder] = useState<string | null>(null); // Selected folder in card view
+  const [breadcrumbPath, setBreadcrumbPath] = useState<{ id: string; name: string }[]>([]); // Breadcrumb navigation path
 
   // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -129,7 +383,10 @@ export default function MyResumesPage() {
     folderId: string | null;
     folderName: string;
     resumeCount: number;
-  }>({ isOpen: false, folderId: null, folderName: '', resumeCount: 0 });
+    parentFolderId: string | null;
+    parentFolderName: string;
+    contentAction: 'move-parent' | 'move-root' | null;
+  }>({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null });
 
   useEffect(() => {
     fetchData();
@@ -244,7 +501,7 @@ export default function MyResumesPage() {
         source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
         folderId: r.folder_id || '',
         uploadDate: r.created_at,
-        attachments: r.version_count || 1,
+        attachments: r.version_count || r.version || 1,
         uploadedBy: r.uploaded_by_name || 'Unknown',
         currentCompany: r.current_company,
         previousCompany: r.previous_company,
@@ -353,6 +610,67 @@ export default function MyResumesPage() {
       setLoading(false);
     }
   };
+
+  // Helper function to flatten all folders (including nested children)
+  const flattenAllFolders = useCallback((folderList: FolderType[]): FolderType[] => {
+    const result: FolderType[] = [];
+    const traverse = (items: FolderType[]) => {
+      for (const folder of items) {
+        result.push(folder);
+        if (folder.children && folder.children.length > 0) {
+          traverse(folder.children);
+        }
+      }
+    };
+    traverse(folderList);
+    return result;
+  }, []);
+
+  // Get folder by ID (including nested folders)
+  const getFolderById = useCallback((folderId: string): FolderType | undefined => {
+    const allFolders = flattenAllFolders(folders);
+    return allFolders.find(f => f.id === folderId);
+  }, [folders, flattenAllFolders]);
+
+  // Get direct children folders of a parent folder
+  const getChildrenFolders = useCallback((parentId: string | null): FolderType[] => {
+    if (parentId === null) {
+      // Return top-level folders (excluding 'all' virtual folder)
+      return folders.filter(f => f.id !== 'all' && !f.parentId);
+    }
+    const parentFolder = getFolderById(parentId);
+    return parentFolder?.children || [];
+  }, [folders, getFolderById]);
+
+  // Build breadcrumb path for a folder
+  const buildBreadcrumbPath = useCallback((folderId: string | null): { id: string; name: string }[] => {
+    if (!folderId) return [];
+
+    const path: { id: string; name: string }[] = [];
+    let currentFolder = getFolderById(folderId);
+
+    while (currentFolder) {
+      path.unshift({ id: currentFolder.id, name: currentFolder.name });
+      if (currentFolder.parentId) {
+        currentFolder = getFolderById(currentFolder.parentId);
+      } else {
+        break;
+      }
+    }
+
+    return path;
+  }, [getFolderById]);
+
+  // Navigate to folder in card view
+  const navigateToFolder = useCallback((folderId: string | null) => {
+    setCardViewFolder(folderId);
+    if (folderId) {
+      const path = buildBreadcrumbPath(folderId);
+      setBreadcrumbPath(path);
+    } else {
+      setBreadcrumbPath([]);
+    }
+  }, [buildBreadcrumbPath]);
 
   const handleSelectResume = (id: string) => {
     setSelectedResumes(prev =>
@@ -863,42 +1181,77 @@ export default function MyResumesPage() {
     // Count resumes in this folder
     const resumesInFolder = resumes.filter(r => r.folderId === id);
 
+    // Find parent folder info
+    const parentFolder = folderToDelete?.parentId
+      ? folders.find(f => f.id === folderToDelete.parentId)
+      : null;
+
+    // Find root folder
+    const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
+
     // Show confirmation dialog
     setDeleteFolderConfirm({
       isOpen: true,
       folderId: id,
       folderName: folderToDelete?.name || 'this folder',
       resumeCount: resumesInFolder.length,
+      parentFolderId: parentFolder?.id || rootFolder?.id || null,
+      parentFolderName: parentFolder?.name || 'My Resumes (root)',
+      contentAction: null,
     });
   };
 
   const confirmDeleteFolder = async () => {
-    const { folderId, resumeCount } = deleteFolderConfirm;
+    const { folderId, resumeCount, contentAction, parentFolderId } = deleteFolderConfirm;
     if (!folderId) return;
 
-    // Delete all resumes in the folder first if any
-    if (resumeCount > 0) {
-      const resumesInFolder = resumes.filter(r => r.folderId === folderId);
-      try {
-        await Promise.all(resumesInFolder.map(r => resumeService.delete(r.id)));
-        setResumes(prev => prev.filter(r => r.folderId !== folderId));
-      } catch (error) {
-        toast.error('Failed to delete resumes in folder');
-        setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0 });
-        return;
+    // If folder has content and no action selected, don't proceed
+    if (resumeCount > 0 && !contentAction) {
+      toast.error('Please select what to do with the resumes in this folder');
+      return;
+    }
+
+    // Find root folder for 'move-root' action
+    const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
+
+    // Determine target folder for moving resumes
+    let moveResumesTo: string | undefined;
+    if (resumeCount > 0 && contentAction) {
+      if (contentAction === 'move-parent') {
+        moveResumesTo = parentFolderId || rootFolder?.id;
+      } else if (contentAction === 'move-root') {
+        moveResumesTo = rootFolder?.id;
       }
     }
 
     try {
-      await folderService.delete(folderId);
+      // Delete folder with move_resumes_to parameter (backend handles moving)
+      await folderService.delete(folderId, moveResumesTo);
+
+      // Update local state - move resumes to target folder
+      if (resumeCount > 0 && moveResumesTo) {
+        setResumes(prev => prev.map(r =>
+          r.folderId === folderId ? { ...r, folderId: moveResumesTo } : r
+        ));
+      }
+
+      // Remove folder from state
       setFolders(prev => prev.filter(f => f.id !== folderId));
+
+      // Update folder counts
+      if (moveResumesTo) {
+        setFolders(prev => prev.map(f =>
+          f.id === moveResumesTo ? { ...f, count: f.count + resumeCount } : f
+        ));
+      }
+
       toast.success('Folder deleted successfully');
     } catch (error) {
       toast.error('Failed to delete folder');
     }
 
     // Close dialog
-    setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0 });
+    setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null });
   };
 
   // Helper function to find or create "root" folder
@@ -1213,7 +1566,7 @@ export default function MyResumesPage() {
     source: 'Manual',
     folderId: r.folder_id || '',
     uploadDate: r.created_at,
-    attachments: r.version_count || 1,
+    attachments: r.version_count || r.version || 1,
     uploadedBy: r.uploaded_by_name || 'Unknown',
     currentCompany: r.current_company,
     previousCompany: r.previous_company,
@@ -1516,34 +1869,81 @@ export default function MyResumesPage() {
               onWidthChange={setFolderTreeWidth}
             />
 
-            <ResumeTable
-              resumes={filteredResumes}
-              selectedResumes={selectedResumes}
-              onSelectResume={handleSelectResume}
-              onSelectAll={handleSelectAll}
-              onQuickView={(resume) => setQuickViewResume(resume)}
-              onApplyToJob={handleSingleResumeApplyToJob}
-              onDelete={(id) => handleDelete(id)}
-              onMoveToFolder={handleMoveToFolder}
-              folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
-              onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
-              highlightQuery={appliedSearchQuery}
-              onArchive={(resumeId) => handleArchiveResumes([resumeId])}
-            />
+            <div className="flex-1 flex flex-col">
+              {/* Breadcrumb Navigation for List View */}
+              {selectedFolder && selectedFolder !== 'all' && (
+                <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-sm">
+                  <button
+                    onClick={() => setSelectedFolder('all')}
+                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                    <span>All Resumes</span>
+                  </button>
+                  {buildBreadcrumbPath(selectedFolder).map((item, index, arr) => (
+                    <div key={item.id} className="flex items-center gap-2">
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                      {index === arr.length - 1 ? (
+                        <span className="text-gray-900 font-medium">{item.name}</span>
+                      ) : (
+                        <button
+                          onClick={() => setSelectedFolder(item.id)}
+                          className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                        >
+                          {item.name}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <ResumeTable
+                resumes={filteredResumes}
+                selectedResumes={selectedResumes}
+                onSelectResume={handleSelectResume}
+                onSelectAll={handleSelectAll}
+                onQuickView={(resume) => setQuickViewResume(resume)}
+                onApplyToJob={handleSingleResumeApplyToJob}
+                onDelete={(id) => handleDelete(id)}
+                onMoveToFolder={handleMoveToFolder}
+                folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
+                onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
+                highlightQuery={appliedSearchQuery}
+                onArchive={(resumeId) => handleArchiveResumes([resumeId])}
+              />
+            </div>
           </div>
         ) : (
-          // Card View - Folders as Cards OR Resumes List when folder selected
+          // Card View - Folders as Cards with Breadcrumb Navigation
           <div className="p-6">
-            {cardViewFolder === null ? (
-              // Show Folder Cards
-              (() => {
-                // Filter out only 'all' virtual folder - show root and Archived Resumes
-                const realFolders = folders.filter(f => f.id !== 'all');
+            {(() => {
+              // Get current folder data and children
+              const currentFolderData = cardViewFolder ? getFolderById(cardViewFolder) : null;
+              const folderName = cardViewFolder === 'uncategorized'
+                ? 'Uncategorized'
+                : currentFolderData?.name || 'All Folders';
 
-                // Group resumes by folder to get counts
-                const resumesByFolder = new Map<string, Resume[]>();
-                const unfolderedResumes: Resume[] = [];
+              // Get folders to display (top-level or children of current folder)
+              const foldersToDisplay = cardViewFolder === null
+                ? folders.filter(f => f.id !== 'all' && !f.parentId) // Top-level folders
+                : cardViewFolder === 'all' || cardViewFolder === 'uncategorized'
+                  ? [] // No subfolders in All Resumes or Uncategorized view
+                  : currentFolderData?.children || []; // Children of current folder
 
+              // Get resumes for current folder (only direct resumes, not nested)
+              const folderResumes = cardViewFolder === null
+                ? [] // No resumes at root level view
+                : cardViewFolder === 'all'
+                  ? filteredResumes // Show all resumes
+                  : cardViewFolder === 'uncategorized'
+                    ? filteredResumes.filter(r => !r.folderId)
+                    : filteredResumes.filter(r => r.folderId === cardViewFolder);
+
+              // Group resumes by folder for counts (only needed at root level)
+              const resumesByFolder = new Map<string, Resume[]>();
+              const unfolderedResumes: Resume[] = [];
+              if (cardViewFolder === null) {
                 filteredResumes.forEach(resume => {
                   if (resume.folderId) {
                     const existing = resumesByFolder.get(resume.folderId) || [];
@@ -1552,127 +1952,221 @@ export default function MyResumesPage() {
                     unfolderedResumes.push(resume);
                   }
                 });
+              }
 
-                const folderCards = realFolders.map((folder) => {
-                  const folderResumes = resumesByFolder.get(folder.id) || [];
+              // Count resumes in a folder (including nested subfolders)
+              const getResumeCountRecursive = (folder: FolderType): number => {
+                let count = filteredResumes.filter(r => r.folderId === folder.id).length;
+                if (folder.children) {
+                  folder.children.forEach(child => {
+                    count += getResumeCountRecursive(child);
+                  });
+                }
+                return count;
+              };
 
-                  const isArchived = folder.name === 'Archived Resumes' && !folder.parentId;
-                  const isRoot = folder.name.toLowerCase() === 'root' && !folder.parentId;
-
-                  return (
-                    <div
-                      key={folder.id}
-                      className={`bg-white border rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all ${
-                        isArchived
-                          ? 'border-amber-200 hover:border-amber-400'
-                          : isRoot
-                            ? 'border-green-200 hover:border-green-400'
-                            : 'border-gray-200 hover:border-blue-300'
-                      }`}
-                      onClick={() => setCardViewFolder(folder.id)}
-                    >
-                      <div className="flex items-center gap-3 p-4">
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                          isArchived
-                            ? 'bg-amber-100'
-                            : isRoot
-                              ? 'bg-green-100'
-                              : 'bg-blue-100'
-                        }`}>
-                          {isArchived ? (
-                            <Archive className="w-6 h-6 text-amber-600" />
+              return (
+                <>
+                  {/* Breadcrumb Navigation */}
+                  {(cardViewFolder !== null || breadcrumbPath.length > 0) && (
+                    <div className="flex items-center gap-2 mb-6 text-sm">
+                      <button
+                        onClick={() => navigateToFolder(null)}
+                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                      >
+                        <LayoutGrid className="w-4 h-4" />
+                        <span>All Folders</span>
+                      </button>
+                      {breadcrumbPath.map((item, index) => (
+                        <div key={item.id} className="flex items-center gap-2">
+                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                          {index === breadcrumbPath.length - 1 ? (
+                            <span className="text-gray-900 font-medium">{item.name}</span>
                           ) : (
-                            <Folder className={`w-6 h-6 ${isRoot ? 'text-green-600' : 'text-blue-600'}`} />
+                            <button
+                              onClick={() => navigateToFolder(item.id)}
+                              className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                            >
+                              {item.name}
+                            </button>
                           )}
                         </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900">
-                            {isRoot ? 'Root (Default)' : folder.name}
-                          </h3>
-                          <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      ))}
+                      {cardViewFolder === 'uncategorized' && (
+                        <>
+                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                          <span className="text-gray-900 font-medium">Uncategorized</span>
+                        </>
+                      )}
+                      {cardViewFolder === 'all' && (
+                        <>
+                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                          <span className="text-gray-900 font-medium">All Resumes</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Current Folder Header (when inside a folder) */}
+                  {cardViewFolder !== null && cardViewFolder !== 'uncategorized' && cardViewFolder !== 'all' && currentFolderData && (
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                        currentFolderData.name === 'Archived Resumes' && !currentFolderData.parentId
+                          ? 'bg-amber-100'
+                          : currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
+                            ? 'bg-green-100'
+                            : 'bg-blue-100'
+                      }`}>
+                        {currentFolderData.name === 'Archived Resumes' && !currentFolderData.parentId ? (
+                          <Archive className="w-6 h-6 text-amber-600" />
+                        ) : (
+                          <FolderOpen className={`w-6 h-6 ${
+                            currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
+                              ? 'text-green-600'
+                              : 'text-blue-600'
+                          }`} />
+                        )}
+                      </div>
+                      <div>
+                        <h2 className="font-semibold text-gray-900 text-lg">
+                          {currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
+                            ? 'Root (Default)'
+                            : currentFolderData.name}
+                        </h2>
+                        <p className="text-sm text-gray-500">
+                          {foldersToDisplay.length > 0 && `${foldersToDisplay.length} subfolder${foldersToDisplay.length !== 1 ? 's' : ''}`}
+                          {foldersToDisplay.length > 0 && folderResumes.length > 0 && ' • '}
+                          {folderResumes.length > 0 && `${folderResumes.length} resume${folderResumes.length !== 1 ? 's' : ''}`}
+                          {foldersToDisplay.length === 0 && folderResumes.length === 0 && 'Empty folder'}
+                        </p>
                       </div>
                     </div>
-                  );
-                });
+                  )}
 
-                const uncategorizedCard = unfolderedResumes.length > 0 ? (
-                  <div
-                    key="unfoldered"
-                    className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-gray-400 transition-all"
-                    onClick={() => setCardViewFolder('uncategorized')}
-                  >
-                    <div className="flex items-center gap-3 p-4">
+                  {/* All Resumes Header */}
+                  {cardViewFolder === 'all' && (
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <LayoutGrid className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <h2 className="font-semibold text-gray-900 text-lg">All Resumes</h2>
+                        <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Uncategorized Header */}
+                  {cardViewFolder === 'uncategorized' && (
+                    <div className="flex items-center gap-4 mb-6">
                       <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
                         <Folder className="w-6 h-6 text-gray-600" />
                       </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">Uncategorized</h3>
-                        <p className="text-sm text-gray-500">{unfolderedResumes.length} resume{unfolderedResumes.length !== 1 ? 's' : ''}</p>
+                      <div>
+                        <h2 className="font-semibold text-gray-900 text-lg">Uncategorized</h2>
+                        <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-gray-400" />
                     </div>
-                  </div>
-                ) : null;
+                  )}
 
-                return (
-                  <>
-                    {(realFolders.length > 0 || uncategorizedCard) ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {folderCards}
-                        {uncategorizedCard}
+                  {/* Subfolders Grid (if any) */}
+                  {(foldersToDisplay.length > 0 || cardViewFolder === null) && (
+                    <div className="mb-6">
+                      {cardViewFolder !== null && (
+                        <h3 className="text-sm font-medium text-gray-700 mb-3">Subfolders</h3>
+                      )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {/* All Resumes card at root level */}
+                        {cardViewFolder === null && (
+                          <div
+                            className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-blue-400 transition-all"
+                            onClick={() => {
+                              setCardViewFolder('all');
+                              setBreadcrumbPath([]);
+                            }}
+                          >
+                            <div className="flex items-center gap-3 p-4">
+                              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <LayoutGrid className="w-6 h-6 text-blue-600" />
+                              </div>
+                              <div className="flex-1">
+                                <h3 className="font-semibold text-gray-900">All Resumes</h3>
+                                <p className="text-sm text-gray-500">{filteredResumes.length} resume{filteredResumes.length !== 1 ? 's' : ''}</p>
+                              </div>
+                              <ChevronRight className="w-5 h-5 text-gray-400" />
+                            </div>
+                          </div>
+                        )}
+
+                        {foldersToDisplay.map((folder) => {
+                          const resumeCount = cardViewFolder === null
+                            ? (resumesByFolder.get(folder.id) || []).length
+                            : getResumeCountRecursive(folder);
+                          const hasSubfolders = folder.children && folder.children.length > 0;
+                          const isArchived = folder.name === 'Archived Resumes' && !folder.parentId;
+                          const isRoot = folder.name.toLowerCase() === 'root' && !folder.parentId;
+
+                          return (
+                            <DroppableFolderCard
+                              key={folder.id}
+                              folder={folder}
+                              resumeCount={resumeCount}
+                              hasSubfolders={hasSubfolders || false}
+                              isArchived={isArchived}
+                              isRoot={isRoot}
+                              onNavigate={navigateToFolder}
+                              onMoveToFolder={handleMoveToFolder}
+                            />
+                          );
+                        })}
+
+                        {/* Uncategorized card at root level */}
+                        {cardViewFolder === null && unfolderedResumes.length > 0 && (
+                          <div
+                            className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-gray-400 transition-all"
+                            onClick={() => {
+                              setCardViewFolder('uncategorized');
+                              setBreadcrumbPath([]);
+                            }}
+                          >
+                            <div className="flex items-center gap-3 p-4">
+                              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                                <Folder className="w-6 h-6 text-gray-600" />
+                              </div>
+                              <div className="flex-1">
+                                <h3 className="font-semibold text-gray-900">Uncategorized</h3>
+                                <p className="text-sm text-gray-500">{unfolderedResumes.length} resume{unfolderedResumes.length !== 1 ? 's' : ''}</p>
+                              </div>
+                              <ChevronRight className="w-5 h-5 text-gray-400" />
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="text-center py-12">
-                        <Folder className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No folders found</h3>
-                        <p className="text-gray-500">Create folders to organize your resumes</p>
-                      </div>
-                    )}
-                  </>
-                );
-              })()
-            ) : (
-              // Show Resumes List for selected folder
-              (() => {
-                const selectedFolderData = folders.find(f => f.id === cardViewFolder);
-                const folderName = cardViewFolder === 'uncategorized'
-                  ? 'Uncategorized'
-                  : selectedFolderData?.name || 'Unknown Folder';
+                    </div>
+                  )}
 
-                // Get resumes for this folder
-                const folderResumes = cardViewFolder === 'uncategorized'
-                  ? filteredResumes.filter(r => !r.folderId)
-                  : filteredResumes.filter(r => r.folderId === cardViewFolder);
+                  {/* Empty state for root level */}
+                  {cardViewFolder === null && foldersToDisplay.length === 0 && unfolderedResumes.length === 0 && (
+                    <div className="text-center py-12">
+                      <Folder className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No folders found</h3>
+                      <p className="text-gray-500">Create folders to organize your resumes</p>
+                    </div>
+                  )}
 
-                return (
-                  <div>
-                    {/* Header with Back Button */}
-                    <div className="flex items-center gap-4 mb-6">
-                      <button
-                        onClick={() => setCardViewFolder(null)}
-                        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-                      >
-                        <ArrowLeft className="w-5 h-5" />
-                        <span>Back to Folders</span>
-                      </button>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <FolderOpen className="w-5 h-5 text-blue-600" />
-                        </div>
+                  {/* Resumes Section (when inside a folder) */}
+                  {cardViewFolder !== null && (
+                    <>
+                      {folderResumes.length > 0 && (
                         <div>
-                          <h2 className="font-semibold text-gray-900">{folderName}</h2>
-                          <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Resumes Table */}
-                    {folderResumes.length > 0 ? (
+                          {foldersToDisplay.length > 0 && (
+                            <h3 className="text-sm font-medium text-gray-700 mb-3">Resumes in this folder</h3>
+                          )}
+                          {/* Resumes Table */}
                       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                         {/* Table Header */}
-                        <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <div className="grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <div></div>
                           <div className="flex items-center">
                             <input
                               type="checkbox"
@@ -1700,141 +2194,34 @@ export default function MyResumesPage() {
                         </div>
                         {/* Table Body */}
                         {folderResumes.map((resume, index) => (
-                          <div
+                          <DraggableCardResumeRow
                             key={resume.id}
-                            className={`grid grid-cols-[auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center ${
-                              index !== folderResumes.length - 1 ? 'border-b border-gray-100' : ''
-                            } ${selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''}`}
-                            onClick={() => router.push(`/recruitment/resume-view/${resume.id}`)}
-                          >
-                            {/* Checkbox */}
-                            <div className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={selectedResumes.includes(resume.id)}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  handleSelectResume(resume.id);
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                              />
-                            </div>
-                            {/* Candidate Name */}
-                            <div className="flex items-center min-w-0">
-                              <span className="font-medium text-gray-900 text-sm truncate">{resume.name}</span>
-                            </div>
-                            {/* Email */}
-                            <div className="text-sm text-gray-600 truncate">{resume.email || '-'}</div>
-                            {/* Phone */}
-                            <div className="text-sm text-gray-600 truncate">{resume.phone || '-'}</div>
-                            {/* Skills */}
-                            <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-                              {resume.skills && resume.skills.length > 0 ? (
-                                <>
-                                  {resume.skills.slice(0, 3).map((skill, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 truncate max-w-[90px]"
-                                      title={skill}
-                                    >
-                                      {skill}
-                                    </span>
-                                  ))}
-                                  {resume.skills.length > 3 && (
-                                    <span
-                                      className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors"
-                                      title={resume.skills.slice(3).join(', ')}
-                                    >
-                                      +{resume.skills.length - 3}
-                                    </span>
-                                  )}
-                                </>
-                              ) : (
-                                <span className="text-xs text-gray-400 italic">No skills</span>
-                              )}
-                            </div>
-                            {/* Experience */}
-                            <div className="text-sm text-gray-600">{resume.experience || '-'}</div>
-                            {/* Source */}
-                            <div>
-                              <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                resume.source === 'TalentFlow'
-                                  ? 'bg-purple-100 text-purple-700'
-                                  : 'bg-gray-100 text-gray-700'
-                              }`}>
-                                {resume.source || 'Manual'}
-                              </span>
-                            </div>
-                            {/* Upload Date */}
-                            <div className="text-sm text-gray-600">
-                              {formatDateIST(resume.uploadDate)}
-                            </div>
-                            {/* Uploaded By */}
-                            <div className="text-sm text-gray-600 truncate">{resume.uploadedBy || '-'}</div>
-                            {/* Files */}
-                            <div className="flex items-center gap-1 text-sm text-gray-600">
-                              <FileText className="w-4 h-4" />
-                              <span>{resume.attachments || 1}</span>
-                            </div>
-                            {/* Actions */}
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setQuickViewResume(resume);
-                                }}
-                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                                title="Quick View"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  try {
-                                    const blob = await resumeService.download(resume.id);
-                                    const url = window.URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    // Use original fileName to preserve file extension (pdf, doc, docx, rtf, txt, etc.)
-                                    a.download = resume.fileName || `${resume.name}.${resume.fileType || 'pdf'}`;
-                                    a.click();
-                                    window.URL.revokeObjectURL(url);
-                                  } catch (err) {
-                                    toast.error('Failed to download');
-                                  }
-                                }}
-                                className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
-                                title="Download"
-                              >
-                                <Download className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(resume.id);
-                                }}
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
+                            resume={resume}
+                            selectedResumes={selectedResumes}
+                            isLast={index === folderResumes.length - 1}
+                            onSelect={handleSelectResume}
+                            onQuickView={(r) => setQuickViewResume(r)}
+                            onDelete={handleDelete}
+                            onViewDetails={(r) => router.push(`/recruitment/resume-view/${r.id}`)}
+                          />
                         ))}
                       </div>
-                    ) : (
-                      <div className="text-center py-12 bg-white border border-gray-200 rounded-xl">
-                        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No resumes in this folder</h3>
-                        <p className="text-gray-500">Upload resumes to this folder to get started</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()
-            )}
+                        </div>
+                      )}
+
+                      {/* Empty state when no resumes and no subfolders */}
+                      {folderResumes.length === 0 && foldersToDisplay.length === 0 && (
+                        <div className="text-center py-12 bg-white border border-gray-200 rounded-xl">
+                          <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No resumes in this folder</h3>
+                          <p className="text-gray-500">Upload resumes to this folder to get started</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -2554,29 +2941,110 @@ export default function MyResumesPage() {
         open={deleteFolderConfirm.isOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0 });
+            setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null });
           }
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Folder</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete &quot;{deleteFolderConfirm.folderName}&quot;?
-              {deleteFolderConfirm.resumeCount > 0 && (
-                <span className="block mt-2 text-red-600 font-medium">
-                  This will also permanently delete {deleteFolderConfirm.resumeCount} resume{deleteFolderConfirm.resumeCount !== 1 ? 's' : ''} inside this folder.
-                </span>
-              )}
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-500" />
+              Delete Folder
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>
+                  Are you sure you want to delete &quot;{deleteFolderConfirm.folderName}&quot;?
+                </p>
+
+                {deleteFolderConfirm.resumeCount > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-amber-800">
+                          This folder contains {deleteFolderConfirm.resumeCount} resume{deleteFolderConfirm.resumeCount !== 1 ? 's' : ''}
+                        </p>
+                        <p className="text-sm text-amber-700 mt-1">
+                          Please choose where to move the resumes:
+                        </p>
+
+                        <div className="mt-3 space-y-2">
+                          {/* Option 1: Move to parent folder */}
+                          <label
+                            className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                              deleteFolderConfirm.contentAction === 'move-parent'
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300 bg-white'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="contentAction"
+                              value="move-parent"
+                              checked={deleteFolderConfirm.contentAction === 'move-parent'}
+                              onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-parent' }))}
+                              className="w-4 h-4 text-blue-600"
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <FolderOpen className="w-4 h-4 text-gray-600" />
+                                <span className="text-sm font-medium text-gray-900">
+                                  Move to {deleteFolderConfirm.parentFolderName}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                Resumes will be moved to the parent folder
+                              </p>
+                            </div>
+                          </label>
+
+                          {/* Option 2: Move to root */}
+                          {deleteFolderConfirm.parentFolderId && (
+                            <label
+                              className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                                deleteFolderConfirm.contentAction === 'move-root'
+                                  ? 'border-blue-500 bg-blue-50'
+                                  : 'border-gray-200 hover:border-gray-300 bg-white'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="contentAction"
+                                value="move-root"
+                                checked={deleteFolderConfirm.contentAction === 'move-root'}
+                                onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-root' }))}
+                                className="w-4 h-4 text-blue-600"
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <Folder className="w-4 h-4 text-gray-600" />
+                                  <span className="text-sm font-medium text-gray-900">
+                                    Move to My Resumes (root)
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  Resumes will be moved to the root folder
+                                </p>
+                              </div>
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteFolder}
-              className="bg-red-600 text-white hover:bg-red-700 focus:ring-red-500"
+              disabled={deleteFolderConfirm.resumeCount > 0 && !deleteFolderConfirm.contentAction}
+              className="bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Delete
+              {deleteFolderConfirm.resumeCount > 0 ? 'Move & Delete' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

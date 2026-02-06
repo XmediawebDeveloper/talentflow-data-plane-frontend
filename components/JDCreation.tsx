@@ -1135,24 +1135,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               console.log('[TalentFlow] Extracted params from stream:', response.extracted_params);
               processExtractedParams(response.extracted_params);
 
-              // Show what was extracted
-              const params = response.extracted_params;
-              const extractedItems: string[] = [];
-              if (params.must_have_skills?.length > 0) extractedItems.push(`${params.must_have_skills.length} skills`);
-              if (params.salary_min || params.salary_max) extractedItems.push(`salary: ₹${params.salary_min || 0} - ₹${params.salary_max || 0}`);
-              if (params.experience_min || params.experience_max) extractedItems.push(`${params.experience_min || 0}-${params.experience_max || '+'} yrs exp`);
-
-              if (extractedItems.length > 0) {
-                toast.success({
-                  title: 'JD Generated Successfully',
-                  description: `Extracted: ${extractedItems.join(', ')}`,
-                });
-              } else {
-                toast.success({
-                  title: 'JD Generated Successfully',
-                  description: 'Click "Next" to add job details.',
-                });
-              }
+              toast.success({
+                title: 'JD Generated Successfully',
+                description: 'Job details have been auto-filled. Click "Next" to review.',
+              });
             } else {
               toast.success({
                 title: 'JD Generated Successfully',
@@ -3905,16 +3891,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   : 'AI has extracted the following information from your JD. You can modify, add, or remove items.'
                 }
               </p>
-
-              {/* Read-only notice banner when processing */}
-              {isRegenerating && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-center gap-3">
-                  <Info className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                  <p className="text-sm text-blue-800">
-                    Fields are read-only while processing. Please wait...
-                  </p>
-                </div>
-              )}
 
               {/* Skills & Comments Section - Single Row with 3 Columns */}
               <div className="grid grid-cols-3 gap-6 mb-8">

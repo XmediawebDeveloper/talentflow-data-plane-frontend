@@ -20,6 +20,8 @@ export default function AITalentMatchProgressPanel({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const selectedModel = 'bge-small-en-v1.5';  // Use recommended model directly
+  // const selectedModel = 'all-MiniLM-L12-v2';  // Use recommended model directly
+
   const hasStarted = useRef(false);
 
   const steps = [

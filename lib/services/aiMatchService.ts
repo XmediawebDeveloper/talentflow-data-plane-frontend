@@ -2,10 +2,25 @@
  * AI Talent Match Service
  * Connects to RAG-powered backend for candidate matching
  * Same design as rag.py: OpenAI Embedding + Similarity Search + AI Filtering + 1-10 Rating
+ *
+ * Similarity Computation:
+ * - Uses cosine similarity for all vector comparisons
+ * - Supports both backend computation (via API) and client-side computation
+ * - JD vectors are compared against resume vectors to find best matches
  */
 
 import api, { handleApiError } from './api';
 import { resumeService } from './resumeService';
+import {
+  cosineSimilarity,
+  computeJDResumeMatches,
+  similarityToRating,
+  similarityToPercentage,
+  SimilarityResult,
+  VectorMatchOptions,
+  EMBEDDING_DIMENSIONS,
+  EmbeddingModel,
+} from '../utils/vectorSimilarity';
 
 // Backend response types (match the backend schemas)
 export interface AIMatchResultItem {
@@ -72,6 +87,32 @@ export interface MatchedCandidate {
   rank?: number;  // Rating (1-10 scale)
 }
 
+// Vector-based matching interfaces for client-side similarity computation
+export interface JDVector {
+  jdId: string;
+  vector: number[];
+  embeddingModel: EmbeddingModel;
+}
+
+export interface ResumeVector {
+  resumeId: string;
+  candidateName?: string;
+  candidateTitle?: string;
+  candidateSkills?: string[];
+  vector: number[];
+}
+
+export interface VectorMatchResult {
+  resumeId: string;
+  candidateName: string;
+  candidateTitle: string;
+  candidateSkills: string[];
+  similarityScore: number;      // Raw cosine similarity (0-1)
+  matchScore: number;           // Percentage (0-100)
+  rank: number;                 // Position rank (1 = best match)
+  rating: number;               // 1-10 scale rating
+}
+
 // Transform backend response to frontend format
 function transformResultToCandidate(result: AIMatchResultItem): MatchedCandidate {
   // Calculate match score from final_score (0-100) or similarity (0-1)
@@ -120,6 +161,7 @@ async function enrichCandidatesWithResumeDetails(candidates: MatchedCandidate[])
             uploadedBy: resume.uploaded_by || '',
             uploadedByName: resume.uploaded_by_name || '',
             uploadDate: resume.created_at || candidate.uploadDate,
+            attachmentCount: resume.version_count || 1,
           };
         } catch (error) {
           console.error(`Failed to fetch resume details for ${candidate.resumeId}:`, error);
@@ -275,6 +317,123 @@ export const aiMatchService = {
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  // ============================================================
+  // Client-Side Cosine Similarity Computation Methods
+  // Used when AI Talent Match is triggered with local vectors
+  // ============================================================
+
+  /**
+   * Compute similarity between a JD vector and resume vectors using cosine similarity
+   * This is the primary method for client-side matching when vectors are available
+   *
+   * Given: JD vector and resume vectors already exist
+   * When: AI Talent Match is triggered
+   * Then: Compute cosine similarity between JD vector and each resume vector
+   *
+   * @param jdVector Job Description embedding vector
+   * @param resumeVectors Array of resume vectors with metadata
+   * @param options Matching options (threshold, max results)
+   * @returns Array of match results sorted by similarity score
+   */
+  computeVectorSimilarity(
+    jdVector: JDVector,
+    resumeVectors: ResumeVector[],
+    options: VectorMatchOptions = {}
+  ): VectorMatchResult[] {
+    const { minSimilarity = 0.5, maxResults } = options;
+
+    // Compute cosine similarity for each resume
+    const results = computeJDResumeMatches(
+      jdVector.vector,
+      resumeVectors.map(r => ({ resumeId: r.resumeId, vector: r.vector })),
+      { minSimilarity, maxResults, sortDescending: true }
+    );
+
+    // Transform to VectorMatchResult with full metadata
+    return results.map((result) => {
+      const resume = resumeVectors.find(r => r.resumeId === result.resumeId)!;
+      return {
+        resumeId: result.resumeId,
+        candidateName: resume.candidateName || 'Unknown Candidate',
+        candidateTitle: resume.candidateTitle || 'Not specified',
+        candidateSkills: resume.candidateSkills || [],
+        similarityScore: result.similarityScore,
+        matchScore: similarityToPercentage(result.similarityScore),
+        rank: result.rank,
+        rating: similarityToRating(result.similarityScore),
+      };
+    });
+  },
+
+  /**
+   * Compute single cosine similarity between a JD and a resume
+   *
+   * @param jdVector JD embedding vector values
+   * @param resumeVector Resume embedding vector values
+   * @returns Cosine similarity score (0-1 for normalized embeddings)
+   */
+  computeSingleSimilarity(jdVector: number[], resumeVector: number[]): number {
+    return cosineSimilarity(jdVector, resumeVector);
+  },
+
+  /**
+   * Convert raw similarity score to display formats
+   *
+   * @param similarityScore Raw cosine similarity score
+   * @returns Object with percentage (0-100) and rating (1-10)
+   */
+  formatSimilarityScore(similarityScore: number): { percentage: number; rating: number } {
+    return {
+      percentage: similarityToPercentage(similarityScore),
+      rating: similarityToRating(similarityScore),
+    };
+  },
+
+  /**
+   * Fetch vectors for a JD and compute matches against resume vectors
+   * Combines API call for JD vector with local similarity computation
+   *
+   * @param jdId Job Description ID
+   * @param resumeVectors Pre-loaded resume vectors
+   * @param options Matching options
+   * @returns Match results or null if JD vector fetch fails
+   */
+  async runWithLocalVectors(
+    jdId: string,
+    resumeVectors: ResumeVector[],
+    options: VectorMatchOptions & { embeddingModel?: EmbeddingModel } = {}
+  ): Promise<VectorMatchResult[] | null> {
+    try {
+      // Fetch JD vector from backend
+      const response = await api.get<{ vector: number[]; embedding_model: string }>(
+        `/jd/${jdId}/vector`
+      );
+
+      const jdVector: JDVector = {
+        jdId,
+        vector: response.data.vector,
+        embeddingModel: (response.data.embedding_model || options.embeddingModel || 'bge-small-en-v1.5') as EmbeddingModel,
+      };
+
+      // Compute cosine similarity locally
+      return this.computeVectorSimilarity(jdVector, resumeVectors, options);
+    } catch (error) {
+      console.error('[aiMatchService] Failed to fetch JD vector:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Get embedding dimension for a model
+   * Useful for validating vector dimensions before computation
+   *
+   * @param model Embedding model name
+   * @returns Expected dimension or undefined if unknown
+   */
+  getEmbeddingDimension(model: EmbeddingModel): number {
+    return EMBEDDING_DIMENSIONS[model];
   },
 };
 
