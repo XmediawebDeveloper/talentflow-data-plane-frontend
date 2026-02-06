@@ -161,6 +161,7 @@ async function enrichCandidatesWithResumeDetails(candidates: MatchedCandidate[])
             uploadedBy: resume.uploaded_by || '',
             uploadedByName: resume.uploaded_by_name || '',
             uploadDate: resume.created_at || candidate.uploadDate,
+            attachmentCount: resume.version_count || 1,
           };
         } catch (error) {
           console.error(`Failed to fetch resume details for ${candidate.resumeId}:`, error);

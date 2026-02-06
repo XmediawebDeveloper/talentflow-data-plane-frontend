@@ -1053,7 +1053,10 @@ export default function ResumeScoringPage({
                         errorReason: undefined,
                         scoredDateTime: new Date(),
                         matchResult: scoredResume
-                          ? (scoredResume.overall_score >= 85 ? 'Exact Match'
+                          ? (scoredResume.match_status === 'exact_match' || scoredResume.match_status === 'Exact Match' ? 'Exact Match'
+                             : scoredResume.match_status === 'partial_match' || scoredResume.match_status === 'Partial Match' ? 'Partial Match'
+                             : scoredResume.match_status === 'no_match' || scoredResume.match_status === 'No Match' ? 'No Match'
+                             : scoredResume.overall_score >= 85 ? 'Exact Match'
                              : scoredResume.overall_score >= 70 ? 'Partial Match'
                              : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
                           : undefined,
@@ -1276,8 +1279,12 @@ export default function ResumeScoringPage({
                       source: item.source === 'my-resumes' ? 'My Resumes' : 'Internal DB' as 'My Resumes' | 'Internal DB',
                       status: 'Scored successfully' as const,
                       scoredDateTime: new Date(item.scoredAt),
-                      matchResult: (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match' :
-                                   (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match' : 'No Match' as 'Exact Match' | 'Partial Match' | 'No Match',
+                      matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
+                                   : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
+                                   : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
+                                   : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
+                                   : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
+                                   : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
                       score: resume.overall_score || resume.scorePercentage || 0,
                     }))
                   );
@@ -1989,7 +1996,10 @@ export default function ResumeScoringPage({
                         errorReason: undefined,
                         scoredDateTime: new Date(),
                         matchResult: scoredResume
-                          ? (scoredResume.overall_score >= 85 ? 'Exact Match'
+                          ? (scoredResume.match_status === 'exact_match' || scoredResume.match_status === 'Exact Match' ? 'Exact Match'
+                             : scoredResume.match_status === 'partial_match' || scoredResume.match_status === 'Partial Match' ? 'Partial Match'
+                             : scoredResume.match_status === 'no_match' || scoredResume.match_status === 'No Match' ? 'No Match'
+                             : scoredResume.overall_score >= 85 ? 'Exact Match'
                              : scoredResume.overall_score >= 70 ? 'Partial Match'
                              : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
                           : undefined,
@@ -2380,7 +2390,10 @@ export default function ResumeScoringPage({
                       status: 'Scored successfully' as const,
                       errorReason: undefined,
                       scoredDateTime: new Date(),
-                      matchResult: scoreResult.overall_score >= 85 ? 'Exact Match' as const
+                      matchResult: scoreResult.match_status === 'exact_match' || scoreResult.match_status === 'Exact Match' ? 'Exact Match' as const
+                                 : scoreResult.match_status === 'partial_match' || scoreResult.match_status === 'Partial Match' ? 'Partial Match' as const
+                                 : scoreResult.match_status === 'no_match' || scoreResult.match_status === 'No Match' ? 'No Match' as const
+                                 : scoreResult.overall_score >= 85 ? 'Exact Match' as const
                                  : scoreResult.overall_score >= 70 ? 'Partial Match' as const
                                  : 'No Match' as const,
                       score: scoreResult.overall_score
