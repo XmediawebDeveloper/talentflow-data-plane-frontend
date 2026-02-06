@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { X, Clock, User, FileText, History, Loader2, ArrowLeft, Eye } from 'lucide-react';
+import { X, Clock, User, FileText, History, Loader2, ArrowLeft, Eye, Download } from 'lucide-react';
 import { jdService, JDVersion, JDVersionHistoryResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 
@@ -27,6 +27,7 @@ function computeDiff(oldText: string, newText: string): { text: string; isNew: b
     return { text: line, isNew: true };
   });
 }
+
 
 export default function JDVersionHistoryModal({
   isOpen,
@@ -121,6 +122,22 @@ export default function JDVersionHistoryModal({
     return computeDiff(previousVersion.description, selectedVersion.description);
   }, [selectedVersion, previousVersion]);
 
+  // Download JD as text file
+  const handleDownload = () => {
+    if (!selectedVersion) return;
+
+    const content = `${selectedVersion.title}\n\n${selectedVersion.description}`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${selectedVersion.title.replace(/[^a-z0-9]/gi, '_')}_v${selectedVersion.version_number}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -174,7 +191,7 @@ export default function JDVersionHistoryModal({
           ) : selectedVersion ? (
             /* Version Detail View */
             <div>
-              {/* Version Info Bar */}
+              {/* Version Info Bar with Download Button */}
               <div className="flex items-center justify-between mb-6 p-4 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-4">
                   <span className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-sm font-semibold">
@@ -186,96 +203,106 @@ export default function JDVersionHistoryModal({
                       {selectedVersion.published_by_name || 'Unknown'}
                     </span>
                   </div>
+                  {previousVersion && (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                      New content highlighted in blue
+                    </span>
+                  )}
                 </div>
-                {previousVersion && (
-                  <div className="text-sm text-gray-500">
-                    Comparing with v{previousVersion.version_number}.0
-                    <span className="ml-2 text-xs text-gray-400">(new content shown in bold)</span>
-                  </div>
-                )}
+                <button
+                  onClick={handleDownload}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </button>
               </div>
 
               {/* Job Title */}
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">{selectedVersion.title}</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-6">{selectedVersion.title}</h3>
 
-              {/* Job Attributes */}
-              <div className="flex flex-wrap gap-2 mb-6">
-                {selectedVersion.department && (
-                  <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                    {selectedVersion.department}
-                  </span>
-                )}
-                {selectedVersion.location && (
-                  <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                    {selectedVersion.location}
-                  </span>
-                )}
-                {(selectedVersion.experience_min || selectedVersion.experience_max) && (
-                  <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                    {selectedVersion.experience_min || 0}-{selectedVersion.experience_max || '10+'} years
-                  </span>
-                )}
-                {selectedVersion.employment_type && (
-                  <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                    {selectedVersion.employment_type === 'full_time' ? 'Full Time' :
-                     selectedVersion.employment_type === 'part_time' ? 'Part Time' :
-                     selectedVersion.employment_type === 'contract' ? 'Contract' :
-                     selectedVersion.employment_type}
-                  </span>
-                )}
-                {selectedVersion.remote_type && (
-                  <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                    {selectedVersion.remote_type === 'onsite' ? 'On-site' :
-                     selectedVersion.remote_type === 'remote' ? 'Remote' :
-                     selectedVersion.remote_type === 'hybrid' ? 'Hybrid' :
-                     selectedVersion.remote_type}
-                  </span>
-                )}
-              </div>
+              {/* Job Description with proper markdown rendering and blue highlighting */}
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                {(() => {
+                  const isV1 = selectedVersion.version_number === 1;
+                  const currentDesc = selectedVersion.description || '';
+                  const prevDesc = previousVersion?.description || '';
 
-              {/* Skills */}
-              {selectedVersion.must_have_skills && selectedVersion.must_have_skills.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Must Have Skills</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedVersion.must_have_skills.map((skill, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2 py-1 bg-gray-100 text-gray-700 rounded-md text-xs"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+                  // Helper function to convert a single line of markdown to HTML
+                  const convertLineToHtml = (line: string): string => {
+                    let html = line;
+                    // Convert headings
+                    if (html.match(/^### /)) {
+                      html = html.replace(/^### (.*)$/, '<h3 class="text-base font-semibold text-gray-900 mt-4 mb-2">$1</h3>');
+                    } else if (html.match(/^## /)) {
+                      html = html.replace(/^## (.*)$/, '<h2 class="text-lg font-semibold text-gray-900 mt-5 mb-3">$1</h2>');
+                    } else if (html.match(/^# /)) {
+                      html = html.replace(/^# (.*)$/, '<h1 class="text-xl font-bold text-gray-900 mt-6 mb-3">$1</h1>');
+                    }
+                    // Convert bold
+                    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>');
+                    // Convert list items
+                    if (html.match(/^- /)) {
+                      html = html.replace(/^- (.*)$/, '<li class="ml-4 text-gray-700 list-disc">$1</li>');
+                    }
+                    return html;
+                  };
 
-              {selectedVersion.nice_to_have_skills && selectedVersion.nice_to_have_skills.length > 0 && (
-                <div className="mb-6">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Nice to Have Skills</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedVersion.nice_to_have_skills.map((skill, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2 py-1 bg-gray-50 text-gray-600 rounded-md text-xs"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+                  // For v1 or no previous version, render without highlighting
+                  if (isV1 || !prevDesc) {
+                    const processedLines = currentDesc.split('\n').map((line: string) => convertLineToHtml(line));
+                    let finalHtml = processedLines.join('<br/>');
+                    finalHtml = finalHtml.replace(/(<br\/>){2,}/g, '</p><p class="my-3 text-gray-700">');
+                    finalHtml = finalHtml.replace(/(<\/h[1-3]>)<br\/>/g, '$1');
+                    finalHtml = finalHtml.replace(/(<\/li>)<br\/>/g, '$1');
 
-              {/* Job Description with Diff */}
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Job Description</h4>
-                <div className="bg-gray-50 rounded-lg p-4 prose prose-sm max-w-none">
-                  {diffLines && diffLines.map((line, idx) => (
-                    <div key={idx} className={line.isNew ? 'font-bold text-gray-900' : 'text-gray-700'}>
-                      {line.text || '\u00A0'}
-                    </div>
-                  ))}
-                </div>
+                    return (
+                      <div
+                        className="prose prose-sm max-w-none text-gray-700 leading-relaxed"
+                        dangerouslySetInnerHTML={{ __html: finalHtml }}
+                      />
+                    );
+                  }
+
+                  // For v2+, compute diff and highlight new content
+                  const prevLinesSet = new Set(prevDesc.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0));
+
+                  // Process each line: convert markdown to HTML first, then wrap in blue if new
+                  const processedLines = currentDesc.split('\n').map((line: string) => {
+                    const trimmedLine = line.trim();
+                    const isNewLine = trimmedLine.length > 0 && !prevLinesSet.has(trimmedLine);
+
+                    // Convert markdown to HTML first
+                    let htmlLine = convertLineToHtml(line);
+
+                    // If it's a new line, wrap the content in blue highlight
+                    if (isNewLine) {
+                      // Check if it's a heading or list item (already wrapped in tags)
+                      if (htmlLine.match(/^<(h[1-3]|li)/)) {
+                        // Add blue background class to the existing tag
+                        htmlLine = htmlLine.replace(/^<(h[1-3]|li)([^>]*)class="([^"]*)"/, '<$1$2class="$3 bg-blue-100 text-blue-800 px-2 rounded"');
+                      } else if (trimmedLine.length > 0) {
+                        // Regular text - wrap in span
+                        htmlLine = `<span class="bg-blue-100 text-blue-800 px-1 rounded">${htmlLine}</span>`;
+                      }
+                    }
+
+                    return htmlLine;
+                  });
+
+                  // Join lines and handle paragraph breaks
+                  let finalHtml = processedLines.join('<br/>');
+                  finalHtml = finalHtml.replace(/(<br\/>){2,}/g, '</p><p class="my-3 text-gray-700">');
+                  finalHtml = finalHtml.replace(/(<\/h[1-3]>)<br\/>/g, '$1');
+                  finalHtml = finalHtml.replace(/(<\/li>)<br\/>/g, '$1');
+
+                  return (
+                    <div
+                      className="prose prose-sm max-w-none text-gray-700 leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: finalHtml }}
+                    />
+                  );
+                })()}
               </div>
             </div>
           ) : !versionHistory || versionHistory.versions.length === 0 ? (
