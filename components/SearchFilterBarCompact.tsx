@@ -91,6 +91,38 @@ export default function SearchFilterBarCompact({
     'Professional Certification'
   ];
 
+  // Map display values to backend filter codes
+  const mapEducationToBackendCode = (displayValue: string): string | null => {
+    if (!displayValue || displayValue === 'Any') return null;
+
+    const mapping: Record<string, string> = {
+      "Bachelor's Degree": "bachelors",
+      "Master's Degree": "masters",
+      "Doctorate (PhD)": "doctorate",
+      "Associate Degree": "associate",
+      "High School": "diploma",
+      "Professional Certification": "certification"
+    };
+
+    return mapping[displayValue] || displayValue;
+  };
+
+  // Map backend codes back to display values
+  const mapBackendCodeToDisplay = (backendCode: string | null | undefined): string => {
+    if (!backendCode) return 'Any';
+
+    const reverseMapping: Record<string, string> = {
+      "bachelors": "Bachelor's Degree",
+      "masters": "Master's Degree",
+      "doctorate": "Doctorate (PhD)",
+      "associate": "Associate Degree",
+      "diploma": "High School",
+      "certification": "Professional Certification"
+    };
+
+    return reverseMapping[backendCode] || backendCode;
+  };
+
   const noticePeriods = [
     'Any',
     'Immediate',
@@ -132,7 +164,7 @@ export default function SearchFilterBarCompact({
 
     if (filters.education && filters.education !== 'Any') {
       chips.push({
-        label: filters.education,
+        label: mapBackendCodeToDisplay(filters.education),
         key: 'education',
         onRemove: () => onFiltersChange({ ...filters, education: null })
       });
@@ -151,14 +183,6 @@ export default function SearchFilterBarCompact({
         label: `Company: ${filters.currentCompany}`,
         key: 'currentCompany',
         onRemove: () => onFiltersChange({ ...filters, currentCompany: null })
-      });
-    }
-
-    if (filters.previousCompany) {
-      chips.push({
-        label: `Prev: ${filters.previousCompany}`,
-        key: 'previousCompany',
-        onRemove: () => onFiltersChange({ ...filters, previousCompany: null })
       });
     }
 
@@ -322,8 +346,11 @@ export default function SearchFilterBarCompact({
                         <div>
                           <label className="block text-xs text-gray-600 mb-1.5">Education</label>
                           <select
-                            value={tempFilters.education || 'Any'}
-                            onChange={(e) => setTempFilters({ ...tempFilters, education: e.target.value === 'Any' ? null : e.target.value })}
+                            value={mapBackendCodeToDisplay(tempFilters.education)}
+                            onChange={(e) => {
+                              const backendCode = mapEducationToBackendCode(e.target.value);
+                              setTempFilters({ ...tempFilters, education: backendCode });
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
                           >
                             {educationLevels.map(level => (
@@ -336,7 +363,7 @@ export default function SearchFilterBarCompact({
                   )}
                 </div>
 
-                {/* Company & Notice Period Section */}
+                {/* Current Company & Notice Period Section */}
                 <div className="border-b border-gray-100">
                   <button
                     onClick={() => toggleSection('company-notice')}
@@ -344,8 +371,8 @@ export default function SearchFilterBarCompact({
                   >
                     <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
                       <Building2 className="w-4 h-4 text-gray-500" />
-                      <span>Company & Notice Period</span>
-                      {(tempFilters.currentCompany || tempFilters.previousCompany || (tempFilters.noticePeriod && tempFilters.noticePeriod !== 'Any')) && (
+                      <span>Current Company & Notice Period</span>
+                      {(tempFilters.currentCompany || (tempFilters.noticePeriod && tempFilters.noticePeriod !== 'Any')) && (
                         <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Active</span>
                       )}
                     </div>
@@ -353,7 +380,7 @@ export default function SearchFilterBarCompact({
                   </button>
                   {expandedSections.includes('company-notice') && (
                     <div className="px-5 pb-4">
-                      <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-xs text-gray-600 mb-1.5">Current Company</label>
                           <input
@@ -365,27 +392,17 @@ export default function SearchFilterBarCompact({
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1.5">Previous Company</label>
-                          <input
-                            type="text"
-                            placeholder="e.g., Amazon"
-                            value={tempFilters.previousCompany || ''}
-                            onChange={(e) => setTempFilters({ ...tempFilters, previousCompany: e.target.value || null })}
+                          <label className="block text-xs text-gray-600 mb-1.5">Notice Period</label>
+                          <select
+                            value={tempFilters.noticePeriod || 'Any'}
+                            onChange={(e) => setTempFilters({ ...tempFilters, noticePeriod: e.target.value === 'Any' ? null : e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                          />
+                          >
+                            {noticePeriods.map(period => (
+                              <option key={period} value={period}>{period}</option>
+                            ))}
+                          </select>
                         </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1.5">Notice Period</label>
-                        <select
-                          value={tempFilters.noticePeriod || 'Any'}
-                          onChange={(e) => setTempFilters({ ...tempFilters, noticePeriod: e.target.value === 'Any' ? null : e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                        >
-                          {noticePeriods.map(period => (
-                            <option key={period} value={period}>{period}</option>
-                          ))}
-                        </select>
                       </div>
                     </div>
                   )}

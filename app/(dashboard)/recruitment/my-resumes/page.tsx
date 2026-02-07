@@ -616,9 +616,6 @@ export default function MyResumesPage() {
         if (currentFilters.currentCompany) {
           searchParams.current_company = currentFilters.currentCompany;
         }
-        if (currentFilters.previousCompany) {
-          searchParams.previous_company = currentFilters.previousCompany;
-        }
         if (currentFilters.noticePeriod) {
           searchParams.notice_period = currentFilters.noticePeriod;
         }
@@ -1852,7 +1849,6 @@ export default function MyResumesPage() {
       resume.title,
       resume.location,
       resume.currentCompany,
-      resume.previousCompany,
       resume.experience,
       resume.education,
       ...(resume.skills || []),
@@ -1927,7 +1923,28 @@ export default function MyResumesPage() {
       if (filters.education) {
         filtered = filtered.filter(resume => {
           const edu = (resume.education || '').toLowerCase();
-          return edu.includes(filters.education.toLowerCase());
+          const educationCode = filters.education.toLowerCase();
+
+          // Map backend codes to search patterns (matching backend logic)
+          if (educationCode === 'bachelors') {
+            return edu.includes('bachelor') || edu.includes('b.tech') ||
+                   edu.includes('b.e') || edu.includes('bca') ||
+                   edu.includes('b.a') || edu.includes('b.sc') || edu.includes('b.com');
+          } else if (educationCode === 'masters') {
+            return edu.includes('master') || edu.includes('m.tech') ||
+                   edu.includes('m.e') || edu.includes('mca') ||
+                   edu.includes('m.a') || edu.includes('m.sc') || edu.includes('mba');
+          } else if (educationCode === 'doctorate') {
+            return edu.includes('phd') || edu.includes('ph.d') ||
+                   edu.includes('doctorate') || edu.includes('doctor of');
+          } else if (educationCode === 'diploma') {
+            return edu.includes('diploma');
+          } else if (educationCode === 'associate') {
+            return edu.includes('associate');
+          } else {
+            // For other values, use substring match
+            return edu.includes(educationCode);
+          }
         });
       }
 
@@ -1944,14 +1961,6 @@ export default function MyResumesPage() {
         filtered = filtered.filter(resume => {
           const company = (resume.currentCompany || '').toLowerCase();
           return company.includes(filters.currentCompany.toLowerCase());
-        });
-      }
-
-      // Filter by previous company
-      if (filters.previousCompany) {
-        filtered = filtered.filter(resume => {
-          const company = (resume.previousCompany || '').toLowerCase();
-          return company.includes(filters.previousCompany.toLowerCase());
         });
       }
 

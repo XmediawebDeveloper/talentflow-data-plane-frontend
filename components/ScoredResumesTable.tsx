@@ -1,9 +1,10 @@
-import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader, Send } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
 import InviteToAssessmentModal from './InviteToAssessmentModal';
 import { scoringService } from '@/lib/services/scoringService';
+import { assessmentService } from '@/lib/services/assessmentService';
 
 const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
@@ -97,7 +98,8 @@ export default function ScoredResumesTable({
   const [showFilters, setShowFilters] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteCandidate, setInviteCandidate] = useState<ScoredResume | null>(null);
-  
+  const [showBulkInviteModal, setShowBulkInviteModal] = useState(false);
+
   // Filter states
   const [filterMatchStatus, setFilterMatchStatus] = useState<string>('all');
   const [filterScoreMin, setFilterScoreMin] = useState<number>(0);
@@ -503,6 +505,16 @@ export default function ScoredResumesTable({
               >
                 <FileDown className="w-4 h-4" />
                 <span className="hidden sm:inline">Export</span>
+              </button>
+              <button
+                onClick={() => setShowBulkInviteModal(true)}
+                disabled={availableUnits === 0}
+                className="px-3 sm:px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={availableUnits === 0 ? 'No assessment units available' : `Bulk invite ${selectedResumes.length} candidates`}
+              >
+                <Send className="w-4 h-4" />
+                <span className="hidden sm:inline">Bulk Invite ({selectedResumes.length})</span>
+                <span className="sm:hidden">{selectedResumes.length}</span>
               </button>
             </>
           )}
@@ -1154,6 +1166,28 @@ export default function ScoredResumesTable({
         />
       )}
 
+      {/* Bulk Invite Modal */}
+      {showBulkInviteModal && (
+        <BulkInviteModal
+          selectedResumes={selectedResumes.map(id => {
+            const resume = resumes.find(r => r.id === id);
+            return resume!;
+          }).filter(Boolean)}
+          jobId={jobId}
+          jobTitle={jobTitle}
+          onClose={() => setShowBulkInviteModal(false)}
+          onSuccess={() => {
+            setShowBulkInviteModal(false);
+            // Clear selection after successful bulk invite
+            if (onSelectAll) {
+              onSelectAll([]);
+            } else {
+              setInternalSelectedResumes([]);
+            }
+          }}
+        />
+      )}
+
       {/* Export Format Selection Modal */}
       {showExportModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -1225,6 +1259,371 @@ export default function ScoredResumesTable({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Bulk Invite Modal Component
+interface BulkInviteModalProps {
+  selectedResumes: ScoredResume[];
+  jobId: string;
+  jobTitle: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess }: BulkInviteModalProps) {
+  const [assessments, setAssessments] = useState<any[]>([]);
+  const [selectedAssessment, setSelectedAssessment] = useState<string>('');
+  const [isLoadingAssessments, setIsLoadingAssessments] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expiryDays, setExpiryDays] = useState(7);
+  const [showNoMatchWarning, setShowNoMatchWarning] = useState(false);
+
+  // Separate valid and invalid candidates
+  const validCandidates = selectedResumes.filter(r =>
+    r.matchStatus === 'Exact Match' || r.matchStatus === 'Partial Match'
+  );
+  const noMatchCandidates = selectedResumes.filter(r =>
+    r.matchStatus === 'No Match' || (!r.matchStatus || r.matchStatus === '')
+  );
+
+  useEffect(() => {
+    fetchAssessments();
+    // Show warning if there are no match candidates
+    if (noMatchCandidates.length > 0) {
+      setShowNoMatchWarning(true);
+    }
+  }, [jobId]);
+
+  const fetchAssessments = async () => {
+    setIsLoadingAssessments(true);
+    try {
+      const response = await assessmentService.list({ jd_id: jobId });
+      // Only show PUBLISHED assessments (not draft, not archived)
+      const activeAssessments = response.items.filter(
+        (a: any) => a.status === 'published' && !a.is_archived
+      );
+      setAssessments(activeAssessments);
+      // Auto-select if only one assessment
+      if (activeAssessments.length === 1) {
+        setSelectedAssessment(activeAssessments[0].id);
+      }
+    } catch (error) {
+      console.error('Failed to fetch assessments:', error);
+      toast.error('Failed to load assessments');
+    } finally {
+      setIsLoadingAssessments(false);
+    }
+  };
+
+  const handleSendBulkInvitations = async () => {
+    if (!selectedAssessment) {
+      toast.error('Please select an assessment first');
+      return;
+    }
+
+    // Only send to valid candidates (Exact Match or Partial Match)
+    if (validCandidates.length === 0) {
+      toast.error('No valid candidates to invite. Only "Exact Match" and "Partial Match" candidates can be invited.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const candidates = validCandidates.map(resume => ({
+        candidate_name: resume.candidateName,
+        candidate_email: resume.email,
+        resume_id: resume.resumeId,
+      }));
+
+      await assessmentService.bulkInvite(selectedAssessment, {
+        candidates,
+        expiry_days: expiryDays,
+      });
+
+      const message = noMatchCandidates.length > 0
+        ? `Successfully sent ${validCandidates.length} invitation${validCandidates.length > 1 ? 's' : ''}! ${noMatchCandidates.length} "No Match" candidate${noMatchCandidates.length > 1 ? 's were' : ' was'} excluded.`
+        : `Successfully sent ${validCandidates.length} invitation${validCandidates.length > 1 ? 's' : ''}!`;
+
+      toast.success(message);
+      onSuccess();
+    } catch (error: any) {
+      console.error('Failed to send bulk invitations:', error);
+      const errorMessage = error.message || 'Failed to send invitations. Please try again.';
+
+      // Check for quota error
+      if (errorMessage.includes('quota') || errorMessage.includes('units')) {
+        toast.error('Insufficient assessment units available');
+      } else if (errorMessage.includes('409') || errorMessage.includes('duplicate')) {
+        toast.error('Some candidates have already been invited to this assessment');
+      } else {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const selectedAssessmentData = assessments.find(a => a.id === selectedAssessment);
+
+  if (isLoadingAssessments) {
+    return (
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8 text-center">
+          <Loader className="w-12 h-12 animate-spin text-gray-600 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Assessments...</h3>
+          <p className="text-gray-500 text-sm">Checking for existing assessments</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (assessments.length === 0) {
+    return (
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-10 h-10 text-amber-600" />
+            </div>
+            <h3 className="text-gray-900 text-lg font-medium mb-2">No Assessment Found</h3>
+            <p className="text-gray-600 text-sm">
+              There is no published assessment for this job description yet.
+              Please create and publish an assessment first.
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <button
+              onClick={onClose}
+              className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+              <Send className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-white">Bulk Invite Candidates</h2>
+              <p className="text-blue-100 text-sm">{jobTitle}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Assessment Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select Assessment *</label>
+            <select
+              value={selectedAssessment}
+              onChange={(e) => setSelectedAssessment(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">-- Choose an assessment --</option>
+              {assessments.map((assessment) => (
+                <option key={assessment.id} value={assessment.id}>
+                  {assessment.title} • {assessment.duration_minutes} min
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-2">
+              {assessments.length} assessment{assessments.length !== 1 ? 's' : ''} available for this job
+            </p>
+          </div>
+
+          {/* Expiry Settings */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Invitation Expiry</label>
+            <select
+              value={expiryDays}
+              onChange={(e) => setExpiryDays(Number(e.target.value))}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value={1}>1 day</option>
+              <option value={3}>3 days</option>
+              <option value={7}>7 days</option>
+              <option value={14}>14 days</option>
+              <option value={30}>30 days</option>
+            </select>
+          </div>
+
+          {/* No Match Warning */}
+          {showNoMatchWarning && noMatchCandidates.length > 0 && (
+            <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-4">
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-5 h-5 text-gray-600" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-gray-900 mb-1">
+                    {noMatchCandidates.length} Candidate{noMatchCandidates.length > 1 ? 's' : ''} Cannot Be Invited
+                  </h4>
+                  <p className="text-sm text-gray-700 mb-3">
+                    Only candidates with "Exact Match" or "Partial Match" status can be invited to assessments.
+                    The following {noMatchCandidates.length > 1 ? 'candidates have' : 'candidate has'} "No Match" status and will be excluded:
+                  </p>
+                  <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2 max-h-32 overflow-y-auto">
+                    {noMatchCandidates.map((resume) => (
+                      <div key={resume.id} className="flex items-center gap-2 text-sm">
+                        <X className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                        <span className="font-medium text-gray-900">{resume.candidateName}</span>
+                        <span className="text-gray-500">({resume.email})</span>
+                        <span className="ml-auto px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded-full">No Match</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+                <p className="text-sm text-gray-600">
+                  <strong>{validCandidates.length}</strong> valid candidate{validCandidates.length !== 1 ? 's' : ''} will receive invitations
+                </p>
+                <button
+                  onClick={() => setShowNoMatchWarning(false)}
+                  className="text-sm text-gray-600 hover:text-gray-800 underline"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Candidates List - Valid Only */}
+          {validCandidates.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Candidates to Invite ({validCandidates.length})
+              </label>
+              <div className="max-h-60 overflow-y-auto border border-green-200 rounded-lg bg-green-50">
+                {validCandidates.map((resume, index) => (
+                  <div
+                    key={resume.id}
+                    className={`p-3 flex items-center gap-3 ${
+                      index < validCandidates.length - 1 ? 'border-b border-green-100' : ''
+                    }`}
+                  >
+                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600 font-medium text-sm">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900 text-sm">{resume.candidateName}</div>
+                      <div className="text-xs text-gray-600">{resume.email}</div>
+                    </div>
+                    {resume.matchStatus && (
+                      <div
+                        className={`px-2 py-1 text-xs rounded-full ${
+                          resume.matchStatus === 'Exact Match'
+                            ? 'bg-green-100 text-green-700 border border-green-300'
+                            : 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+                        }`}
+                      >
+                        {resume.matchStatus}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* No Valid Candidates Warning */}
+          {validCandidates.length === 0 && (
+            <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-6 text-center">
+              <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                <AlertCircle className="w-8 h-8 text-gray-600" />
+              </div>
+              <h4 className="font-semibold text-gray-900 mb-2">No Valid Candidates Selected</h4>
+              <p className="text-sm text-gray-600">
+                All selected candidates have "No Match" status and cannot be invited to assessments.
+                Please select candidates with "Exact Match" or "Partial Match" status.
+              </p>
+            </div>
+          )}
+
+          {/* Preview */}
+          {selectedAssessment && validCandidates.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Mail className="w-5 h-5 text-blue-600" />
+                <span className="font-medium text-blue-800">Ready to Send</span>
+              </div>
+              <div className="text-sm text-blue-700 space-y-1">
+                <p><strong>Assessment:</strong> {selectedAssessmentData?.title}</p>
+                <p><strong>Duration:</strong> {selectedAssessmentData?.duration_minutes} minutes</p>
+                <p><strong>Recipients:</strong> {validCandidates.length} candidate(s)</p>
+                {noMatchCandidates.length > 0 && (
+                  <p className="text-gray-600">
+                    <strong>Excluded:</strong> {noMatchCandidates.length} "No Match" candidate(s)
+                  </p>
+                )}
+                <p><strong>Expires in:</strong> {expiryDays} day{expiryDays > 1 ? 's' : ''}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+          <div className="text-sm text-gray-600">
+            {validCandidates.length > 0 ? (
+              <>
+                <strong className="text-green-600">{validCandidates.length}</strong> invitation{validCandidates.length !== 1 ? 's' : ''} will be sent
+                {noMatchCandidates.length > 0 && (
+                  <span className="ml-2 text-gray-500">
+                    ({noMatchCandidates.length} excluded)
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-gray-500">No valid candidates to invite</span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSendBulkInvitations}
+              disabled={!selectedAssessment || isSubmitting || validCandidates.length === 0}
+              className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  Send Invitations
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
