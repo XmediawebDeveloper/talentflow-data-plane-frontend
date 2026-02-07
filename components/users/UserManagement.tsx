@@ -756,13 +756,37 @@ export default function UserManagement() {
     initializeUsers();
   }, []);
 
+  // Component lifecycle tracking
+  useEffect(() => {
+    console.log('[COMPONENT LIFECYCLE] UserManagement component mounted');
+    return () => {
+      console.log('[COMPONENT LIFECYCLE] UserManagement component unmounting');
+    };
+  }, []);
+
+  // Track allPermissions state changes
+  useEffect(() => {
+    console.log('[STATE CHANGE] allPermissions changed. New count:', allPermissions.length);
+    if (allPermissions.length > 0) {
+      console.log('[STATE CHANGE] First 3 permissions:', allPermissions.slice(0, 3));
+    } else {
+      console.warn('[STATE CHANGE] ⚠️  allPermissions is EMPTY!');
+    }
+  }, [allPermissions]);
 
   const loadAllPermissions = async () => {
+    console.log('[LOAD PERMISSIONS] Starting to load permissions...');
     try {
       const data = await rbacService.getPermissions();
+      console.log('[LOAD PERMISSIONS] Received data:', data);
+      console.log('[LOAD PERMISSIONS] Permissions count:', data.permissions?.length || 0);
+      if (data.permissions && data.permissions.length > 0) {
+        console.log('[LOAD PERMISSIONS] First 3 permissions:', data.permissions.slice(0, 3));
+      }
       setAllPermissions(data.permissions);
+      console.log('[LOAD PERMISSIONS] ✓ allPermissions state updated successfully');
     } catch (error) {
-      console.warn('Failed to load permissions:', error);
+      console.error('[LOAD PERMISSIONS] ✗ Failed to load permissions:', error);
     }
   };
 
@@ -993,6 +1017,11 @@ export default function UserManagement() {
         is_active: user.is_active ?? true,
         last_login: user.last_login_at,
       }));
+
+      // DEBUG: Log loaded users
+      console.log('[LOAD USERS] Loaded', mappedUsers.length, 'users');
+      console.log('[LOAD USERS] User IDs:', mappedUsers.map(u => `${u.email}: ${u.id}`).join(', '));
+
       setUsers(mappedUsers);
     } catch (error: any) {
       console.error('Error loading users:', error);
@@ -1398,6 +1427,13 @@ export default function UserManagement() {
   };
 
   const handleUpdateUser = async () => {
+    console.log('[UPDATE USER] Function called');
+    console.log('[UPDATE USER] allPermissions state at function start:', {
+      count: allPermissions.length,
+      isArray: Array.isArray(allPermissions),
+      isEmpty: allPermissions.length === 0
+    });
+
     if (!editingUser) return;
 
     if (!editSelectedRoleId) {
@@ -1418,10 +1454,31 @@ export default function UserManagement() {
 
     // Derive permission IDs from codes at save time (avoids stale dual-state bugs)
     const derivedPermissionIds: number[] = [];
+
+    // DEBUG: Check if allPermissions is loaded
+    if (allPermissions.length === 0) {
+      console.error('[UPDATE USER CRITICAL] allPermissions is EMPTY! Cannot derive permission IDs');
+      console.error('[UPDATE USER CRITICAL] This will cause permissions to NOT be saved!');
+      toast.error('Permission system not loaded. Please refresh the page and try again.');
+      setIsSaving(false);
+      return;
+    }
+
+    console.log('[UPDATE USER] Deriving permission IDs from codes...');
+    console.log('[UPDATE USER] allPermissions count:', allPermissions.length);
+    console.log('[UPDATE USER] editSelectedPermissionCodes:', Array.from(editSelectedPermissionCodes));
+
     editSelectedPermissionCodes.forEach(code => {
       const perm = allPermissions.find(p => p.code === code);
-      if (perm) derivedPermissionIds.push(perm.id);
+      if (perm) {
+        derivedPermissionIds.push(perm.id);
+        console.log(`[UPDATE USER] ✓ ${code} → ID ${perm.id}`);
+      } else {
+        console.warn(`[UPDATE USER] ✗ ${code} → NOT FOUND in allPermissions!`);
+      }
     });
+
+    console.log('[UPDATE USER] Final derivedPermissionIds:', derivedPermissionIds);
 
     // Reconstruct full email from username + domain
     const fullEmail = editEmailUsername && tenantEmailDomain
@@ -1436,16 +1493,28 @@ export default function UserManagement() {
       role_id: editSelectedRoleId,
     };
 
-    // Always send permission_ids if they were explicitly changed
+    // ALWAYS send permission_ids to ensure custom permissions are respected
+    // This prevents the backend from applying role defaults when role changes
+    requestBody.permission_ids = derivedPermissionIds;
+    requestBody.permission_codes = Array.from(editSelectedPermissionCodes);
+
     if (permissionsChanged) {
-      requestBody.permission_ids = derivedPermissionIds;
-      requestBody.permission_codes = Array.from(editSelectedPermissionCodes);
       console.log('[EDIT USER] Permissions changed, sending updated permission_ids:', derivedPermissionIds);
     } else if (roleChanged) {
-      console.log('[EDIT USER] Role changed, backend will apply new role defaults');
+      console.log('[EDIT USER] Role changed, sending current permission_ids to preserve custom permissions:', derivedPermissionIds);
     } else {
-      console.log('[EDIT USER] No changes to role or permissions');
+      console.log('[EDIT USER] No changes detected, but sending current permission_ids to ensure consistency:', derivedPermissionIds);
     }
+
+    // DEBUG LOGGING
+    console.log('='.repeat(80));
+    console.log('[UPDATE USER] Starting user update...');
+    console.log('[UPDATE USER] User ID:', editingUser.id);
+    console.log('[UPDATE USER] User Email:', editingUser.email);
+    console.log('[UPDATE USER] API URL:', `${API_URL}/users/${editingUser.id}`);
+    console.log('[UPDATE USER] Request Body:', JSON.stringify(requestBody, null, 2));
+    console.log('[UPDATE USER] Token exists:', !!localStorage.getItem('accessToken'));
+    console.log('='.repeat(80));
 
     setIsSaving(true);
     try {
@@ -1466,6 +1535,17 @@ export default function UserManagement() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+
+        // DEBUG: Log error details
+        console.error('='.repeat(80));
+        console.error('[UPDATE USER ERROR] Update failed!');
+        console.error('[UPDATE USER ERROR] Status:', response.status);
+        console.error('[UPDATE USER ERROR] Status Text:', response.statusText);
+        console.error('[UPDATE USER ERROR] Error Data:', JSON.stringify(errorData, null, 2));
+        console.error('[UPDATE USER ERROR] User ID that failed:', editingUser.id);
+        console.error('[UPDATE USER ERROR] User Email that failed:', editingUser.email);
+        console.error('='.repeat(80));
+
         if (errorData.detail?.error === 'LAST_ADMIN_ROLE_CHANGE_BLOCKED') {
           toast.error(errorData.detail.message || 'Cannot change role of the last admin user');
         } else {
@@ -1488,7 +1568,15 @@ export default function UserManagement() {
       loadUsers();
     } catch (error: any) {
       console.error('Error updating user:', error);
-      toast.error(error.message || 'Failed to update user');
+
+      // Handle 404 - user not found (deleted or wrong tenant)
+      if (error.response?.status === 404) {
+        toast.error('User not found. The user may have been deleted or belongs to a different organization. Refreshing list...');
+        resetEditModal();
+        loadUsers(); // Refresh the list to remove stale data
+      } else {
+        toast.error(error.message || 'Failed to update user');
+      }
     } finally {
       setIsSaving(false);
     }
