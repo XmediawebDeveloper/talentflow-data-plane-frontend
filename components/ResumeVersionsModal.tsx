@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { X, FileText, Download, Calendar, GitBranch, Eye, Clock, Loader2, ArrowLeft, Plus, Minus, Equal, Briefcase, MapPin, GraduationCap, Award } from 'lucide-react';
 import { resumeService } from '@/lib/services/resumeService';
+import { toast } from 'sonner';
 
 interface ResumeVersion {
   id: string;
@@ -135,7 +136,7 @@ export default function ResumeVersionsModal({
       document.body.removeChild(a);
     } catch (error) {
       console.error('Download failed:', error);
-      alert('Failed to download resume');
+      toast.error('Failed to download resume');
     }
   };
 

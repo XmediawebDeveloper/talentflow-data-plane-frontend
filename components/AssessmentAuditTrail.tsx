@@ -5,6 +5,7 @@ import {
   Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff
 } from 'lucide-react';
 import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } from '@/lib/services';
+import { toast } from 'sonner';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 
@@ -129,7 +130,7 @@ export default function AssessmentAuditTrail() {
 
   const handleExportAuditLogs = () => {
     console.log('Exporting audit logs:', activities);
-    alert(`Exporting ${activities.length} audit log entries to CSV`);
+    toast.info(`Exporting ${activities.length} audit log entries to CSV`);
   };
 
   const formatTimestamp = (timestamp: string) => {

@@ -1,5 +1,6 @@
 import { AlertCircle, Lock, CreditCard, UserX, CheckCircle } from 'lucide-react';
 import { User, Tenant, isSubscriptionActive, hasAvailableUnits, getRemainingUnits } from '@/lib/types/tenant';
+import { toast } from 'sonner';
 
 interface PreConditionGuardProps {
   user: User;
@@ -209,7 +210,7 @@ export default function PreConditionGuard({
             <button
               onClick={() => {
                 // In real app, this would open a contact modal or redirect
-                alert('Please contact your Owner to request permissions.');
+                toast.warning('Please contact your Owner to request permissions.');
               }}
               className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
             >

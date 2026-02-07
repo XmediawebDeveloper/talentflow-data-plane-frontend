@@ -6,6 +6,7 @@ import api from '@/lib/services/api';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import VersionBadge from './VersionBadge';
+import { toast } from 'sonner';
 
 // Email validation regex - requires valid format with domain containing a period
 const isValidEmail = (email: string): boolean => {
@@ -167,7 +168,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
       const candidatesWithData = candidates.filter(c => c.name.trim() && c.email.trim());
 
       if (candidatesWithData.length === 0) {
-        alert('Please add at least one candidate with name and email');
+        toast.warning('Please add at least one candidate with name and email');
         setIsSubmitting(false);
         return;
       }
@@ -176,7 +177,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
       const invalidEmails = candidatesWithData.filter(c => !isValidEmail(c.email));
       if (invalidEmails.length > 0) {
         const invalidEmailList = invalidEmails.map(c => c.email).join(', ');
-        alert(`Invalid email address(es): ${invalidEmailList}\n\nPlease enter valid email addresses (e.g., user@example.com)`);
+        toast.error(`Invalid email address(es): ${invalidEmailList}. Please enter valid email addresses.`);
         setIsSubmitting(false);
         return;
       }
@@ -567,7 +568,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(assessmentLink);
-                  alert('Link copied to clipboard!');
+                  toast.success('Link copied to clipboard!');
                 }}
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
               >

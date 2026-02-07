@@ -3,6 +3,7 @@
 import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
+import { toast } from 'sonner';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -167,7 +168,7 @@ export default function CandidateResultDetails({
       }
     } catch (error) {
       console.error('Failed to generate insights:', error);
-      alert('Failed to generate AI insights. Please try again.');
+      toast.error('Failed to generate AI insights. Please try again.');
     } finally {
       setIsGeneratingInsights(false);
     }
@@ -236,7 +237,7 @@ export default function CandidateResultDetails({
                   document.body.removeChild(a);
                 } catch (error) {
                   console.error('Failed to export results:', error);
-                  alert('Failed to export results. Please try again.');
+                  toast.error('Failed to export results. Please try again.');
                 }
               }}
               className="px-6 py-2.5 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg transition-colors flex items-center gap-2 border border-white/30"
