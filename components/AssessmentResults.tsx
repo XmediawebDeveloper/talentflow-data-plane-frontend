@@ -2,6 +2,8 @@ import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, Chevr
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
+import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import {
   calculateFinalResult,
   QuestionScore,
@@ -67,6 +69,7 @@ interface QuestionResult {
 
 export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle }: AssessmentResultsProps) {
   const router = useRouter();
+  const dialog = useGlobalDialog();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -312,7 +315,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Handle delete result
   const handleDeleteResult = async (resultId: string, candidateName: string) => {
-    if (!confirm(`Are you sure you want to delete the result for ${candidateName}? This action cannot be undone.`)) {
+    if (!await dialog.confirm({ title: 'Delete Result', message: `Are you sure you want to delete the result for ${candidateName}? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) {
       return;
     }
     setIsDeleting(resultId);
@@ -332,7 +335,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       }
     } catch (error) {
       console.error('Failed to delete result:', error);
-      alert('Failed to delete result. Please try again.');
+      toast.error('Failed to delete result. Please try again.');
     } finally {
       setIsDeleting(null);
     }
@@ -374,7 +377,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download PDF:', error);
-      alert('Failed to download PDF report. Please try again.');
+      toast.error('Failed to download PDF report. Please try again.');
     } finally {
       setDownloadingPDF(null);
     }
@@ -400,7 +403,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download bulk PDFs:', error);
-      alert('Failed to download PDF reports. Please try again.');
+      toast.error('Failed to download PDF reports. Please try again.');
     } finally {
       setDownloadingBulkPDF(false);
     }
@@ -570,7 +573,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     document.body.removeChild(a);
                   } catch (error) {
                     console.error('Failed to export results:', error);
-                    alert('Failed to export results. Please try again.');
+                    toast.error('Failed to export results. Please try again.');
                   }
                 }}
                 className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"

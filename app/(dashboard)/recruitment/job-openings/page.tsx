@@ -6,6 +6,7 @@ import JobsListing from '@/components/JobsListing';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
@@ -37,6 +38,7 @@ export default function JobOpeningsPage() {
   }>({ open: false, job: null });
   const router = useRouter();
   const searchParams = useSearchParams();
+  const dialog = useGlobalDialog();
   const { user, isTenantAdmin } = useAuth();
 
   // Sync filter with URL parameter
@@ -288,7 +290,7 @@ export default function JobOpeningsPage() {
   };
 
   const handleDeleteJob = async (job: Job) => {
-    if (!confirm(`Are you sure you want to delete "${job.title}"?`)) return;
+    if (!await dialog.confirm({ title: 'Delete Job Opening', message: `Are you sure you want to delete "${job.title}"? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) return;
     try {
       await jdService.delete(job.id);
       setJobs(prev => prev.filter(j => j.id !== job.id));

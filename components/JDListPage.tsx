@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 // FIX-003: Import Sheet for inline JD creation
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import JDCreation from '@/components/JDCreation';
@@ -31,6 +32,7 @@ const STATUS_TABS = [
 export default function JDListPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const dialog = useGlobalDialog();
   const [jds, setJds] = useState<JDResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -260,7 +262,7 @@ export default function JDListPage() {
 
   const handleBulkDelete = async () => {
     if (selectedJds.length === 0) return;
-    if (!confirm(`Are you sure you want to delete ${selectedJds.length} job description(s)?`)) return;
+    if (!await dialog.confirm({ title: 'Delete Job Descriptions', message: `Are you sure you want to delete ${selectedJds.length} job description(s)?`, variant: 'error', confirmText: 'Delete' })) return;
 
     try {
       let successCount = 0;

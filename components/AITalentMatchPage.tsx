@@ -12,6 +12,7 @@ import { MatchedCandidate } from '@/lib/services/aiMatchService';
 import api from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
 import { resumeService } from '@/lib/services/resumeService';
+import { toast } from 'sonner';
 
 interface Job {
   id: string;
@@ -140,7 +141,7 @@ export default function AITalentMatchPage({
   // Handle attachments click - fetch real versions
   const handleAttachmentsClick = async (candidate: MatchedCandidateWithVersions) => {
     if (!candidate.resumeId) {
-      alert('Resume ID not found');
+      toast.error('Resume ID not found');
       return;
     }
 
@@ -387,7 +388,7 @@ export default function AITalentMatchPage({
 
   const handleSubmitToScoring = async () => {
     if (selectedCandidates.length === 0) {
-      alert('Please select at least one candidate to score');
+      toast.warning('Please select at least one candidate to score');
       return;
     }
 
@@ -403,7 +404,7 @@ export default function AITalentMatchPage({
     const jobTitle = selectedJobData?.title || selectedHistoryItem?.jobTitle || 'Job';
 
     if (!jobId) {
-      alert('Job ID not found');
+      toast.error('Job ID not found');
       return;
     }
 
@@ -411,7 +412,7 @@ export default function AITalentMatchPage({
     if (selected.length === 1) {
       const candidate = selected[0];
       if (!candidate.resumeId) {
-        alert('Resume ID not found for this candidate');
+        toast.error('Resume ID not found for this candidate');
         return;
       }
 
@@ -459,7 +460,7 @@ export default function AITalentMatchPage({
       router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
-      alert(error.message || 'Failed to start scoring');
+      toast.error(error.message || 'Failed to start scoring');
     }
   };
 
@@ -967,7 +968,7 @@ export default function AITalentMatchPage({
               router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
             } catch (error: any) {
               console.error('Failed to start scoring:', error);
-              alert(error.message || 'Failed to start scoring');
+              toast.error(error.message || 'Failed to start scoring');
             }
 
             setShowVersionSelectForScoring(false);
@@ -1694,7 +1695,7 @@ export default function AITalentMatchPage({
               router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
             } catch (error: any) {
               console.error('Failed to start scoring:', error);
-              alert(error.message || 'Failed to start scoring');
+              toast.error(error.message || 'Failed to start scoring');
             }
 
             setShowVersionSelectForScoring(false);

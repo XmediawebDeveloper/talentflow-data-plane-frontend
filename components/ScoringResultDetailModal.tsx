@@ -3,6 +3,7 @@ import { useState } from 'react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import ContactCandidateModal from './ContactCandidateModal';
 import ResumePreviewModal from './ResumePreviewModal';
+import { toast } from 'sonner';
 
 interface DetailedScores {
   titleMatch: number;
@@ -115,7 +116,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
   };
 
   const handleDownloadScorecard = () => {
-    alert(`Downloading scorecard for ${resume.candidateName}\n\nIncludes:\n• Overall match score: ${resume.scorePercentage}%\n• Detailed scoring breakdown\n• Skills analysis\n• AI recommendations\n\nFile will be downloaded as PDF.`);
+    toast.info(`Downloading scorecard for ${resume.candidateName}`);
   };
 
   return (

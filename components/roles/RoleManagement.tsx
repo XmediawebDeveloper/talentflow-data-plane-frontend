@@ -14,6 +14,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
 import {
@@ -60,6 +61,7 @@ type TabType = 'roles' | 'audit';
 
 export default function RoleManagement() {
   const router = useRouter();
+  const dialog = useGlobalDialog();
   const [activeTab, setActiveTab] = useState<TabType>('roles');
   const [roles, setRoles] = useState<RoleListItem[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -141,7 +143,7 @@ export default function RoleManagement() {
       return;
     }
 
-    if (!confirm('Are you sure you want to delete this role? Users with this role will lose their permissions.')) {
+    if (!await dialog.confirm({ title: 'Delete Role', message: 'Are you sure you want to delete this role? Users with this role will lose their permissions.', variant: 'error', confirmText: 'Delete' })) {
       return;
     }
 

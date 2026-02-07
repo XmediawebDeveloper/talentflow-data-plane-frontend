@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, Eye, BarChart3, Calendar, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive, Loader2 } from 'lucide-react';
 import React from 'react';
 import { assessmentService } from '@/lib/services/assessmentService';
+import { toast } from 'sonner';
 
 // AS-24: localStorage key for column preferences
 const COLUMN_PREFERENCES_KEY = 'assessment_results_column_preferences';
@@ -152,7 +153,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       columns: enabledColumns.map(c => c.id),
       filters: { filterPassFail, filterScoreMin, filterScoreMax, filterDateFrom, filterDateTo }
     });
-    alert(`Exporting ${selectedResults.length > 0 ? selectedResults.length : filteredResults.length} assessment results to Excel with ${enabledColumns.length} columns`);
+    toast.info(`Exporting ${selectedResults.length > 0 ? selectedResults.length : filteredResults.length} assessment results to Excel with ${enabledColumns.length} columns`);
   };
 
   // AS-25: Individual PDF download
@@ -174,7 +175,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download PDF:', error);
-      alert('Failed to download PDF report. Please try again.');
+      toast.error('Failed to download PDF report. Please try again.');
     } finally {
       setDownloadingPDF(null);
     }
@@ -200,7 +201,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download bulk PDFs:', error);
-      alert('Failed to download PDF reports. Please try again.');
+      toast.error('Failed to download PDF reports. Please try again.');
     } finally {
       setDownloadingBulkPDF(false);
     }

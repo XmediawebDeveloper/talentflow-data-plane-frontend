@@ -3,6 +3,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import { toast } from 'sonner';
 import VersionBadge from './VersionBadge';
 
 interface AssessmentDetailsViewProps {
@@ -35,6 +37,7 @@ export default function AssessmentDetailsView({
   onRefresh
 }: AssessmentDetailsViewProps) {
   const router = useRouter();
+  const dialog = useGlobalDialog();
   const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions'>('overview');
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -628,7 +631,7 @@ export default function AssessmentDetailsView({
                 <button
                   onClick={async () => {
                     if (assessment.status === 'Draft') {
-                      alert('Please publish the assessment before sharing');
+                      toast.warning('Please publish the assessment before sharing');
                       return;
                     }
                     try {
@@ -653,10 +656,10 @@ export default function AssessmentDetailsView({
                         document.execCommand('copy');
                         document.body.removeChild(textArea);
                       }
-                      alert('Shareable link copied! This link can be used by one candidate.');
+                      toast.success('Shareable link copied! This link can be used by one candidate.');
                     } catch (error) {
                       console.error('Failed to generate link:', error);
-                      alert('Failed to generate shareable link. Please try Share via Email instead.');
+                      toast.error('Failed to generate shareable link. Please try Share via Email instead.');
                     }
                   }}
                   disabled={assessment.status === 'Draft'}
@@ -686,10 +689,10 @@ export default function AssessmentDetailsView({
                       a.click();
                       window.URL.revokeObjectURL(url);
                       document.body.removeChild(a);
-                      alert('Results exported successfully!');
+                      toast.success('Results exported successfully!');
                     } catch (error) {
                       console.error('Export failed:', error);
-                      alert('Failed to export results. Make sure there are completed assessments to export.');
+                      toast.error('Failed to export results. Make sure there are completed assessments to export.');
                     } finally {
                       setActionLoading(null);
                     }
@@ -707,11 +710,11 @@ export default function AssessmentDetailsView({
                     setActionLoading('duplicate');
                     try {
                       const result = await assessmentService.clone(assessment.id, `${assessment.title} (Copy)`);
-                      alert(`Assessment duplicated successfully! New assessment: "${result.cloned_title}"`);
+                      toast.success(`Assessment duplicated successfully! New assessment: "${result.cloned_title}"`);
                       onRefresh?.();
                     } catch (error) {
                       console.error('Duplicate failed:', error);
-                      alert('Failed to duplicate assessment. Please try again.');
+                      toast.error('Failed to duplicate assessment. Please try again.');
                     } finally {
                       setActionLoading(null);
                     }
@@ -737,16 +740,16 @@ export default function AssessmentDetailsView({
 
                 <button
                   onClick={async () => {
-                    if (!confirm('Archive this assessment? It will be moved to the archived section.')) return;
+                    if (!await dialog.confirm({ title: 'Archive Assessment', message: 'Archive this assessment? It will be moved to the archived section.', variant: 'warning', confirmText: 'Archive' })) return;
                     setActionLoading('archive');
                     try {
                       await assessmentService.update(assessment.id, { status: 'archived' });
-                      alert('Assessment archived successfully!');
+                      toast.success('Assessment archived successfully!');
                       onRefresh?.();
                       onBack();
                     } catch (error) {
                       console.error('Archive failed:', error);
-                      alert('Failed to archive assessment. Please try again.');
+                      toast.error('Failed to archive assessment. Please try again.');
                     } finally {
                       setActionLoading(null);
                     }
@@ -761,16 +764,16 @@ export default function AssessmentDetailsView({
 
                 <button
                   onClick={async () => {
-                    if (!confirm('Delete this assessment permanently? This action cannot be undone.')) return;
+                    if (!await dialog.confirm({ title: 'Delete Assessment', message: 'Delete this assessment permanently? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) return;
                     setActionLoading('delete');
                     try {
                       await assessmentService.delete(assessment.id);
-                      alert('Assessment deleted successfully!');
+                      toast.success('Assessment deleted successfully!');
                       onRefresh?.();
                       onBack();
                     } catch (error) {
                       console.error('Delete failed:', error);
-                      alert('Failed to delete assessment. Only draft assessments can be deleted.');
+                      toast.error('Failed to delete assessment. Only draft assessments can be deleted.');
                     } finally {
                       setActionLoading(null);
                     }

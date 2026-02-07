@@ -1,5 +1,6 @@
 import { X, Mail, Phone, Calendar, Clock, Send, FileText, Loader } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface ContactCandidateModalProps {
   candidateName: string;
@@ -59,26 +60,26 @@ export default function ContactCandidateModal({
     // Simulate sending email
     setTimeout(() => {
       setIsSending(false);
-      alert(`Email sent successfully to ${candidateEmail}`);
+      toast.success(`Email sent successfully to ${candidateEmail}`);
       onClose();
     }, 1500);
   };
 
   const handleScheduleCall = () => {
     if (!scheduleDate || !scheduleTime) {
-      alert('Please select both date and time');
+      toast.warning('Please select both date and time');
       return;
     }
     setIsSending(true);
     setTimeout(() => {
       setIsSending(false);
-      alert(`Interview scheduled for ${scheduleDate} at ${scheduleTime}`);
+      toast.success(`Interview scheduled for ${scheduleDate} at ${scheduleTime}`);
       onClose();
     }, 1500);
   };
 
   const handlePhoneContact = () => {
-    alert(`Calling ${candidateName} at ${candidatePhone}\n\nNotes: ${phoneNotes || 'No notes added'}`);
+    toast.info(`Calling ${candidateName} at ${candidatePhone}`);
     onClose();
   };
 

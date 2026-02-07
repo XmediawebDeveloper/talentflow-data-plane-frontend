@@ -1,5 +1,6 @@
 import { X, Download, Printer, ZoomIn, ZoomOut, FileText } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface ResumePreviewModalProps {
   candidateName: string;
@@ -15,7 +16,7 @@ export default function ResumePreviewModal({
   const [zoomLevel, setZoomLevel] = useState(100);
 
   const handleDownload = () => {
-    alert(`Downloading resume for ${candidateName}`);
+    toast.info(`Downloading resume for ${candidateName}`);
   };
 
   const handlePrint = () => {

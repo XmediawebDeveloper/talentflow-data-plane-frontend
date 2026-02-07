@@ -749,7 +749,7 @@ export default function ResumeScoringPage({
     const selectedData = scoredHistory.filter(item => selectedHistoryItems.has(item.id));
     const totalResumes = selectedData.reduce((sum, item) => sum + item.totalScored, 0);
 
-    alert(`Download initiated!\n\n${selectedHistoryItems.size} scoring session${selectedHistoryItems.size > 1 ? 's' : ''} selected\n${totalResumes} total resume${totalResumes > 1 ? 's' : ''}\n\nIncluded:\n${selectedData.map((item, i) => `${i + 1}. ${item.jobTitle} - ${item.totalScored} resumes`).join('\n')}\n\n(Mock download - would download ZIP file with all resumes)`);
+    toast.info(`Download initiated! ${selectedHistoryItems.size} scoring session(s) selected, ${totalResumes} total resume(s)`);
   };
 
   // Bulk download scorecards as ZIP
