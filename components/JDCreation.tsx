@@ -4704,9 +4704,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
-              {/* Certifications & Domain Keywords - Side by Side */}
+              {/* Certifications & Domain Keywords - HIDDEN as per requirement */}
+              {/*
               <div className="mt-6 grid grid-cols-2 gap-6">
-                {/* Certifications - Left */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-gray-900">Certifications</h3>
@@ -4764,7 +4764,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </div>
                 </div>
 
-                {/* Domain Keywords - Right */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-gray-900">Domain Keywords</h3>
@@ -4822,6 +4821,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </div>
                 </div>
               </div>
+              */}
 
               {/* Assessment Guidance & Internal Recruiter Notes - Side by Side */}
               <div className="mt-6 grid grid-cols-2 gap-6">

@@ -408,17 +408,7 @@ export default function ScoringJobProgressModal({
                     </span>
                   </div>
 
-                  {/* Score if completed or already scored */}
-                  {item.status === 'completed' && item.score !== undefined && (
-                    <div className="flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 bg-green-100 rounded-full flex-shrink-0">
-                      <span className="text-xs sm:text-sm font-bold text-green-700">{item.score}%</span>
-                    </div>
-                  )}
-                  {item.status === 'already_scored' && item.score !== undefined && (
-                    <div className="flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 bg-amber-100 rounded-full flex-shrink-0">
-                      <span className="text-xs sm:text-sm font-bold text-amber-700">{item.score}%</span>
-                    </div>
-                  )}
+                  {/* Score percentage removed as per requirement - don't show percentages */}
 
                   {/* Retry button for failed items */}
                   {item.status === 'failed' && onRetryFailed && (

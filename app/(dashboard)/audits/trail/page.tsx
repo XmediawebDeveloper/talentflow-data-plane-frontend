@@ -33,7 +33,7 @@ interface AuditLog {
   id: string;
   tenant_id: string;
   user_id: string | null;
-  user_name: string;
+  user_name: string | null;
   user_email: string | null;
   action: string;
   action_label: string;
@@ -493,10 +493,11 @@ export default function AuditTrailPage() {
     if (!searchQuery) return true;
     const search = searchQuery.toLowerCase();
     return (
-      log.user_name.toLowerCase().includes(search) ||
-      log.action_label.toLowerCase().includes(search) ||
+      (log.user_name && log.user_name.toLowerCase().includes(search)) ||
+      (log.action_label && log.action_label.toLowerCase().includes(search)) ||
       (log.entity_type && log.entity_type.toLowerCase().includes(search)) ||
-      (log.ip_address && log.ip_address.includes(search))
+      (log.ip_address && log.ip_address.includes(search)) ||
+      (log.user_email && log.user_email.toLowerCase().includes(search))
     );
   });
 
@@ -876,7 +877,7 @@ export default function AuditTrailPage() {
           )}
 
           {/* Pagination */}
-          {totalPages > 1 && (
+          {totalPages > 1 && filteredLogs.length > 0 && (
             <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
               <p className="text-sm text-gray-600">
                 Page <span className="font-semibold text-gray-900">{page}</span> of <span className="font-semibold text-gray-900">{totalPages}</span>

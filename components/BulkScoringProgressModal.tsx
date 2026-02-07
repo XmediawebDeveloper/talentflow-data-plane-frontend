@@ -141,8 +141,7 @@ export default function BulkScoringProgressModal({
     return (
       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${badgeClass}`}>
         {icon}
-        {result}
-        {score !== undefined && <span className="ml-1 font-bold">({score}%)</span>}
+        Scored - Completed
       </span>
     );
   };
@@ -186,7 +185,7 @@ export default function BulkScoringProgressModal({
                   />
                 </div>
               </div>
-              <span className="text-sm font-bold text-white min-w-[3rem]">{progressPercentage}%</span>
+              {/* Percentage removed as per requirement */}
             </div>
 
             {isAllComplete && (
