@@ -930,7 +930,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                               ? 'bg-gray-200 text-gray-700'
                               : 'bg-gray-100 text-gray-600'
                         }`}>
-                          {(100 - quota.percentage_used).toFixed(0)}% left
+                          {quota.limit <= 0 ? '0' : Math.max(0, 100 - quota.percentage_used).toFixed(0)}% left
                         </span>
                       )}
                     </div>
