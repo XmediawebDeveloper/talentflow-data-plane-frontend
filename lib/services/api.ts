@@ -27,8 +27,16 @@ export const setTokens = (access: string, refresh: string) => {
   if (typeof window !== 'undefined') {
     localStorage.setItem('accessToken', access);
     localStorage.setItem('refreshToken', refresh);
-    Cookies.set('accessToken', access, { expires: 7 });
-    Cookies.set('refreshToken', refresh, { expires: 30 });
+
+    // Set cookies with proper configuration for production/staging environments
+    const cookieOptions: Cookies.CookieAttributes = {
+      path: '/',
+      sameSite: 'lax',
+      secure: window.location.protocol === 'https:',
+    };
+
+    Cookies.set('accessToken', access, { ...cookieOptions, expires: 7 });
+    Cookies.set('refreshToken', refresh, { ...cookieOptions, expires: 30 });
   }
 };
 
@@ -47,8 +55,10 @@ export const clearTokens = () => {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    Cookies.remove('accessToken');
-    Cookies.remove('refreshToken');
+
+    // Remove cookies with the same path used when setting them
+    Cookies.remove('accessToken', { path: '/' });
+    Cookies.remove('refreshToken', { path: '/' });
   }
 };
 

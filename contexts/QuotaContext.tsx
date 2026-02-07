@@ -92,6 +92,15 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
   const [lastFetchTime, setLastFetchTime] = useState<number | null>(null);
   const fetchingRef = useRef(false);
 
+  const lastFetchTimeRef = useRef<number | null>(null);
+  const quotaDataRef = useRef<QuotaData | null>(null);
+
+  // Update refs when state changes
+  useEffect(() => {
+    lastFetchTimeRef.current = lastFetchTime;
+    quotaDataRef.current = quotaData;
+  }, [lastFetchTime, quotaData]);
+
   const fetchQuotaData = useCallback(async (force = false) => {
     // Skip if already fetching
     if (fetchingRef.current) {
@@ -99,8 +108,8 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Skip if cached data is still fresh (unless force refresh)
-    if (!force && lastFetchTime && Date.now() - lastFetchTime < CACHE_DURATION && quotaData) {
+    // Skip if cached data is still fresh (unless force refresh) - use refs to avoid dependency
+    if (!force && lastFetchTimeRef.current && Date.now() - lastFetchTimeRef.current < CACHE_DURATION && quotaDataRef.current) {
       console.log('[QuotaContext] Using cached quota data');
       return;
     }
@@ -145,7 +154,7 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [lastFetchTime, quotaData]);
+  }, []); // ← FIX: Empty dependency array to prevent recreation
 
   // Initial fetch on mount
   useEffect(() => {

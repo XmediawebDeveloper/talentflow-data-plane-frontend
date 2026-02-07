@@ -2,6 +2,7 @@ import { X, FolderOpen, Database, Search, CheckSquare, Square, User, Mail, Award
 import { useState, useRef } from 'react';
 import { Resume, Folder as FolderType } from '@/lib/types/types';
 import ScoringVersionSelectionModal from './ScoringVersionSelectionModal';
+import DuplicateResumeDetectedModal from './DuplicateResumeDetectedModal';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
 
@@ -42,6 +43,13 @@ export default function ResumeSelectionModal({
   const [isUploading, setIsUploading] = useState(false);
   const [localResumes, setLocalResumes] = useState<Resume[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Duplicate detection modal
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState<{
+    fileName: string;
+    existingResume: any;
+  } | null>(null);
 
   // Debug: Log folders data
   console.log('[ResumeSelectionModal] Folders received:', folders);
@@ -116,8 +124,33 @@ export default function ResumeSelectionModal({
     } catch (error: any) {
       console.error('Upload failed:', error);
 
-      // Handle duplicate error
-      if (error.message?.includes('409') || error.message?.includes('DUPLICATE')) {
+      // Handle duplicate error (409)
+      if (error.status === 409 || error.response?.status === 409) {
+        toast.dismiss(toastId);
+
+        // Parse the existing resume details from error response
+        const errorData = error.response?.data || error.data || {};
+        const existingResume = errorData.existing_resume;
+
+        if (existingResume) {
+          // Show duplicate detection modal
+          setDuplicateInfo({
+            fileName: file.name,
+            existingResume: {
+              id: existingResume.id,
+              candidate_name: existingResume.candidate_name,
+              email: existingResume.email,
+              current_title: existingResume.current_title,
+              folder_name: existingResume.folder_name,
+              uploaded_at: existingResume.upload_date,
+              version: existingResume.version,
+            },
+          });
+          setShowDuplicateModal(true);
+        } else {
+          toast.error('A resume with this email already exists.', { id: toastId });
+        }
+      } else if (error.message?.includes('DUPLICATE')) {
         toast.error('A resume with this email already exists.', { id: toastId });
       } else {
         toast.error(error.message || 'Failed to upload resume', { id: toastId });
@@ -190,6 +223,63 @@ export default function ResumeSelectionModal({
     setSelectedResumes([]);
     setSearchTerm('');
     setSelectedFolder('all');
+  };
+
+  // Handle duplicate modal actions
+  const handleProceedWithScoring = async (resumeId: string) => {
+    // Add existing resume to local resumes if not already present
+    const existingInList = allMyResumes.find(r => r.id === resumeId);
+
+    if (!existingInList && duplicateInfo?.existingResume) {
+      const existingResume = duplicateInfo.existingResume;
+
+      // Fetch full resume details to add to the list
+      try {
+        const fullResume = await resumeService.getById(resumeId);
+
+        const resumeToAdd: Resume = {
+          id: fullResume.id,
+          name: fullResume.candidate_name || existingResume.candidate_name,
+          email: fullResume.candidate_email || existingResume.email || 'No email',
+          phone: fullResume.phone || 'No phone',
+          title: fullResume.current_title || existingResume.current_title || 'N/A',
+          experience: fullResume.experience_years ? `${fullResume.experience_years} years` : 'N/A',
+          education: fullResume.education?.[0]?.degree || 'N/A',
+          location: fullResume.location || 'N/A',
+          skills: fullResume.skills || [],
+          source: 'Manual' as const,
+          folderId: existingResume.folder_id || '',
+          uploadDate: existingResume.uploaded_at || new Date().toISOString(),
+          attachments: 1,
+          uploadedBy: 'Existing',
+          version: existingResume.version || 1,
+          versionCount: 1,
+          fileName: fullResume.file_name,
+        };
+
+        setLocalResumes(prev => [resumeToAdd, ...prev]);
+      } catch (error) {
+        console.error('Failed to fetch resume details:', error);
+        // Continue anyway with basic info
+      }
+    }
+
+    // Add the existing resume to selected resumes for scoring
+    setSelectedResumes(prev => {
+      if (!prev.includes(resumeId)) {
+        return [...prev, resumeId];
+      }
+      return prev;
+    });
+
+    toast.success('Existing resume added to selection for scoring');
+    setShowDuplicateModal(false);
+    setDuplicateInfo(null);
+  };
+
+  const handleViewExisting = (resumeId: string) => {
+    // Open resume detail in new tab
+    window.open(`/recruitment/resume-view/${resumeId}`, '_blank');
   };
 
   const handleScore = () => {
@@ -703,6 +793,22 @@ export default function ResumeSelectionModal({
           jobTitle={jobTitle}
           onClose={() => setShowVersionSelection(false)}
           onConfirm={handleVersionSelectionConfirm}
+        />
+      )}
+
+      {/* Duplicate Resume Detected Modal */}
+      {showDuplicateModal && duplicateInfo && (
+        <DuplicateResumeDetectedModal
+          isOpen={showDuplicateModal}
+          onClose={() => {
+            setShowDuplicateModal(false);
+            setDuplicateInfo(null);
+          }}
+          fileName={duplicateInfo.fileName}
+          existingResume={duplicateInfo.existingResume}
+          jobTitle={jobTitle}
+          onViewExisting={handleViewExisting}
+          onProceedWithScoring={handleProceedWithScoring}
         />
       )}
     </div>

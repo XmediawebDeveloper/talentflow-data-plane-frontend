@@ -68,6 +68,13 @@ export default function AITalentMatchPage({
   const [filterThreshold, setFilterThreshold] = useState(0);
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
 
+  // Additional filters
+  const [filterPhone, setFilterPhone] = useState('');
+  const [filterLocation, setFilterLocation] = useState('');
+  const [filterExperienceMin, setFilterExperienceMin] = useState<number | ''>('');
+  const [filterExperienceMax, setFilterExperienceMax] = useState<number | ''>('');
+  const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank');
+
   // Pagination state for match results
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -461,6 +468,7 @@ export default function AITalentMatchPage({
                       selectedHistoryItem ? selectedHistoryItem.matchedCandidates : [];
 
     const filtered = candidates.filter(candidate => {
+      // Existing filters
       const matchesThreshold = candidate.matchScore >= filterThreshold;
       const matchesSearch = searchQuery === '' ||
         candidate.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -468,16 +476,54 @@ export default function AITalentMatchPage({
         (candidate.email && candidate.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
         candidate.skills.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()));
 
-      return matchesThreshold && matchesSearch;
+      // Phone filter (normalize phone numbers - remove special chars)
+      const matchesPhone = filterPhone === '' ||
+        (candidate.phone && (
+          candidate.phone.toLowerCase().includes(filterPhone.toLowerCase()) ||
+          candidate.phone.replace(/[^0-9]/g, '').includes(filterPhone.replace(/[^0-9]/g, ''))
+        ));
+
+      // Location filter
+      const matchesLocation = filterLocation === '' ||
+        (candidate.location && candidate.location.toLowerCase().includes(filterLocation.toLowerCase()));
+
+      // Experience filter
+      const candidateExp = candidate.experience ? parseFloat(candidate.experience) : 0;
+      const matchesExperienceMin = filterExperienceMin === '' || candidateExp >= filterExperienceMin;
+      const matchesExperienceMax = filterExperienceMax === '' || candidateExp <= filterExperienceMax;
+
+      return matchesThreshold && matchesSearch && matchesPhone && matchesLocation &&
+             matchesExperienceMin && matchesExperienceMax;
     });
 
-    // Sort by rating descending (10 at top, 1 at bottom)
-    return filtered.sort((a, b) => (b.rank || 0) - (a.rank || 0));
+    // Sort by selected option
+    const sorted = [...filtered];
+    switch (sortBy) {
+      case 'rank':
+        sorted.sort((a, b) => (b.rank || 0) - (a.rank || 0));
+        break;
+      case 'name':
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'score':
+        sorted.sort((a, b) => b.matchScore - a.matchScore);
+        break;
+      case 'experience':
+        sorted.sort((a, b) => {
+          const expA = a.experience ? parseFloat(a.experience) : 0;
+          const expB = b.experience ? parseFloat(b.experience) : 0;
+          return expB - expA;
+        });
+        break;
+    }
+
+    return sorted;
   };
 
   // Memoized filtered candidates for pagination calculations
   const filteredCandidatesMemo = useMemo(() => getFilteredCandidates(), [
-    viewMode, matchedCandidates, selectedHistoryItem, filterThreshold, searchQuery
+    viewMode, matchedCandidates, selectedHistoryItem, filterThreshold, searchQuery,
+    filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy
   ]);
 
   // Calculate pagination values
@@ -494,7 +540,7 @@ export default function AITalentMatchPage({
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterThreshold, selectedHistoryItem, viewMode]);
+  }, [searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy, selectedHistoryItem, viewMode]);
 
   // Handle page change
   const handlePageChange = (page: number) => {
@@ -641,39 +687,82 @@ export default function AITalentMatchPage({
           </div>
 
           {/* Filters & Search */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search candidates..."
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                />
+              </div>
+              <select
+                value={filterThreshold}
+                onChange={(e) => setFilterThreshold(Number(e.target.value))}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+              >
+                <option value={0}>All Matches</option>
+                <option value={50}>50%+ Match</option>
+                <option value={70}>70%+ Match</option>
+                <option value={85}>85%+ Match</option>
+              </select>
+              <div className="text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
+                {filteredCandidates.length} candidates
+              </div>
+              {selectedCandidates.length > 0 && (
+                <button
+                  onClick={handleSubmitToScoring}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium text-sm flex items-center gap-2"
+                >
+                  <Target className="w-4 h-4" />
+                  Score ({selectedCandidates.length})
+                </button>
+              )}
+            </div>
+            {/* Additional Filters */}
+            <div className="flex items-center gap-3">
               <input
                 type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search candidates..."
-                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                value={filterPhone}
+                onChange={(e) => setFilterPhone(e.target.value)}
+                placeholder="Filter by phone..."
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
               />
-            </div>
-            <select
-              value={filterThreshold}
-              onChange={(e) => setFilterThreshold(Number(e.target.value))}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
-            >
-              <option value={0}>All Matches</option>
-              <option value={50}>50%+ Match</option>
-              <option value={70}>70%+ Match</option>
-              <option value={85}>85%+ Match</option>
-            </select>
-            <div className="text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
-              {filteredCandidates.length} candidates
-            </div>
-            {selectedCandidates.length > 0 && (
-              <button
-                onClick={handleSubmitToScoring}
-                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium text-sm flex items-center gap-2"
+              <input
+                type="text"
+                value={filterLocation}
+                onChange={(e) => setFilterLocation(e.target.value)}
+                placeholder="Filter by location..."
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+              />
+              <input
+                type="number"
+                value={filterExperienceMin}
+                onChange={(e) => setFilterExperienceMin(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="Min exp (years)"
+                className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+              />
+              <input
+                type="number"
+                value={filterExperienceMax}
+                onChange={(e) => setFilterExperienceMax(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="Max exp (years)"
+                className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+              />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
               >
-                <Target className="w-4 h-4" />
-                Score ({selectedCandidates.length})
-              </button>
-            )}
+                <option value="rank">Sort by Rank</option>
+                <option value="name">Sort by Name</option>
+                <option value="score">Sort by Score</option>
+                <option value="experience">Sort by Experience</option>
+              </select>
+            </div>
           </div>
               </>
             );
@@ -1275,39 +1364,82 @@ export default function AITalentMatchPage({
           </div>
 
           {/* Filters & Search */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search candidates..."
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                />
+              </div>
+              <select
+                value={filterThreshold}
+                onChange={(e) => setFilterThreshold(Number(e.target.value))}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+              >
+                <option value={0}>All Matches</option>
+                <option value={50}>50%+ Match</option>
+                <option value={70}>70%+ Match</option>
+                <option value={85}>85%+ Match</option>
+              </select>
+              <div className="text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
+                {filteredCandidates.length} candidates
+              </div>
+              {selectedCandidates.length > 0 && (
+                <button
+                  onClick={handleSubmitToScoring}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium text-sm flex items-center gap-2"
+                >
+                  <Target className="w-4 h-4" />
+                  Score ({selectedCandidates.length})
+                </button>
+              )}
+            </div>
+            {/* Additional Filters */}
+            <div className="flex items-center gap-3">
               <input
                 type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search candidates..."
-                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                value={filterPhone}
+                onChange={(e) => setFilterPhone(e.target.value)}
+                placeholder="Filter by phone..."
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
               />
-            </div>
-            <select
-              value={filterThreshold}
-              onChange={(e) => setFilterThreshold(Number(e.target.value))}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
-            >
-              <option value={0}>All Matches</option>
-              <option value={50}>50%+ Match</option>
-              <option value={70}>70%+ Match</option>
-              <option value={85}>85%+ Match</option>
-            </select>
-            <div className="text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
-              {filteredCandidates.length} candidates
-            </div>
-            {selectedCandidates.length > 0 && (
-              <button
-                onClick={handleSubmitToScoring}
-                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium text-sm flex items-center gap-2"
+              <input
+                type="text"
+                value={filterLocation}
+                onChange={(e) => setFilterLocation(e.target.value)}
+                placeholder="Filter by location..."
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+              />
+              <input
+                type="number"
+                value={filterExperienceMin}
+                onChange={(e) => setFilterExperienceMin(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="Min exp (years)"
+                className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+              />
+              <input
+                type="number"
+                value={filterExperienceMax}
+                onChange={(e) => setFilterExperienceMax(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="Max exp (years)"
+                className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+              />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
               >
-                <Target className="w-4 h-4" />
-                Score ({selectedCandidates.length})
-              </button>
-            )}
+                <option value="rank">Sort by Rank</option>
+                <option value="name">Sort by Name</option>
+                <option value="score">Sort by Score</option>
+                <option value="experience">Sort by Experience</option>
+              </select>
+            </div>
           </div>
         </div>
 

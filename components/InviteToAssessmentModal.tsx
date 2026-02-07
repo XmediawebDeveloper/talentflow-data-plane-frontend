@@ -69,8 +69,9 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
     setIsLoadingAssessments(true);
     try {
       const response = await assessmentService.list({ jd_id: jobId });
+      // Only show PUBLISHED assessments (not draft, not archived)
       const activeAssessments = response.items.filter(
-        (a: any) => a.status === 'published' || a.status === 'active' || a.status === 'draft'
+        (a: any) => a.status === 'published' && !a.is_archived
       );
       setAssessments(activeAssessments);
 

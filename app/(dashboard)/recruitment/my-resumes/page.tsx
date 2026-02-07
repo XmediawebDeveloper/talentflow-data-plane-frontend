@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -388,18 +388,72 @@ export default function MyResumesPage() {
     contentAction: 'move-parent' | 'move-root' | null;
   }>({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null });
 
+  // Refs to prevent infinite loop and duplicate API calls
+  const hasMountedRef = useRef(false);
+  const lastFetchParamsRef = useRef<string>('');
+  const isFetchingRef = useRef(false);
+
   useEffect(() => {
     fetchData();
     fetchUploadHistory();
+    hasMountedRef.current = true; // Mark as mounted
+
+    // Cleanup: Stop all polling intervals when component unmounts
+    return () => {
+      pollingIntervalsRef.current.forEach(interval => {
+        clearInterval(interval);
+      });
+      pollingIntervalsRef.current.clear();
+      console.log('[MyResumes] Cleaned up all polling intervals on unmount');
+    };
   }, []);
 
   // Refetch when filters or folder selection changes
   useEffect(() => {
-    // Skip initial render (fetchData is already called above)
-    if (resumes.length > 0) {
-      fetchData(appliedSearchQuery, filters, selectedFolder);
+    // Skip the very first render (fetchData is already called in mount effect above)
+    if (!hasMountedRef.current) {
+      console.log('[MyResumes] useEffect - Skipping (not mounted yet)');
+      return;
     }
-  }, [filters, selectedFolder]);
+
+    // Create signature of params to detect ACTUAL changes (not just reference changes)
+    const currentParams = JSON.stringify({ appliedSearchQuery, filters, selectedFolder });
+
+    // Skip if params haven't actually changed (prevents loop from object reference changes)
+    if (currentParams === lastFetchParamsRef.current) {
+      console.log('[MyResumes] useEffect - Skipping (params unchanged)', currentParams);
+      return;
+    }
+
+    // Skip if already fetching (prevents rapid successive calls)
+    if (isFetchingRef.current) {
+      console.log('[MyResumes] useEffect - Skipping (fetch in progress)');
+      return;
+    }
+
+    console.log('[MyResumes] useEffect - Will fetch in 300ms', {
+      appliedSearchQuery,
+      filtersKeys: Object.keys(filters),
+      selectedFolder
+    });
+
+    // Debounce: Wait 300ms before fetching
+    const debounceTimer = setTimeout(() => {
+      console.log('[MyResumes] useEffect - Fetching data now...');
+      lastFetchParamsRef.current = currentParams;
+      isFetchingRef.current = true;
+
+      fetchData(appliedSearchQuery, filters, selectedFolder).finally(() => {
+        isFetchingRef.current = false;
+        console.log('[MyResumes] useEffect - Fetch complete');
+      });
+    }, 300);
+
+    return () => {
+      console.log('[MyResumes] useEffect - Cleanup (timer cleared)');
+      clearTimeout(debounceTimer);
+    };
+  }, [appliedSearchQuery, filters, selectedFolder]);
 
   // Handle deep link from notifications
   useEffect(() => {
@@ -487,13 +541,31 @@ export default function MyResumesPage() {
     setIsUploadHistoryMinimized(false);
   };
 
+  // Ref to store active polling intervals for cleanup
+  const pollingIntervalsRef = useRef<Set<NodeJS.Timeout>>(new Set());
+
   const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string) => {
+    console.log('[FETCH] fetchData called', {
+      searchTerm,
+      filtersKeys: currentFilters ? Object.keys(currentFilters) : 'none',
+      folderId,
+      isFetching: isFetchingRef.current
+    });
+
+    // Prevent concurrent fetches - stops flickering from rapid calls
+    if (isFetchingRef.current) {
+      console.log('[FETCH] Already fetching, skipping duplicate call');
+      return;
+    }
+
+    isFetchingRef.current = true;
     setLoading(true);
+    console.log('[FETCH] Starting fetch...');
     try {
       // Build search params for backend API
       const searchParams: any = {
         source: 'my-resumes',
-        page_size: 100, // API maximum limit
+        page_size: 100, // Backend API maximum limit
       };
 
       // Add folder filter if not viewing all
@@ -671,6 +743,7 @@ export default function MyResumesPage() {
       toast.error('Failed to load resumes');
     } finally {
       setLoading(false);
+      isFetchingRef.current = false; // Reset flag to allow next fetch
     }
   };
 
@@ -1552,7 +1625,7 @@ export default function MyResumesPage() {
       // Remove temp record and add real one
       setUploadHistory(prev => [newBatchRecord, ...prev.filter(r => !r.id.startsWith('temp-'))]);
 
-      // Poll for batch status until complete (every 1 second)
+      // Poll for batch status until complete (REDUCED: every 3 seconds instead of 1)
       const pollInterval = setInterval(async () => {
         try {
           const status = await resumeService.getBatchStatus(batch.id);
@@ -1587,6 +1660,7 @@ export default function MyResumesPage() {
           // Check if batch is complete
           if (status.status === 'completed' || status.pending === 0) {
             clearInterval(pollInterval);
+            pollingIntervalsRef.current.delete(pollInterval); // Remove from tracking
 
             // Refresh upload history and resume list
             fetchUploadHistory();
@@ -1594,12 +1668,20 @@ export default function MyResumesPage() {
           }
         } catch (pollError) {
           console.error('Error polling batch status:', pollError);
+          // On error, stop polling this batch to prevent infinite errors
+          clearInterval(pollInterval);
+          pollingIntervalsRef.current.delete(pollInterval);
         }
-      }, 1000); // Poll every 1 second for faster updates
+      }, 3000); // FIXED: Poll every 3 seconds (was 1 second) = 3x fewer requests
+
+      // Track interval for cleanup
+      pollingIntervalsRef.current.add(pollInterval);
 
       // Set a timeout to stop polling after 10 minutes
-      setTimeout(() => {
+      const stopTimeout = setTimeout(() => {
         clearInterval(pollInterval);
+        pollingIntervalsRef.current.delete(pollInterval);
+        console.log('[Upload] Polling stopped after 10 minutes timeout');
       }, 600000);
 
       return { success: true };
@@ -1675,9 +1757,9 @@ export default function MyResumesPage() {
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
     setAppliedSearchQuery(query);
-    // Trigger backend search
-    fetchData(query, filters, selectedFolder);
-  }, [filters, selectedFolder]);
+    // Don't call fetchData directly - let the useEffect handle it
+    // This prevents double API calls
+  }, []);
 
   // Client-side search helper - searches across all text fields including phone and skills
   const matchesSearch = useCallback((resume: Resume, query: string): boolean => {
