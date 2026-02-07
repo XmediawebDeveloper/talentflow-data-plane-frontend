@@ -1035,9 +1035,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
         employmentType: prev.employmentType,
         workModel: prev.workModel,
-        // Pre-fill salary from generation response
-        salaryFrom: params.salary_min ? params.salary_min.toString() : (isEditMode ? prev.salaryFrom : ''),
-        salaryTo: params.salary_max ? params.salary_max.toString() : (isEditMode ? prev.salaryTo : ''),
+        // Pre-fill salary from generation response, preserve existing values if extraction returns null
+        salaryFrom: params.salary_min ? params.salary_min.toString() : (prev.salaryFrom || ''),
+        salaryTo: params.salary_max ? params.salary_max.toString() : (prev.salaryTo || ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
@@ -1583,9 +1583,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
         employmentType: params.job_type || (isEditMode ? extractedData.employmentType : 'full_time'),
         workModel: params.work_mode || (isEditMode ? extractedData.workModel : 'onsite'),
-        salaryFrom: params.salary_min ? params.salary_min.toString() : (isEditMode ? extractedData.salaryFrom : ''),
-        salaryTo: params.salary_max ? params.salary_max.toString() : (isEditMode ? extractedData.salaryTo : ''),
-        compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || (isEditMode ? extractedData.compensationType : 'yearly'),
+        // Preserve salary from generation step if extraction doesn't find it in the JD text
+        salaryFrom: params.salary_min ? params.salary_min.toString() : (extractedData.salaryFrom || ''),
+        salaryTo: params.salary_max ? params.salary_max.toString() : (extractedData.salaryTo || ''),
+        compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
           radius: '50'  // Default radius
