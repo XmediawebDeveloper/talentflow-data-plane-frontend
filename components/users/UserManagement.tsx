@@ -31,6 +31,7 @@ import FeaturePermissionManager from './FeaturePermissionManager';
 import DependencyMatrix from './DependencyMatrix';
 import UserLimits, { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Types
 interface UserPermissions {
@@ -618,6 +619,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1
 
 export default function UserManagement() {
   const router = useRouter();
+  const { user: currentUser, refreshUser } = useAuth();
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1473,6 +1475,15 @@ export default function UserManagement() {
       }
 
       toast.success('User updated successfully');
+
+      // If the updated user is the current logged-in user, refresh their session
+      // This ensures permission changes take effect immediately without logout/login
+      if (currentUser && editingUser.id === currentUser.id) {
+        console.log('[UserManagement] Updated user is current user, refreshing session...');
+        await refreshUser();
+        console.log('[UserManagement] Current user session refreshed');
+      }
+
       resetEditModal();
       loadUsers();
     } catch (error: any) {

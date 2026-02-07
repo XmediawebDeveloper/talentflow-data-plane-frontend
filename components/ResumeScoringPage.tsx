@@ -113,6 +113,7 @@ interface ResumeScoringPageProps {
   scoredHistory?: ScoredResumeData[];
   onSaveScores?: (data: ScoredResumeData) => void;
   onRefreshHistory?: () => Promise<void>;
+  onRefreshResumes?: () => Promise<void>;
   onNavigateToAITalentMatch?: (jobId: string) => void;
   onBack?: () => void;
   tenant?: Tenant;
@@ -131,6 +132,7 @@ export default function ResumeScoringPage({
   scoredHistory = [],
   onSaveScores,
   onRefreshHistory,
+  onRefreshResumes,
   onNavigateToAITalentMatch,
   onBack,
   tenant,
@@ -666,8 +668,32 @@ export default function ResumeScoringPage({
 
   // Split resumes - myResumes are all user-uploaded resumes, databaseResumes are all resumes
   // Include locally uploaded resumes (from the modal) to keep them visible without page refresh
-  const myResumes = [...uploadedResumes, ...resumes]; // All resumes belong to the user (My Resumes)
-  const databaseResumes = [...uploadedResumes, ...resumes];
+  // IMPORTANT: Deduplicate by ID to prevent showing the same resume twice
+  const deduplicateResumes = (localUploads: any[], apiResumes: any[]) => {
+    const seenIds = new Set<string>();
+    const result = [];
+
+    // Add API resumes first (they're the source of truth)
+    for (const resume of apiResumes) {
+      if (!seenIds.has(resume.id)) {
+        seenIds.add(resume.id);
+        result.push(resume);
+      }
+    }
+
+    // Add local uploads only if not already in API results
+    for (const resume of localUploads) {
+      if (!seenIds.has(resume.id)) {
+        seenIds.add(resume.id);
+        result.push(resume);
+      }
+    }
+
+    return result;
+  };
+
+  const myResumes = deduplicateResumes(uploadedResumes, resumes); // All resumes belong to the user (My Resumes)
+  const databaseResumes = deduplicateResumes(uploadedResumes, resumes);
 
   const availableResumes = resumeSource === 'my-resumes' ? myResumes :
                           resumeSource === 'internal-database' ? databaseResumes :
@@ -2283,9 +2309,17 @@ export default function ResumeScoringPage({
           folders={folders}
           availableUnits={availableUnits}
           onClose={() => setShowResumeSelectionModal(false)}
-          onResumeUploaded={(resume) => {
-            // Add uploaded resume to local state so it persists in the list
+          onResumeUploaded={async (resume) => {
+            // Add uploaded resume to local state temporarily for immediate display
             setUploadedResumes(prev => [resume, ...prev]);
+
+            // Refresh resumes from API to get the uploaded resume from backend
+            // This ensures data consistency and prevents duplicates
+            if (onRefreshResumes) {
+              await onRefreshResumes();
+              // Clear uploadedResumes since API data now has it
+              setUploadedResumes([]);
+            }
           }}
           onScoreResumes={async (selectedIds, source, versionSelections) => {
             setShowResumeSelectionModal(false);

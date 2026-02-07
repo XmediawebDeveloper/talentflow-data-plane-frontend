@@ -5,6 +5,7 @@ import ScoringVersionSelectionModal from './ScoringVersionSelectionModal';
 import DuplicateResumeDetectedModal from './DuplicateResumeDetectedModal';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 interface VersionSelection {
   resumeId: string;
@@ -33,6 +34,7 @@ export default function ResumeSelectionModal({
   availableUnits,
   onResumeUploaded
 }: ResumeSelectionModalProps) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'database'>('my-resumes');
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,6 +45,9 @@ export default function ResumeSelectionModal({
   const [isUploading, setIsUploading] = useState(false);
   const [localResumes, setLocalResumes] = useState<Resume[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check if user has Internal DB access permission
+  const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
 
   // Duplicate detection modal
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
@@ -56,9 +61,32 @@ export default function ResumeSelectionModal({
   console.log('[ResumeSelectionModal] MyResumes count:', myResumes.length);
   console.log('[ResumeSelectionModal] MyResumes sample:', myResumes.slice(0, 3).map(r => ({ id: r.id, name: r.name, folderId: r.folderId })));
 
-  // Combine myResumes with locally uploaded resumes
-  const allMyResumes = [...localResumes, ...myResumes];
-  const allDatabaseResumes = [...localResumes, ...databaseResumes];
+  // Combine myResumes with locally uploaded resumes - DEDUPLICATE by ID to prevent showing same resume twice
+  const deduplicateByResumeId = (localUploads: Resume[], propsResumes: Resume[]): Resume[] => {
+    const seenIds = new Set<string>();
+    const result: Resume[] = [];
+
+    // Add props resumes first (source of truth from API)
+    for (const resume of propsResumes) {
+      if (!seenIds.has(resume.id)) {
+        seenIds.add(resume.id);
+        result.push(resume);
+      }
+    }
+
+    // Add local uploads only if not already in props
+    for (const resume of localUploads) {
+      if (!seenIds.has(resume.id)) {
+        seenIds.add(resume.id);
+        result.push(resume);
+      }
+    }
+
+    return result;
+  };
+
+  const allMyResumes = deduplicateByResumeId(localResumes, myResumes);
+  const allDatabaseResumes = deduplicateByResumeId(localResumes, databaseResumes);
 
   // Handle file upload
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -453,26 +481,29 @@ export default function ResumeSelectionModal({
                 </span>
               </div>
             </button>
-            <button
-              onClick={() => handleTabChange('database')}
-              className={`px-5 py-3 text-sm font-medium rounded-t-lg transition-all ${
-                activeTab === 'database'
-                  ? 'bg-gray-50 text-gray-900 border-b-2 border-gray-800'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4" />
-                Internal Database
-                <span className={`px-2 py-0.5 rounded-full text-xs ${
+            {/* Only show Internal Database tab if user has permission */}
+            {hasInternalDBAccess && (
+              <button
+                onClick={() => handleTabChange('database')}
+                className={`px-5 py-3 text-sm font-medium rounded-t-lg transition-all ${
                   activeTab === 'database'
-                    ? 'bg-gray-800 text-white'
-                    : 'bg-gray-200 text-gray-600'
-                }`}>
-                  {allDatabaseResumes.length}
-                </span>
-              </div>
-            </button>
+                    ? 'bg-gray-50 text-gray-900 border-b-2 border-gray-800'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4" />
+                  Internal Database
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${
+                    activeTab === 'database'
+                      ? 'bg-gray-800 text-white'
+                      : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {allDatabaseResumes.length}
+                  </span>
+                </div>
+              </button>
+            )}
           </div>
         </div>
 

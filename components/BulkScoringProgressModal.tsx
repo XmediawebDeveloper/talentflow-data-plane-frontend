@@ -1,5 +1,6 @@
 import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader, Database, FolderOpen, Target, TrendingUp, RotateCcw } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 export interface ScoringProgressItem {
   id: string;
@@ -30,10 +31,14 @@ export default function BulkScoringProgressModal({
   showJobTitleColumn = true,
   onRetryFailed
 }: BulkScoringProgressModalProps) {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
+
+  // Check if user has Internal DB access permission
+  const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
 
   // Handle retry for a failed item
   const handleRetry = async (item: ScoringProgressItem) => {
@@ -290,7 +295,8 @@ export default function BulkScoringProgressModal({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
               >
                 <option value="all">All Sources</option>
-                <option value="internal-db">Internal DB</option>
+                {/* Only show Internal DB option if user has permission */}
+                {hasInternalDBAccess && <option value="internal-db">Internal DB</option>}
                 <option value="my-resumes">My Resumes</option>
               </select>
             </div>

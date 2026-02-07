@@ -7,6 +7,7 @@ import { resumeService, folderService, Resume, Folder as FolderType } from '@/li
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Progress item interface
 interface ProgressItem {
@@ -31,6 +32,10 @@ export default function SelectSourceModal({
   onScoringComplete
 }: SelectSourceModalProps) {
   const router = useRouter();
+  const { user } = useAuth();
+
+  // Check if user has Internal DB access permission
+  const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
 
   // State
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
@@ -421,24 +426,27 @@ export default function SelectSourceModal({
                 {activeTab === 'my-resumes' ? resumes.length : '...'}
               </span>
             </button>
-            <button
-              onClick={() => handleTabChange('internal-db')}
-              className={`px-5 py-3 text-sm font-medium rounded-t-lg transition-all flex items-center gap-2 ${
-                activeTab === 'internal-db'
-                  ? 'bg-white text-green-600 border-b-2 border-green-600 shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-              }`}
-            >
-              <Database className="w-4 h-4" />
-              Internal Database
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                activeTab === 'internal-db'
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-gray-200 text-gray-600'
-              }`}>
-                {activeTab === 'internal-db' ? resumes.length : '...'}
-              </span>
-            </button>
+            {/* Only show Internal Database tab if user has permission */}
+            {hasInternalDBAccess && (
+              <button
+                onClick={() => handleTabChange('internal-db')}
+                className={`px-5 py-3 text-sm font-medium rounded-t-lg transition-all flex items-center gap-2 ${
+                  activeTab === 'internal-db'
+                    ? 'bg-white text-green-600 border-b-2 border-green-600 shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                }`}
+              >
+                <Database className="w-4 h-4" />
+                Internal Database
+                <span className={`px-2 py-0.5 rounded-full text-xs ${
+                  activeTab === 'internal-db'
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {activeTab === 'internal-db' ? resumes.length : '...'}
+                </span>
+              </button>
+            )}
           </div>
         </div>
 
