@@ -44,6 +44,7 @@ export default function ResumeScoringRoute() {
   const [initialJdId, setInitialJdId] = useState<string | null>(null);
   const [initialScoreId, setInitialScoreId] = useState<string | null>(null);
   const [showProgress, setShowProgress] = useState(false);
+  const [initialNewScoring, setInitialNewScoring] = useState(false);
   const [pendingScoringData, setPendingScoringData] = useState<{
     jobId: string;
     jobTitle: string;
@@ -92,6 +93,13 @@ export default function ResumeScoringRoute() {
     if (showProgressParam === 'true') {
       console.log('[ResumeScoringRoute] Show progress requested');
       setShowProgress(true);
+    }
+
+    // Handle mode=new from JD module (JD-first scoring flow)
+    const modeParam = searchParams.get('mode');
+    if (modeParam === 'new' && jdId) {
+      console.log('[ResumeScoringRoute] JD-first scoring flow: mode=new with jd_id:', jdId);
+      setInitialNewScoring(true);
     }
 
     // Handle batch_id from async scoring (Celery)
@@ -526,6 +534,7 @@ export default function ResumeScoringRoute() {
       initialJdId={initialJdId}
       initialScoreId={initialScoreId}
       initialShowProgress={showProgress}
+      initialNewScoring={initialNewScoring}
       pendingScoringData={pendingScoringData}
       batchProgress={batchProgress}
     />

@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, Clock, ArrowUpDown, Power } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, Clock, ArrowUpDown, Power, Target } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
@@ -650,6 +650,16 @@ export default function JDListPage() {
                             <Users className="w-4 h-4" />
                             View Applicants
                           </button>
+                          {/* Score Resumes - only for published JDs */}
+                          {jd.status === 'published' && (
+                            <button
+                              onClick={() => { router.push(`/recruitment/resume-scoring?jd_id=${jd.id}&mode=new`); setActiveDropdown(null); }}
+                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Target className="w-4 h-4" />
+                              Score Resumes
+                            </button>
+                          )}
                           {/* JD04: Publish action for draft JDs */}
                           {jd.status === 'draft' && (
                             <button

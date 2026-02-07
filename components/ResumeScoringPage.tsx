@@ -119,6 +119,7 @@ interface ResumeScoringPageProps {
   initialJdId?: string | null;
   initialScoreId?: string | null;
   initialShowProgress?: boolean;
+  initialNewScoring?: boolean;
   pendingScoringData?: PendingScoringData | null;
   batchProgress?: BatchProgress | null;
 }
@@ -136,6 +137,7 @@ export default function ResumeScoringPage({
   initialJdId,
   initialScoreId,
   initialShowProgress = false,
+  initialNewScoring = false,
   pendingScoringData = null,
   batchProgress = null
 }: ResumeScoringPageProps) {
@@ -289,12 +291,41 @@ export default function ResumeScoringPage({
     setSelectedScoredResumes([]); // Clear selection when switching views
   };
 
-  // Handle initial JD ID from URL - auto-open scored resumes view
+  // Handle initial JD ID from URL - auto-open scored resumes view or start new scoring
   useEffect(() => {
     // Only handle initialJdId once
     if (initialJdHandled) return;
 
     if (initialJdId) {
+      // JD-First Scoring Flow: mode=new from JD module - skip history, go straight to new scoring
+      if (initialNewScoring) {
+        console.log('[ResumeScoringPage] JD-first flow: pre-selecting JD and entering new scoring mode:', initialJdId);
+        // Verify the JD exists in the published jobs list
+        const jobExists = jobs.find(j => j.id === initialJdId);
+        if (jobExists) {
+          setSelectedJob(initialJdId);
+          setViewMode('new');
+          setResumeSource(null);
+          setSelectedResumes([]);
+          setIsWaitingForInitialJd(false);
+          setInitialJdHandled(true);
+          // Auto-open resume selection modal after a short delay for UI to render
+          setTimeout(() => {
+            setShowResumeSelectionModal(true);
+          }, 300);
+        } else if (jobs.length === 0) {
+          // Jobs not loaded yet - wait
+          console.log('[ResumeScoringPage] JD-first flow: waiting for jobs to load');
+          return;
+        } else {
+          console.log('[ResumeScoringPage] JD-first flow: JD not found in published jobs:', initialJdId);
+          setIsWaitingForInitialJd(false);
+          setInitialJdHandled(true);
+        }
+        return;
+      }
+
+      // Standard flow: look for JD in scored history
       // Set waiting state when we have an initialJdId
       if (!isWaitingForInitialJd && scoredHistory.length === 0) {
         console.log('[ResumeScoringPage] Setting waiting state for initialJdId:', initialJdId);
@@ -367,7 +398,7 @@ export default function ResumeScoringPage({
         }
       }
     }
-  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData]);
+  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs]);
 
   // Timeout for waiting state - don't wait forever for history to load
   useEffect(() => {

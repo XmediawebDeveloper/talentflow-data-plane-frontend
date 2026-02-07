@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, Target } from 'lucide-react';
 import { useState, useEffect, ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDVersion, JDAssessmentResultsResponse, AssessmentResultItem } from '@/lib/services/jdService';
@@ -868,6 +868,15 @@ export default function JDDetailsPage() {
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   Publish
+                </button>
+              )}
+              {jd.status === 'published' && (
+                <button
+                  onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${jd.id}&mode=new`)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+                >
+                  <Target className="w-4 h-4" />
+                  Score Resumes
                 </button>
               )}
               <button
