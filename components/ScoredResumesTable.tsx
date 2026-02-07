@@ -464,7 +464,7 @@ export default function ScoredResumesTable({
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div>
           <h2 className="text-gray-900">Scored Resumes</h2>
           <p className="text-sm text-gray-600 mt-1">
@@ -472,44 +472,47 @@ export default function ScoredResumesTable({
             {selectedResumes.length > 0 && ` • ${selectedResumes.length} selected`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Customize Columns - Hide on mobile */}
           <button
             onClick={() => setShowColumnModal(true)}
-            className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
+            className="hidden sm:flex px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors items-center gap-2"
           >
             <SlidersHorizontal className="w-4 h-4" />
-            Customize Columns
+            <span className="hidden md:inline">Customize Columns</span>
+            <span className="md:hidden">Columns</span>
           </button>
           {selectedResumes.length > 0 && (
             <>
               <button
                 onClick={handleDownloadBulkScorecards}
                 disabled={bulkDownloading}
-                className="px-4 py-2 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 sm:px-4 py-2 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {bulkDownloading ? (
                   <Loader className="w-4 h-4 animate-spin" />
                 ) : (
                   <Download className="w-4 h-4" />
                 )}
-                {bulkDownloading ? 'Downloading...' : `Download Scorecards (${selectedResumes.length})`}
+                <span className="hidden sm:inline">{bulkDownloading ? 'Downloading...' : `Download (${selectedResumes.length})`}</span>
+                <span className="sm:hidden">{selectedResumes.length}</span>
               </button>
               <button
                 onClick={handleExportExcel}
-                className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
+                className="px-3 sm:px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
               >
                 <FileDown className="w-4 h-4" />
-                Export
+                <span className="hidden sm:inline">Export</span>
               </button>
             </>
           )}
           {selectedResumes.length === 0 && (
             <button
               onClick={handleExportExcel}
-              className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
+              className="px-3 sm:px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
               <FileDown className="w-4 h-4" />
-              Export
+              <span className="hidden sm:inline">Export</span>
             </button>
           )}
         </div>
@@ -517,7 +520,7 @@ export default function ScoredResumesTable({
 
       {/* Search and Filter Bar */}
       <div className="mb-4 space-y-3">
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           {/* Search */}
           <div className="flex-1 relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -530,36 +533,39 @@ export default function ScoredResumesTable({
             />
           </div>
 
-          {/* Filter Toggle */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`px-4 py-2 text-sm border rounded-md transition-colors flex items-center gap-2 ${
-              showFilters || hasActiveFilters
-                ? 'bg-gray-50 border-gray-300 text-gray-900'
-                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <Filter className="w-4 h-4" />
-            Filters
-            {hasActiveFilters && !showFilters && (
-              <span className="w-2 h-2 bg-gray-800 rounded-full"></span>
-            )}
-          </button>
-
-          {hasActiveFilters && (
+          {/* Filter and Clear buttons row */}
+          <div className="flex gap-2">
+            {/* Filter Toggle */}
             <button
-              onClick={clearFilters}
-              className="px-4 py-2 text-sm text-red-600 border border-red-300 rounded-md hover:bg-red-50 transition-colors"
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex-1 sm:flex-none px-4 py-2 text-sm border rounded-md transition-colors flex items-center justify-center gap-2 ${
+                showFilters || hasActiveFilters
+                  ? 'bg-gray-50 border-gray-300 text-gray-900'
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
             >
-              Clear All
+              <Filter className="w-4 h-4" />
+              <span>Filters</span>
+              {hasActiveFilters && !showFilters && (
+                <span className="w-2 h-2 bg-gray-800 rounded-full"></span>
+              )}
             </button>
-          )}
+
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="px-4 py-2 text-sm text-red-600 border border-red-300 rounded-md hover:bg-red-50 transition-colors whitespace-nowrap"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Advanced Filters */}
         {showFilters && (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Match Status */}
               <div>
                 <label className="block text-sm text-gray-700 mb-1">Match Status</label>
