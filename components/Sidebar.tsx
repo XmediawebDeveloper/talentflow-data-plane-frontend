@@ -81,12 +81,30 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
   const isBillingManager = user?.role === 'billing_manager';
   const isStandardUser = user?.role === 'standard_user';
 
-  // Check if user has a specific permission
+  // Check if user has a specific permission (supports both legacy and granular)
   const hasPermission = (permission?: string): boolean => {
     if (!permission) return true;
     if (isTenantAdmin) return true;
     if (!user?.permissions) return false;
-    return user.permissions[permission as keyof typeof user.permissions] === true;
+
+    // Check the specific permission
+    const hasSpecificPerm = user.permissions[permission as keyof typeof user.permissions] === true;
+
+    // Fallback checks for common permission patterns
+    if (hasSpecificPerm) return true;
+
+    // For read permissions, also check if user has the legacy "manage" permission
+    if (permission === 'canViewJD' || permission === 'canReadJD') {
+      return user.permissions.canManageJD === true;
+    }
+    if (permission === 'canViewResumes') {
+      return user.permissions.canUploadResumes === true || user.permissions.canManageResumes === true;
+    }
+    if (permission === 'canViewInternalDB' || permission === 'canAccessInternalDB') {
+      return user.permissions.canAccessInternalDB === true || user.permissions.canViewInternalDB === true;
+    }
+
+    return false;
   };
 
   // RBAC06: Check if user has a specific feature enabled
@@ -121,14 +139,22 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
       label: 'Recruitment Tools',
       icon: FileText,
       children: [
+        // JD Creation - requires create permission
         { id: 'jd-creation', label: 'JD Creation', icon: FileText, permission: 'canCreateJD', feature: 'jd_create' },
-        { id: 'job-openings', label: 'Job Openings', icon: Briefcase, permission: 'canManageJD', feature: 'jd_manage' },
+        // Job Openings - requires view permission (will show if user can view JDs)
+        { id: 'job-openings', label: 'Job Openings', icon: Briefcase, permission: 'canViewJD', feature: 'jd_manage' },
+        // Resume Scoring - requires resume view permission
         { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, permission: 'canViewResumes', feature: 'resume_scoring' },
+        // AI Talent Match - requires resume view permission
         { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, permission: 'canViewResumes', feature: 'ai_talent_match' },
-        { id: 'assessments', label: 'Assessments', icon: ClipboardList, permission: 'canCreateAssessments', feature: 'assessment' },
+        // Assessments - requires create assessment permission (or view for viewing results)
+        { id: 'assessments', label: 'Assessments', icon: ClipboardList, permission: 'canViewAssessments', feature: 'assessment' },
+        // AI Interviews - requires resume view permission
         { id: 'ai-interviews', label: 'AI Interviews', icon: Video, permission: 'canViewResumes', feature: 'ai_interview' },
-        { id: 'my-resumes', label: 'My Resumes', icon: Users, permission: 'canUploadResumes', feature: 'resume_upload' },
-        { id: 'resume-database', label: 'Internal Resume Database', icon: Database, permission: 'canAccessInternalDB', feature: 'resume_database_access' },
+        // My Resumes - requires resume upload/create permission
+        { id: 'my-resumes', label: 'My Resumes', icon: Users, permission: 'canCreateResumes', feature: 'resume_upload' },
+        // Internal Resume Database - requires internal DB access
+        { id: 'resume-database', label: 'Internal Resume Database', icon: Database, permission: 'canViewInternalDB', feature: 'resume_database_access' },
       ]
     },
 
@@ -248,7 +274,17 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
     }).filter(Boolean) as NavItem[];
   };
 
-  const visibleNavItems = filterNavItems(allNavItems);
+  const visibleNavItems = useMemo(() => {
+    const filtered = filterNavItems(allNavItems);
+    console.log('[SIDEBAR] User:', user?.email, 'Role:', user?.role);
+    console.log('[SIDEBAR] Permissions:', user?.permissions);
+    console.log('[SIDEBAR] Visible menu items:', filtered.map(item => ({
+      id: item.id,
+      label: item.label,
+      childrenCount: item.children?.length || 0
+    })));
+    return filtered;
+  }, [user, allNavItems]);
 
   const toggleSection = (sectionId: string) => {
     setExpandedSections(prev =>

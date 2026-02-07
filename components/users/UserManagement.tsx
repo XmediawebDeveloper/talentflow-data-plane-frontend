@@ -853,11 +853,94 @@ export default function UserManagement() {
   const togglePermission = (permissionId: number) => {
     setSelectedPermissionIds(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(permissionId)) {
-        newSet.delete(permissionId);
-      } else {
+      const toggledPermission = allPermissions.find(p => p.id === permissionId);
+
+      if (!toggledPermission) return newSet;
+
+      const isEnabling = !newSet.has(permissionId);
+
+      if (isEnabling) {
         newSet.add(permissionId);
+      } else {
+        newSet.delete(permissionId);
       }
+
+      // CASCADING LOGIC: If toggling a view permission (parent), toggle all related actions (children)
+      // Find which category this permission belongs to
+      for (const category of CUSTOM_PERMISSION_CATEGORIES) {
+        // Check if this is a top-level viewCode
+        if (category.viewCode === toggledPermission.code) {
+          // Get all related action permissions
+          const relatedCodes = new Set<string>();
+
+          if (category.actions) {
+            category.actions.forEach(action => relatedCodes.add(action.code));
+          }
+
+          if (category.subCategories) {
+            category.subCategories.forEach(sub => {
+              sub.actions?.forEach(action => relatedCodes.add(action.code));
+            });
+          }
+
+          // SPECIAL CASE: If toggling Assessments, also toggle "Apply for Assessment" in other categories
+          if (toggledPermission.code === 'assessments:read') {
+            relatedCodes.add('my_resumes:apply_assessment');
+            relatedCodes.add('internal_db:apply_assessment');
+          }
+
+          // Toggle all related permissions
+          allPermissions.forEach(perm => {
+            if (relatedCodes.has(perm.code)) {
+              if (isEnabling) {
+                newSet.add(perm.id);
+              } else {
+                newSet.delete(perm.id);
+              }
+            }
+          });
+
+          console.log(`[CASCADING] ${isEnabling ? 'Enabled' : 'Disabled'} ${toggledPermission.code} and ${relatedCodes.size} related permissions`);
+          break;
+        }
+
+        // Check if this is a subcategory viewCode
+        if (category.subCategories) {
+          for (const sub of category.subCategories) {
+            if (sub.viewCode === toggledPermission.code) {
+              // Get all actions in this subcategory
+              const relatedCodes = new Set<string>();
+              sub.actions?.forEach(action => relatedCodes.add(action.code));
+
+              // SPECIAL CASE: If toggling Assessments, also toggle "Apply for Assessment" in other categories
+              if (toggledPermission.code === 'assessments:read') {
+                relatedCodes.add('my_resumes:apply_assessment');
+                relatedCodes.add('internal_db:apply_assessment');
+                console.log('[CASCADING] Added cross-category: my_resumes:apply_assessment, internal_db:apply_assessment');
+              }
+
+              // Toggle all related permissions
+              const toggledPermissions: string[] = [];
+              allPermissions.forEach(perm => {
+                if (relatedCodes.has(perm.code)) {
+                  if (isEnabling) {
+                    newSet.add(perm.id);
+                  } else {
+                    newSet.delete(perm.id);
+                  }
+                  toggledPermissions.push(perm.code);
+                }
+              });
+
+              console.log(`[CASCADING] ${isEnabling ? 'Enabled' : 'Disabled'} ${toggledPermission.code}`);
+              console.log(`[CASCADING] Related codes to toggle:`, Array.from(relatedCodes));
+              console.log(`[CASCADING] Actually toggled ${toggledPermissions.length} permissions:`, toggledPermissions);
+              break;
+            }
+          }
+        }
+      }
+
       return newSet;
     });
   };
@@ -866,11 +949,94 @@ export default function UserManagement() {
   const toggleEditPermission = (permissionId: number) => {
     setEditSelectedPermissionIds(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(permissionId)) {
-        newSet.delete(permissionId);
-      } else {
+      const toggledPermission = allPermissions.find(p => p.id === permissionId);
+
+      if (!toggledPermission) return newSet;
+
+      const isEnabling = !newSet.has(permissionId);
+
+      if (isEnabling) {
         newSet.add(permissionId);
+      } else {
+        newSet.delete(permissionId);
       }
+
+      // CASCADING LOGIC: If toggling a view permission (parent), toggle all related actions (children)
+      // Find which category this permission belongs to
+      for (const category of CUSTOM_PERMISSION_CATEGORIES) {
+        // Check if this is a top-level viewCode
+        if (category.viewCode === toggledPermission.code) {
+          // Get all related action permissions
+          const relatedCodes = new Set<string>();
+
+          if (category.actions) {
+            category.actions.forEach(action => relatedCodes.add(action.code));
+          }
+
+          if (category.subCategories) {
+            category.subCategories.forEach(sub => {
+              sub.actions?.forEach(action => relatedCodes.add(action.code));
+            });
+          }
+
+          // SPECIAL CASE: If toggling Assessments, also toggle "Apply for Assessment" in other categories
+          if (toggledPermission.code === 'assessments:read') {
+            relatedCodes.add('my_resumes:apply_assessment');
+            relatedCodes.add('internal_db:apply_assessment');
+          }
+
+          // Toggle all related permissions
+          allPermissions.forEach(perm => {
+            if (relatedCodes.has(perm.code)) {
+              if (isEnabling) {
+                newSet.add(perm.id);
+              } else {
+                newSet.delete(perm.id);
+              }
+            }
+          });
+
+          console.log(`[CASCADING EDIT] ${isEnabling ? 'Enabled' : 'Disabled'} ${toggledPermission.code} and ${relatedCodes.size} related permissions`);
+          break;
+        }
+
+        // Check if this is a subcategory viewCode
+        if (category.subCategories) {
+          for (const sub of category.subCategories) {
+            if (sub.viewCode === toggledPermission.code) {
+              // Get all actions in this subcategory
+              const relatedCodes = new Set<string>();
+              sub.actions?.forEach(action => relatedCodes.add(action.code));
+
+              // SPECIAL CASE: If toggling Assessments, also toggle "Apply for Assessment" in other categories
+              if (toggledPermission.code === 'assessments:read') {
+                relatedCodes.add('my_resumes:apply_assessment');
+                relatedCodes.add('internal_db:apply_assessment');
+                console.log('[CASCADING EDIT] Added cross-category: my_resumes:apply_assessment, internal_db:apply_assessment');
+              }
+
+              // Toggle all related permissions
+              const toggledPermissions: string[] = [];
+              allPermissions.forEach(perm => {
+                if (relatedCodes.has(perm.code)) {
+                  if (isEnabling) {
+                    newSet.add(perm.id);
+                  } else {
+                    newSet.delete(perm.id);
+                  }
+                  toggledPermissions.push(perm.code);
+                }
+              });
+
+              console.log(`[CASCADING EDIT] ${isEnabling ? 'Enabled' : 'Disabled'} ${toggledPermission.code}`);
+              console.log(`[CASCADING EDIT] Related codes to toggle:`, Array.from(relatedCodes));
+              console.log(`[CASCADING EDIT] Actually toggled ${toggledPermissions.length} permissions:`, toggledPermissions);
+              break;
+            }
+          }
+        }
+      }
+
       return newSet;
     });
   };
