@@ -105,7 +105,7 @@ export function AssessmentInterface({
   );
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [allQuestionsAnswered, setAllQuestionsAnswered] = useState(false);
-  const [showUnansweredPopup, setShowUnansweredPopup] = useState(false);
+  // const [showUnansweredPopup, setShowUnansweredPopup] = useState(false); // REMOVED: Combined into showCompleteConfirm modal
   const [unansweredQuestions, setUnansweredQuestions] = useState<number[]>([]);
 
   // Track answer statuses: questionId -> { hasDraft: boolean, isLocked: boolean }
@@ -697,13 +697,11 @@ export function AssessmentInterface({
       }
     }
 
-    // If there are unanswered, show popup
+    // Show single combined popup (includes unanswered questions if any)
     if (unanswered.length > 0) {
       setUnansweredQuestions(unanswered);
-      setShowUnansweredPopup(true);
-    } else {
-      setShowCompleteConfirm(true);
     }
+    setShowCompleteConfirm(true);
   };
 
   // Legacy handleSubmit for auto-submit on timer expire
@@ -1415,55 +1413,9 @@ export function AssessmentInterface({
       </main>
 
       {/* Unanswered Questions Popup */}
-      {showUnansweredPopup && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
-            {/* Close Button */}
-            <button
-              onClick={() => {
-                setShowUnansweredPopup(false);
-                setShowCompleteConfirm(true);
-              }}
-              className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100 transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
+      {/* REMOVED: Separate unanswered popup - now combined with Complete Confirmation Modal */}
 
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
-                <AlertCircle className="w-6 h-6 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800">Unanswered Questions</h3>
-                <p className="text-sm text-gray-500">You have some questions without answers</p>
-              </div>
-            </div>
-
-            <div className="bg-amber-50 rounded-xl p-4 mb-4">
-              <p className="text-sm text-amber-700 mb-3">
-                You haven't answered <span className="font-bold">{unansweredQuestions.length}</span> question(s):
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {unansweredQuestions.map((qNum) => (
-                  <span
-                    key={qNum}
-                    className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium"
-                  >
-                    Q{qNum}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <p className="text-xs text-gray-500 text-center">
-              Click X to close and proceed to submit, or go back to answer them.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Complete Confirmation Modal */}
+      {/* Complete Confirmation Modal - Combined with Unanswered Questions Warning */}
       {showCompleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
@@ -1477,8 +1429,12 @@ export function AssessmentInterface({
             </button>
 
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-green-600" />
+              <div className={`w-12 h-12 ${unansweredQuestions.length > 0 ? 'bg-amber-100' : 'bg-green-100'} rounded-full flex items-center justify-center`}>
+                {unansweredQuestions.length > 0 ? (
+                  <AlertCircle className="w-6 h-6 text-amber-600" />
+                ) : (
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                )}
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-800">Complete Assessment?</h3>
@@ -1491,6 +1447,28 @@ export function AssessmentInterface({
               </div>
             </div>
 
+            {/* Unanswered Questions Warning - shown if there are unanswered questions */}
+            {unansweredQuestions.length > 0 && (
+              <div className="bg-amber-50 rounded-xl p-4 mb-4 border border-amber-200">
+                <p className="text-sm text-amber-700 mb-3 font-semibold">
+                  ⚠️ You haven't answered <span className="font-bold">{unansweredQuestions.length}</span> question(s):
+                </p>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {unansweredQuestions.map((qNum) => (
+                    <span
+                      key={qNum}
+                      className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium"
+                    >
+                      Q{qNum}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-amber-600">
+                  You can still submit, but unanswered questions will be marked as incorrect.
+                </p>
+              </div>
+            )}
+
             <div className="bg-gray-50 rounded-xl p-4 mb-6">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-gray-600">Questions Answered</span>
@@ -1500,15 +1478,15 @@ export function AssessmentInterface({
               </div>
               <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-green-500"
+                  className={`h-full ${progress.percent === 100 ? 'bg-green-500' : 'bg-amber-500'}`}
                   style={{ width: `${progress.percent}%` }}
                 />
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-xl mb-6">
-              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-700">
+            <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl mb-6 border border-blue-200">
+              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-blue-700">
                 Once submitted, you cannot modify your answers. Make sure you've reviewed all your responses.
               </p>
             </div>

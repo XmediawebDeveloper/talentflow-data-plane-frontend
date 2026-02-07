@@ -228,10 +228,12 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
         setCameraCheck({ status: 'error', message: 'No camera found' });
         setMicCheck({ status: 'error', message: 'No microphone found' });
-      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError' || err.name === 'AbortError') {
         // Device is being used by another application
-        setCameraCheck({ status: 'error', message: 'Camera in use by another app' });
-        setMicCheck({ status: 'error', message: 'Microphone in use by another app' });
+        // AbortError: Safari/Firefox throw this when camera is already in use
+        // NotReadableError: Chrome throws this when camera is already in use
+        setCameraCheck({ status: 'error', message: 'Camera is already in use by another app or tab' });
+        setMicCheck({ status: 'error', message: 'Microphone is already in use by another app or tab' });
       } else if (err.name === 'OverconstrainedError') {
         setCameraCheck({ status: 'error', message: 'Camera constraints not satisfied' });
         setMicCheck({ status: 'error', message: 'Microphone constraints not satisfied' });
@@ -239,8 +241,9 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         setCameraCheck({ status: 'error', message: 'Security error - use HTTPS' });
         setMicCheck({ status: 'error', message: 'Security error - use HTTPS' });
       } else {
-        setCameraCheck({ status: 'error', message: `Camera error: ${err.name}` });
-        setMicCheck({ status: 'error', message: `Microphone error: ${err.name}` });
+        // For unknown errors, show user-friendly message
+        setCameraCheck({ status: 'error', message: 'Camera error - please check if camera is available' });
+        setMicCheck({ status: 'error', message: 'Microphone error - please check if microphone is available' });
       }
 
       // Try to get more specific info - maybe only one device is the problem

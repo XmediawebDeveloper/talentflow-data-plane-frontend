@@ -157,6 +157,8 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canDeleteResumes: apiUser.permissions.can_delete_resumes,
       // Resume Database - Granular CRUD
       canAccessInternalDB: apiUser.permissions.can_access_internal_db,
+      canViewInternalDB: apiUser.permissions.can_view_internal_db,
+      canCreateInternalDB: apiUser.permissions.can_create_internal_db,
       canUpdateInternalDB: apiUser.permissions.can_update_internal_db,
       canDeleteInternalDB: apiUser.permissions.can_delete_internal_db,
       // Assessments - Granular CRUD

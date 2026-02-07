@@ -84,6 +84,8 @@ const candidateApi = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 60000, // 60 second timeout for all requests (handles slow networks in Safari/Firefox)
+  withCredentials: false, // Disable credentials for CORS compatibility across all browsers
 });
 
 // Add request interceptor to include session token
@@ -110,6 +112,25 @@ candidateApi.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Add response interceptor for better cross-browser error handling
+candidateApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Enhanced error logging for debugging browser-specific issues
+    if (error.response) {
+      // Server responded with error status
+      console.error('[CANDIDATE API] Server error:', error.response.status, error.response.data);
+    } else if (error.request) {
+      // Request was made but no response received (network issues)
+      console.error('[CANDIDATE API] Network error - no response received:', error.message);
+    } else {
+      // Something else happened (browser security, CORS, etc.)
+      console.error('[CANDIDATE API] Request setup error:', error.message);
+    }
+    return Promise.reject(error);
+  }
+);
 
 // ===================== Types =====================
 
@@ -515,15 +536,44 @@ export const candidateService = {
       }
       return response.data;
     } catch (error) {
+      console.error('[CANDIDATE SERVICE] Start assessment error:', error);
+
       if (axios.isAxiosError(error)) {
         // Check for session already active error
         const errorDetail = error.response?.data?.detail;
         if (typeof errorDetail === 'object' && errorDetail?.error === 'SESSION_ALREADY_ACTIVE') {
           throw new Error('SESSION_ALREADY_ACTIVE');
         }
-        throw new Error(typeof errorDetail === 'string' ? errorDetail : 'Failed to start assessment');
+
+        // Handle network errors (common in Safari/Firefox)
+        if (error.code === 'ERR_NETWORK' || !error.response) {
+          throw new Error('Network error - please check your internet connection and try again');
+        }
+
+        // Handle specific HTTP errors
+        if (error.response?.status === 400) {
+          throw new Error(typeof errorDetail === 'string' ? errorDetail : 'Invalid assessment or token expired');
+        } else if (error.response?.status === 404) {
+          throw new Error('Assessment not found or has been deleted');
+        } else if (error.response?.status === 403) {
+          throw new Error('Access denied - this assessment may no longer be available');
+        } else if (error.response?.status >= 500) {
+          throw new Error('Server error - please try again in a moment');
+        }
+
+        throw new Error(typeof errorDetail === 'string' ? errorDetail : 'Failed to start assessment - please refresh and try again');
       }
-      throw error;
+
+      // Handle non-Axios errors (browser-specific issues)
+      if (error instanceof Error) {
+        // Browser-specific errors (e.g., CORS, CSP violations)
+        if (error.message.includes('fetch') || error.message.includes('CORS')) {
+          throw new Error('Connection error - please refresh the page and try again');
+        }
+        throw new Error(error.message);
+      }
+
+      throw new Error('Unexpected error - please refresh the page and try again');
     }
   },
 

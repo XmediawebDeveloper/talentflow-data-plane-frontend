@@ -159,7 +159,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
       label: 'RESUME MANAGEMENT',
       items: [
         { id: 'my-resumes', label: 'My Resumes', icon: Users, href: '/recruitment/my-resumes', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes'] },
-        { id: 'resume-database', label: 'Internal Database', icon: Database, href: '/recruitment/resume-database', permissions: ['canAccessInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'] },
+        { id: 'resume-database', label: 'Internal Database', icon: Database, href: '/recruitment/resume-database', permissions: ['canAccessInternalDB', 'canViewInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'] },
       ]
     },
 
