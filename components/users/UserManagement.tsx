@@ -1569,6 +1569,9 @@ export default function UserManagement() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm text-gray-600">Total Users</p>
           <p className="text-3xl font-semibold text-gray-900 mt-1">{users.length}</p>
+          <p className="text-xs text-gray-500 mt-1">
+            ({users.filter(u => u.is_active).length} Active, {users.filter(u => !u.is_active).length} Inactive)
+          </p>
         </div>
         {availableRoles.slice(0, 3).map((role, index) => (
           <div key={role.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

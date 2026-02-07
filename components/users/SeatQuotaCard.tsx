@@ -259,16 +259,21 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
 
   // Error state for invalid data
   if (isInvalidData) {
+    const usersToDeactivate = seatData.used - seatData.limit;
     return (
       <div className={`rounded-xl border-2 border-red-300 bg-red-50 ${compact ? 'p-4' : 'p-5'}`}>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-red-100">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-red-100 flex-shrink-0">
             <AlertCircle className="w-5 h-5 text-red-600" />
           </div>
-          <div>
-            <h3 className="font-semibold text-red-800">Data Error</h3>
-            <p className="text-sm text-red-600">
-              Invalid quota data: {seatData.used}/{seatData.limit} (used exceeds limit)
+          <div className="flex-1">
+            <h3 className="font-semibold text-red-800">User Limit Exceeded</h3>
+            <p className="text-sm text-red-600 mt-1">
+              You have {seatData.used} active users, but your plan allows only {seatData.limit}.
+              Please deactivate {usersToDeactivate} user{usersToDeactivate > 1 ? 's' : ''} or upgrade your plan.
+            </p>
+            <p className="text-xs text-red-500 mt-2">
+              This may have occurred due to a recent plan downgrade.
             </p>
           </div>
         </div>

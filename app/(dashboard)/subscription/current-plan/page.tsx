@@ -10,6 +10,7 @@ import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
+import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -465,6 +466,16 @@ function CurrentPlanContent() {
     zipCode: '',
     country: 'India',
   });
+
+  // Downgrade warning modal state
+  const [showDowngradeWarning, setShowDowngradeWarning] = useState(false);
+  const [downgradeWarningData, setDowngradeWarningData] = useState<{
+    activeUsers: number;
+    newPlanMaxSeats: number;
+    usersToDeactivate: number;
+    newPlanName: string;
+    actionRequired?: string;
+  } | null>(null);
   const [formErrors, setFormErrors] = useState<Partial<PaymentFormData>>({});
 
   // Plan settings from admin API (yearly discount, database extra charge)
@@ -1185,6 +1196,20 @@ function CurrentPlanContent() {
       } else {
         // Handle both string and object error formats
         const errorDetail = data.detail;
+
+        // Check if this is a downgrade blocked error
+        if (errorDetail && typeof errorDetail === 'object' && errorDetail.error === 'DOWNGRADE_BLOCKED_USER_LIMIT') {
+          setDowngradeWarningData({
+            activeUsers: errorDetail.active_users || 0,
+            newPlanMaxSeats: errorDetail.new_plan_max_seats || 0,
+            usersToDeactivate: errorDetail.users_to_deactivate || 0,
+            newPlanName: errorDetail.new_plan_name || 'selected plan',
+            actionRequired: errorDetail.action_required,
+          });
+          setShowDowngradeWarning(true);
+          return; // Don't show generic error toast
+        }
+
         let errorMessage = typeof errorDetail === 'string'
           ? errorDetail
           : errorDetail?.message || data.message || 'Failed to upgrade plan';
@@ -2768,6 +2793,22 @@ function CurrentPlanContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Downgrade Warning Modal */}
+      {showDowngradeWarning && downgradeWarningData && (
+        <DowngradeWarningModal
+          isOpen={showDowngradeWarning}
+          onClose={() => {
+            setShowDowngradeWarning(false);
+            setDowngradeWarningData(null);
+          }}
+          activeUsers={downgradeWarningData.activeUsers}
+          newPlanMaxSeats={downgradeWarningData.newPlanMaxSeats}
+          usersToDeactivate={downgradeWarningData.usersToDeactivate}
+          newPlanName={downgradeWarningData.newPlanName}
+          actionRequired={downgradeWarningData.actionRequired}
+        />
       )}
     </main>
   );
