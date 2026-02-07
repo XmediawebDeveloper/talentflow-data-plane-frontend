@@ -244,6 +244,36 @@ export const authService = {
       throw new Error(handleApiError(error));
     }
   },
+
+  /**
+   * ✅ NEW: Check current permission version from server
+   * Used during hard refresh to detect if permissions have changed
+   */
+  async checkPermissionVersion(): Promise<{ permission_version: number }> {
+    try {
+      const response = await api.get<{ permission_version: number }>('/auth/permission-version');
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * ✅ NEW: Refresh access token using refresh token
+   * Returns new access and refresh tokens
+   */
+  async refreshToken(refreshTokenValue: string): Promise<{ access_token: string; refresh_token: string }> {
+    try {
+      const response = await api.post<{ access_token: string; refresh_token: string }>('/auth/refresh', {
+        refresh_token: refreshTokenValue,
+      });
+      // Update stored tokens
+      setTokens(response.data.access_token, response.data.refresh_token);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
 };
 
 export default authService;

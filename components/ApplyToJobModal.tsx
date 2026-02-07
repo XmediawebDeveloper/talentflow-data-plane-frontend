@@ -39,9 +39,30 @@ interface ApplyToJobModalProps {
   jobs: Job[];
   onClose: () => void;
   onApply: (resumeIds: string[], jobIds: string[]) => void;
+  mode?: 'apply' | 'assessment' | 'scoring'; // New: Support different modes
+  title?: string; // New: Custom title
+  description?: string; // New: Custom description
 }
 
-export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: ApplyToJobModalProps) {
+export default function ApplyToJobModal({
+  resumes,
+  jobs,
+  onClose,
+  onApply,
+  mode = 'apply',
+  title,
+  description
+}: ApplyToJobModalProps) {
+  // Default titles based on mode
+  const defaultTitle = mode === 'assessment' ? 'Create Assessment' : mode === 'scoring' ? 'Resume Scoring' : 'Apply to Job';
+  const defaultDescription = mode === 'assessment'
+    ? 'Select a job description for the assessment'
+    : mode === 'scoring'
+    ? 'Select job description to score resumes'
+    : 'Select job openings to apply candidates';
+
+  const modalTitle = title || defaultTitle;
+  const modalDescription = description || defaultDescription;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [isApplying, setIsApplying] = useState(false);
@@ -84,8 +105,8 @@ export default function ApplyToJobModal({ resumes, jobs, onClose, onApply }: App
               <Briefcase className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-xl text-gray-900">Apply to Job</h2>
-              <p className="text-sm text-gray-600">Select job openings to apply candidates</p>
+              <h2 className="text-xl text-gray-900">{modalTitle}</h2>
+              <p className="text-sm text-gray-600">{modalDescription}</p>
             </div>
           </div>
           <button

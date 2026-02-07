@@ -313,17 +313,17 @@ export default function JobOpeningsPage() {
     <>
       <JobsListing
         jobs={jobs}
-        onCreateNew={handleCreateNew}
+        onCreateNew={user?.permissions?.canCreateJD || isTenantAdmin ? handleCreateNew : undefined}
         onViewJob={handleViewJob}
-        onAIMatch={handleAIMatch}
+        onAIMatch={user?.permissions?.canRunAiMatch || isTenantAdmin ? handleAIMatch : undefined}
         onUpdateJobStatus={handleUpdateJobStatus}
-        onEditJob={handleEditJob}
-        onPublishJob={handlePublishJob}
+        onEditJob={user?.permissions?.canUpdateJD || isTenantAdmin ? handleEditJob : undefined}
+        onPublishJob={user?.permissions?.canCreateJD || isTenantAdmin ? handlePublishJob : undefined}
         onDisableJob={isTenantAdmin ? handleDisableJob : undefined}
-        onRepublishJob={handleRepublishJob}
+        onRepublishJob={user?.permissions?.canUpdateJD || isTenantAdmin ? handleRepublishJob : undefined}
         onArchiveJob={isTenantAdmin ? handleArchiveJob : undefined}
-        onUnarchiveJob={handleUnarchiveJob}
-        onDeleteJob={handleDeleteJob}
+        onUnarchiveJob={user?.permissions?.canUpdateJD || isTenantAdmin ? handleUnarchiveJob : undefined}
+        onDeleteJob={user?.permissions?.canDeleteJD || isTenantAdmin ? handleDeleteJob : undefined}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
       />

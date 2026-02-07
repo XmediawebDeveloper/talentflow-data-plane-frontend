@@ -26,18 +26,6 @@ const protectedRoutes = [
   '/analytics',
 ];
 
-// Helper to decode JWT payload (without verification - just to read claims)
-function decodeJwtPayload(token: string): { exp?: number } | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]));
-    return payload;
-  } catch {
-    return null;
-  }
-}
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -54,6 +42,29 @@ export function middleware(request: NextRequest) {
   // Get auth token from cookie
   const token = request.cookies.get('accessToken')?.value;
 
+  // Diagnostic logging for cross-browser token debugging
+  if (!isPublicRoute && isProtectedRoute && !token) {
+    const userAgent = request.headers.get('user-agent') || 'unknown';
+    const ua = userAgent.toLowerCase();
+
+    // Detect specific browsers
+    const browserType = ua.includes('firefox') ? 'Firefox'
+      : ua.includes('safari') && !ua.includes('chrome') ? 'Safari'
+      : /iphone|ipad|ipod/.test(ua) ? 'iOS Safari'
+      : ua.includes('arc') ? 'Arc'
+      : ua.includes('brave') ? 'Brave'
+      : ua.includes('edg') ? 'Edge'
+      : ua.includes('chrome') ? 'Chrome'
+      : 'Unknown';
+
+    console.log('[MIDDLEWARE] No token cookie found', {
+      pathname,
+      browser: browserType,
+      userAgent: userAgent.substring(0, 100), // First 100 chars for debugging
+      referer: request.headers.get('referer'),
+    });
+  }
+
   // If trying to access protected route without token, redirect to login
   if (!isPublicRoute && isProtectedRoute && !token) {
     console.log('[MIDDLEWARE] No token found, redirecting to login from:', pathname);
@@ -63,22 +74,16 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Validate token expiry if present
-  if (token) {
-    const payload = decodeJwtPayload(token);
-
-    // Check if token is expired
-    if (payload?.exp && payload.exp * 1000 < Date.now()) {
-      console.log('[MIDDLEWARE] Token expired, redirecting to login');
-      const response = NextResponse.redirect(new URL('/login', request.url));
-      // Clear the expired cookies with proper path
-      response.cookies.delete('accessToken');
-      response.cookies.delete('refreshToken');
-      response.cookies.set('accessToken', '', { path: '/', maxAge: 0 });
-      response.cookies.set('refreshToken', '', { path: '/', maxAge: 0 });
-      return response;
-    }
-  }
+  // NOTE: We intentionally DO NOT check token expiry here in middleware
+  // Reason: Middleware runs server-side BEFORE client-side token refresh can happen
+  // If we redirect on expired tokens here, users get logged out even though their
+  // refresh token might still be valid and the client could auto-refresh the access token.
+  //
+  // Instead, we let the backend API validate tokens and return 401 if invalid/expired,
+  // which triggers the client-side axios interceptor to attempt token refresh.
+  // Only if refresh fails does the user get logged out (handled by api.ts interceptor).
+  //
+  // This middleware only checks: "Does a token cookie exist?" not "Is it valid?"
 
   // Authorization (role/permission-based route access) is handled client-side
   // by AuthProvider + usePermissions hooks, which check user.permissions from

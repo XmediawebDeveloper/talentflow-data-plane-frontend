@@ -59,6 +59,8 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'jd:create', label: 'Create' },
       { code: 'jd:update', label: 'Edit' },
       { code: 'jd:delete', label: 'Delete' },
+      { code: 'jd:export', label: 'Export' },
+      { code: 'jd:duplicate', label: 'Duplicate' },
       { code: 'jd:archive', label: 'Archive' },
       { code: 'jd:disable', label: 'Disable' },
     ],
@@ -95,7 +97,24 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'ai_match:export', label: 'Export' },
     ],
   },
-  // 4. Resume Management
+  // 4. Resumes (All Users)
+  {
+    id: 'resumes_all_users',
+    name: 'Resumes (All Users)',
+    description: 'Access to all resumes in the system',
+    viewCode: 'resumes:read',
+    actions: [
+      { code: 'resumes:create', label: 'Create' },
+      { code: 'resumes:update', label: 'Edit' },
+      { code: 'resumes:delete', label: 'Delete' },
+      { code: 'resumes:download', label: 'Download' },
+      { code: 'resumes:parse', label: 'Parse' },
+      { code: 'resumes:score', label: 'Score' },
+      { code: 'resumes:export', label: 'Export' },
+      { code: 'resumes:bulk_upload', label: 'Bulk Upload' },
+    ],
+  },
+  // 5. Resume Management
   {
     id: 'resume_management',
     name: 'Resume Management',
@@ -106,9 +125,9 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
         viewCode: 'my_resumes:read',
         actions: [
           { code: 'my_resumes:upload', label: 'Resume Upload' },
+          { code: 'my_resumes:update', label: 'Edit' },
           { code: 'my_resumes:delete', label: 'Delete' },
           { code: 'my_resumes:archive', label: 'Archive' },
-          { code: 'my_resumes:apply_assessment', label: 'Apply to Assessment' },
         ],
       },
       {
@@ -116,27 +135,36 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
         viewCode: 'internal_db:read',
         actions: [
           { code: 'internal_db:upload', label: 'Resume Upload' },
+          { code: 'internal_db:export', label: 'Export' },
           { code: 'internal_db:delete', label: 'Delete' },
           { code: 'internal_db:archive', label: 'Archive' },
-          { code: 'internal_db:apply_assessment', label: 'Apply to Assessment' },
+        ],
+      },
+      {
+        name: 'Assessment',
+        viewCode: 'assessments:read',
+        actions: [
+          { code: 'assessments:invite', label: 'Invite' },
+          { code: 'assessments:review', label: 'Review' },
+          { code: 'assessments:export', label: 'Export' },
+          { code: 'assessments:delete', label: 'Delete' },
         ],
       },
     ],
   },
-  // 5. Assessment
+  // 6. Analytics
   {
-    id: 'assessments',
-    name: 'Assessment',
-    description: 'Assessment management permissions',
-    viewCode: 'assessments:read',
+    id: 'analytics',
+    name: 'Analytics',
+    description: 'Dashboard and analytics permissions',
+    isMenuToggle: true,
+    viewCode: 'analytics:read',
     actions: [
-      { code: 'assessments:create', label: 'Create' },
-      { code: 'assessments:update', label: 'Edit' },
-      { code: 'assessments:delete', label: 'Delete' },
-      { code: 'assessments:archive', label: 'Archive' },
+      { code: 'analytics:export', label: 'Export' },
+      { code: 'analytics:custom_reports', label: 'Custom Reports' },
     ],
   },
-  // 6. Subscription & Billing
+  // 7. Subscription & Billing
   {
     id: 'subscription_billing',
     name: 'Subscription & Billing',
@@ -188,7 +216,7 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       },
     ],
   },
-  // 7. Settings
+  // 8. Settings
   {
     id: 'settings',
     name: 'Settings',
@@ -226,7 +254,7 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       },
     ],
   },
-  // 8. Support
+  // 9. Support
   {
     id: 'support',
     name: 'Support',

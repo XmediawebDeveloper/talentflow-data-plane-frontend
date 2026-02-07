@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Clock, Loader2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import ResumeTable from '@/components/ResumeTable';
@@ -38,6 +39,7 @@ interface SearchFilters {
 
 export default function ResumeDatabasePage() {
   const router = useRouter();
+  const { user, isTenantAdmin } = useAuth();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -70,6 +72,9 @@ export default function ResumeDatabasePage() {
 
   // AI Talent Match modal state
   const [showAITalentMatchModal, setShowAITalentMatchModal] = useState(false);
+
+  // Assessment modal state
+  const [showAssessmentJobModal, setShowAssessmentJobModal] = useState(false);
 
   // Version History modal state
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -495,6 +500,60 @@ export default function ResumeDatabasePage() {
     setShowAITalentMatchModal(true);
   };
 
+  // ✅ NEW: Handle bulk Resume Scoring
+  const handleBulkResumeScoring = () => {
+    const selectedResumesList = resumes.filter(r => selectedResumes.includes(r.id));
+    if (selectedResumesList.length === 0) {
+      toast.error('Please select at least one resume');
+      return;
+    }
+    setResumesForApply(selectedResumesList);
+    fetchJobs();
+    setShowApplyToJobModal(true); // Use the same modal for selecting JD
+  };
+
+  // ✅ Handle bulk Assessment creation - Show job selection modal first
+  const handleBulkAssessment = () => {
+    const selectedResumesList = resumes.filter(r => selectedResumes.includes(r.id));
+    if (selectedResumesList.length === 0) {
+      toast.error('Please select at least one resume');
+      return;
+    }
+    setResumesForApply(selectedResumesList);
+    fetchJobs();
+    setShowAssessmentJobModal(true); // Show job selection modal
+  };
+
+  // Handle job selection for Assessment creation
+  const handleAssessmentJobSelect = async (resumeIds: string[], jobIds: string[]) => {
+    if (jobIds.length === 0 || resumeIds.length === 0) return;
+
+    setShowAssessmentJobModal(false);
+
+    // Get the selected job and resumes
+    const jobId = jobIds[0]; // Take first selected job
+    const selectedJob = jobs.find(j => j.id === jobId);
+    const selectedResumesList = resumeIds.map(id => {
+      const resume = resumes.find(r => r.id === id);
+      return {
+        id: id,
+        candidateName: resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown',
+        email: resume?.email || '',
+      };
+    });
+
+    // Store resumes in session storage for assessment page
+    sessionStorage.setItem('assessmentResumes', JSON.stringify(selectedResumesList));
+
+    // Clear selection
+    setSelectedResumes([]);
+    setResumesForApply([]);
+
+    // Navigate to assessment creation page with job pre-selected
+    const encodedTitle = encodeURIComponent(selectedJob?.title || '');
+    router.push(`/recruitment/assessments?create=true&jd_id=${jobId}&jd_title=${encodedTitle}`);
+  };
+
   // Handle actual apply action from modal - using async Celery scoring
   const handleApply = async (resumeIds: string[], jobIds: string[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
@@ -741,10 +800,10 @@ export default function ResumeDatabasePage() {
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
             onApplyToJob={handleBulkApplyToJob}
-            onDelete={() => handleDeleteResumes(selectedResumes)}
-            onResumeScoring={() => {}}
-            onAssessment={() => {}}
-            onAITalentMatch={handleBulkAITalentMatch}
+            onDelete={user?.permissions?.canDeleteInternalDB || isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onResumeScoring={user?.permissions?.canRunScoring || isTenantAdmin ? handleBulkResumeScoring : undefined}
+            onAssessment={user?.permissions?.canCreateAssessments || isTenantAdmin ? handleBulkAssessment : undefined}
+            onAITalentMatch={user?.permissions?.canRunAiMatch || isTenantAdmin ? handleBulkAITalentMatch : undefined}
           />
         </div>
       )}
@@ -801,7 +860,7 @@ export default function ResumeDatabasePage() {
           onSelectAll={handleSelectAll}
           onQuickView={(resume) => setQuickViewResume(resume)}
           onApplyToJob={handleApplyToJob}
-          onDelete={(id) => handleDelete(id)}
+          onDelete={user?.permissions?.canDeleteInternalDB || isTenantAdmin ? (id) => handleDelete(id) : undefined}
           onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
           onVersion={handleShowVersionHistory}
           highlightQuery={appliedSearchQuery}
@@ -873,7 +932,7 @@ export default function ResumeDatabasePage() {
         <ResumeDetailView
           resume={viewingResume}
           onClose={() => setViewingResume(null)}
-          onDelete={(id) => handleDelete(id)}
+          onDelete={user?.permissions?.canDeleteInternalDB || isTenantAdmin ? (id) => handleDelete(id) : undefined}
         />
       )}
 
@@ -888,6 +947,7 @@ export default function ResumeDatabasePage() {
         <ApplyToJobModal
           resumes={resumesForApply}
           jobs={jobs}
+          mode="apply"
           onClose={() => {
             setShowApplyToJobModal(false);
             setResumesForApply([]);
@@ -922,6 +982,20 @@ export default function ResumeDatabasePage() {
             // Navigate to AI Talent Match page with the selected JD
             router.push(`/recruitment/ai-talent-match?jdId=${jobId}&view=new`);
           }}
+        />
+      )}
+
+      {/* Assessment Job Selection Modal */}
+      {showAssessmentJobModal && (
+        <ApplyToJobModal
+          resumes={resumesForApply}
+          jobs={jobs}
+          mode="assessment"
+          onClose={() => {
+            setShowAssessmentJobModal(false);
+            setResumesForApply([]);
+          }}
+          onApply={handleAssessmentJobSelect}
         />
       )}
 

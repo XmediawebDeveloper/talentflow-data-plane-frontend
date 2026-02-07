@@ -498,14 +498,37 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   const handleSystemCheckComplete = async (existingStream?: MediaStream) => {
     console.log('[DEBUG] handleSystemCheckComplete started');
 
-    // If SystemCheck passed us a stream, keep it alive for assessment
+    // If SystemCheck passed us a stream, validate it before use
     if (existingStream) {
-      console.log('[PORTAL] Received camera stream from SystemCheck - keeping it alive');
-      streamRef.current = existingStream;
-      setCameraStream(existingStream);
+      console.log('[PORTAL] Received camera stream from SystemCheck');
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = existingStream;
+      const videoTrack = existingStream.getVideoTracks()[0];
+      const audioTrack = existingStream.getAudioTracks()[0];
+
+      const isVideoLive = videoTrack && videoTrack.readyState === 'live';
+      const isAudioLive = audioTrack && audioTrack.readyState === 'live';
+
+      console.log('[PORTAL] Stream health check:', {
+        hasStream: !!existingStream,
+        videoTrack: videoTrack ? videoTrack.readyState : 'none',
+        audioTrack: audioTrack ? audioTrack.readyState : 'none',
+        isVideoLive,
+        isAudioLive
+      });
+
+      if (isVideoLive) {
+        console.log('[PORTAL] Stream is healthy - keeping it alive');
+        streamRef.current = existingStream;
+        setCameraStream(existingStream);
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = existingStream;
+        }
+      } else {
+        console.warn('[PORTAL] Stream appears stale (video track not live) - assessment will re-request camera if needed');
+        // Still store it but assessment component will likely need to re-request
+        streamRef.current = existingStream;
+        setCameraStream(existingStream);
       }
     }
 
@@ -732,15 +755,51 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         }
       }
     } catch (err) {
-      console.error('[PORTAL] Error in handleSystemCheckComplete:', err);
+      // Detect browser for error messaging
+      const getBrowserInfo = () => {
+        if (typeof navigator === 'undefined') return 'Unknown';
+        const ua = navigator.userAgent.toLowerCase();
+        return ua.includes('firefox') ? 'Firefox'
+            : ua.includes('safari') && !ua.includes('chrome') ? 'Safari'
+            : /iphone|ipad|ipod/.test(ua) ? 'iOS Safari'
+            : ua.includes('arc') ? 'Arc'
+            : ua.includes('brave') ? 'Brave'
+            : ua.includes('edg') ? 'Edge'
+            : ua.includes('chrome') ? 'Chrome'
+            : 'Unknown';
+      };
+
+      const browser = getBrowserInfo();
+
+      console.error('[PORTAL] Error in handleSystemCheckComplete:', {
+        error: err,
+        message: err instanceof Error ? err.message : 'unknown',
+        stack: err instanceof Error ? err.stack : undefined,
+        browser,
+        streamState: streamRef.current ? {
+          hasVideo: streamRef.current.getVideoTracks().length > 0,
+          hasAudio: streamRef.current.getAudioTracks().length > 0,
+          videoLive: streamRef.current.getVideoTracks()[0]?.readyState === 'live',
+          audioLive: streamRef.current.getAudioTracks()[0]?.readyState === 'live'
+        } : 'no stream'
+      });
+
       if (isMountedRef.current) {
         // Handle session already active error with user-friendly message
-        const errorMessage = err instanceof Error ? err.message : 'Failed to start assessment';
+        let errorMessage = err instanceof Error ? err.message : 'Failed to start assessment';
+
         if (errorMessage === 'SESSION_ALREADY_ACTIVE') {
-          setError('This assessment is already open in another browser or device. Please close the other session and try again. Only one active session is allowed per assessment.');
-        } else {
-          setError(errorMessage);
+          errorMessage = 'This assessment is already open in another browser or device. Please close the other session and try again. Only one active session is allowed per assessment.';
+        } else if (errorMessage.includes('Network error') || errorMessage.includes('Connection error')) {
+          // Add browser-specific hints for network errors
+          if (browser === 'Firefox') {
+            errorMessage += '\n\nFirefox Tip: Check if Enhanced Tracking Protection is blocking the connection (shield icon in address bar).';
+          } else if (browser === 'Safari' || browser === 'iOS Safari') {
+            errorMessage += '\n\nSafari Tip: Check if "Prevent Cross-Site Tracking" is enabled in Settings.';
+          }
         }
+
+        setError(errorMessage);
         setStepSafe('error');
         isStartingRef.current = false;
         isFlowActiveRef.current = false;

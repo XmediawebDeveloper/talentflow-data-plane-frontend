@@ -2132,9 +2132,9 @@ export default function MyResumesPage() {
             onDownload={handleBulkDownload}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
-            onAssessment={handleAssessment}
+            onAssessment={user?.permissions?.canCreateAssessments || isTenantAdmin ? handleAssessment : undefined}
             onArchive={() => handleArchiveResumes(selectedResumes)}
-            onAITalentMatch={handleAITalentMatch}
+            onAITalentMatch={user?.permissions?.canRunAiMatch || isTenantAdmin ? handleAITalentMatch : undefined}
           />
         )}
 

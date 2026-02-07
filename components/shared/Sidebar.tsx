@@ -39,7 +39,7 @@ import {
   Headphones,
   Inbox
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -74,6 +74,7 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
     'administration', 'recruitment', 'resume-management', 'evaluation',
     'organization', 'user-management-section', 'masters', 'subscription', 'settings', 'reports', 'audits'
   ]);
+  const [forceRender, setForceRender] = useState(0);
 
   const roleLabels = {
     tenant_admin: 'Owner',
@@ -83,8 +84,21 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
 
   const isTenantAdmin = user?.role === 'tenant_admin';
 
+  // ✅ Listen for permission updates (from hard refresh or permission changes)
+  useEffect(() => {
+    const handlePermissionsUpdated = () => {
+      console.log('[SIDEBAR] Permissions updated, forcing re-render');
+      setForceRender(prev => prev + 1); // Force re-render to show updated menus
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('permissions-updated', handlePermissionsUpdated);
+      return () => window.removeEventListener('permissions-updated', handlePermissionsUpdated);
+    }
+  }, []);
+
   // Debug: Log user permissions on sidebar render
-  console.log('[SIDEBAR] User:', user?.email, 'Role:', user?.role, 'Permissions:', user?.permissions);
+  console.log('[SIDEBAR] User:', user?.email, 'Role:', user?.role, 'Permissions:', user?.permissions, 'ForceRender:', forceRender);
 
   /**
    * PERMISSION CHECKING LOGIC:
@@ -97,6 +111,46 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
    *
    * This ensures users ONLY see menus for permissions explicitly granted to them.
    */
+
+  // ✅ Permission dependencies (must match backend)
+  // If a permission has dependencies, ALL dependencies must be present for the feature to work
+  const PERMISSION_DEPENDENCIES: Record<string, string[]> = {
+    // AI Talent Match requires both Internal DB and JD access
+    'canRunAiMatch': ['canViewInternalDB', 'canReadJD'],
+
+    // Resume Scoring requires JD and Resume access
+    'canRunScoring': ['canReadJD', 'canViewResumes'],
+
+    // Assessments require JD access
+    'canCreateAssessments': ['canReadJD'],
+    'canUpdateAssessments': ['canViewAssessments', 'canReadJD'],
+    'canDeleteAssessments': ['canViewAssessments'],
+
+    // AI Interviews require Resume access
+    'canRunAiInterviews': ['canViewResumes'],
+
+    // Delete permissions require read permission (CRUD hierarchy)
+    'canDeleteJD': ['canReadJD'],
+    'canDeleteResumes': ['canViewResumes'],
+    'canDeleteInternalDB': ['canViewInternalDB'],
+    'canDeleteAssessments': ['canViewAssessments'],
+    'canDeleteUsers': ['canViewUsers'],
+    'canDeleteRoles': ['canViewRoles'],
+
+    // Update permissions require read permission (CRUD hierarchy)
+    'canUpdateJD': ['canReadJD'],
+    'canUpdateResumes': ['canViewResumes'],
+    'canUpdateInternalDB': ['canViewInternalDB'],
+    'canUpdateUsers': ['canViewUsers'],
+    'canUpdateRoles': ['canViewRoles'],
+
+    // Create permissions might require read permission (depends on feature)
+    'canCreateJD': [], // No dependency
+    'canCreateResumes': ['canViewResumes'], // Need to see resumes to create
+    'canCreateInternalDB': ['canViewInternalDB'], // Need to see DB to create
+    'canCreateUsers': ['canViewUsers'], // Need to see users to create
+    'canCreateRoles': ['canViewRoles'], // Need to see roles to create
+  };
 
   // Check if user has a specific permission
   const hasPermission = (permission?: string): boolean => {
@@ -114,6 +168,41 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
     const hasAccess = user.permissions[permission as keyof typeof user.permissions] === true;
     console.log(`[SIDEBAR] Permission check: ${permission} = ${hasAccess}`);
     return hasAccess;
+  };
+
+  // NEW: Check permission AND all its dependencies
+  const hasAllRequiredPermissions = (permissions: string[]): boolean => {
+    if (isTenantAdmin) return true;
+
+    console.log(`[SIDEBAR] Checking all required permissions:`, permissions);
+
+    for (const perm of permissions) {
+      console.log(`[SIDEBAR] Checking permission: ${perm} = ${user?.permissions?.[perm as keyof typeof user.permissions]}`);
+
+      if (!user?.permissions || !user.permissions[perm as keyof typeof user.permissions]) {
+        console.log(`[SIDEBAR] Missing permission: ${perm}`);
+        return false;
+      }
+
+      // Check dependencies
+      const deps = PERMISSION_DEPENDENCIES[perm] || [];
+      if (deps.length > 0) {
+        console.log(`[SIDEBAR] Checking dependencies for ${perm}:`, deps);
+      }
+
+      for (const dep of deps) {
+        const hasDepValue = user?.permissions?.[dep as keyof typeof user.permissions];
+        console.log(`[SIDEBAR]   Dependency ${dep} = ${hasDepValue}`);
+
+        if (!user?.permissions || !user.permissions[dep as keyof typeof user.permissions]) {
+          console.log(`[SIDEBAR] Missing dependency: ${perm} requires ${dep}`);
+          return false;
+        }
+      }
+    }
+
+    console.log(`[SIDEBAR] All required permissions passed!`);
+    return true;
   };
 
   // Check if user has ANY of the specified permissions (for grouped checks)
@@ -244,13 +333,13 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
     //   ]
     // },
 
-    // AUDITS & TRAIL - Permission-based access
+    // AUDITS & TRAIL - Tenant Admin Only
     {
       id: 'audits',
       label: 'AUDITS & TRAIL',
       items: [
-        { id: 'audit-trail', label: 'Audit Trail', icon: ScrollText, href: '/audits/trail', permission: 'canViewAnalytics' },
-        { id: 'activity-logs', label: 'Activity Logs', icon: Activity, href: '/audits/activity', permission: 'canViewAnalytics' },
+        { id: 'audit-trail', label: 'Audit Trail', icon: ScrollText, href: '/audits/trail', adminOnly: true },
+        { id: 'activity-logs', label: 'Activity Logs', icon: Activity, href: '/audits/activity', adminOnly: true },
       ]
     },
 
@@ -279,6 +368,11 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
 
         // Check permissions array (granular - show if ANY match)
         if (item.permissions && item.permissions.length > 0) {
+          // ✅ NEW: For specific features with dependencies, check ALL required permissions
+          if (item.id === 'ai-talent-match' || item.id === 'resume-scoring') {
+            return hasAllRequiredPermissions(item.permissions);
+          }
+          // For other items, use the existing ANY logic
           return hasAnyPermission(item.permissions);
         }
 

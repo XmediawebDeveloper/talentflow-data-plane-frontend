@@ -808,18 +808,19 @@ export default function Dashboard({
         </div>
 
         {/* Two Column Layout - Recent Activity & Quick Actions */}
-        <div className="grid grid-cols-3 gap-6 mb-6">
-          {/* Recent Activity */}
-          <div className="col-span-2 bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-gray-900">Recent Activity</h2>
-                <a href="/audits/activity" className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1">
-                  View all
-                  <ArrowRight className="w-4 h-4" />
-                </a>
+        <div className={`grid gap-6 mb-6 ${user?.is_tenant_admin ? 'grid-cols-3' : 'grid-cols-1'}`}>
+          {/* Recent Activity - Tenant Admin Only */}
+          {user?.is_tenant_admin && (
+            <div className="col-span-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-gray-900">Recent Activity</h2>
+                  <a href="/audits/activity" className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1">
+                    View all
+                    <ArrowRight className="w-4 h-4" />
+                  </a>
+                </div>
               </div>
-            </div>
             <div className="p-0">
               {loadingActivities ? (
                 <div className="flex items-center justify-center py-8">
@@ -874,6 +875,7 @@ export default function Dashboard({
               )}
             </div>
           </div>
+          )}
 
           {/* Quick Actions */}
           <div className="space-y-6">

@@ -389,7 +389,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
     setDownloadingBulkPDF(true);
     try {
-      const blob = await assessmentService.exportBulkPDFs(selectedRows);
+      const blob = await assessmentService.exportResultsBulkPDFs(assessmentId, selectedRows);
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -997,12 +997,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {/* AS-25: PDF Download Button */}
                           {candidate.status === 'Completed' ? (
                             <button
-                              onClick={() => handleDownloadPDF(candidate.id)}
-                              disabled={downloadingPDF === candidate.id}
+                              onClick={() => handleDownloadPDF(assessmentId)}
+                              disabled={downloadingPDF === assessmentId}
                               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Download PDF Report"
                             >
-                              {downloadingPDF === candidate.id ? (
+                              {downloadingPDF === assessmentId ? (
                                 <Loader2 className="w-3 h-3 animate-spin" />
                               ) : (
                                 <Download className="w-3 h-3" />

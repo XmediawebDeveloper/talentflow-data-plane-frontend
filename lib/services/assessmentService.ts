@@ -777,6 +777,21 @@ export const assessmentService = {
   },
 
   /**
+   * Export multiple candidate results from one assessment as ZIP
+   * Used on assessment results page for bulk download
+   */
+  async exportResultsBulkPDFs(assessmentId: string, resultIds: string[]): Promise<Blob> {
+    try {
+      const response = await api.post(`/reports/export/assessment/${assessmentId}/results/bulk`, resultIds, {
+        responseType: 'blob',
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Get version history for an assessment
    */
   async getVersionHistory(assessmentId: string) {

@@ -3,6 +3,7 @@
 import { Plus, Clock, Users, CheckCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/hooks/useAuth';
 import AssessmentCreation from './AssessmentCreation';
 import AssessmentResults from './AssessmentResults';
 import ShareAssessmentModal from './ShareAssessmentModal';
@@ -74,6 +75,7 @@ interface AssessmentsProps {
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle }: AssessmentsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
+  const { user, isTenantAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
   const [showCreation, setShowCreation] = useState(false);
@@ -919,18 +921,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 Preview Candidate View
               </button>
             )}
-            <button
-              onClick={handleOpenCreation}
-              disabled={!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg transition-colors shadow-sm ${
-                !isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-gray-800 text-white hover:bg-gray-900'
-              }`}
-            >
-              <Sparkles className="w-5 h-5" />
-              Create Assessment
-            </button>
+            {(user?.permissions?.canCreateAssessments || isTenantAdmin) && (
+              <button
+                onClick={handleOpenCreation}
+                disabled={!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg transition-colors shadow-sm ${
+                  !isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-800 text-white hover:bg-gray-900'
+                }`}
+              >
+                <Sparkles className="w-5 h-5" />
+                Create Assessment
+              </button>
+            )}
           </div>
         </div>
 
@@ -1124,28 +1128,32 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 >
                   Completed
                 </button>
-                <button
-                  onClick={() => setActiveTab('audit')}
-                  className={`py-4 text-sm border-b-2 transition-colors flex items-center gap-1.5 ${
-                    activeTab === 'audit'
-                      ? 'border-gray-800 text-gray-800'
-                      : 'border-transparent text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <Activity className="w-4 h-4" />
-                  Activity Logs
-                </button>
-                <button
-                  onClick={() => setActiveTab('consent')}
-                  className={`py-4 text-sm border-b-2 transition-colors flex items-center gap-1.5 ${
-                    activeTab === 'consent'
-                      ? 'border-gray-800 text-gray-800'
-                      : 'border-transparent text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <FileCheck className="w-4 h-4" />
-                  Consent Logs
-                </button>
+                {isTenantAdmin && (
+                  <>
+                    <button
+                      onClick={() => setActiveTab('audit')}
+                      className={`py-4 text-sm border-b-2 transition-colors flex items-center gap-1.5 ${
+                        activeTab === 'audit'
+                          ? 'border-gray-800 text-gray-800'
+                          : 'border-transparent text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <Activity className="w-4 h-4" />
+                      Activity Logs
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('consent')}
+                      className={`py-4 text-sm border-b-2 transition-colors flex items-center gap-1.5 ${
+                        activeTab === 'consent'
+                          ? 'border-gray-800 text-gray-800'
+                          : 'border-transparent text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <FileCheck className="w-4 h-4" />
+                      Consent Logs
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => setActiveTab('archived')}
                   className={`py-4 text-sm border-b-2 transition-colors ${
@@ -1892,16 +1900,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           onClick={() => setOpenMenuId(null)}
                         />
                         <div className="absolute right-4 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-20">
-                          <button
-                            onClick={() => {
-                              handleEditAssessment(assessment);
-                              setOpenMenuId(null);
-                            }}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
-                          >
-                            <Edit2 className="w-4 h-4 text-gray-600" />
-                            Edit
-                          </button>
+                          {(user?.permissions?.canUpdateAssessments || isTenantAdmin) && (
+                            <button
+                              onClick={() => {
+                                handleEditAssessment(assessment);
+                                setOpenMenuId(null);
+                              }}
+                              className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                            >
+                              <Edit2 className="w-4 h-4 text-gray-600" />
+                              Edit
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               setSelectedAssessmentForPreview(assessment);
@@ -1976,13 +1986,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <Archive className="w-4 h-4 text-gray-600" />
                             Archive
                           </button>
-                          <button
-                            onClick={() => handleDeleteAssessment(assessment.id)}
-                            className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2.5"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
-                          </button>
+                          {(user?.permissions?.canDeleteAssessments || isTenantAdmin) && (
+                            <button
+                              onClick={() => handleDeleteAssessment(assessment.id)}
+                              className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2.5"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </>
                     )}
@@ -2143,16 +2155,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 onClick={() => setOpenMenuId(null)}
                               />
                               <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-20">
-                                <button
-                                  onClick={() => {
-                                    handleEditAssessment(assessment);
-                                    setOpenMenuId(null);
-                                  }}
-                                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
-                                >
-                                  <Edit2 className="w-4 h-4 text-gray-600" />
-                                  Edit Assessment
-                                </button>
+                                {(user?.permissions?.canUpdateAssessments || isTenantAdmin) && (
+                                  <button
+                                    onClick={() => {
+                                      handleEditAssessment(assessment);
+                                      setOpenMenuId(null);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                  >
+                                    <Edit2 className="w-4 h-4 text-gray-600" />
+                                    Edit Assessment
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => {
                                     setSelectedAssessmentForPreview(assessment);
@@ -2256,13 +2270,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Archive
                                 </button>
                                 <div className="border-t border-gray-100 my-1"></div>
-                                <button
-                                  onClick={() => handleDeleteAssessment(assessment.id)}
-                                  className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2.5"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Delete
-                                </button>
+                                {(user?.permissions?.canDeleteAssessments || isTenantAdmin) && (
+                                  <button
+                                    onClick={() => handleDeleteAssessment(assessment.id)}
+                                    className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2.5"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete
+                                  </button>
+                                )}
                               </div>
                             </>
                           )}

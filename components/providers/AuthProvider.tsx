@@ -6,6 +6,7 @@ import { authService, clearTokens } from '@/lib/services';
 import { mockTenant } from '@/lib/mockData/tenantData';
 import { useRouter } from 'next/navigation';
 import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/services/authService';
+import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
 
 // Helper to store/retrieve user from localStorage
 const USER_STORAGE_KEY = 'talentflow_user';
@@ -145,7 +146,7 @@ function mapApiUserToUser(apiUser: ApiUser): User {
     // No role-based defaults are applied here
     permissions: {
       // Job Descriptions - Granular CRUD
-      canReadJD: apiUser.permissions.can_read_jd,
+      canReadJD: apiUser.permissions.can_view_jd, // Backend maps jd:read → can_view_jd
       canCreateJD: apiUser.permissions.can_create_jd,
       canUpdateJD: apiUser.permissions.can_update_jd,
       canDeleteJD: apiUser.permissions.can_delete_jd,
@@ -256,6 +257,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[AUTH] Restoring session...');
       console.log('[AUTH] Has token:', authService.isAuthenticated());
 
+      // Ensure cookies are synced with localStorage (cross-browser token recovery)
+      // This fixes token loss in Firefox, Safari, iOS Safari, Arc, Brave, etc.
+      const recovered = ensureTokenCookies();
+      if (recovered) {
+        console.log('[AUTH] Tokens recovered from localStorage to cookies');
+      }
+
       // First, try to restore from localStorage (fast path)
       const storedUser = getUserFromStorage();
       const storedTenant = getTenantFromStorage();
@@ -268,6 +276,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clearTenantFromStorage();
           setIsLoading(false);
           return;
+        }
+
+        // ✅ NEW: Check permission version on page load (hard refresh)
+        // This ensures permissions are fresh even when user hits F5
+        try {
+          const accessToken = localStorage.getItem('accessToken');
+          const storedVersion = localStorage.getItem('permission_version');
+
+          if (accessToken && storedVersion) {
+            // Make a lightweight API call to check server's permission version
+            const versionCheckResponse = await authService.checkPermissionVersion();
+            const serverVersion = versionCheckResponse.permission_version;
+            const currentVersion = parseInt(storedVersion, 10);
+
+            if (serverVersion > currentVersion) {
+              console.log(`[AUTH] Permission version outdated on hard refresh: ${currentVersion} → ${serverVersion}`);
+              console.log('[AUTH] Refreshing token to get updated permissions...');
+
+              // Refresh token to get latest permissions
+              const refreshToken = localStorage.getItem('refreshToken');
+              if (refreshToken) {
+                const refreshResponse = await authService.refreshToken(refreshToken);
+                // Token will be automatically updated by setTokens call in authService
+
+                // Fetch updated user data with new permissions
+                const apiUserData = await authService.getCurrentUser();
+                const userData = mapApiUserToUser(apiUserData);
+                setUser(userData);
+                saveUserToStorage(userData);
+                setTenant(storedTenant || mockTenant);
+                console.log('[AUTH] Permissions refreshed on hard refresh ✅');
+
+                // ✅ Dispatch event to notify UI components (like Sidebar) to re-render
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('permissions-updated'));
+                }
+
+                setIsLoading(false);
+                return;
+              }
+            } else {
+              console.log('[AUTH] Permission version up to date:', currentVersion);
+            }
+          }
+        } catch (versionError) {
+          console.warn('[AUTH] Permission version check failed, continuing with cached permissions:', versionError);
+          // Don't block - fall through to normal restore
         }
 
         console.log('[AUTH] Restored user from localStorage:', storedUser.email);

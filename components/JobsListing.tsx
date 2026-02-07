@@ -531,19 +531,21 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   <span>Job publishing limit reached ({quotaInfo.used}/{quotaInfo.limit}). <a href="/subscription/current-plan" className="underline font-medium">Upgrade your plan</a></span>
                 </div>
               )}
-              <button
-                onClick={() => {
-                  if (quotaInfo && quotaInfo.remaining <= 0) {
-                    setShowQuotaModal(true);
-                    return;
-                  }
-                  onCreateNew();
-                }}
-                className="px-6 py-3.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-base font-medium"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Create New Job</span>
-              </button>
+              {onCreateNew && (
+                <button
+                  onClick={() => {
+                    if (quotaInfo && quotaInfo.remaining <= 0) {
+                      setShowQuotaModal(true);
+                      return;
+                    }
+                    onCreateNew();
+                  }}
+                  className="px-6 py-3.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center gap-2 text-base font-medium"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span>Create New Job</span>
+                </button>
+              )}
             </div>
           </div>
 
