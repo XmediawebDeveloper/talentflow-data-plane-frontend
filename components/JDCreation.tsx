@@ -2436,17 +2436,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           console.log('[DEBUG] Must-have skills:', extractedData.mustHaveSkills);
           console.log('[DEBUG] Nice-to-have skills:', extractedData.niceToHaveSkills);
 
-          // Parse experience for saving
+          // Parse experience for reformat API - look up code in experienceLevels array
           let experienceMin: number | undefined;
           let experienceMax: number | undefined;
           if (extractedData.experience) {
-            const rangeMatch = extractedData.experience.match(/(\d+)\s*-\s*(\d+)/);
-            const plusMatch = extractedData.experience.match(/(\d+)\+/);
-            if (rangeMatch) {
-              experienceMin = parseInt(rangeMatch[1]);
-              experienceMax = parseInt(rangeMatch[2]);
-            } else if (plusMatch) {
-              experienceMin = parseInt(plusMatch[1]);
+            const experienceLevel = experienceLevels.find(level => level.code === extractedData.experience);
+            if (experienceLevel) {
+              experienceMin = experienceLevel.min_years;
+              experienceMax = experienceLevel.max_years || undefined;
+              console.log('[DEBUG] Experience code for reformat:', {
+                code: extractedData.experience,
+                min_years: experienceMin,
+                max_years: experienceMax
+              });
+            } else {
+              console.warn('[DEBUG] Experience code not found for reformat:', extractedData.experience);
             }
           }
 
@@ -2532,24 +2536,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Save JD with creation_stage: 'review' so refresh preserves the stage
     try {
-      // Parse experience for saving
+      // Parse experience for saving - look up code in experienceLevels array
       let experienceMin: number | undefined;
       let experienceMax: number | undefined;
       if (extractedData.experience) {
-        const rangeMatch = extractedData.experience.match(/(\d+)\s*-\s*(\d+)/);
-        const plusMatch = extractedData.experience.match(/(\d+)\+/);
-        if (rangeMatch) {
-          experienceMin = parseInt(rangeMatch[1]);
-          experienceMax = parseInt(rangeMatch[2]);
-        } else if (plusMatch) {
-          experienceMin = parseInt(plusMatch[1]);
-          experienceMax = experienceMin + 5;
+        const experienceLevel = experienceLevels.find(level => level.code === extractedData.experience);
+        if (experienceLevel) {
+          experienceMin = experienceLevel.min_years;
+          experienceMax = experienceLevel.max_years || undefined;
+          console.log('[DEBUG] Experience code lookup:', {
+            code: extractedData.experience,
+            min_years: experienceMin,
+            max_years: experienceMax
+          });
         } else {
-          const singleMatch = extractedData.experience.match(/(\d+)/);
-          if (singleMatch) {
-            experienceMin = parseInt(singleMatch[1]);
-            experienceMax = experienceMin + 2;
-          }
+          console.warn('[DEBUG] Experience code not found in levels:', extractedData.experience);
         }
       }
 
@@ -2756,22 +2757,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setIsPublishing(true);
 
     try {
-      // Parse experience values - handle formats like "3-5", "5+", "0-2"
+      // Parse experience values - look up code in experienceLevels array
       let experienceMin: number | undefined;
       let experienceMax: number | undefined;
       if (extractedData.experience) {
-        const rangeMatch = extractedData.experience.match(/(\d+)\s*-\s*(\d+)/);
-        const plusMatch = extractedData.experience.match(/(\d+)\+/);
-        if (rangeMatch) {
-          experienceMin = parseInt(rangeMatch[1]);
-          experienceMax = parseInt(rangeMatch[2]);
-        } else if (plusMatch) {
-          experienceMin = parseInt(plusMatch[1]);
+        const experienceLevel = experienceLevels.find(level => level.code === extractedData.experience);
+        if (experienceLevel) {
+          experienceMin = experienceLevel.min_years;
+          experienceMax = experienceLevel.max_years || undefined;
+          console.log('[DEBUG] Experience code for publish:', {
+            code: extractedData.experience,
+            min_years: experienceMin,
+            max_years: experienceMax
+          });
         } else {
-          const singleMatch = extractedData.experience.match(/(\d+)/);
-          if (singleMatch) {
-            experienceMin = parseInt(singleMatch[1]);
-          }
+          console.warn('[DEBUG] Experience code not found for publish:', extractedData.experience);
         }
       }
 
@@ -3035,22 +3035,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setIsSavingDraft(true);
 
     try {
-      // Parse experience values - handle formats like "3-5", "5+", "0-2"
+      // Parse experience values - look up code in experienceLevels array
       let experienceMin: number | undefined;
       let experienceMax: number | undefined;
       if (extractedData.experience) {
-        const rangeMatch = extractedData.experience.match(/(\d+)\s*-\s*(\d+)/);
-        const plusMatch = extractedData.experience.match(/(\d+)\+/);
-        if (rangeMatch) {
-          experienceMin = parseInt(rangeMatch[1]);
-          experienceMax = parseInt(rangeMatch[2]);
-        } else if (plusMatch) {
-          experienceMin = parseInt(plusMatch[1]);
+        const experienceLevel = experienceLevels.find(level => level.code === extractedData.experience);
+        if (experienceLevel) {
+          experienceMin = experienceLevel.min_years;
+          experienceMax = experienceLevel.max_years || undefined;
+          console.log('[DEBUG] Experience code for draft:', {
+            code: extractedData.experience,
+            min_years: experienceMin,
+            max_years: experienceMax
+          });
         } else {
-          const singleMatch = extractedData.experience.match(/(\d+)/);
-          if (singleMatch) {
-            experienceMin = parseInt(singleMatch[1]);
-          }
+          console.warn('[DEBUG] Experience code not found for draft:', extractedData.experience);
         }
       }
 
