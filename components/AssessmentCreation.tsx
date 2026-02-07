@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import { assessmentService, jdService } from '@/lib/services';
 import JDCreation from '@/components/JDCreation';
+import { toast } from 'sonner';
 
 // 1:1 JD-Assessment relationship: JDs that already have assessments cannot be selected
 
@@ -205,7 +206,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         console.log('[TalentFlow] Assessment loaded for editing:', assessment.title);
       } catch (error) {
         console.error('Failed to load assessment for edit:', error);
-        alert('Failed to load assessment for editing. Please try again.');
+        toast.error('Failed to load assessment for editing. Please try again.');
         router.push('/recruitment/assessments');
       }
     };
@@ -753,7 +754,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     if (codingPopupMode === 'enable') {
       // Enabling coding - require language selection
       if (selectedCodingLanguages.length === 0) {
-        alert('Please select at least one programming language');
+        toast.warning('Please select at least one programming language');
         return;
       }
 
@@ -1065,7 +1066,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     } catch (error) {
       console.error('Failed to create/update assessment:', error);
       setIsGenerating(false);
-      alert(`Failed to ${isEditMode ? 'update' : 'create'} assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Failed to ${isEditMode ? 'update' : 'create'} assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

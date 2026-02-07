@@ -3,6 +3,8 @@
 import { Wallet, Plus, CreditCard, Trash2, Check, Building2, X, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
+import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 
 interface PaymentMethod {
   id: string;
@@ -35,6 +37,7 @@ interface CardFormData {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export default function PaymentMethodsPage() {
+  const dialog = useGlobalDialog();
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -154,7 +157,7 @@ export default function PaymentMethodsPage() {
     try {
       const token = getAuthToken();
       if (!token) {
-        alert('Please log in to add a payment method');
+        toast.error('Please log in to add a payment method');
         return;
       }
 
@@ -202,11 +205,11 @@ export default function PaymentMethodsPage() {
         resetForm();
       } else {
         const error = await response.json();
-        alert(error.detail || 'Failed to add payment method');
+        toast.error(error.detail || 'Failed to add payment method');
       }
     } catch (error) {
       console.error('Error adding payment method:', error);
-      alert('Failed to add payment method');
+      toast.error('Failed to add payment method');
     } finally {
       setSubmitting(false);
     }
@@ -256,7 +259,7 @@ export default function PaymentMethodsPage() {
   };
 
   const deleteMethod = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this payment method?')) return;
+    if (!await dialog.confirm({ title: 'Delete Payment Method', message: 'Are you sure you want to delete this payment method?', variant: 'error', confirmText: 'Delete' })) return;
 
     setDeleting(id);
     try {

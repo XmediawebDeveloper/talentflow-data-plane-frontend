@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Building2, Plus, Search, Edit2, Trash2, Check, X, Users, Calendar } from 'lucide-react';
 import { Tenant } from '@/lib/types/tenant';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 
 interface TenantsManagementProps {
   currentTenant?: Tenant;
@@ -41,6 +42,7 @@ const mockTenants = [
 ];
 
 export default function TenantsManagement({ currentTenant, onSelectTenant }: TenantsManagementProps) {
+  const dialog = useGlobalDialog();
   const [tenants, setTenants] = useState(mockTenants);
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -69,8 +71,8 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
     }
   };
 
-  const handleDeleteTenant = (id: string) => {
-    if (confirm('Are you sure you want to delete this tenant?')) {
+  const handleDeleteTenant = async (id: string) => {
+    if (await dialog.confirm({ title: 'Delete Tenant', message: 'Are you sure you want to delete this tenant? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) {
       setTenants(tenants.filter(t => t.id !== id));
     }
   };

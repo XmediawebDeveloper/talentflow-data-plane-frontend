@@ -18,6 +18,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { CurrentQuestion, candidateService } from '@/lib/services/candidateService';
 import {
   LANGUAGE_CONFIGS,
@@ -72,6 +73,8 @@ export function MultiLanguageCodeEditor({
   allowLanguageChange = true,
   isLocked = false,
 }: MultiLanguageCodeEditorProps) {
+  const dialog = useGlobalDialog();
+
   // Determine initial language from question or answer
   const getInitialLanguage = (): string => {
     // If answer has a language, use it
@@ -163,14 +166,17 @@ export function MultiLanguageCodeEditor({
     setCode(value || '');
   };
 
-  const handleLanguageChange = (langId: string) => {
+  const handleLanguageChange = async (langId: string) => {
     if (!allowLanguageChange || isLocked) return;
 
     // Confirm if user has written code
     if (code.trim() && code !== getLanguageTemplate(selectedLanguage)) {
-      const confirmed = window.confirm(
-        'Changing language will reset your code to the starter template. Continue?'
-      );
+      const confirmed = await dialog.confirm({
+        title: 'Change Language',
+        message: 'Changing language will reset your code. Are you sure?',
+        variant: 'warning',
+        confirmText: 'Change Language',
+      });
       if (!confirmed) {
         setShowLanguageDropdown(false);
         return;
@@ -183,10 +189,15 @@ export function MultiLanguageCodeEditor({
     setExecutionOutput(null);
   };
 
-  const handleResetCode = () => {
+  const handleResetCode = async () => {
     const template = question.starter_code?.[selectedLanguage] || getLanguageTemplate(selectedLanguage);
     if (code !== template) {
-      const confirmed = window.confirm('Reset code to starter template?');
+      const confirmed = await dialog.confirm({
+        title: 'Reset Code',
+        message: 'Reset code to starter template? Your current code will be lost.',
+        variant: 'warning',
+        confirmText: 'Reset',
+      });
       if (confirmed) {
         setCode(template);
         setTestResults(null);

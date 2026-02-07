@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Mail, Phone, MapPin, Send } from "lucide-react";
+import { toast } from 'sonner';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,7 @@ export default function ContactPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Thank you for your message! We'll get back to you soon.");
+    toast.success("Thank you for your message! We'll get back to you soon.");
   };
 
   return (

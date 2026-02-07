@@ -6,6 +6,7 @@ import { Resume } from '@/lib/types/types';
 import { FileText, Clock, History, User, File, HardDrive } from 'lucide-react';
 import ResumeVersionSelector from './ResumeVersionSelector';
 import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 
 interface ResumeDetailViewProps {
   resume: Resume;
@@ -16,18 +17,19 @@ interface ResumeDetailViewProps {
 }
 
 export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, onApplyToJob }: ResumeDetailViewProps) {
+  const dialog = useGlobalDialog();
   const [showVersionSelector, setShowVersionSelector] = useState(false);
   
   const handleDownload = () => {
-    alert('Resume download functionality would trigger here');
+    toast.info('Resume download functionality would trigger here');
   };
 
   const handleShare = () => {
-    alert('Share resume functionality would trigger here');
+    toast.info('Share resume functionality would trigger here');
   };
 
-  const handleDelete = () => {
-    if (confirm('Are you sure you want to delete this resume?')) {
+  const handleDelete = async () => {
+    if (await dialog.confirm({ title: 'Delete Resume', message: 'Are you sure you want to delete this resume? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) {
       onDelete?.(resume.id);
       onClose();
     }

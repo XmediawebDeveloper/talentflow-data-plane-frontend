@@ -4,6 +4,7 @@ import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, U
 import { useState, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -84,6 +85,7 @@ interface JobsListingProps {
 }
 
 export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, quotaInfo, initialStatusFilter }: JobsListingProps) {
+  const dialog = useGlobalDialog();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'all');
   const [creationMethodFilter, setCreationMethodFilter] = useState<'manual' | 'ai' | null>(null);
@@ -291,8 +293,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
     setShowBulkActions(false);
   };
 
-  const handleBulkDelete = () => {
-    if (window.confirm(`Are you sure you want to delete ${selectedJobs.size} job(s)? This action cannot be undone.`)) {
+  const handleBulkDelete = async () => {
+    if (await dialog.confirm({ title: 'Delete Jobs', message: `Are you sure you want to delete ${selectedJobs.size} job(s)? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) {
       // In a real implementation, you'd call a delete handler
       console.log('Deleting jobs:', Array.from(selectedJobs));
       setSelectedJobs(new Set());

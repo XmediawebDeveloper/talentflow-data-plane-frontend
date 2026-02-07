@@ -1,12 +1,13 @@
 'use client';
 
-import { Plus, Clock, Users, CheckCircle, FileText, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity } from 'lucide-react';
+import { Plus, Clock, Users, CheckCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AssessmentCreation from './AssessmentCreation';
 import AssessmentResults from './AssessmentResults';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import AssessmentAuditTrail from './AssessmentAuditTrail';
+import ConsentLogs from './compliance/ConsentLogs';
 import AssessmentPreviewModal from './AssessmentPreviewModal';
 import AssessmentEditModal from './AssessmentEditModal';
 import AssessmentDetailsView from './AssessmentDetailsView';
@@ -18,6 +19,8 @@ import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/se
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import VersionBadge from './VersionBadge';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import { toast } from 'sonner';
 
 // Helper function to format date/time in UTC timezone
 const formatDateTimeIST = (dateStr: string | null | undefined, options?: { includeTime?: boolean }) => {
@@ -70,7 +73,8 @@ interface AssessmentsProps {
 
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle }: AssessmentsProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'archived' | 'settings'>('all');
+  const dialog = useGlobalDialog();
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
   const [showCreation, setShowCreation] = useState(false);
   const [showResults, setShowResults] = useState(false);
@@ -251,10 +255,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
       // Process quota
       if (quotaResult.status === 'fulfilled') {
-        const quotas = quotaResult.value.data?.data?.quotas;
+        const apiData = quotaResult.value.data?.data;
+        const quotas = apiData?.quotas;
+        const subscriptionStatus = (apiData?.subscription_status || '').toLowerCase();
+        const isTrial = apiData?.is_trial;
+        const quotaSource = apiData?.quota_source;
+
+        console.log('[TalentFlow] Quota API response:', { subscriptionStatus, isTrial, quotaSource, hasAS: !!quotas?.AS, asData: quotas?.AS });
+
+        // Determine if plan is inactive/expired — don't show "quota exhausted" for these
+        const isActivePlan = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
+
         if (quotas?.AS) {
-          // Get subscription limit (total units)
-          const subLimit = quotas.AS.subscription?.limit || 10;
+          const subLimit = quotas.AS.subscription?.limit;
           const addonRemaining = quotas.AS.addon?.remaining || 0;
           const used = quotas.AS.subscription?.used || 0;
 
@@ -266,20 +279,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             setTotalUnits(-1);
             setAvailableUnits(-1);
             setQuotaPercentage(0);
-          } else {
-            const totalLimit = (typeof subLimit === 'number' ? subLimit : 10) + addonRemaining;
+          } else if (typeof subLimit === 'number' && subLimit > 0) {
+            // Valid quota limit from API
+            const totalLimit = subLimit + addonRemaining;
             setTotalUnits(totalLimit);
 
-            // Get remaining units (total_remaining is limit - used + addon)
             const remaining = quotas.AS.total_remaining ?? (totalLimit - used);
             setAvailableUnits(remaining);
 
-            // Calculate percentage used
             const percentage = totalLimit > 0 ? (used / totalLimit) * 100 : 0;
             setQuotaPercentage(percentage);
+          } else if (isActivePlan) {
+            // Active plan but limit is 0/null — use fallback
+            const totalLimit = 10 + addonRemaining;
+            setTotalUnits(totalLimit);
+            const remaining = quotas.AS.total_remaining ?? (totalLimit - used);
+            setAvailableUnits(remaining);
+          } else {
+            // Inactive/expired plan with 0 or null limit — don't set quota values
+            // Leave availableUnits as null so the "exhausted" banner never shows
+            console.log('[TalentFlow] Inactive plan — skipping quota display');
           }
 
-          console.log('[TalentFlow] Quota loaded: limit=', subLimit, 'remaining=', quotas.AS.total_remaining, 'unlimited=', unlimited);
+          console.log('[TalentFlow] Quota loaded: limit=', subLimit, 'used=', used, 'remaining=', quotas.AS.total_remaining, 'unlimited=', unlimited, 'isActivePlan=', isActivePlan);
         }
       } else {
         console.log('[TalentFlow] Failed to load quota:', quotaResult.reason);
@@ -420,7 +442,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const handleEditAssessment = (assessment: any) => {
     // Check if candidates have been invited - if so, block editing
     if (assessment.invitations_count > 0 || assessment.candidates > 0) {
-      alert(`Cannot edit this assessment - ${assessment.invitations_count || assessment.candidates} candidate(s) have already been invited. Please create a new assessment instead.`);
+      toast.warning(`Cannot edit this assessment - ${assessment.invitations_count || assessment.candidates} candidate(s) have already been invited. Please create a new assessment instead.`);
       return;
     }
 
@@ -432,13 +454,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const reloadQuota = async () => {
     try {
       const quotaResponse = await api.get('/usage/quota-status');
-      const quotas = quotaResponse.data?.data?.quotas;
+      const apiData = quotaResponse.data?.data;
+      const quotas = apiData?.quotas;
+      const subscriptionStatus = (apiData?.subscription_status || '').toLowerCase();
+      const isActivePlan = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
+
       if (quotas?.AS) {
-        const subLimit = quotas.AS.subscription?.limit || 10;
+        const subLimit = quotas.AS.subscription?.limit;
         const addonRemaining = quotas.AS.addon?.remaining || 0;
         const used = quotas.AS.subscription?.used || 0;
 
-        // Check if unlimited
         const unlimited = subLimit === -1 || subLimit === 'unlimited';
         setIsUnlimited(unlimited);
 
@@ -446,13 +471,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           setTotalUnits(-1);
           setAvailableUnits(-1);
           setQuotaPercentage(0);
-        } else {
-          const totalLimit = (typeof subLimit === 'number' ? subLimit : 10) + addonRemaining;
+        } else if (typeof subLimit === 'number' && subLimit > 0) {
+          const totalLimit = subLimit + addonRemaining;
           setTotalUnits(totalLimit);
           const remaining = quotas.AS.total_remaining ?? (totalLimit - used);
           setAvailableUnits(remaining);
           const percentage = totalLimit > 0 ? (used / totalLimit) * 100 : 0;
           setQuotaPercentage(percentage);
+        } else if (isActivePlan) {
+          const totalLimit = 10 + addonRemaining;
+          setTotalUnits(totalLimit);
+          const remaining = quotas.AS.total_remaining ?? (totalLimit - used);
+          setAvailableUnits(remaining);
+        } else {
+          // Inactive/expired — reset to avoid false "exhausted" banner
+          setAvailableUnits(null);
+          console.log('[TalentFlow] Inactive plan — skipping quota display');
         }
       }
     } catch (error) {
@@ -550,7 +584,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
     // Check if quota is available (use availableUnits from API)
     if (availableUnits !== null && availableUnits <= 0) {
-      alert('Assessment quota exhausted. Please upgrade your plan or purchase add-on credits to continue.');
+      toast.warning('Assessment quota exhausted. Please upgrade your plan or purchase add-on credits to continue.');
       return;
     }
 
@@ -577,7 +611,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Delete assessment via API
   const handleDeleteAssessment = async (assessmentId: string) => {
-    if (!confirm('Delete this assessment permanently?')) return;
+    if (!await dialog.confirm({ title: 'Delete Assessment', message: 'Delete this assessment permanently? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) return;
 
     try {
       await assessmentService.delete(assessmentId);
@@ -586,14 +620,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setOpenMenuId(null);
     } catch (error) {
       console.error('Failed to delete assessment:', error);
-      alert(`Failed to delete assessment: ${error instanceof Error ? error.message : 'Only draft assessments can be deleted'}`);
+      toast.error(`Failed to delete assessment: ${error instanceof Error ? error.message : 'Only draft assessments can be deleted'}`);
       setOpenMenuId(null);
     }
   };
 
   // Pause assessment (set status to closed)
   const handlePauseAssessment = async (assessmentId: string) => {
-    if (!confirm('Pause this assessment?')) return;
+    if (!await dialog.confirm({ title: 'Pause Assessment', message: 'Are you sure you want to pause this assessment?', variant: 'warning', confirmText: 'Pause' })) return;
 
     try {
       await assessmentService.update(assessmentId, { status: 'closed' as any });
@@ -601,7 +635,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setOpenMenuId(null);
     } catch (error) {
       console.error('Failed to pause assessment:', error);
-      alert(`Failed to pause assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Failed to pause assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setOpenMenuId(null);
     }
   };
@@ -614,14 +648,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setOpenMenuId(null);
     } catch (error) {
       console.error('Failed to activate assessment:', error);
-      alert(`Failed to activate assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Failed to activate assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setOpenMenuId(null);
     }
   };
 
   // Archive assessment
   const handleArchiveAssessment = async (assessmentId: string) => {
-    if (!confirm('Archive this assessment?')) return;
+    if (!await dialog.confirm({ title: 'Archive Assessment', message: 'Archive this assessment? It will be moved to the archived section.', variant: 'warning', confirmText: 'Archive' })) return;
 
     try {
       await assessmentService.update(assessmentId, { status: 'archived' as any });
@@ -629,14 +663,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setOpenMenuId(null);
     } catch (error) {
       console.error('Failed to archive assessment:', error);
-      alert(`Failed to archive assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Failed to archive assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setOpenMenuId(null);
     }
   };
 
   // Mark assessment as completed (uses dedicated /close endpoint)
   const handleCompleteAssessment = async (assessmentId: string) => {
-    if (!confirm('Mark this assessment as completed?')) return;
+    if (!await dialog.confirm({ title: 'Complete Assessment', message: 'Mark this assessment as completed? This action cannot be undone.', variant: 'confirm', confirmText: 'Complete' })) return;
 
     try {
       await assessmentService.close(assessmentId);
@@ -646,9 +680,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       console.error('Failed to complete assessment:', error);
       const errorMessage = error?.message || 'Unknown error';
       if (errorMessage.includes('403') || errorMessage.toLowerCase().includes('forbidden')) {
-        alert('Permission denied: You do not have permission to complete this assessment. Please contact your administrator.');
+        toast.error('Permission denied: You do not have permission to complete this assessment. Please contact your administrator.');
       } else {
-        alert(`Failed to complete assessment: ${errorMessage}`);
+        toast.error(`Failed to complete assessment: ${errorMessage}`);
       }
       setOpenMenuId(null);
     }
@@ -690,12 +724,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         candidate_name: invitation.candidate_name,
         candidate_email: invitation.candidate_email,
       });
-      alert('Invitation resent successfully!');
+      toast.success('Invitation resent successfully!');
       // Reload invitations
       handleTrackInvites(selectedAssessmentForTracking);
     } catch (error) {
       console.error('Failed to resend invitation:', error);
-      alert('Failed to resend invitation. Please try again.');
+      toast.error('Failed to resend invitation. Please try again.');
     }
   };
 
@@ -924,8 +958,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </div>
         )}
 
-        {/* Quota Exhausted Banner */}
-        {!isUnlimited && availableUnits !== null && availableUnits <= 0 && (
+        {/* Quota Exhausted Banner — only show when units were actually consumed */}
+        {!isUnlimited && availableUnits !== null && availableUnits <= 0 && stats.units_consumed > 0 && (
           <div className="mb-6 bg-red-50 border-2 border-red-300 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-200 flex items-center justify-center flex-shrink-0">
@@ -1102,6 +1136,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   Activity Logs
                 </button>
                 <button
+                  onClick={() => setActiveTab('consent')}
+                  className={`py-4 text-sm border-b-2 transition-colors flex items-center gap-1.5 ${
+                    activeTab === 'consent'
+                      ? 'border-gray-800 text-gray-800'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <FileCheck className="w-4 h-4" />
+                  Consent Logs
+                </button>
+                <button
                   onClick={() => setActiveTab('archived')}
                   className={`py-4 text-sm border-b-2 transition-colors ${
                     activeTab === 'archived'
@@ -1156,6 +1201,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {activeTab === 'audit' ? (
               /* Activity Logs Tab */
               <AssessmentAuditTrail />
+            ) : activeTab === 'consent' ? (
+              /* Consent Logs Tab */
+              <ConsentLogs />
             ) : activeTab === 'settings' ? (
               /* Settings Tab with Sub-tabs */
               <div className="space-y-6">
@@ -1798,7 +1846,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <button
                         onClick={() => {
                           if (assessment.status === 'Draft') {
-                            alert('Please publish the assessment before sharing');
+                            toast.warning('Please publish the assessment before sharing');
                             return;
                           }
                           setSelectedAssessmentForShare(assessment);
@@ -1868,7 +1916,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <button
                             onClick={async () => {
                               if (assessment.status === 'Draft') {
-                                alert('Please publish the assessment before sharing');
+                                toast.warning('Please publish the assessment before sharing');
                                 setOpenMenuId(null);
                                 return;
                               }
@@ -1894,10 +1942,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   document.execCommand('copy');
                                   document.body.removeChild(textArea);
                                 }
-                                alert('Shareable link copied! This link can be used by one candidate.');
+                                toast.success('Shareable link copied! This link can be used by one candidate.');
                               } catch (error) {
                                 console.error('Failed to generate link:', error);
-                                alert('Failed to generate shareable link. Please try Share via Email instead.');
+                                toast.error('Failed to generate shareable link. Please try Share via Email instead.');
                               }
                               setOpenMenuId(null);
                             }}
@@ -2014,7 +2062,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <button
                           onClick={() => {
                             if (assessment.status === 'Draft') {
-                              alert('Please publish the assessment before sharing');
+                              toast.warning('Please publish the assessment before sharing');
                               return;
                             }
                             setSelectedAssessmentForShare(assessment);
@@ -2119,7 +2167,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <button
                                   onClick={async () => {
                                     if (assessment.status === 'Draft') {
-                                      alert('Please publish the assessment before sharing');
+                                      toast.warning('Please publish the assessment before sharing');
                                       setOpenMenuId(null);
                                       return;
                                     }
@@ -2145,10 +2193,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         document.execCommand('copy');
                                         document.body.removeChild(textArea);
                                       }
-                                      alert('Shareable link copied! This link can be used by one candidate.');
+                                      toast.success('Shareable link copied! This link can be used by one candidate.');
                                     } catch (error) {
                                       console.error('Failed to generate link:', error);
-                                      alert('Failed to generate shareable link. Please try Share via Email instead.');
+                                      toast.error('Failed to generate shareable link. Please try Share via Email instead.');
                                     }
                                     setOpenMenuId(null);
                                   }}
@@ -2169,10 +2217,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       // Reload assessments to show the new clone
                                       // Reload assessments after cloning
                                       await reloadAssessments();
-                                      alert(`Assessment duplicated: "${response.cloned_title}"`);
+                                      toast.success(`Assessment duplicated: "${response.cloned_title}"`);
                                     } catch (error) {
                                       console.error('Failed to duplicate assessment:', error);
-                                      alert('Failed to duplicate assessment. Please try again.');
+                                      toast.error('Failed to duplicate assessment. Please try again.');
                                     }
                                     setOpenMenuId(null);
                                   }}

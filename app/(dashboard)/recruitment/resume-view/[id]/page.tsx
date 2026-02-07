@@ -198,10 +198,12 @@ import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 
 export default function ResumeViewPage() {
   const params = useParams();
   const router = useRouter();
+  const dialog = useGlobalDialog();
   const resumeId = params.id as string;
 
   const [resume, setResume] = useState<Resume | null>(null);
@@ -545,7 +547,7 @@ Best regards`);
   };
 
   const handleDelete = async () => {
-    if (confirm('Are you sure you want to delete this resume?')) {
+    if (await dialog.confirm({ title: 'Delete Resume', message: 'Are you sure you want to delete this resume? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) {
       try {
         await resumeService.delete(resumeId);
         toast.success('Resume deleted');
