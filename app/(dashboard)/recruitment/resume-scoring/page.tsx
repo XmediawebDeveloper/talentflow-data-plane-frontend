@@ -514,6 +514,37 @@ export default function ResumeScoringRoute() {
     }
   };
 
+  // Refresh only resumes (lightweight, no loading state)
+  const refreshResumes = async () => {
+    try {
+      const resumeResponse = await resumeService.list({ page_size: 100 });
+      const convertedResumes: Resume[] = resumeResponse.items.map((r: any) => ({
+        id: r.id,
+        name: r.candidate_name || r.file_name?.replace(/\.[^/.]+$/, '') || 'Unknown',
+        email: r.email || 'No email',
+        phone: r.phone || 'No phone',
+        title: r.current_title || 'N/A',
+        experience: r.experience_years ? `${r.experience_years} years` : 'N/A',
+        education: r.education?.[0]?.degree || 'N/A',
+        location: r.location || 'N/A',
+        skills: r.skills || [],
+        source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
+        folderId: r.folder_id || '',
+        uploadDate: r.created_at,
+        attachments: r.file_name ? 1 : 0,
+        uploadedBy: r.uploaded_by || 'System',
+        version: r.version || 1,
+        versionCount: r.version_count || 1,
+        fileName: r.file_name,
+        fileSizeKb: r.file_size_kb,
+      }));
+      setResumes(convertedResumes);
+      console.log('[ResumeScoringRoute] Refreshed resumes from API:', convertedResumes.length);
+    } catch (error) {
+      console.error('[ResumeScoringRoute] Failed to refresh resumes:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -531,6 +562,7 @@ export default function ResumeScoringRoute() {
       scoredHistory={scoredHistory}
       onSaveScores={saveScoredHistory}
       onRefreshHistory={loadScoredHistory}
+      onRefreshResumes={refreshResumes}
       initialJdId={initialJdId}
       initialScoreId={initialScoreId}
       initialShowProgress={showProgress}
