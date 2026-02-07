@@ -15,6 +15,7 @@ import ResumeDetailView from '@/components/ResumeDetailView';
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
+import VersionHistoryModal from '@/components/VersionHistoryModal';
 import { Resume, Folder, Job } from '@/lib/types/types';
 import { resumeService, folderService, ResumeSearchParams } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
@@ -69,6 +70,11 @@ export default function ResumeDatabasePage() {
 
   // AI Talent Match modal state
   const [showAITalentMatchModal, setShowAITalentMatchModal] = useState(false);
+
+  // Version History modal state
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [selectedResumeForVersion, setSelectedResumeForVersion] = useState<Resume | null>(null);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
 
   // Build search params from filters
   const buildSearchParams = useCallback((): ResumeSearchParams => {
@@ -161,9 +167,10 @@ export default function ResumeDatabasePage() {
         source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
         folderId: r.folder_id || '',
         uploadDate: r.created_at,
-        attachments: r.file_name ? 1 : 0,
+        attachments: r.version_count || 1, // Show version count as file count
         uploadedBy: r.uploaded_by_name || 'System',
         versionCount: r.version_count || 1,
+        version: r.version || 1,
         currentCompany: r.current_company,
         previousCompany: r.previous_company,
         noticePeriod: r.notice_period,
@@ -362,9 +369,10 @@ export default function ResumeDatabasePage() {
     source: 'Manual',
     folderId: r.folder_id || '',
     uploadDate: r.created_at,
-    attachments: 1,
+    attachments: r.version_count || 1, // Show version count as file count
     uploadedBy: r.uploaded_by_name || 'System',
     versionCount: r.version_count || 1,
+    version: r.version || 1,
     currentCompany: r.current_company,
     previousCompany: r.previous_company,
     noticePeriod: r.notice_period,
@@ -546,14 +554,14 @@ export default function ResumeDatabasePage() {
     }
   };
 
-  // Client-side search helper - searches across all text fields including phone and skills
+  // Client-side search helper - searches across all text fields including phone, skills, and resume content
   const matchesSearch = useCallback((resume: Resume, query: string): boolean => {
     if (!query) return true;
 
     const searchTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 0);
     if (searchTerms.length === 0) return true;
 
-    // Create searchable text from all relevant fields
+    // Create searchable text from all relevant fields INCLUDING resume content
     const searchableFields = [
       resume.name,
       resume.email,
@@ -562,7 +570,10 @@ export default function ResumeDatabasePage() {
       resume.location,
       resume.currentCompany,
       resume.previousCompany,
-      ...(resume.skills || []),
+      resume.professionalSummary, // Search inside resume summary
+      ...(resume.skills || []), // Skills from resume
+      ...(resume.technicalSkills || []), // Technical skills from resume content
+      ...(resume.softSkills || []), // Soft skills from resume content
     ].filter(Boolean).map(field => field?.toLowerCase() || '');
 
     const searchableText = searchableFields.join(' ');
@@ -664,6 +675,40 @@ export default function ResumeDatabasePage() {
     return pages;
   };
 
+  // Handle showing version history
+  const handleShowVersionHistory = async (resume: Resume) => {
+    setIsLoadingVersions(true);
+    try {
+      const versions = await resumeService.getVersions(resume.id);
+      const resumeWithVersions = {
+        ...resume,
+        versions: versions && versions.length > 0
+          ? versions.map((v: any) => ({
+              id: v.id,
+              name: v.file_name || v.candidate_name || 'Resume',
+              uploadDate: v.created_at,
+              version: v.version || 1,
+              uploadedBy: v.uploaded_by_name || 'Unknown',
+              size: v.file_size ? `${(v.file_size / 1024).toFixed(0)} KB` : undefined,
+            }))
+          : [{
+              id: resume.id,
+              name: resume.name || 'Resume',
+              uploadDate: resume.uploadDate,
+              version: resume.version || 1,
+              uploadedBy: resume.uploadedBy || 'Unknown',
+            }],
+      };
+      setSelectedResumeForVersion(resumeWithVersions);
+      setShowVersionHistory(true);
+    } catch (error) {
+      console.error('Failed to fetch versions:', error);
+      toast.error('Failed to load version history');
+    } finally {
+      setIsLoadingVersions(false);
+    }
+  };
+
   if (loading && resumes.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -758,6 +803,7 @@ export default function ResumeDatabasePage() {
           onApplyToJob={handleApplyToJob}
           onDelete={(id) => handleDelete(id)}
           onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
+          onVersion={handleShowVersionHistory}
           highlightQuery={appliedSearchQuery}
         />
 
@@ -875,6 +921,36 @@ export default function ResumeDatabasePage() {
 
             // Navigate to AI Talent Match page with the selected JD
             router.push(`/recruitment/ai-talent-match?jdId=${jobId}&view=new`);
+          }}
+        />
+      )}
+
+      {/* Version History Modal */}
+      {showVersionHistory && selectedResumeForVersion && (
+        <VersionHistoryModal
+          resume={selectedResumeForVersion}
+          onClose={() => {
+            setShowVersionHistory(false);
+            setSelectedResumeForVersion(null);
+          }}
+          onDownload={async (versionId: string) => {
+            try {
+              toast.loading('Downloading resume...', { id: 'download' });
+              const blob = await resumeService.download(versionId);
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              const version = selectedResumeForVersion.versions?.find(v => v.id === versionId);
+              a.download = version?.name || `${selectedResumeForVersion.name}_resume.pdf`;
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              document.body.removeChild(a);
+              toast.success('Resume downloaded', { id: 'download' });
+            } catch (error) {
+              console.error('Download failed:', error);
+              toast.error('Failed to download resume', { id: 'download' });
+            }
           }}
         />
       )}

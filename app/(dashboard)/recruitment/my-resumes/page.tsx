@@ -362,6 +362,22 @@ export default function MyResumesPage() {
   const [uploadedResumeToScore, setUploadedResumeToScore] = useState<{ id: string; candidateName: string } | null>(null);
   const [singleResumeToApply, setSingleResumeToApply] = useState<Resume | null>(null);
 
+  // Duplicate scoring warning state
+  const [duplicateScoringWarning, setDuplicateScoringWarning] = useState<{
+    isOpen: boolean;
+    jobId: string;
+    jobTitle: string;
+    resumeIds: string[];
+    existingScores: Array<{
+      resume_id: string;
+      candidate_name: string;
+      overall_score: number;
+      match_status: string;
+      scored_at: string | null;
+    }>;
+    newCount: number;
+  }>({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 });
+
   // Version selector state (for single candidate apply)
   const [versionSelectorResume, setVersionSelectorResume] = useState<Resume | null>(null);
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
@@ -1166,6 +1182,33 @@ export default function MyResumesPage() {
     const selectedJob = publishedJobs.find(j => j.id === jobId);
 
     try {
+      // Check for existing scores (duplicate check)
+      const duplicateCheck = await scoringService.checkExistingScores(jobId, resumeIds);
+
+      // If there are existing scores, show warning
+      if (duplicateCheck.existing_count > 0) {
+        setDuplicateScoringWarning({
+          isOpen: true,
+          jobId: jobId,
+          jobTitle: duplicateCheck.jd_title,
+          resumeIds: resumeIds,
+          existingScores: duplicateCheck.existing_scores,
+          newCount: duplicateCheck.new_count,
+        });
+        return; // Stop here and wait for user decision
+      }
+
+      // No duplicates - proceed with scoring
+      await proceedWithScoring(jobId, resumeIds, selectedJob?.title || duplicateCheck.jd_title);
+    } catch (error: any) {
+      console.error('Failed to check duplicates or start scoring:', error);
+      toast.error(error.message || 'Failed to start scoring');
+    }
+  };
+
+  // Proceed with scoring (extracted for reuse in duplicate confirmation)
+  const proceedWithScoring = async (jobId: string, resumeIds: string[], jobTitle: string) => {
+    try {
       // Start async bulk scoring via Celery (resumeIds already have correct version IDs)
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
@@ -1195,6 +1238,26 @@ export default function MyResumesPage() {
       console.error('Failed to start scoring:', error);
       toast.error(error.message || 'Failed to start scoring');
     }
+  };
+
+  // Handle scoring only new candidates (remove duplicates)
+  const handleScoreOnlyNew = async () => {
+    const { jobId, resumeIds, jobTitle, existingScores } = duplicateScoringWarning;
+
+    // Filter out already scored resumes
+    const alreadyScoredIds = existingScores.map(s => s.resume_id);
+    const newResumeIds = resumeIds.filter(id => !alreadyScoredIds.includes(id));
+
+    setDuplicateScoringWarning({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 });
+
+    if (newResumeIds.length === 0) {
+      toast.error('All selected candidates are already scored');
+      return;
+    }
+
+    // Proceed with scoring only new candidates
+    await proceedWithScoring(jobId, newResumeIds, jobTitle);
+    toast.success(`Scoring ${newResumeIds.length} new candidate(s), skipped ${alreadyScoredIds.length} duplicate(s)`);
   };
 
   const handleCreateFolder = async (name: string, parentId?: string) => {
@@ -2591,6 +2654,100 @@ export default function MyResumesPage() {
           }}
           onApply={handleApplyToJobSubmit}
         />
+      )}
+
+      {/* Duplicate Scoring Warning Modal */}
+      {duplicateScoringWarning.isOpen && (
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200" />
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="flex items-center gap-4 p-6 border-b border-gray-200">
+                <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                  <AlertCircle className="w-6 h-6 text-yellow-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Already Scored - Duplicate Warning</h3>
+                  <p className="text-sm text-gray-500">{duplicateScoringWarning.jobTitle}</p>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 max-h-96 overflow-y-auto">
+                <p className="text-gray-700 mb-4">
+                  <span className="font-semibold text-red-600">{duplicateScoringWarning.existingScores.length} candidate(s)</span> have already been scored for this job description.
+                </p>
+
+                {/* List of duplicate candidates */}
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-600" />
+                    Already Scored - Will NOT be Re-scored:
+                  </h4>
+                  <div className="space-y-2">
+                    {duplicateScoringWarning.existingScores.map((score, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-white rounded-lg p-3 border border-red-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                            <X className="w-4 h-4 text-red-600" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900">{score.candidate_name}</div>
+                            {score.scored_at && (
+                              <div className="text-xs text-gray-500">
+                                Scored on {formatDateTimeIST(score.scored_at)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-semibold text-gray-900">{score.overall_score}%</div>
+                          <div className="text-xs text-gray-500 capitalize">{score.match_status}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {duplicateScoringWarning.newCount > 0 ? (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="text-sm text-gray-700">
+                      <span className="font-semibold text-green-700">{duplicateScoringWarning.newCount} new candidate(s)</span> will be scored if you continue.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <p className="text-sm text-gray-600">
+                      All selected candidates are already scored. No new candidates to score.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200">
+                <button
+                  onClick={() => setDuplicateScoringWarning({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 })}
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                {duplicateScoringWarning.newCount > 0 && (
+                  <button
+                    onClick={handleScoreOnlyNew}
+                    className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Score Only New ({duplicateScoringWarning.newCount})
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* ZIP Download Confirmation Modal */}
