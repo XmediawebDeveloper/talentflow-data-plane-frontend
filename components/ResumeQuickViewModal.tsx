@@ -11,31 +11,64 @@ interface ResumeQuickViewModalProps {
 
 export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickViewModalProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [loadingPdf, setLoadingPdf] = useState(false);
+  const [extractedText, setExtractedText] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // Fetch PDF preview on mount
+  // Section headers for document-like formatting
+  const sectionHeaders = [
+    'experience', 'work experience', 'employment', 'professional experience',
+    'education', 'academic', 'qualifications',
+    'skills', 'technical skills', 'core competencies', 'expertise', 'key skills',
+    'summary', 'professional summary', 'objective', 'profile', 'about',
+    'certifications', 'certificates', 'licenses',
+    'projects', 'key projects',
+    'achievements', 'accomplishments', 'awards',
+    'languages', 'contact', 'personal', 'references', 'hobbies', 'interests'
+  ];
+
   useEffect(() => {
-    fetchPdfPreview();
+    fetchPreview();
     return () => {
-      // Clean up blob URL when unmounting
       if (pdfUrl) {
         URL.revokeObjectURL(pdfUrl);
       }
     };
   }, [resume.id]);
 
-  const fetchPdfPreview = async () => {
-    setLoadingPdf(true);
+  const fetchPreview = async () => {
+    setLoading(true);
     try {
-      // Use preview endpoint which converts DOCX/DOC to PDF
       const blob = await resumeService.preview(resume.id);
-      const url = URL.createObjectURL(blob);
-      setPdfUrl(url);
+      const firstBytes = await blob.slice(0, 10).text();
+
+      if (firstBytes.startsWith('%PDF')) {
+        const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+        const url = URL.createObjectURL(pdfBlob);
+        setPdfUrl(url);
+      } else {
+        // Not a PDF - fetch extracted text as fallback
+        await fetchExtractedText();
+      }
     } catch (error) {
       console.error('Failed to fetch PDF preview:', error);
-      toast.error('Failed to load PDF preview');
+      // Fallback to extracted text
+      await fetchExtractedText();
     } finally {
-      setLoadingPdf(false);
+      setLoading(false);
+    }
+  };
+
+  const fetchExtractedText = async () => {
+    try {
+      const data = await resumeService.get(resume.id);
+      if (data?.extracted_text) {
+        setExtractedText(data.extracted_text);
+      } else {
+        toast.error('Preview not available for this resume');
+      }
+    } catch (err) {
+      console.error('Failed to fetch extracted text:', err);
+      toast.error('Preview not available for this resume');
     }
   };
 
@@ -45,7 +78,6 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      // Use original filename to preserve file extension (pdf, doc, docx, rtf, txt, etc.)
       a.download = resume.fileName || `${resume.name || 'resume'}.${resume.fileType || 'pdf'}`;
       document.body.appendChild(a);
       a.click();
@@ -82,13 +114,13 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
           </div>
         </div>
 
-        {/* PDF Preview Content */}
+        {/* Preview Content */}
         <div className="flex-1 overflow-hidden p-4">
-          {loadingPdf ? (
+          {loading ? (
             <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
               <div className="text-center">
                 <Loader2 className="w-8 h-8 mx-auto mb-4 text-gray-600 animate-spin" />
-                <p className="text-gray-600">Loading PDF preview...</p>
+                <p className="text-gray-600">Loading preview...</p>
               </div>
             </div>
           ) : pdfUrl ? (
@@ -97,16 +129,49 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
               className="w-full h-full rounded-lg border border-gray-200"
               title="Resume Preview"
             />
+          ) : extractedText ? (
+            <div className="h-full overflow-y-auto bg-gray-100 rounded-lg p-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-3xl mx-auto">
+                {extractedText.split('\n').map((line, idx, lines) => {
+                  const trimmed = line.trim();
+                  if (!trimmed) return <div key={idx} className="h-3" />;
+
+                  const lowerLine = trimmed.toLowerCase().replace(/[:\-_]/g, ' ').trim();
+                  const isHeader = sectionHeaders.some(h =>
+                    lowerLine === h || lowerLine.startsWith(h + ' ') || lowerLine.endsWith(' ' + h)
+                  ) && trimmed.length < 50;
+
+                  if (isHeader) {
+                    return (
+                      <h3 key={idx} className="text-base font-bold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide">
+                        {trimmed}
+                      </h3>
+                    );
+                  }
+
+                  const firstNonEmpty = lines.findIndex(l => l.trim().length > 0);
+                  if (idx === firstNonEmpty) {
+                    return <h2 key={idx} className="text-xl font-bold text-gray-900 mb-1">{trimmed}</h2>;
+                  }
+
+                  if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
+                    return <p key={idx} className="text-sm text-gray-700 leading-relaxed pl-4 mb-0.5">{trimmed}</p>;
+                  }
+
+                  return <p key={idx} className="text-sm text-gray-700 leading-relaxed mb-0.5">{trimmed}</p>;
+                })}
+              </div>
+            </div>
           ) : (
             <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
               <div className="text-center">
                 <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                <p className="text-gray-600">PDF preview not available</p>
+                <p className="text-gray-600">Preview not available</p>
                 <button
-                  onClick={fetchPdfPreview}
+                  onClick={handleDownload}
                   className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
                 >
-                  Try Again
+                  Download Instead
                 </button>
               </div>
             </div>
