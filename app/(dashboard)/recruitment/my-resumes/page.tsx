@@ -25,6 +25,8 @@ import UploadHistoryDetailModal, { UploadHistoryItem } from '@/components/Upload
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
 import ResumeVersionSelector from '@/components/ResumeVersionSelector';
+import BulkVersionResolutionModal from '@/components/BulkVersionResolutionModal';
+import type { VersionedBatchItem } from '@/components/BulkVersionResolutionModal';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
@@ -370,6 +372,10 @@ export default function MyResumesPage() {
   const [isUploadHistoryMinimized, setIsUploadHistoryMinimized] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
   const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | null>(null);
+
+  // Bulk version resolution state
+  const [selectedVersionedItems, setSelectedVersionedItems] = useState<Map<string, VersionedBatchItem>>(new Map());
+  const [isBulkResolveModalOpen, setIsBulkResolveModalOpen] = useState(false);
 
   // Apply to Job modal state
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
@@ -3019,11 +3025,11 @@ export default function MyResumesPage() {
                                     </div>
                                     <div className="text-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
                                       <div className="text-sm font-semibold text-yellow-700">{record.duplicated}</div>
-                                      <div className="text-xs text-gray-600">Dup</div>
+                                      <div className="text-xs text-gray-600">Duplicates</div>
                                     </div>
                                     <div className="text-center p-2 bg-purple-50 rounded-lg border border-purple-100">
                                       <div className="text-sm font-semibold text-purple-700">{record.versioned || 0}</div>
-                                      <div className="text-xs text-gray-600">Ver</div>
+                                      <div className="text-xs text-gray-600">Version</div>
                                     </div>
                                     <div className="text-center p-2 bg-red-50 rounded-lg border border-red-100">
                                       <div className="text-sm font-semibold text-red-700">{record.errors}</div>
@@ -3031,7 +3037,7 @@ export default function MyResumesPage() {
                                     </div>
                                     <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100">
                                       <div className="text-sm font-semibold text-blue-700">{record.pending}</div>
-                                      <div className="text-xs text-gray-600">Pend</div>
+                                      <div className="text-xs text-gray-600">Pending</div>
                                     </div>
                                   </div>
 
@@ -3096,8 +3102,46 @@ export default function MyResumesPage() {
                                     return filteredStatuses.length > 0 ? (
                                     <div className="border-t border-gray-100 pt-4">
                                       <div className="flex items-center justify-between mb-3">
-                                        <div className="text-xs font-semibold text-gray-700">
-                                          Files ({filteredStatuses.length}{uploadHistoryFilter ? ` of ${record.statuses.length}` : ''})
+                                        <div className="flex items-center gap-3">
+                                          <div className="text-xs font-semibold text-gray-700">
+                                            Files ({filteredStatuses.length}{uploadHistoryFilter ? ` of ${record.statuses.length}` : ''})
+                                          </div>
+                                          {/* Select All checkbox for versioned items */}
+                                          {uploadHistoryFilter === 'versioned' && filteredStatuses.length > 0 && (() => {
+                                            const versionedInBatch = filteredStatuses.filter((f: any) => f.status === 'versioned' || f.status === 'version');
+                                            if (versionedInBatch.length === 0) return null;
+                                            const allSelected = versionedInBatch.every((f: any) => selectedVersionedItems.has(f.id));
+                                            return (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const newSelected = new Map(selectedVersionedItems);
+                                                  if (allSelected) {
+                                                    versionedInBatch.forEach((f: any) => newSelected.delete(f.id));
+                                                  } else {
+                                                    versionedInBatch.forEach((f: any) => {
+                                                      newSelected.set(f.id, {
+                                                        id: f.id,
+                                                        fileName: f.fileName,
+                                                        candidateName: f.candidateName || '',
+                                                        resumeId: f.resumeId,
+                                                      });
+                                                    });
+                                                  }
+                                                  setSelectedVersionedItems(newSelected);
+                                                }}
+                                                className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded-md hover:bg-purple-100 transition-colors"
+                                              >
+                                                <input
+                                                  type="checkbox"
+                                                  checked={allSelected}
+                                                  readOnly
+                                                  className="w-3 h-3 rounded border-purple-400 text-purple-600 pointer-events-none"
+                                                />
+                                                Select All
+                                              </button>
+                                            );
+                                          })()}
                                         </div>
                                         <div className="flex items-center gap-2 text-xs">
                                           <span className="flex items-center gap-1 text-green-600">
@@ -3117,6 +3161,8 @@ export default function MyResumesPage() {
                                       <div className="space-y-1.5 max-h-64 overflow-y-auto">
                                         {filteredStatuses.map((file: any, idx: number) => {
                                           const isClickable = ['completed', 'versioned', 'duplicate', 'error'].includes(file.status);
+                                          const isVersioned = file.status === 'versioned' || file.status === 'version';
+                                          const isSelected = selectedVersionedItems.has(file.id);
                                           return (
                                           <div
                                             key={file.id || idx}
@@ -3133,6 +3179,7 @@ export default function MyResumesPage() {
                                               }
                                             }}
                                             className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+                                              isVersioned && isSelected ? 'bg-purple-100 border-purple-400 ring-1 ring-purple-300' :
                                               file.status === 'completed' ? 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300' :
                                               file.status === 'versioned' ? 'bg-purple-50 border-purple-200 hover:bg-purple-100 hover:border-purple-300' :
                                               file.status === 'processing' ? 'bg-blue-50 border-blue-200' :
@@ -3141,6 +3188,30 @@ export default function MyResumesPage() {
                                               'bg-gray-50 border-gray-200'
                                             } ${isClickable ? 'cursor-pointer' : ''}`}
                                           >
+                                            {/* Checkbox for versioned items */}
+                                            {isVersioned && (
+                                              <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onClick={(e) => e.stopPropagation()}
+                                                onChange={(e) => {
+                                                  e.stopPropagation();
+                                                  const newSelected = new Map(selectedVersionedItems);
+                                                  if (isSelected) {
+                                                    newSelected.delete(file.id);
+                                                  } else {
+                                                    newSelected.set(file.id, {
+                                                      id: file.id,
+                                                      fileName: file.fileName,
+                                                      candidateName: file.candidateName || '',
+                                                      resumeId: file.resumeId,
+                                                    });
+                                                  }
+                                                  setSelectedVersionedItems(newSelected);
+                                                }}
+                                                className="w-4 h-4 rounded border-purple-400 text-purple-600 focus:ring-purple-500 cursor-pointer flex-shrink-0"
+                                              />
+                                            )}
                                             {/* Status Icon */}
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                                               file.status === 'completed' ? 'bg-green-500' :
@@ -3212,6 +3283,38 @@ export default function MyResumesPage() {
                 })()}
               </div>
 
+              {/* Floating Resolve Selected Bar */}
+              {selectedVersionedItems.size > 0 && (
+                <div className="border-t border-purple-200 px-6 py-3 bg-gradient-to-r from-purple-50 to-violet-50 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+                      <GitBranch className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-purple-900">
+                        {selectedVersionedItems.size} versioned resume{selectedVersionedItems.size !== 1 ? 's' : ''} selected
+                      </span>
+                      <p className="text-xs text-purple-600">Choose how to resolve these version conflicts</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedVersionedItems(new Map())}
+                      className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-white transition-colors"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={() => setIsBulkResolveModalOpen(true)}
+                      className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-2"
+                    >
+                      <GitBranch className="w-4 h-4" />
+                      Resolve Selected ({selectedVersionedItems.size})
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Footer */}
               <div className="border-t border-gray-200 px-6 py-4 bg-white rounded-b-2xl">
                 <button
@@ -3231,6 +3334,22 @@ export default function MyResumesPage() {
         <UploadHistoryDetailModal
           item={selectedHistoryItem}
           onClose={() => setSelectedHistoryItem(null)}
+        />
+      )}
+
+      {/* Bulk Version Resolution Modal */}
+      {isBulkResolveModalOpen && selectedVersionedItems.size > 0 && (
+        <BulkVersionResolutionModal
+          items={Array.from(selectedVersionedItems.values())}
+          onClose={() => setIsBulkResolveModalOpen(false)}
+          onResolved={() => {
+            setIsBulkResolveModalOpen(false);
+            setSelectedVersionedItems(new Map());
+            // Refresh batch data
+            fetchUploadHistory();
+            isFetchingRef.current = false;
+            fetchData();
+          }}
         />
       )}
 

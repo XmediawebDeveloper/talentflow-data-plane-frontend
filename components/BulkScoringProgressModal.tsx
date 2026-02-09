@@ -2,6 +2,32 @@ import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader, Database, FolderO
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 
+// Utility function to format date to IST (Asia/Kolkata timezone)
+function formatDateTimeIST(date: Date | string | undefined): { date: string; time: string } {
+  if (!date) {
+    return { date: '-', time: '' };
+  }
+
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+  // Use Asia/Kolkata timezone for proper IST conversion
+  const dateStr = dateObj.toLocaleDateString('en-US', {
+    timeZone: 'Asia/Kolkata',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  const timeStr = dateObj.toLocaleTimeString('en-US', {
+    timeZone: 'Asia/Kolkata',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  return { date: dateStr, time: timeStr };
+}
+
 export interface ScoringProgressItem {
   id: string;
   resumeId: string;  // Added: Resume ID for retry
@@ -127,27 +153,38 @@ export default function BulkScoringProgressModal({
 
     let badgeClass = '';
     let icon = null;
+    let displayText = result;
 
     switch (result) {
       case 'Exact Match':
         badgeClass = 'bg-green-100 text-green-700 border-green-300';
         icon = <CheckCircle2 className="w-3 h-3" />;
+        displayText = 'Exact Match';
         break;
       case 'Partial Match':
         badgeClass = 'bg-yellow-100 text-yellow-700 border-yellow-300';
         icon = <TrendingUp className="w-3 h-3" />;
+        displayText = 'Partial Match';
         break;
       case 'No Match':
         badgeClass = 'bg-red-100 text-red-700 border-red-300';
         icon = <XCircle className="w-3 h-3" />;
+        displayText = 'No Match';
         break;
     }
 
     return (
-      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${badgeClass}`}>
-        {icon}
-        Scored - Completed
-      </span>
+      <div className="flex flex-col gap-1">
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${badgeClass} w-fit`}>
+          {icon}
+          {displayText}
+        </span>
+        {score !== undefined && score > 0 && (
+          <span className="text-xs text-gray-500">
+            Score: {score.toFixed(1)}%
+          </span>
+        )}
+      </div>
     );
   };
 
@@ -210,24 +247,52 @@ export default function BulkScoringProgressModal({
           </div>
         </div>
 
-        {/* Stats Row */}
+        {/* Stats Row - Clickable Boxes */}
         <div className="flex flex-wrap items-center gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-gray-400" />
-            <span className="text-sm text-gray-600">Queue: <span className="font-semibold text-gray-900">{queuedCount}</span></span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Loader className={`w-4 h-4 text-blue-500 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />
-            <span className="text-sm text-gray-600">Processing: <span className="font-semibold text-blue-600">{inProgressCount}</span></span>
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-green-500" />
-            <span className="text-sm text-gray-600">Done: <span className="font-semibold text-green-600">{completedCount}</span></span>
-          </div>
-          <div className="flex items-center gap-2">
-            <XCircle className="w-4 h-4 text-red-500" />
-            <span className="text-sm text-gray-600">Failed: <span className="font-semibold text-red-600">{failedCount}</span></span>
-          </div>
+          <button
+            onClick={() => setStatusFilter(statusFilter === 'queued' ? 'all' : 'queued')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer hover:shadow-md ${
+              statusFilter === 'queued'
+                ? 'bg-gray-600 text-white shadow-md ring-2 ring-gray-400'
+                : 'bg-white text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span className="text-sm font-medium">Queue: <span className="font-bold">{queuedCount}</span></span>
+          </button>
+          <button
+            onClick={() => setStatusFilter(statusFilter === 'in-progress' ? 'all' : 'in-progress')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer hover:shadow-md ${
+              statusFilter === 'in-progress'
+                ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400'
+                : 'bg-white text-gray-600 hover:bg-blue-50'
+            }`}
+          >
+            <Loader className={`w-4 h-4 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />
+            <span className="text-sm font-medium">Processing: <span className="font-bold">{inProgressCount}</span></span>
+          </button>
+          <button
+            onClick={() => setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer hover:shadow-md ${
+              statusFilter === 'completed'
+                ? 'bg-green-600 text-white shadow-md ring-2 ring-green-400'
+                : 'bg-white text-gray-600 hover:bg-green-50'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span className="text-sm font-medium">Done: <span className="font-bold">{completedCount}</span></span>
+          </button>
+          <button
+            onClick={() => setStatusFilter(statusFilter === 'failed' ? 'all' : 'failed')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer hover:shadow-md ${
+              statusFilter === 'failed'
+                ? 'bg-red-600 text-white shadow-md ring-2 ring-red-400'
+                : 'bg-white text-gray-600 hover:bg-red-50'
+            }`}
+          >
+            <XCircle className="w-4 h-4" />
+            <span className="text-sm font-medium">Failed: <span className="font-bold">{failedCount}</span></span>
+          </button>
         </div>
 
         {/* Preparing State - Show when all are queued and nothing started */}
@@ -328,7 +393,6 @@ export default function BulkScoringProgressModal({
               <thead>
                 <tr className="border-b-2 border-gray-200">
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Candidate Name</th>
-                  {(showJobTitleColumn && !filterByJobId) && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Job Title</th>}
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Source</th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Status</th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Scored Date & Time</th>
@@ -345,16 +409,16 @@ export default function BulkScoringProgressModal({
                     }`}
                   >
                     <td className="py-3 px-4">
-                      <div className="font-medium text-gray-900">{item.candidateName}</div>
+                      <div className="flex flex-col gap-1">
+                        <div className="font-medium text-gray-900">{item.candidateName}</div>
+                        {item.jobTitle && !filterByJobId && (
+                          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                            <Target className="w-3 h-3" />
+                            <span>{item.jobTitle}</span>
+                          </div>
+                        )}
+                      </div>
                     </td>
-                    {(showJobTitleColumn && !filterByJobId) && (
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <Target className="w-4 h-4 text-gray-800" />
-                          <span className="text-sm text-gray-900 font-medium">{item.jobTitle}</span>
-                        </div>
-                      </td>
-                    )}
                     <td className="py-3 px-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${
                         item.source === 'Internal DB'
@@ -387,21 +451,23 @@ export default function BulkScoringProgressModal({
                       {item.scoredDateTime ? (
                         <div className="text-sm text-gray-700">
                           <div className="font-medium">
-                            {item.scoredDateTime.toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}
+                            {formatDateTimeIST(item.scoredDateTime).date}
                           </div>
                           <div className="text-xs text-gray-500">
-                            {item.scoredDateTime.toLocaleTimeString('en-US', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
+                            {formatDateTimeIST(item.scoredDateTime).time}
+                          </div>
+                        </div>
+                      ) : item.status === 'Scored successfully' ? (
+                        <div className="text-sm text-gray-700">
+                          <div className="font-medium">
+                            {formatDateTimeIST(new Date()).date}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {formatDateTimeIST(new Date()).time}
                           </div>
                         </div>
                       ) : (
-                        <span className="text-sm text-gray-400">-</span>
+                        <span className="text-sm text-gray-400">Pending</span>
                       )}
                     </td>
                     <td className="py-3 px-4">
