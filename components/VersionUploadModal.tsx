@@ -1,6 +1,7 @@
 import { X, Upload, File, Trash2, GitBranch, AlertCircle } from 'lucide-react';
 import { useState, useRef } from 'react';
 import DuplicateResolutionModal from './DuplicateResolutionModal';
+import { toast } from 'sonner';
 
 // File validation constants
 const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
@@ -125,7 +126,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
     // In a real app, you'd process each resolution action
     // For now, we'll just show an alert and close
     const actionSummary = resolutions.map(r => `${r.fileName}: ${r.action}`).join('\n');
-    alert(`Version upload completed!\n\n${actionSummary}`);
+    toast.success('Version upload completed!');
     
     setShowResolutionModal(false);
     onClose();

@@ -5,6 +5,7 @@ import {
   Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff
 } from 'lucide-react';
 import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } from '@/lib/services';
+import { toast } from 'sonner';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 
@@ -129,7 +130,7 @@ export default function AssessmentAuditTrail() {
 
   const handleExportAuditLogs = () => {
     console.log('Exporting audit logs:', activities);
-    alert(`Exporting ${activities.length} audit log entries to CSV`);
+    toast.info(`Exporting ${activities.length} audit log entries to CSV`);
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -146,7 +147,7 @@ export default function AssessmentAuditTrail() {
     if (diffDays < 7) return `${diffDays} days ago`;
 
     return date.toLocaleString('en-US', {
-      timeZone: 'UTC',
+      timeZone: 'Asia/Kolkata',
       month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
@@ -459,7 +460,7 @@ export default function AssessmentAuditTrail() {
                           <div>
                             <span className="text-gray-500">Timestamp:</span>
                             <span className="ml-2 text-gray-900">
-                              {new Date(activity.timestamp).toLocaleString('en-US', { timeZone: 'UTC', hour12: true })}
+                              {new Date(activity.timestamp).toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true })}
                             </span>
                           </div>
                           {activity.assessment_id && (

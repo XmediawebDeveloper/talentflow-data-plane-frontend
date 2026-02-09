@@ -1,4 +1,4 @@
-import { Bell, Search, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command, Loader2, X, Wifi, WifiOff } from 'lucide-react';
+import { Bell, Search, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command, Loader2, X, Wifi, WifiOff, Building2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { User as UserType } from '@/lib/types/tenant';
 import NotificationCenter from './NotificationCenter';
@@ -759,68 +759,146 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowUserMenu(false)}
               ></div>
-              <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm text-gray-900">{user.name}</p>
-                    <span className={`px-2 py-0.5 rounded text-xs border ${roleBadgeColors[user.role]}`}>
-                      {roleLabels[user.role]}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500">{user.email}</p>
-                </div>
-                
-                {/* Permissions Summary */}
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                    <Shield className="w-3 h-3" />
-                    Your Permissions
-                  </p>
-                  <div className="space-y-1 text-xs">
-                    {user.permissions.can_manage_users && (
-                      <div className="flex items-center gap-1.5 text-green-600">
-                        <span className="w-1 h-1 bg-green-600 rounded-full"></span>
-                        Manage Users & Tenants
-                      </div>
-                    )}
-                    {user.permissions.can_view_analytics && (
-                      <div className="flex items-center gap-1.5 text-green-600">
-                        <span className="w-1 h-1 bg-green-600 rounded-full"></span>
-                        View Analytics
-                      </div>
-                    )}
-                    {user.permissions.can_manage_settings && (
-                      <div className="flex items-center gap-1.5 text-green-600">
-                        <span className="w-1 h-1 bg-green-600 rounded-full"></span>
-                        Manage Settings
-                      </div>
-                    )}
-                    {!user.permissions.can_manage_users && (
-                      <div className="flex items-center gap-1.5 text-gray-400">
-                        <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                        Admin Features (restricted)
-                      </div>
-                    )}
+              <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20">
+                {/* User Profile Header */}
+                <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-5 py-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-full bg-white/20 text-white flex items-center justify-center text-lg font-semibold ring-2 ring-white/30">
+                      {(user.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-medium truncate">{user.name || 'User'}</p>
+                      <p className="text-gray-300 text-sm truncate">{user.email}</p>
+                      <span className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+                        user.role === 'tenant_admin'
+                          ? 'bg-purple-500/20 text-purple-200 border border-purple-400/30'
+                          : user.role === 'recruiter'
+                          ? 'bg-blue-500/20 text-blue-200 border border-blue-400/30'
+                          : 'bg-gray-500/20 text-gray-200 border border-gray-400/30'
+                      }`}>
+                        <Shield className="w-3 h-3" />
+                        {roleLabels[user.role]}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                
+
+                {/* Organization Info */}
+                {tenant && (
+                  <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Building2 className="w-4 h-4 text-gray-500" />
+                      <span className="text-gray-600">Organization:</span>
+                      <span className="font-medium text-gray-900 truncate">{tenant.name || 'N/A'}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Stats */}
+                <div className="px-5 py-3 border-b border-gray-100">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Your Permissions</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${
+                      user.permissions.can_manage_users ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
+                    }`}>
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Manage Users</span>
+                    </div>
+                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${
+                      user.permissions.can_view_analytics ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
+                    }`}>
+                      <TrendingUp className="w-3.5 h-3.5" />
+                      <span>Analytics</span>
+                    </div>
+                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${
+                      user.permissions.can_manage_settings ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
+                    }`}>
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>Settings</span>
+                    </div>
+                    <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${
+                      user.is_tenant_admin ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
+                    }`}>
+                      <Shield className="w-3.5 h-3.5" />
+                      <span>Admin Access</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Menu Items */}
                 <div className="py-2">
-                  <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3">
-                    <User className="w-4 h-4" />
-                    Profile Settings
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      router.push('/settings/general-settings');
+                    }}
+                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
+                      <User className="w-4 h-4 text-gray-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">Profile Settings</p>
+                      <p className="text-xs text-gray-500">Update your personal information</p>
+                    </div>
                   </button>
-                  <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3">
-                    <Settings className="w-4 h-4" />
-                    Account Settings
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      router.push('/settings/security');
+                    }}
+                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
+                      <Shield className="w-4 h-4 text-gray-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">Security</p>
+                      <p className="text-xs text-gray-500">Password & authentication</p>
+                    </div>
                   </button>
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      router.push('/audits/activity');
+                    }}
+                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
+                      <Activity className="w-4 h-4 text-gray-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">Activity Log</p>
+                      <p className="text-xs text-gray-500">View your recent activity</p>
+                    </div>
+                  </button>
+                  {hasQuotaPermission && (
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        router.push('/subscription/usage-quotas');
+                      }}
+                      className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
+                        <Zap className="w-4 h-4 text-gray-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">Usage & Billing</p>
+                        <p className="text-xs text-gray-500">View usage and manage subscription</p>
+                      </div>
+                    </button>
+                  )}
                 </div>
-                <div className="border-t border-gray-100 pt-2">
+
+                {/* Sign Out */}
+                <div className="border-t border-gray-100 p-3 bg-gray-50">
                   <button
                     onClick={() => {
                       setShowUserMenu(false);
                       onLogout();
                     }}
-                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-3"
+                    className="w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-100 transition-colors flex items-center justify-center gap-2 rounded-lg font-medium"
                   >
                     <LogOut className="w-4 h-4" />
                     Sign Out

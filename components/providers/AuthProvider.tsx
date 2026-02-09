@@ -6,9 +6,11 @@ import { authService, clearTokens } from '@/lib/services';
 import { mockTenant } from '@/lib/mockData/tenantData';
 import { useRouter } from 'next/navigation';
 import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/services/authService';
+import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
 
 // Helper to store/retrieve user from localStorage
 const USER_STORAGE_KEY = 'talentflow_user';
+const TENANT_STORAGE_KEY = 'talentflow_tenant';
 
 const saveUserToStorage = (user: User) => {
   if (typeof window !== 'undefined') {
@@ -32,6 +34,51 @@ const clearUserFromStorage = () => {
   }
 };
 
+const saveTenantToStorage = (tenant: Tenant) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(TENANT_STORAGE_KEY, JSON.stringify(tenant));
+  }
+};
+
+const getTenantFromStorage = (): Tenant | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(TENANT_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearTenantFromStorage = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(TENANT_STORAGE_KEY);
+  }
+};
+
+// Helper to check if token is expired
+const isTokenExpired = (): boolean => {
+  if (typeof window === 'undefined') return false;
+
+  const token = localStorage.getItem('accessToken');
+  if (!token) return false;
+
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+    const payload = JSON.parse(atob(parts[1]));
+
+    // Check if token is expired (with 30 second buffer)
+    if (payload.exp && (payload.exp * 1000) < Date.now() + 30000) {
+      console.log('[AUTH] Token expired or expiring soon');
+      return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+};
+
 // RBAC Helper functions
 const isViewerRole = (role: UserRole): boolean => role === 'viewer';
 const isBillingManagerRole = (role: UserRole): boolean => role === 'billing_manager';
@@ -44,7 +91,7 @@ interface AuthContextType {
   tenant: Tenant | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (user: User) => void;
+  login: (user: User, tenantName?: string) => void;
   logout: () => void;
   updateUser: (user: User) => void;
   // RBAC01-07: Extended role and permission helpers
@@ -99,7 +146,7 @@ function mapApiUserToUser(apiUser: ApiUser): User {
     // No role-based defaults are applied here
     permissions: {
       // Job Descriptions - Granular CRUD
-      canReadJD: apiUser.permissions.can_read_jd,
+      canReadJD: apiUser.permissions.can_view_jd, // Backend maps jd:read → can_view_jd
       canCreateJD: apiUser.permissions.can_create_jd,
       canUpdateJD: apiUser.permissions.can_update_jd,
       canDeleteJD: apiUser.permissions.can_delete_jd,
@@ -111,6 +158,8 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canDeleteResumes: apiUser.permissions.can_delete_resumes,
       // Resume Database - Granular CRUD
       canAccessInternalDB: apiUser.permissions.can_access_internal_db,
+      canViewInternalDB: apiUser.permissions.can_view_internal_db,
+      canCreateInternalDB: apiUser.permissions.can_create_internal_db,
       canUpdateInternalDB: apiUser.permissions.can_update_internal_db,
       canDeleteInternalDB: apiUser.permissions.can_delete_internal_db,
       // Assessments - Granular CRUD
@@ -208,12 +257,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[AUTH] Restoring session...');
       console.log('[AUTH] Has token:', authService.isAuthenticated());
 
+      // Ensure cookies are synced with localStorage (cross-browser token recovery)
+      // This fixes token loss in Firefox, Safari, iOS Safari, Arc, Brave, etc.
+      const recovered = ensureTokenCookies();
+      if (recovered) {
+        console.log('[AUTH] Tokens recovered from localStorage to cookies');
+      }
+
       // First, try to restore from localStorage (fast path)
       const storedUser = getUserFromStorage();
+      const storedTenant = getTenantFromStorage();
       if (storedUser && authService.isAuthenticated()) {
+        // Check if token is expired before restoring session
+        if (isTokenExpired()) {
+          console.log('[AUTH] Token expired, clearing session');
+          clearTokens();
+          clearUserFromStorage();
+          clearTenantFromStorage();
+          setIsLoading(false);
+          return;
+        }
+
+        // ✅ NEW: Check permission version on page load (hard refresh)
+        // This ensures permissions are fresh even when user hits F5
+        try {
+          const accessToken = localStorage.getItem('accessToken');
+          const storedVersion = localStorage.getItem('permission_version');
+
+          if (accessToken && storedVersion) {
+            // Make a lightweight API call to check server's permission version
+            const versionCheckResponse = await authService.checkPermissionVersion();
+            const serverVersion = versionCheckResponse.permission_version;
+            const currentVersion = parseInt(storedVersion, 10);
+
+            if (serverVersion > currentVersion) {
+              console.log(`[AUTH] Permission version outdated on hard refresh: ${currentVersion} → ${serverVersion}`);
+              console.log('[AUTH] Refreshing token to get updated permissions...');
+
+              // Refresh token to get latest permissions
+              const refreshToken = localStorage.getItem('refreshToken');
+              if (refreshToken) {
+                const refreshResponse = await authService.refreshToken(refreshToken);
+                // Token will be automatically updated by setTokens call in authService
+
+                // Fetch updated user data with new permissions
+                const apiUserData = await authService.getCurrentUser();
+                const userData = mapApiUserToUser(apiUserData);
+                setUser(userData);
+                saveUserToStorage(userData);
+                setTenant(storedTenant || mockTenant);
+                console.log('[AUTH] Permissions refreshed on hard refresh ✅');
+
+                // ✅ Dispatch event to notify UI components (like Sidebar) to re-render
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('permissions-updated'));
+                }
+
+                setIsLoading(false);
+                return;
+              }
+            } else {
+              console.log('[AUTH] Permission version up to date:', currentVersion);
+            }
+          }
+        } catch (versionError) {
+          console.warn('[AUTH] Permission version check failed, continuing with cached permissions:', versionError);
+          // Don't block - fall through to normal restore
+        }
+
         console.log('[AUTH] Restored user from localStorage:', storedUser.email);
         setUser(storedUser);
-        setTenant(mockTenant);
+        // Use stored tenant if available, otherwise use mock as fallback
+        setTenant(storedTenant || mockTenant);
         setIsLoading(false);
 
         // Optionally validate with API in background (don't block UI)
@@ -242,6 +357,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.warn('[AUTH] Subscription inactive, clearing session');
             clearTokens();
             clearUserFromStorage();
+            clearTenantFromStorage();
             setUser(null);
             setTenant(null);
             // Don't redirect - let the modal handle it
@@ -268,6 +384,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('[AUTH] Session restore failed:', error);
           clearTokens();
           clearUserFromStorage();
+          clearTenantFromStorage();
         }
       } else {
         console.log('[AUTH] No token found, skipping session restore');
@@ -278,11 +395,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     restoreSession();
   }, []);
 
-  const login = (userData: User) => {
-    console.log('[AUTH] Login called for:', userData.email);
+  const login = (userData: User, tenantName?: string) => {
+    console.log('[AUTH] Login called for:', userData.email, 'tenant:', tenantName);
     setUser(userData);
-    setTenant(mockTenant);
+
+    // Create tenant object from login response
+    const tenantData: Tenant = {
+      ...mockTenant, // Use mock as base for structure
+      id: userData.tenantId,
+      name: tenantName || mockTenant.name,
+    };
+    setTenant(tenantData);
     saveUserToStorage(userData);
+    saveTenantToStorage(tenantData);
   };
 
   const logout = () => {
@@ -291,6 +416,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTenant(null);
     clearTokens();
     clearUserFromStorage();
+    clearTenantFromStorage();
     router.push('/login');
   };
 

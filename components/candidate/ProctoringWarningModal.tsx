@@ -112,7 +112,7 @@ function WarningCard({
             {warning.message}
           </p>
           <p className="text-xs mt-1 opacity-60">
-            {warning.timestamp.toLocaleTimeString()}
+            {warning.timestamp.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true })}
           </p>
         </div>
 

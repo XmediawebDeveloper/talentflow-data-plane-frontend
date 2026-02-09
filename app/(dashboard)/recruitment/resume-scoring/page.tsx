@@ -44,11 +44,17 @@ export default function ResumeScoringRoute() {
   const [initialJdId, setInitialJdId] = useState<string | null>(null);
   const [initialScoreId, setInitialScoreId] = useState<string | null>(null);
   const [showProgress, setShowProgress] = useState(false);
+  const [initialNewScoring, setInitialNewScoring] = useState(false);
   const [pendingScoringData, setPendingScoringData] = useState<{
     jobId: string;
     jobTitle: string;
     resumeIds: string[];
     resumeNames: string[];
+    alreadyScoredItems?: Array<{
+      resumeId: string;
+      candidateName: string;
+      score: number;
+    }>;
   } | null>(null);
   const [pendingBatchId, setPendingBatchId] = useState<string | null>(null);
   const [batchProgress, setBatchProgress] = useState<{
@@ -87,6 +93,13 @@ export default function ResumeScoringRoute() {
     if (showProgressParam === 'true') {
       console.log('[ResumeScoringRoute] Show progress requested');
       setShowProgress(true);
+    }
+
+    // Handle mode=new from JD module (JD-first scoring flow)
+    const modeParam = searchParams.get('mode');
+    if (modeParam === 'new' && jdId) {
+      console.log('[ResumeScoringRoute] JD-first scoring flow: mode=new with jd_id:', jdId);
+      setInitialNewScoring(true);
     }
 
     // Handle batch_id from async scoring (Celery)
@@ -501,6 +514,37 @@ export default function ResumeScoringRoute() {
     }
   };
 
+  // Refresh only resumes (lightweight, no loading state)
+  const refreshResumes = async () => {
+    try {
+      const resumeResponse = await resumeService.list({ page_size: 100 });
+      const convertedResumes: Resume[] = resumeResponse.items.map((r: any) => ({
+        id: r.id,
+        name: r.candidate_name || r.file_name?.replace(/\.[^/.]+$/, '') || 'Unknown',
+        email: r.email || 'No email',
+        phone: r.phone || 'No phone',
+        title: r.current_title || 'N/A',
+        experience: r.experience_years ? `${r.experience_years} years` : 'N/A',
+        education: r.education?.[0]?.degree || 'N/A',
+        location: r.location || 'N/A',
+        skills: r.skills || [],
+        source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
+        folderId: r.folder_id || '',
+        uploadDate: r.created_at,
+        attachments: r.file_name ? 1 : 0,
+        uploadedBy: r.uploaded_by || 'System',
+        version: r.version || 1,
+        versionCount: r.version_count || 1,
+        fileName: r.file_name,
+        fileSizeKb: r.file_size_kb,
+      }));
+      setResumes(convertedResumes);
+      console.log('[ResumeScoringRoute] Refreshed resumes from API:', convertedResumes.length);
+    } catch (error) {
+      console.error('[ResumeScoringRoute] Failed to refresh resumes:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -518,9 +562,11 @@ export default function ResumeScoringRoute() {
       scoredHistory={scoredHistory}
       onSaveScores={saveScoredHistory}
       onRefreshHistory={loadScoredHistory}
+      onRefreshResumes={refreshResumes}
       initialJdId={initialJdId}
       initialScoreId={initialScoreId}
       initialShowProgress={showProgress}
+      initialNewScoring={initialNewScoring}
       pendingScoringData={pendingScoringData}
       batchProgress={batchProgress}
     />

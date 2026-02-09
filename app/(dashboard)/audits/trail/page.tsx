@@ -33,7 +33,7 @@ interface AuditLog {
   id: string;
   tenant_id: string;
   user_id: string | null;
-  user_name: string;
+  user_name: string | null;
   user_email: string | null;
   action: string;
   action_label: string;
@@ -44,6 +44,10 @@ interface AuditLog {
   user_agent: string | null;
   units_consumed: number;
   unit_type: string | null;
+  // Unit consumption tracking fields
+  consumption_status: string | null;  // SUCCESS, FAILED, INSUFFICIENT_UNITS, etc.
+  balance_before: number | null;      // Available units before action
+  balance_after: number | null;       // Available units after action
   created_at: string;
 }
 
@@ -365,7 +369,7 @@ export default function AuditTrailPage() {
       const token = localStorage.getItem('accessToken');
       const params = new URLSearchParams({
         page: '1',
-        page_size: '1000',
+        page_size: '100',
       });
 
       if (actionFilter) params.append('action', actionFilter);
@@ -393,13 +397,18 @@ export default function AuditTrailPage() {
   };
 
   const convertToCSV = (logs: AuditLog[]): string => {
-    const headers = ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'IP Address', 'Details'];
+    const headers = ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Unit Type', 'Units Consumed', 'Balance Before', 'Balance After', 'Result', 'IP Address', 'Details'];
     const rows = logs.map(log => [
       log.created_at,
       log.user_name,
       log.action_label,
       log.entity_type || '',
       log.entity_id || '',
+      log.unit_type || '',
+      log.units_consumed || '',
+      log.balance_before ?? '',
+      log.balance_after ?? '',
+      log.consumption_status || '',
       log.ip_address || '',
       JSON.stringify(log.details),
     ]);
@@ -484,10 +493,11 @@ export default function AuditTrailPage() {
     if (!searchQuery) return true;
     const search = searchQuery.toLowerCase();
     return (
-      log.user_name.toLowerCase().includes(search) ||
-      log.action_label.toLowerCase().includes(search) ||
+      (log.user_name && log.user_name.toLowerCase().includes(search)) ||
+      (log.action_label && log.action_label.toLowerCase().includes(search)) ||
       (log.entity_type && log.entity_type.toLowerCase().includes(search)) ||
-      (log.ip_address && log.ip_address.includes(search))
+      (log.ip_address && log.ip_address.includes(search)) ||
+      (log.user_email && log.user_email.toLowerCase().includes(search))
     );
   });
 
@@ -735,7 +745,11 @@ export default function AuditTrailPage() {
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Entity</th>
                     {viewMode !== 'system' && (
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Units</th>
+                      <>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Units</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Available</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Result</th>
+                      </>
                     )}
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">IP Address</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"></th>
@@ -785,23 +799,60 @@ export default function AuditTrailPage() {
                           )}
                         </td>
                         {viewMode !== 'system' && (
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {log.units_consumed && log.units_consumed > 0 ? (
-                              <div className="inline-flex items-center gap-1.5 bg-gray-100 px-3 py-1.5 rounded-lg">
-                                <Zap className="w-4 h-4 text-gray-600" />
-                                <span className="text-sm font-semibold text-gray-800">
-                                  {log.units_consumed}
-                                </span>
-                                {log.unit_type && (
-                                  <span className="text-xs text-gray-500">
-                                    {log.unit_type}
+                          <>
+                            {/* Units Consumed */}
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {log.units_consumed && log.units_consumed > 0 ? (
+                                <div className="inline-flex items-center gap-1.5 bg-gray-100 px-3 py-1.5 rounded-lg">
+                                  <Zap className="w-4 h-4 text-gray-600" />
+                                  <span className="text-sm font-semibold text-gray-800">
+                                    {log.units_consumed}
                                   </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-sm text-gray-400">—</span>
-                            )}
-                          </td>
+                                  {log.unit_type && (
+                                    <span className="text-xs text-gray-500">
+                                      {log.unit_type}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-sm text-gray-400">—</span>
+                              )}
+                            </td>
+                            {/* Available Units (Balance Before -> After) */}
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {log.balance_before !== null && log.balance_before !== undefined ? (
+                                <div className="text-sm">
+                                  <span className="text-gray-600">{log.balance_before}</span>
+                                  <span className="text-gray-400 mx-1">→</span>
+                                  <span className="font-medium text-gray-800">{log.balance_after ?? 0}</span>
+                                </div>
+                              ) : (
+                                <span className="text-sm text-gray-400">—</span>
+                              )}
+                            </td>
+                            {/* Result (Consumption Status) */}
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {log.consumption_status ? (
+                                <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                                  log.consumption_status === 'SUCCESS'
+                                    ? 'bg-green-100 text-green-800 border border-green-200'
+                                    : log.consumption_status === 'INSUFFICIENT_UNITS'
+                                    ? 'bg-red-100 text-red-800 border border-red-200'
+                                    : log.consumption_status === 'FAILED'
+                                    ? 'bg-red-100 text-red-800 border border-red-200'
+                                    : log.consumption_status === 'ABANDONED'
+                                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                                    : log.consumption_status === 'INTERRUPTED'
+                                    ? 'bg-orange-100 text-orange-800 border border-orange-200'
+                                    : 'bg-gray-100 text-gray-800 border border-gray-200'
+                                }`}>
+                                  {log.consumption_status.replace(/_/g, ' ')}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-gray-400">—</span>
+                              )}
+                            </td>
+                          </>
                         )}
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm text-gray-600 font-mono bg-gray-50 px-2 py-1 rounded">
@@ -826,7 +877,7 @@ export default function AuditTrailPage() {
           )}
 
           {/* Pagination */}
-          {totalPages > 1 && (
+          {totalPages > 1 && filteredLogs.length > 0 && (
             <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
               <p className="text-sm text-gray-600">
                 Page <span className="font-semibold text-gray-900">{page}</span> of <span className="font-semibold text-gray-900">{totalPages}</span>
@@ -932,6 +983,46 @@ export default function AuditTrailPage() {
                     {selectedLog.unit_type && (
                       <p className="text-xs text-gray-600 mt-0.5">{selectedLog.unit_type}</p>
                     )}
+                  </div>
+                )}
+                {/* Available Units (Balance Before/After) */}
+                {selectedLog.balance_before !== null && selectedLog.balance_before !== undefined && (
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <div className="flex items-center gap-2 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                      <TrendingUp className="w-3.5 h-3.5" />
+                      Available Units
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg text-gray-600">{selectedLog.balance_before}</span>
+                      <span className="text-gray-400">→</span>
+                      <span className="text-lg font-bold text-gray-900">{selectedLog.balance_after ?? 0}</span>
+                    </div>
+                  </div>
+                )}
+                {/* Consumption Result/Status */}
+                {selectedLog.consumption_status && (
+                  <div className={`rounded-xl p-4 ${
+                    selectedLog.consumption_status === 'SUCCESS'
+                      ? 'bg-green-50'
+                      : selectedLog.consumption_status === 'INSUFFICIENT_UNITS' || selectedLog.consumption_status === 'FAILED'
+                      ? 'bg-red-50'
+                      : 'bg-yellow-50'
+                  }`}>
+                    <div className="flex items-center gap-2 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                      <Activity className="w-3.5 h-3.5" />
+                      Result
+                    </div>
+                    <span className={`inline-flex px-3 py-1.5 rounded-lg text-sm font-semibold ${
+                      selectedLog.consumption_status === 'SUCCESS'
+                        ? 'bg-green-100 text-green-800 border border-green-200'
+                        : selectedLog.consumption_status === 'INSUFFICIENT_UNITS' || selectedLog.consumption_status === 'FAILED'
+                        ? 'bg-red-100 text-red-800 border border-red-200'
+                        : selectedLog.consumption_status === 'ABANDONED'
+                        ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                        : 'bg-orange-100 text-orange-800 border border-orange-200'
+                    }`}>
+                      {selectedLog.consumption_status.replace(/_/g, ' ')}
+                    </span>
                   </div>
                 )}
                 <div className="bg-gray-50 rounded-xl p-4 col-span-2">

@@ -3,6 +3,7 @@ import { UserCog, Plus, Search, Edit2, Trash2, X, Mail, Calendar, Loader2 } from
 import { User, UserRole } from '@/lib/types/tenant';
 import { userService, ApiUser, UserPermissions } from '../services/userService';
 import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 
 interface UsersManagementProps {
   currentUser?: User;
@@ -46,6 +47,7 @@ const defaultPermissions: UserPermissions = {
 };
 
 export default function UsersManagement({ currentUser, tenantId }: UsersManagementProps) {
+  const dialog = useGlobalDialog();
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -163,7 +165,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
   };
 
   const handleDeleteUser = async (id: string) => {
-    if (!confirm('Are you sure you want to deactivate this user?')) {
+    if (!await dialog.confirm({ title: 'Deactivate User', message: 'Are you sure you want to deactivate this user?', variant: 'warning', confirmText: 'Deactivate' })) {
       return;
     }
 

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Clock, Loader2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import ResumeTable from '@/components/ResumeTable';
@@ -15,6 +16,7 @@ import ResumeDetailView from '@/components/ResumeDetailView';
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
+import VersionHistoryModal from '@/components/VersionHistoryModal';
 import { Resume, Folder, Job } from '@/lib/types/types';
 import { resumeService, folderService, ResumeSearchParams } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
@@ -37,6 +39,7 @@ interface SearchFilters {
 
 export default function ResumeDatabasePage() {
   const router = useRouter();
+  const { user, isTenantAdmin } = useAuth();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -69,6 +72,14 @@ export default function ResumeDatabasePage() {
 
   // AI Talent Match modal state
   const [showAITalentMatchModal, setShowAITalentMatchModal] = useState(false);
+
+  // Assessment modal state
+  const [showAssessmentJobModal, setShowAssessmentJobModal] = useState(false);
+
+  // Version History modal state
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [selectedResumeForVersion, setSelectedResumeForVersion] = useState<Resume | null>(null);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
 
   // Build search params from filters
   const buildSearchParams = useCallback((): ResumeSearchParams => {
@@ -161,9 +172,10 @@ export default function ResumeDatabasePage() {
         source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
         folderId: r.folder_id || '',
         uploadDate: r.created_at,
-        attachments: r.file_name ? 1 : 0,
+        attachments: r.version_count || 1, // Show version count as file count
         uploadedBy: r.uploaded_by_name || 'System',
         versionCount: r.version_count || 1,
+        version: r.version || 1,
         currentCompany: r.current_company,
         previousCompany: r.previous_company,
         noticePeriod: r.notice_period,
@@ -362,9 +374,10 @@ export default function ResumeDatabasePage() {
     source: 'Manual',
     folderId: r.folder_id || '',
     uploadDate: r.created_at,
-    attachments: 1,
+    attachments: r.version_count || 1, // Show version count as file count
     uploadedBy: r.uploaded_by_name || 'System',
     versionCount: r.version_count || 1,
+    version: r.version || 1,
     currentCompany: r.current_company,
     previousCompany: r.previous_company,
     noticePeriod: r.notice_period,
@@ -487,6 +500,60 @@ export default function ResumeDatabasePage() {
     setShowAITalentMatchModal(true);
   };
 
+  // ✅ NEW: Handle bulk Resume Scoring
+  const handleBulkResumeScoring = () => {
+    const selectedResumesList = resumes.filter(r => selectedResumes.includes(r.id));
+    if (selectedResumesList.length === 0) {
+      toast.error('Please select at least one resume');
+      return;
+    }
+    setResumesForApply(selectedResumesList);
+    fetchJobs();
+    setShowApplyToJobModal(true); // Use the same modal for selecting JD
+  };
+
+  // ✅ Handle bulk Assessment creation - Show job selection modal first
+  const handleBulkAssessment = () => {
+    const selectedResumesList = resumes.filter(r => selectedResumes.includes(r.id));
+    if (selectedResumesList.length === 0) {
+      toast.error('Please select at least one resume');
+      return;
+    }
+    setResumesForApply(selectedResumesList);
+    fetchJobs();
+    setShowAssessmentJobModal(true); // Show job selection modal
+  };
+
+  // Handle job selection for Assessment creation
+  const handleAssessmentJobSelect = async (resumeIds: string[], jobIds: string[]) => {
+    if (jobIds.length === 0 || resumeIds.length === 0) return;
+
+    setShowAssessmentJobModal(false);
+
+    // Get the selected job and resumes
+    const jobId = jobIds[0]; // Take first selected job
+    const selectedJob = jobs.find(j => j.id === jobId);
+    const selectedResumesList = resumeIds.map(id => {
+      const resume = resumes.find(r => r.id === id);
+      return {
+        id: id,
+        candidateName: resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown',
+        email: resume?.email || '',
+      };
+    });
+
+    // Store resumes in session storage for assessment page
+    sessionStorage.setItem('assessmentResumes', JSON.stringify(selectedResumesList));
+
+    // Clear selection
+    setSelectedResumes([]);
+    setResumesForApply([]);
+
+    // Navigate to assessment creation page with job pre-selected
+    const encodedTitle = encodeURIComponent(selectedJob?.title || '');
+    router.push(`/recruitment/assessments?create=true&jd_id=${jobId}&jd_title=${encodedTitle}`);
+  };
+
   // Handle actual apply action from modal - using async Celery scoring
   const handleApply = async (resumeIds: string[], jobIds: string[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
@@ -546,14 +613,14 @@ export default function ResumeDatabasePage() {
     }
   };
 
-  // Client-side search helper - searches across all text fields including phone and skills
+  // Client-side search helper - searches across all text fields including phone, skills, and resume content
   const matchesSearch = useCallback((resume: Resume, query: string): boolean => {
     if (!query) return true;
 
     const searchTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 0);
     if (searchTerms.length === 0) return true;
 
-    // Create searchable text from all relevant fields
+    // Create searchable text from all relevant fields INCLUDING resume content
     const searchableFields = [
       resume.name,
       resume.email,
@@ -562,7 +629,10 @@ export default function ResumeDatabasePage() {
       resume.location,
       resume.currentCompany,
       resume.previousCompany,
-      ...(resume.skills || []),
+      resume.professionalSummary, // Search inside resume summary
+      ...(resume.skills || []), // Skills from resume
+      ...(resume.technicalSkills || []), // Technical skills from resume content
+      ...(resume.softSkills || []), // Soft skills from resume content
     ].filter(Boolean).map(field => field?.toLowerCase() || '');
 
     const searchableText = searchableFields.join(' ');
@@ -664,6 +734,40 @@ export default function ResumeDatabasePage() {
     return pages;
   };
 
+  // Handle showing version history
+  const handleShowVersionHistory = async (resume: Resume) => {
+    setIsLoadingVersions(true);
+    try {
+      const versions = await resumeService.getVersions(resume.id);
+      const resumeWithVersions = {
+        ...resume,
+        versions: versions && versions.length > 0
+          ? versions.map((v: any) => ({
+              id: v.id,
+              name: v.file_name || v.candidate_name || 'Resume',
+              uploadDate: v.created_at,
+              version: v.version || 1,
+              uploadedBy: v.uploaded_by_name || 'Unknown',
+              size: v.file_size ? `${(v.file_size / 1024).toFixed(0)} KB` : undefined,
+            }))
+          : [{
+              id: resume.id,
+              name: resume.name || 'Resume',
+              uploadDate: resume.uploadDate,
+              version: resume.version || 1,
+              uploadedBy: resume.uploadedBy || 'Unknown',
+            }],
+      };
+      setSelectedResumeForVersion(resumeWithVersions);
+      setShowVersionHistory(true);
+    } catch (error) {
+      console.error('Failed to fetch versions:', error);
+      toast.error('Failed to load version history');
+    } finally {
+      setIsLoadingVersions(false);
+    }
+  };
+
   if (loading && resumes.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -696,10 +800,10 @@ export default function ResumeDatabasePage() {
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
             onApplyToJob={handleBulkApplyToJob}
-            onDelete={() => handleDeleteResumes(selectedResumes)}
-            onResumeScoring={() => {}}
-            onAssessment={() => {}}
-            onAITalentMatch={handleBulkAITalentMatch}
+            onDelete={user?.permissions?.canDeleteInternalDB || isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onResumeScoring={user?.permissions?.canRunScoring || isTenantAdmin ? handleBulkResumeScoring : undefined}
+            onAssessment={user?.permissions?.canCreateAssessments || isTenantAdmin ? handleBulkAssessment : undefined}
+            onAITalentMatch={user?.permissions?.canRunAiMatch || isTenantAdmin ? handleBulkAITalentMatch : undefined}
           />
         </div>
       )}
@@ -756,8 +860,9 @@ export default function ResumeDatabasePage() {
           onSelectAll={handleSelectAll}
           onQuickView={(resume) => setQuickViewResume(resume)}
           onApplyToJob={handleApplyToJob}
-          onDelete={(id) => handleDelete(id)}
+          onDelete={user?.permissions?.canDeleteInternalDB || isTenantAdmin ? (id) => handleDelete(id) : undefined}
           onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
+          onVersion={handleShowVersionHistory}
           highlightQuery={appliedSearchQuery}
         />
 
@@ -827,7 +932,7 @@ export default function ResumeDatabasePage() {
         <ResumeDetailView
           resume={viewingResume}
           onClose={() => setViewingResume(null)}
-          onDelete={(id) => handleDelete(id)}
+          onDelete={user?.permissions?.canDeleteInternalDB || isTenantAdmin ? (id) => handleDelete(id) : undefined}
         />
       )}
 
@@ -842,6 +947,7 @@ export default function ResumeDatabasePage() {
         <ApplyToJobModal
           resumes={resumesForApply}
           jobs={jobs}
+          mode="apply"
           onClose={() => {
             setShowApplyToJobModal(false);
             setResumesForApply([]);
@@ -875,6 +981,50 @@ export default function ResumeDatabasePage() {
 
             // Navigate to AI Talent Match page with the selected JD
             router.push(`/recruitment/ai-talent-match?jdId=${jobId}&view=new`);
+          }}
+        />
+      )}
+
+      {/* Assessment Job Selection Modal */}
+      {showAssessmentJobModal && (
+        <ApplyToJobModal
+          resumes={resumesForApply}
+          jobs={jobs}
+          mode="assessment"
+          onClose={() => {
+            setShowAssessmentJobModal(false);
+            setResumesForApply([]);
+          }}
+          onApply={handleAssessmentJobSelect}
+        />
+      )}
+
+      {/* Version History Modal */}
+      {showVersionHistory && selectedResumeForVersion && (
+        <VersionHistoryModal
+          resume={selectedResumeForVersion}
+          onClose={() => {
+            setShowVersionHistory(false);
+            setSelectedResumeForVersion(null);
+          }}
+          onDownload={async (versionId: string) => {
+            try {
+              toast.loading('Downloading resume...', { id: 'download' });
+              const blob = await resumeService.download(versionId);
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              const version = selectedResumeForVersion.versions?.find(v => v.id === versionId);
+              a.download = version?.name || `${selectedResumeForVersion.name}_resume.pdf`;
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              document.body.removeChild(a);
+              toast.success('Resume downloaded', { id: 'download' });
+            } catch (error) {
+              console.error('Download failed:', error);
+              toast.error('Failed to download resume', { id: 'download' });
+            }
           }}
         />
       )}

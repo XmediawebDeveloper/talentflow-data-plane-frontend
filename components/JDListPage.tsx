@@ -1,13 +1,15 @@
 'use client';
 
-import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, Clock, ArrowUpDown, Power } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, Clock, ArrowUpDown, Power, Target } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 // FIX-003: Import Sheet for inline JD creation
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import JDCreation from '@/components/JDCreation';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -30,6 +32,7 @@ const STATUS_TABS = [
 export default function JDListPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const dialog = useGlobalDialog();
   const [jds, setJds] = useState<JDResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,6 +46,20 @@ export default function JDListPage() {
   // FIX-003: State for inline JD creation/editing
   const [showJDSheet, setShowJDSheet] = useState(false);
   const [editingJDId, setEditingJDId] = useState<string | null>(null);
+
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    type: 'disable' | 'archive' | 'delete' | null;
+    jdId: string | null;
+    jdTitle: string;
+  }>({
+    isOpen: false,
+    type: null,
+    jdId: null,
+    jdTitle: '',
+  });
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   // Read status from URL query parameter on mount
   useEffect(() => {
@@ -186,24 +203,31 @@ export default function JDListPage() {
   }, [jds]);
 
   const handleArchive = async (jdId: string) => {
+    setConfirmLoading(true);
     try {
       await jdService.archive(jdId);
       toast.success('Job description archived');
       fetchJDs();
+      setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' });
     } catch (error) {
       toast.error('Failed to archive');
+    } finally {
+      setConfirmLoading(false);
     }
     setActiveDropdown(null);
   };
 
   const handleDelete = async (jdId: string) => {
-    if (!confirm('Are you sure you want to delete this job description?')) return;
+    setConfirmLoading(true);
     try {
       await jdService.delete(jdId);
       toast.success('Job description deleted');
       fetchJDs();
+      setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' });
     } catch (error) {
       toast.error('Failed to delete');
+    } finally {
+      setConfirmLoading(false);
     }
     setActiveDropdown(null);
   };
@@ -222,19 +246,23 @@ export default function JDListPage() {
 
   // JD04: Disable published JD
   const handleDisable = async (jdId: string) => {
+    setConfirmLoading(true);
     try {
-      await jdService.updateStatus(jdId, 'disabled');
+      await jdService.disable(jdId);
       toast.success('Job description disabled');
       fetchJDs();
+      setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' });
     } catch (error) {
       toast.error('Failed to disable');
+    } finally {
+      setConfirmLoading(false);
     }
     setActiveDropdown(null);
   };
 
   const handleBulkDelete = async () => {
     if (selectedJds.length === 0) return;
-    if (!confirm(`Are you sure you want to delete ${selectedJds.length} job description(s)?`)) return;
+    if (!await dialog.confirm({ title: 'Delete Job Descriptions', message: `Are you sure you want to delete ${selectedJds.length} job description(s)?`, variant: 'error', confirmText: 'Delete' })) return;
 
     try {
       let successCount = 0;
@@ -650,6 +678,16 @@ export default function JDListPage() {
                             <Users className="w-4 h-4" />
                             View Applicants
                           </button>
+                          {/* Score Resumes - only for published JDs */}
+                          {jd.status === 'published' && (
+                            <button
+                              onClick={() => { router.push(`/recruitment/resume-scoring?jd_id=${jd.id}&mode=new`); setActiveDropdown(null); }}
+                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Target className="w-4 h-4" />
+                              Score Resumes
+                            </button>
+                          )}
                           {/* JD04: Publish action for draft JDs */}
                           {jd.status === 'draft' && (
                             <button
@@ -663,7 +701,15 @@ export default function JDListPage() {
                           {/* JD04: Disable action for published JDs */}
                           {jd.status === 'published' && (
                             <button
-                              onClick={() => { handleDisable(jd.id); setActiveDropdown(null); }}
+                              onClick={() => {
+                                setConfirmDialog({
+                                  isOpen: true,
+                                  type: 'disable',
+                                  jdId: jd.id,
+                                  jdTitle: jd.title,
+                                });
+                                setActiveDropdown(null);
+                              }}
                               className="w-full flex items-center gap-2 px-4 py-2 text-sm text-orange-700 hover:bg-orange-50"
                             >
                               <Power className="w-4 h-4" />
@@ -673,7 +719,15 @@ export default function JDListPage() {
                           {/* Archive action */}
                           {jd.status !== 'archived' && (
                             <button
-                              onClick={() => { handleArchive(jd.id); setActiveDropdown(null); }}
+                              onClick={() => {
+                                setConfirmDialog({
+                                  isOpen: true,
+                                  type: 'archive',
+                                  jdId: jd.id,
+                                  jdTitle: jd.title,
+                                });
+                                setActiveDropdown(null);
+                              }}
                               className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
                               <Archive className="w-4 h-4" />
@@ -682,7 +736,15 @@ export default function JDListPage() {
                           )}
                           {/* Delete action */}
                           <button
-                            onClick={() => { handleDelete(jd.id); setActiveDropdown(null); }}
+                            onClick={() => {
+                              setConfirmDialog({
+                                isOpen: true,
+                                type: 'delete',
+                                jdId: jd.id,
+                                jdTitle: jd.title,
+                              });
+                              setActiveDropdown(null);
+                            }}
                             className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -771,6 +833,49 @@ export default function JDListPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Confirmation Dialogs */}
+      {confirmDialog.type === 'disable' && (
+        <ConfirmationDialog
+          isOpen={confirmDialog.isOpen}
+          title="Disable Job Description?"
+          message={`Are you sure you want to disable "${confirmDialog.jdTitle}"? This will remove the JD from Resume Scoring, AI Talent Match, Assessment Generator, and Reporting. The JD can be re-enabled later.`}
+          type="warning"
+          confirmText="Yes, Disable"
+          cancelText="Cancel"
+          onConfirm={() => confirmDialog.jdId && handleDisable(confirmDialog.jdId)}
+          onCancel={() => setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' })}
+          isLoading={confirmLoading}
+        />
+      )}
+
+      {confirmDialog.type === 'archive' && (
+        <ConfirmationDialog
+          isOpen={confirmDialog.isOpen}
+          title="Archive Job Description?"
+          message={`Are you sure you want to archive "${confirmDialog.jdTitle}"? This will remove the JD from all active modules. Archived JDs can be restored later.`}
+          type="warning"
+          confirmText="Yes, Archive"
+          cancelText="Cancel"
+          onConfirm={() => confirmDialog.jdId && handleArchive(confirmDialog.jdId)}
+          onCancel={() => setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' })}
+          isLoading={confirmLoading}
+        />
+      )}
+
+      {confirmDialog.type === 'delete' && (
+        <ConfirmationDialog
+          isOpen={confirmDialog.isOpen}
+          title="Delete Job Description?"
+          message={`Are you sure you want to permanently delete "${confirmDialog.jdTitle}"? This action cannot be undone. All associated data (applicants, scored resumes, assessments) will remain but will no longer be linked to this JD.`}
+          type="danger"
+          confirmText="Yes, Delete"
+          cancelText="Cancel"
+          onConfirm={() => confirmDialog.jdId && handleDelete(confirmDialog.jdId)}
+          onCancel={() => setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' })}
+          isLoading={confirmLoading}
+        />
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { ScoringProgressProvider } from "@/contexts/ScoringProgressContext";
 import { Toaster } from "sonner";
 import SubscriptionInactiveModal from "@/components/SubscriptionInactiveModal";
 import GlobalScoringProgressIndicator from "@/components/GlobalScoringProgressIndicator";
+import { GlobalDialogProvider } from "@/components/providers/GlobalDialogProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -32,6 +33,50 @@ export default function RootLayout({
         <link rel="icon" href="/logos/favicon.png" type="image/png" />
         <link rel="shortcut icon" href="/logos/favicon.png" type="image/png" />
         <link rel="apple-touch-icon" href="/logos/favicon.png" />
+        {/* Token recovery script - runs before any navigation to restore cookies from localStorage */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  // Get tokens from localStorage
+                  var accessToken = localStorage.getItem('accessToken');
+                  var refreshToken = localStorage.getItem('refreshToken');
+
+                  // Check if cookies exist
+                  function getCookie(name) {
+                    var value = '; ' + document.cookie;
+                    var parts = value.split('; ' + name + '=');
+                    if (parts.length === 2) return parts.pop().split(';').shift();
+                  }
+
+                  var accessCookie = getCookie('accessToken');
+
+                  // If localStorage has token but cookie doesn't, restore cookie
+                  if (accessToken && !accessCookie) {
+                    console.log('[TOKEN RECOVERY] Restoring cookies from localStorage');
+
+                    var isSecure = window.location.protocol === 'https:';
+                    var cookieOptions = 'path=/; sameSite=lax' + (isSecure ? '; secure' : '');
+
+                    // Set cookies with expiry
+                    var accessExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toUTCString();
+                    document.cookie = 'accessToken=' + accessToken + '; expires=' + accessExpiry + '; ' + cookieOptions;
+
+                    if (refreshToken) {
+                      var refreshExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toUTCString();
+                      document.cookie = 'refreshToken=' + refreshToken + '; expires=' + refreshExpiry + '; ' + cookieOptions;
+                    }
+
+                    console.log('[TOKEN RECOVERY] Cookies restored successfully');
+                  }
+                } catch (e) {
+                  console.error('[TOKEN RECOVERY] Failed:', e);
+                }
+              })();
+            `,
+          }}
+        />
       </head>
       <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider
@@ -42,14 +87,16 @@ export default function RootLayout({
         >
           <AuthProvider>
             <ModalProvider>
-              <ScoringProgressProvider>
-                {children}
-                <Toaster position="top-right" richColors closeButton />
-                {/* Global subscription inactive modal - catches events from API interceptor */}
-                <SubscriptionInactiveModal />
-                {/* Global scoring progress indicator - COMMENTED OUT: Now using redirect flow instead of popup */}
-                {/* <GlobalScoringProgressIndicator /> */}
-              </ScoringProgressProvider>
+              <GlobalDialogProvider>
+                <ScoringProgressProvider>
+                  {children}
+                  <Toaster position="top-right" richColors closeButton />
+                  {/* Global subscription inactive modal - catches events from API interceptor */}
+                  <SubscriptionInactiveModal />
+                  {/* Global scoring progress indicator - COMMENTED OUT: Now using redirect flow instead of popup */}
+                  {/* <GlobalScoringProgressIndicator /> */}
+                </ScoringProgressProvider>
+              </GlobalDialogProvider>
             </ModalProvider>
           </AuthProvider>
         </ThemeProvider>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -23,6 +23,7 @@ import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeS
 import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/hooks/useAuth';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -221,7 +222,7 @@ function DraggableCardResumeRow({
       </div>
       {/* Candidate Name */}
       <div className="flex items-center min-w-0">
-        <span className="font-medium text-gray-900 text-sm truncate">{resume.name}</span>
+        <span className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-sm truncate cursor-pointer">{resume.name}</span>
       </div>
       {/* Email */}
       <div className="text-sm text-gray-600 truncate">{resume.email || '-'}</div>
@@ -326,6 +327,7 @@ function DraggableCardResumeRow({
 export default function MyResumesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, isTenantAdmin } = useAuth();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -362,6 +364,22 @@ export default function MyResumesPage() {
   const [uploadedResumeToScore, setUploadedResumeToScore] = useState<{ id: string; candidateName: string } | null>(null);
   const [singleResumeToApply, setSingleResumeToApply] = useState<Resume | null>(null);
 
+  // Duplicate scoring warning state
+  const [duplicateScoringWarning, setDuplicateScoringWarning] = useState<{
+    isOpen: boolean;
+    jobId: string;
+    jobTitle: string;
+    resumeIds: string[];
+    existingScores: Array<{
+      resume_id: string;
+      candidate_name: string;
+      overall_score: number;
+      match_status: string;
+      scored_at: string | null;
+    }>;
+    newCount: number;
+  }>({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 });
+
   // Version selector state (for single candidate apply)
   const [versionSelectorResume, setVersionSelectorResume] = useState<Resume | null>(null);
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
@@ -388,10 +406,72 @@ export default function MyResumesPage() {
     contentAction: 'move-parent' | 'move-root' | null;
   }>({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null });
 
+  // Refs to prevent infinite loop and duplicate API calls
+  const hasMountedRef = useRef(false);
+  const lastFetchParamsRef = useRef<string>('');
+  const isFetchingRef = useRef(false);
+
   useEffect(() => {
     fetchData();
     fetchUploadHistory();
+    hasMountedRef.current = true; // Mark as mounted
+
+    // Cleanup: Stop all polling intervals when component unmounts
+    return () => {
+      pollingIntervalsRef.current.forEach(interval => {
+        clearInterval(interval);
+      });
+      pollingIntervalsRef.current.clear();
+      console.log('[MyResumes] Cleaned up all polling intervals on unmount');
+    };
   }, []);
+
+  // Refetch when filters or folder selection changes
+  useEffect(() => {
+    // Skip the very first render (fetchData is already called in mount effect above)
+    if (!hasMountedRef.current) {
+      console.log('[MyResumes] useEffect - Skipping (not mounted yet)');
+      return;
+    }
+
+    // Create signature of params to detect ACTUAL changes (not just reference changes)
+    const currentParams = JSON.stringify({ appliedSearchQuery, filters, selectedFolder });
+
+    // Skip if params haven't actually changed (prevents loop from object reference changes)
+    if (currentParams === lastFetchParamsRef.current) {
+      console.log('[MyResumes] useEffect - Skipping (params unchanged)', currentParams);
+      return;
+    }
+
+    // Skip if already fetching (prevents rapid successive calls)
+    if (isFetchingRef.current) {
+      console.log('[MyResumes] useEffect - Skipping (fetch in progress)');
+      return;
+    }
+
+    console.log('[MyResumes] useEffect - Will fetch in 300ms', {
+      appliedSearchQuery,
+      filtersKeys: Object.keys(filters),
+      selectedFolder
+    });
+
+    // Debounce: Wait 300ms before fetching
+    const debounceTimer = setTimeout(() => {
+      console.log('[MyResumes] useEffect - Fetching data now...');
+      lastFetchParamsRef.current = currentParams;
+      isFetchingRef.current = true;
+
+      fetchData(appliedSearchQuery, filters, selectedFolder).finally(() => {
+        isFetchingRef.current = false;
+        console.log('[MyResumes] useEffect - Fetch complete');
+      });
+    }, 300);
+
+    return () => {
+      console.log('[MyResumes] useEffect - Cleanup (timer cleared)');
+      clearTimeout(debounceTimer);
+    };
+  }, [appliedSearchQuery, filters, selectedFolder]);
 
   // Handle deep link from notifications
   useEffect(() => {
@@ -479,11 +559,81 @@ export default function MyResumesPage() {
     setIsUploadHistoryMinimized(false);
   };
 
-  const fetchData = async () => {
+  // Ref to store active polling intervals for cleanup
+  const pollingIntervalsRef = useRef<Set<NodeJS.Timeout>>(new Set());
+
+  const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string) => {
+    console.log('[FETCH] fetchData called', {
+      searchTerm,
+      filtersKeys: currentFilters ? Object.keys(currentFilters) : 'none',
+      folderId,
+      isFetching: isFetchingRef.current
+    });
+
+    // Prevent concurrent fetches - stops flickering from rapid calls
+    if (isFetchingRef.current) {
+      console.log('[FETCH] Already fetching, skipping duplicate call');
+      return;
+    }
+
+    isFetchingRef.current = true;
     setLoading(true);
+    console.log('[FETCH] Starting fetch...');
     try {
+      // Build search params for backend API
+      const searchParams: any = {
+        source: 'my-resumes',
+        page_size: 100, // Backend API maximum limit
+      };
+
+      // Add folder filter if not viewing all
+      if (folderId && folderId !== 'all') {
+        searchParams.folder_id = folderId;
+      }
+
+      // Add search query
+      if (searchTerm && searchTerm.trim()) {
+        searchParams.search = searchTerm.trim();
+      }
+
+      // Add filter parameters
+      if (currentFilters) {
+        if (currentFilters.skills && currentFilters.skills.length > 0) {
+          searchParams.skills = currentFilters.skills.join(',');
+        }
+        if (currentFilters.experienceRange) {
+          if (currentFilters.experienceRange.min !== undefined) {
+            searchParams.experience_min = currentFilters.experienceRange.min;
+          }
+          if (currentFilters.experienceRange.max !== undefined) {
+            searchParams.experience_max = currentFilters.experienceRange.max;
+          }
+        }
+        if (currentFilters.location) {
+          searchParams.location = currentFilters.location;
+        }
+        if (currentFilters.education) {
+          searchParams.education = currentFilters.education;
+        }
+        if (currentFilters.currentCompany) {
+          searchParams.current_company = currentFilters.currentCompany;
+        }
+        if (currentFilters.noticePeriod) {
+          searchParams.notice_period = currentFilters.noticePeriod;
+        }
+        if (currentFilters.uploadDateFrom) {
+          searchParams.upload_date_from = currentFilters.uploadDateFrom;
+        }
+        if (currentFilters.uploadDateTo) {
+          searchParams.upload_date_to = currentFilters.uploadDateTo;
+        }
+        if (currentFilters.sourceType) {
+          searchParams.source_type = currentFilters.sourceType;
+        }
+      }
+
       const [resumeResponse, folderResponse] = await Promise.all([
-        resumeService.list({ source: 'my-resumes', page_size: 100 }),
+        resumeService.list(searchParams),
         folderService.list().catch(() => []),
       ]);
 
@@ -608,6 +758,7 @@ export default function MyResumesPage() {
       toast.error('Failed to load resumes');
     } finally {
       setLoading(false);
+      isFetchingRef.current = false; // Reset flag to allow next fetch
     }
   };
 
@@ -1030,6 +1181,33 @@ export default function MyResumesPage() {
     const selectedJob = publishedJobs.find(j => j.id === jobId);
 
     try {
+      // Check for existing scores (duplicate check)
+      const duplicateCheck = await scoringService.checkExistingScores(jobId, resumeIds);
+
+      // If there are existing scores, show warning
+      if (duplicateCheck.existing_count > 0) {
+        setDuplicateScoringWarning({
+          isOpen: true,
+          jobId: jobId,
+          jobTitle: duplicateCheck.jd_title,
+          resumeIds: resumeIds,
+          existingScores: duplicateCheck.existing_scores,
+          newCount: duplicateCheck.new_count,
+        });
+        return; // Stop here and wait for user decision
+      }
+
+      // No duplicates - proceed with scoring
+      await proceedWithScoring(jobId, resumeIds, selectedJob?.title || duplicateCheck.jd_title);
+    } catch (error: any) {
+      console.error('Failed to check duplicates or start scoring:', error);
+      toast.error(error.message || 'Failed to start scoring');
+    }
+  };
+
+  // Proceed with scoring (extracted for reuse in duplicate confirmation)
+  const proceedWithScoring = async (jobId: string, resumeIds: string[], jobTitle: string) => {
+    try {
       // Start async bulk scoring via Celery (resumeIds already have correct version IDs)
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
@@ -1059,6 +1237,26 @@ export default function MyResumesPage() {
       console.error('Failed to start scoring:', error);
       toast.error(error.message || 'Failed to start scoring');
     }
+  };
+
+  // Handle scoring only new candidates (remove duplicates)
+  const handleScoreOnlyNew = async () => {
+    const { jobId, resumeIds, jobTitle, existingScores } = duplicateScoringWarning;
+
+    // Filter out already scored resumes
+    const alreadyScoredIds = existingScores.map(s => s.resume_id);
+    const newResumeIds = resumeIds.filter(id => !alreadyScoredIds.includes(id));
+
+    setDuplicateScoringWarning({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 });
+
+    if (newResumeIds.length === 0) {
+      toast.error('All selected candidates are already scored');
+      return;
+    }
+
+    // Proceed with scoring only new candidates
+    await proceedWithScoring(jobId, newResumeIds, jobTitle);
+    toast.success(`Scoring ${newResumeIds.length} new candidate(s), skipped ${alreadyScoredIds.length} duplicate(s)`);
   };
 
   const handleCreateFolder = async (name: string, parentId?: string) => {
@@ -1404,6 +1602,7 @@ export default function MyResumesPage() {
                   file_size: existingResume.file_size || 0,
                   file_name: existingResume.file_name || '',
                   version: existingResume.version || 1,
+                  version_count: existingResume.version_count || existingResume.version || 1,
                 },
                 contentDifferences: contentDifferences,
                 isDuplicate: isExactDuplicate,
@@ -1488,7 +1687,7 @@ export default function MyResumesPage() {
       // Remove temp record and add real one
       setUploadHistory(prev => [newBatchRecord, ...prev.filter(r => !r.id.startsWith('temp-'))]);
 
-      // Poll for batch status until complete (every 1 second)
+      // Poll for batch status until complete (REDUCED: every 3 seconds instead of 1)
       const pollInterval = setInterval(async () => {
         try {
           const status = await resumeService.getBatchStatus(batch.id);
@@ -1523,6 +1722,7 @@ export default function MyResumesPage() {
           // Check if batch is complete
           if (status.status === 'completed' || status.pending === 0) {
             clearInterval(pollInterval);
+            pollingIntervalsRef.current.delete(pollInterval); // Remove from tracking
 
             // Refresh upload history and resume list
             fetchUploadHistory();
@@ -1530,12 +1730,20 @@ export default function MyResumesPage() {
           }
         } catch (pollError) {
           console.error('Error polling batch status:', pollError);
+          // On error, stop polling this batch to prevent infinite errors
+          clearInterval(pollInterval);
+          pollingIntervalsRef.current.delete(pollInterval);
         }
-      }, 1000); // Poll every 1 second for faster updates
+      }, 3000); // FIXED: Poll every 3 seconds (was 1 second) = 3x fewer requests
+
+      // Track interval for cleanup
+      pollingIntervalsRef.current.add(pollInterval);
 
       // Set a timeout to stop polling after 10 minutes
-      setTimeout(() => {
+      const stopTimeout = setTimeout(() => {
         clearInterval(pollInterval);
+        pollingIntervalsRef.current.delete(pollInterval);
+        console.log('[Upload] Polling stopped after 10 minutes timeout');
       }, 600000);
 
       return { success: true };
@@ -1611,31 +1819,61 @@ export default function MyResumesPage() {
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
     setAppliedSearchQuery(query);
+    // Don't call fetchData directly - let the useEffect handle it
+    // This prevents double API calls
   }, []);
 
   // Client-side search helper - searches across all text fields including phone and skills
   const matchesSearch = useCallback((resume: Resume, query: string): boolean => {
     if (!query) return true;
 
-    const searchTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 0);
+    // Split by spaces, commas, or both - and clean up each term
+    const searchTerms = query
+      .toLowerCase()
+      .split(/[\s,]+/)  // Split by spaces or commas
+      .map(term => term.trim())
+      .filter(term => term.length > 0);
+
     if (searchTerms.length === 0) return true;
+
+    // Normalize phone number for searching (remove all non-alphanumeric chars)
+    const normalizePhone = (phone: string | undefined) => {
+      if (!phone) return '';
+      return phone.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    };
 
     // Create searchable text from all relevant fields
     const searchableFields = [
       resume.name,
       resume.email,
       resume.phone,
+      normalizePhone(resume.phone), // Also add normalized phone
       resume.title,
       resume.location,
       resume.currentCompany,
-      resume.previousCompany,
+      resume.experience,
+      resume.education,
       ...(resume.skills || []),
+      ...(resume.technicalSkills || []),
+      ...(resume.softSkills || []),
     ].filter(Boolean).map(field => field?.toLowerCase() || '');
 
     const searchableText = searchableFields.join(' ');
 
-    // Check if any search term matches (partial matching)
-    return searchTerms.some(term => searchableText.includes(term));
+    // Normalize search term for phone matching (remove special chars)
+    const normalizeSearchTerm = (term: string) => {
+      // If term looks like a phone number (has digits), normalize it
+      if (/\d/.test(term)) {
+        return term.replace(/[^a-zA-Z0-9]/g, '');
+      }
+      return term;
+    };
+
+    // Check if ALL search terms match (AND logic for multiple terms)
+    return searchTerms.every(term => {
+      const normalizedTerm = normalizeSearchTerm(term);
+      return searchableText.includes(term) || searchableText.includes(normalizedTerm);
+    });
   }, []);
 
   // Filter and sort resumes client-side
@@ -1650,6 +1888,123 @@ export default function MyResumesPage() {
     // Apply search filter (name, email, phone, skills, keywords)
     if (appliedSearchQuery) {
       filtered = filtered.filter(resume => matchesSearch(resume, appliedSearchQuery));
+    }
+
+    // Apply filters from filter bar
+    if (filters && Object.keys(filters).length > 0) {
+      // Filter by skills (all selected skills must be present)
+      if (filters.skills && filters.skills.length > 0) {
+        filtered = filtered.filter(resume => {
+          const resumeSkills = [
+            ...(resume.skills || []),
+            ...(resume.technicalSkills || []),
+            ...(resume.softSkills || [])
+          ].map(s => s.toLowerCase());
+          return filters.skills.every((skill: string) =>
+            resumeSkills.some(rs => rs.includes(skill.toLowerCase()))
+          );
+        });
+      }
+
+      // Filter by experience range
+      if (filters.experienceRange) {
+        filtered = filtered.filter(resume => {
+          // Parse experience string to get years (e.g., "5 years", "3-5 years", "5+ years")
+          const expStr = resume.experience || '';
+          const expMatch = expStr.match(/(\d+)/);
+          if (!expMatch) return true; // If no experience data, include by default
+          const years = parseInt(expMatch[1], 10);
+          const { min, max } = filters.experienceRange;
+          if (min !== undefined && min !== null && years < min) return false;
+          if (max !== undefined && max !== null && years > max) return false;
+          return true;
+        });
+      }
+
+      // Filter by education
+      if (filters.education) {
+        filtered = filtered.filter(resume => {
+          const edu = (resume.education || '').toLowerCase();
+          const educationCode = filters.education.toLowerCase();
+
+          // Map backend codes to search patterns (matching backend logic)
+          if (educationCode === 'bachelors') {
+            return edu.includes('bachelor') || edu.includes('b.tech') ||
+                   edu.includes('b.e') || edu.includes('bca') ||
+                   edu.includes('b.a') || edu.includes('b.sc') || edu.includes('b.com');
+          } else if (educationCode === 'masters') {
+            return edu.includes('master') || edu.includes('m.tech') ||
+                   edu.includes('m.e') || edu.includes('mca') ||
+                   edu.includes('m.a') || edu.includes('m.sc') || edu.includes('mba');
+          } else if (educationCode === 'doctorate') {
+            return edu.includes('phd') || edu.includes('ph.d') ||
+                   edu.includes('doctorate') || edu.includes('doctor of');
+          } else if (educationCode === 'diploma') {
+            return edu.includes('diploma');
+          } else if (educationCode === 'associate') {
+            return edu.includes('associate');
+          } else {
+            // For other values, use substring match
+            return edu.includes(educationCode);
+          }
+        });
+      }
+
+      // Filter by location
+      if (filters.location) {
+        filtered = filtered.filter(resume => {
+          const loc = (resume.location || '').toLowerCase();
+          return loc.includes(filters.location.toLowerCase());
+        });
+      }
+
+      // Filter by current company
+      if (filters.currentCompany) {
+        filtered = filtered.filter(resume => {
+          const company = (resume.currentCompany || '').toLowerCase();
+          return company.includes(filters.currentCompany.toLowerCase());
+        });
+      }
+
+      // Filter by notice period
+      if (filters.noticePeriod) {
+        filtered = filtered.filter(resume => {
+          const notice = (resume.noticePeriod || '').toLowerCase();
+          return notice.includes(filters.noticePeriod.toLowerCase());
+        });
+      }
+
+      // Filter by source type
+      if (filters.sourceType) {
+        filtered = filtered.filter(resume => {
+          return resume.source === filters.sourceType;
+        });
+      }
+
+      // Filter by uploaded by
+      if (filters.uploadedBy) {
+        filtered = filtered.filter(resume => {
+          const uploader = (resume.uploadedBy || '').toLowerCase();
+          return uploader.includes(filters.uploadedBy.toLowerCase());
+        });
+      }
+
+      // Filter by upload date range
+      if (filters.uploadDateRange) {
+        filtered = filtered.filter(resume => {
+          const uploadDate = new Date(resume.uploadDate);
+          if (filters.uploadDateRange.start) {
+            const startDate = new Date(filters.uploadDateRange.start);
+            if (uploadDate < startDate) return false;
+          }
+          if (filters.uploadDateRange.end) {
+            const endDate = new Date(filters.uploadDateRange.end);
+            endDate.setHours(23, 59, 59, 999); // Include entire end day
+            if (uploadDate > endDate) return false;
+          }
+          return true;
+        });
+      }
     }
 
     // Sort resumes
@@ -1667,7 +2022,7 @@ export default function MyResumesPage() {
       default:
         return sorted;
     }
-  }, [resumes, selectedFolder, appliedSearchQuery, sortBy, matchesSearch]);
+  }, [resumes, selectedFolder, appliedSearchQuery, sortBy, matchesSearch, filters]);
 
   // Stats (all resumes returned are user's own resumes)
   const totalResumes = resumes.length;
@@ -1779,9 +2134,9 @@ export default function MyResumesPage() {
             onDownload={handleBulkDownload}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
-            onAssessment={handleAssessment}
+            onAssessment={user?.permissions?.canCreateAssessments || isTenantAdmin ? handleAssessment : undefined}
             onArchive={() => handleArchiveResumes(selectedResumes)}
-            onAITalentMatch={handleAITalentMatch}
+            onAITalentMatch={user?.permissions?.canRunAiMatch || isTenantAdmin ? handleAITalentMatch : undefined}
           />
         )}
 
@@ -2310,6 +2665,100 @@ export default function MyResumesPage() {
           }}
           onApply={handleApplyToJobSubmit}
         />
+      )}
+
+      {/* Duplicate Scoring Warning Modal */}
+      {duplicateScoringWarning.isOpen && (
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200" />
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="flex items-center gap-4 p-6 border-b border-gray-200">
+                <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                  <AlertCircle className="w-6 h-6 text-yellow-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Already Scored - Duplicate Warning</h3>
+                  <p className="text-sm text-gray-500">{duplicateScoringWarning.jobTitle}</p>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 max-h-96 overflow-y-auto">
+                <p className="text-gray-700 mb-4">
+                  <span className="font-semibold text-red-600">{duplicateScoringWarning.existingScores.length} candidate(s)</span> have already been scored for this job description.
+                </p>
+
+                {/* List of duplicate candidates */}
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-600" />
+                    Already Scored - Will NOT be Re-scored:
+                  </h4>
+                  <div className="space-y-2">
+                    {duplicateScoringWarning.existingScores.map((score, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-white rounded-lg p-3 border border-red-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                            <X className="w-4 h-4 text-red-600" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900">{score.candidate_name}</div>
+                            {score.scored_at && (
+                              <div className="text-xs text-gray-500">
+                                Scored on {formatDateTimeIST(score.scored_at)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-semibold text-gray-900">{score.overall_score}%</div>
+                          <div className="text-xs text-gray-500 capitalize">{score.match_status}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {duplicateScoringWarning.newCount > 0 ? (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="text-sm text-gray-700">
+                      <span className="font-semibold text-green-700">{duplicateScoringWarning.newCount} new candidate(s)</span> will be scored if you continue.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <p className="text-sm text-gray-600">
+                      All selected candidates are already scored. No new candidates to score.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200">
+                <button
+                  onClick={() => setDuplicateScoringWarning({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 })}
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                {duplicateScoringWarning.newCount > 0 && (
+                  <button
+                    onClick={handleScoreOnlyNew}
+                    className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Score Only New ({duplicateScoringWarning.newCount})
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* ZIP Download Confirmation Modal */}

@@ -3,6 +3,7 @@
 import { Video, Calendar, Users, CheckCircle, Play, MoreVertical, Settings, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { recordAIInterview } from '@/lib/services/usageTrackingService';
+import { toast } from 'sonner';
 
 export default function AIInterview() {
   const [activeTab, setActiveTab] = useState<'scheduled' | 'completed' | 'settings'>('scheduled');
@@ -15,7 +16,7 @@ export default function AIInterview() {
       action: 'schedule',
       type: 'new_interview'
     });
-    alert('Interview scheduling feature coming soon!');
+    toast.info('Interview scheduling feature coming soon!');
   };
 
   // Handler for starting an interview - tracks usage
@@ -24,7 +25,7 @@ export default function AIInterview() {
       action: 'start',
       candidate: candidateName
     });
-    alert(`Starting AI interview with ${candidateName}...`);
+    toast.info(`Starting AI interview with ${candidateName}...`);
   };
 
   const interviews = [

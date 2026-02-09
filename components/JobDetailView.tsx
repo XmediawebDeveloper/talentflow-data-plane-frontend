@@ -856,8 +856,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             {/* JD15: Action Buttons - For Disabled jobs */}
             {job.status === 'Disabled' && (
               <div className="flex items-center gap-2">
-                {/* JD15: Enable button - Only visible to Owners */}
-                {onEnable && isTenantAdmin && (
+                {/* JD15: Enable button - COMMENTED OUT */}
+                {false && onEnable && isTenantAdmin && (
                   <button
                     onClick={() => onEnable(job)}
                     className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all flex items-center gap-2"
@@ -1468,8 +1468,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               ) : selectedHistoryVersion ? (
                 /* Version Detail View */
                 <div>
-                  {/* Version Info */}
-                  <div className="flex items-center justify-between mb-4 p-4 bg-gray-50 rounded-lg">
+                  {/* Version Info Bar with Download Button */}
+                  <div className="flex items-center justify-between mb-6 p-4 bg-gray-50 rounded-lg">
                     <div className="flex items-center gap-4">
                       <span className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-sm font-semibold">
                         v{selectedHistoryVersion.version.version_number}.0
@@ -1481,236 +1481,166 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                         </span>
                       </div>
                       <span className="text-sm text-gray-500">{selectedHistoryVersion.timestamp}</span>
+                      {selectedHistoryVersion.version.version_number > 1 && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                          New content highlighted in blue
+                        </span>
+                      )}
                     </div>
+                    <button
+                      disabled={downloadingPDF}
+                      onClick={async () => {
+                        if (downloadingPDF) return;
+                        setDownloadingPDF(true);
+
+                        const jdContent = selectedHistoryVersion.version.description || '';
+                        const title = selectedHistoryVersion.version.title || job.title;
+                        const version = selectedHistoryVersion.version.version_number;
+
+                        // Create HTML content for PDF
+                        const htmlContent = `
+                          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 800px; line-height: 1.6;">
+                            <h1 style="color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 5px;">${title}</h1>
+                            <p style="color: #6b7280; font-size: 14px; margin-bottom: 24px;">Version ${version}.0 | Generated on ${new Date().toLocaleDateString()}</p>
+                            <div style="color: #4b5563;">
+                              ${jdContent
+                                .replace(/^### (.*$)/gm, '<h3 style="color: #4b5563; margin-top: 20px; font-size: 16px;">$1</h3>')
+                                .replace(/^## (.*$)/gm, '<h2 style="color: #374151; margin-top: 24px; font-size: 18px;">$1</h2>')
+                                .replace(/^# (.*$)/gm, '<h1 style="color: #1f2937; font-size: 22px;">$1</h1>')
+                                .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1f2937;">$1</strong>')
+                                .replace(/^\- (.*$)/gm, '<li style="margin: 4px 0;">$1</li>')
+                                .replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul style="padding-left: 24px; margin: 8px 0;">$&</ul>')
+                                .replace(/\n\n/g, '</p><p style="margin: 8px 0;">')
+                                .replace(/\n/g, '<br>')}
+                            </div>
+                          </div>
+                        `;
+
+                        // Create a temporary div to render the content
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = htmlContent;
+                        document.body.appendChild(tempDiv);
+
+                        try {
+                          // Dynamically import html2pdf
+                          const html2pdf = (await import('html2pdf.js')).default;
+
+                          await html2pdf().set({
+                            margin: 10,
+                            filename: `${title.replace(/[^a-zA-Z0-9]/g, '_')}_v${version}.pdf`,
+                            image: { type: 'jpeg', quality: 0.98 },
+                            html2canvas: { scale: 2 },
+                            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                          }).from(tempDiv).save();
+                        } catch (error) {
+                          console.error('PDF generation failed:', error);
+                          toast.error('Failed to generate PDF. Please try again.');
+                        } finally {
+                          document.body.removeChild(tempDiv);
+                          setDownloadingPDF(false);
+                        }
+                      }}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${downloadingPDF ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                    >
+                      {downloadingPDF ? (
+                        <>
+                          <svg className="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          Download PDF
+                        </>
+                      )}
+                    </button>
                   </div>
-
-                  {/* Changes Summary for v2+ */}
-                  {selectedHistoryVersion.version.version_number > 1 && (() => {
-                    const currentIndex = jdHistory.findIndex((h: any) => h.id === selectedHistoryVersion.id);
-                    const prevVersion = currentIndex < jdHistory.length - 1 ? jdHistory[currentIndex + 1] : null;
-
-                    if (!prevVersion) return null;
-
-                    const changes: string[] = [];
-                    const curr = selectedHistoryVersion.version;
-                    const prev = prevVersion.version;
-
-                    // Compare fields
-                    if (curr.title !== prev.title) changes.push('Title updated');
-                    if (curr.department !== prev.department) changes.push('Department changed');
-                    if (curr.location !== prev.location) changes.push('Location changed');
-                    if (curr.experience_min !== prev.experience_min || curr.experience_max !== prev.experience_max) changes.push('Experience requirement changed');
-                    if (curr.employment_type !== prev.employment_type) changes.push('Employment type changed');
-                    if (curr.remote_type !== prev.remote_type) changes.push('Work mode changed');
-
-                    // Compare skills
-                    const currMustHave = new Set(curr.must_have_skills || []);
-                    const prevMustHave = new Set(prev.must_have_skills || []);
-                    const newMustHave = [...currMustHave].filter(s => !prevMustHave.has(s));
-                    const removedMustHave = [...prevMustHave].filter(s => !currMustHave.has(s));
-                    if (newMustHave.length > 0) changes.push(`${newMustHave.length} must-have skill(s) added`);
-                    if (removedMustHave.length > 0) changes.push(`${removedMustHave.length} must-have skill(s) removed`);
-
-                    const currNiceToHave = new Set(curr.nice_to_have_skills || []);
-                    const prevNiceToHave = new Set(prev.nice_to_have_skills || []);
-                    const newNiceToHave = [...currNiceToHave].filter(s => !prevNiceToHave.has(s));
-                    const removedNiceToHave = [...prevNiceToHave].filter(s => !currNiceToHave.has(s));
-                    if (newNiceToHave.length > 0) changes.push(`${newNiceToHave.length} nice-to-have skill(s) added`);
-                    if (removedNiceToHave.length > 0) changes.push(`${removedNiceToHave.length} nice-to-have skill(s) removed`);
-
-                    // Compare description
-                    if (curr.description !== prev.description) changes.push('Job description updated');
-
-                    if (changes.length === 0) changes.push('Republished without changes');
-
-                    return (
-                      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                        <h4 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                          <RefreshCw className="w-4 h-4" />
-                          Changes from v{prev.version_number}.0 to v{curr.version_number}.0
-                        </h4>
-                        <ul className="space-y-1">
-                          {changes.map((change, idx) => (
-                            <li key={idx} className="text-sm text-blue-800 flex items-center gap-2">
-                              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
-                              {change}
-                            </li>
-                          ))}
-                        </ul>
-                        <p className="text-xs text-blue-600 mt-2">New skills are highlighted in green below</p>
-                      </div>
-                    );
-                  })()}
 
                   {/* Job Title */}
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">{selectedHistoryVersion.version.title}</h3>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-6">{selectedHistoryVersion.version.title}</h3>
 
-                  {/* Job Attributes */}
-                  <div className="flex flex-wrap gap-2 mb-6">
-                    {selectedHistoryVersion.version.department && (
-                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                        {selectedHistoryVersion.version.department}
-                      </span>
-                    )}
-                    {selectedHistoryVersion.version.location && (
-                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                        {selectedHistoryVersion.version.location}
-                      </span>
-                    )}
-                    {(selectedHistoryVersion.version.experience_min || selectedHistoryVersion.version.experience_max) && (
-                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                        {selectedHistoryVersion.version.experience_min || 0}-{selectedHistoryVersion.version.experience_max || '10+'} years
-                      </span>
-                    )}
-                    {selectedHistoryVersion.version.employment_type && (
-                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                        {selectedHistoryVersion.version.employment_type === 'full_time' ? 'Full Time' :
-                         selectedHistoryVersion.version.employment_type === 'part_time' ? 'Part Time' :
-                         selectedHistoryVersion.version.employment_type === 'contract' ? 'Contract' :
-                         selectedHistoryVersion.version.employment_type}
-                      </span>
-                    )}
-                    {selectedHistoryVersion.version.remote_type && (
-                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm">
-                        {selectedHistoryVersion.version.remote_type === 'onsite' ? 'On-site' :
-                         selectedHistoryVersion.version.remote_type === 'remote' ? 'Remote' :
-                         selectedHistoryVersion.version.remote_type === 'hybrid' ? 'Hybrid' :
-                         selectedHistoryVersion.version.remote_type}
-                      </span>
-                    )}
-                  </div>
+                  {/* Job Description with proper markdown rendering and blue highlighting for new content */}
+                  <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    {(() => {
+                      const currentIndex = jdHistory.findIndex((h: any) => h.id === selectedHistoryVersion.id);
+                      const prevVersion = currentIndex < jdHistory.length - 1 ? jdHistory[currentIndex + 1] : null;
+                      const isV1 = selectedHistoryVersion.version.version_number === 1;
+                      const currentDesc = selectedHistoryVersion.version.description || '';
+                      const prevDesc = prevVersion?.version?.description || '';
 
-                  {/* Skills - with diff highlighting */}
-                  {(() => {
-                    const currentIndex = jdHistory.findIndex((h: any) => h.id === selectedHistoryVersion.id);
-                    const prevVersion = currentIndex < jdHistory.length - 1 ? jdHistory[currentIndex + 1] : null;
-                    const prevMustHave = new Set(prevVersion?.version?.must_have_skills || []);
-                    const prevNiceToHave = new Set(prevVersion?.version?.nice_to_have_skills || []);
-                    const isV1 = selectedHistoryVersion.version.version_number === 1;
+                      // Helper function to convert a single line of markdown to HTML
+                      const convertLineToHtml = (line: string): string => {
+                        let html = line;
+                        // Convert headings
+                        if (html.match(/^### /)) {
+                          html = html.replace(/^### (.*)$/, '<h3 class="text-base font-semibold text-gray-900 mt-4 mb-2">$1</h3>');
+                        } else if (html.match(/^## /)) {
+                          html = html.replace(/^## (.*)$/, '<h2 class="text-lg font-semibold text-gray-900 mt-5 mb-3">$1</h2>');
+                        } else if (html.match(/^# /)) {
+                          html = html.replace(/^# (.*)$/, '<h1 class="text-xl font-bold text-gray-900 mt-6 mb-3">$1</h1>');
+                        }
+                        // Convert bold
+                        html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>');
+                        // Convert list items
+                        if (html.match(/^- /)) {
+                          html = html.replace(/^- (.*)$/, '<li class="ml-4 text-gray-700 list-disc">$1</li>');
+                        }
+                        return html;
+                      };
 
-                    return (
-                      <>
-                        {selectedHistoryVersion.version.must_have_skills && selectedHistoryVersion.version.must_have_skills.length > 0 && (
-                          <div className="mb-4">
-                            <h4 className="text-sm font-medium text-gray-700 mb-2">Must Have Skills</h4>
-                            <div className="flex flex-wrap gap-2">
-                              {selectedHistoryVersion.version.must_have_skills.map((skill: string, idx: number) => {
-                                const isNew = !isV1 && !prevMustHave.has(skill);
-                                return (
-                                  <span
-                                    key={idx}
-                                    className={`px-2 py-1 rounded-md text-xs ${isNew ? 'bg-green-100 text-green-800 font-bold ring-2 ring-green-300' : 'bg-gray-100 text-gray-700'}`}
-                                  >
-                                    {skill} {isNew && <span className="text-green-600 ml-1">NEW</span>}
-                                  </span>
-                                );
-                              })}
-                            </div>
+                      // For v1 or no changes, just render normally
+                      if (isV1 || !prevDesc) {
+                        return (
+                          <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-gray-900">
+                            <ReactMarkdown>{currentDesc}</ReactMarkdown>
                           </div>
-                        )}
+                        );
+                      }
 
-                        {selectedHistoryVersion.version.nice_to_have_skills && selectedHistoryVersion.version.nice_to_have_skills.length > 0 && (
-                          <div className="mb-6">
-                            <h4 className="text-sm font-medium text-gray-700 mb-2">Nice to Have Skills</h4>
-                            <div className="flex flex-wrap gap-2">
-                              {selectedHistoryVersion.version.nice_to_have_skills.map((skill: string, idx: number) => {
-                                const isNew = !isV1 && !prevNiceToHave.has(skill);
-                                return (
-                                  <span
-                                    key={idx}
-                                    className={`px-2 py-1 rounded-md text-xs ${isNew ? 'bg-green-100 text-green-800 font-bold ring-2 ring-green-300' : 'bg-gray-50 text-gray-600'}`}
-                                  >
-                                    {skill} {isNew && <span className="text-green-600 ml-1">NEW</span>}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
+                      // For v2+, compute diff and highlight new paragraphs/sections
+                      const prevLinesSet = new Set(prevDesc.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0));
 
-                  {/* Job Description */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-sm font-medium text-gray-700">Job Description</h4>
-                      <button
-                        disabled={downloadingPDF}
-                        onClick={async () => {
-                          if (downloadingPDF) return;
-                          setDownloadingPDF(true);
+                      // Process each line: convert markdown to HTML first, then wrap in blue if new
+                      const processedLines = currentDesc.split('\n').map((line: string) => {
+                        const trimmedLine = line.trim();
+                        const isNewLine = trimmedLine.length > 0 && !prevLinesSet.has(trimmedLine);
 
-                          const jdContent = selectedHistoryVersion.version.description || '';
-                          const title = selectedHistoryVersion.version.title || job.title;
-                          const version = selectedHistoryVersion.version.version_number;
+                        // Convert markdown to HTML first
+                        let htmlLine = convertLineToHtml(line);
 
-                          // Create HTML content for PDF
-                          const htmlContent = `
-                            <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 800px; line-height: 1.6;">
-                              <h1 style="color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 5px;">${title}</h1>
-                              <p style="color: #6b7280; font-size: 14px; margin-bottom: 24px;">Version ${version}.0 | Generated on ${new Date().toLocaleDateString()}</p>
-                              <div style="color: #4b5563;">
-                                ${jdContent
-                                  .replace(/^### (.*$)/gm, '<h3 style="color: #4b5563; margin-top: 20px; font-size: 16px;">$1</h3>')
-                                  .replace(/^## (.*$)/gm, '<h2 style="color: #374151; margin-top: 24px; font-size: 18px;">$1</h2>')
-                                  .replace(/^# (.*$)/gm, '<h1 style="color: #1f2937; font-size: 22px;">$1</h1>')
-                                  .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1f2937;">$1</strong>')
-                                  .replace(/^\- (.*$)/gm, '<li style="margin: 4px 0;">$1</li>')
-                                  .replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul style="padding-left: 24px; margin: 8px 0;">$&</ul>')
-                                  .replace(/\n\n/g, '</p><p style="margin: 8px 0;">')
-                                  .replace(/\n/g, '<br>')}
-                              </div>
-                            </div>
-                          `;
-
-                          // Create a temporary div to render the content
-                          const tempDiv = document.createElement('div');
-                          tempDiv.innerHTML = htmlContent;
-                          document.body.appendChild(tempDiv);
-
-                          try {
-                            // Dynamically import html2pdf
-                            const html2pdf = (await import('html2pdf.js')).default;
-
-                            await html2pdf().set({
-                              margin: 10,
-                              filename: `${title.replace(/[^a-zA-Z0-9]/g, '_')}_v${version}.pdf`,
-                              image: { type: 'jpeg', quality: 0.98 },
-                              html2canvas: { scale: 2 },
-                              jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                            }).from(tempDiv).save();
-                          } catch (error) {
-                            console.error('PDF generation failed:', error);
-                            alert('Failed to generate PDF. Please try again.');
-                          } finally {
-                            document.body.removeChild(tempDiv);
-                            setDownloadingPDF(false);
+                        // If it's a new line, wrap the content in blue highlight
+                        if (isNewLine) {
+                          // Check if it's a heading or list item (already wrapped in tags)
+                          if (htmlLine.match(/^<(h[1-3]|li)/)) {
+                            // Add blue background class to the existing tag
+                            htmlLine = htmlLine.replace(/^<(h[1-3]|li)([^>]*)class="([^"]*)"/, '<$1$2class="$3 bg-blue-100 text-blue-800 px-2 rounded"');
+                          } else if (trimmedLine.length > 0) {
+                            // Regular text - wrap in span
+                            htmlLine = `<span class="bg-blue-100 text-blue-800 px-1 rounded">${htmlLine}</span>`;
                           }
-                        }}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${downloadingPDF ? 'text-gray-400 cursor-not-allowed' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
-                      >
-                        {downloadingPDF ? (
-                          <>
-                            <svg className="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Generating...
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-4 h-4" />
-                            Download PDF
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4 prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-gray-900">
-                      <ReactMarkdown>
-                        {selectedHistoryVersion.version.description || ''}
-                      </ReactMarkdown>
-                    </div>
+                        }
+
+                        return htmlLine;
+                      });
+
+                      // Join lines and handle paragraph breaks
+                      let finalHtml = processedLines.join('<br/>');
+                      // Clean up multiple <br/> tags (paragraph breaks)
+                      finalHtml = finalHtml.replace(/(<br\/>){2,}/g, '</p><p class="my-3 text-gray-700">');
+                      // Remove <br/> after block elements
+                      finalHtml = finalHtml.replace(/(<\/h[1-3]>)<br\/>/g, '$1');
+                      finalHtml = finalHtml.replace(/(<\/li>)<br\/>/g, '$1');
+
+                      return (
+                        <div
+                          className="prose prose-sm max-w-none text-gray-700 leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: finalHtml }}
+                        />
+                      );
+                    })()}
                   </div>
                 </div>
               ) : jdHistory.length === 0 ? (

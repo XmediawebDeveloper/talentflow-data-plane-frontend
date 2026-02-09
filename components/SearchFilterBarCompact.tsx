@@ -25,7 +25,6 @@ export default function SearchFilterBarCompact({
   const [showSort, setShowSort] = useState(false);
   const [tempFilters, setTempFilters] = useState(filters);
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
-  const [showMoreSkills, setShowMoreSkills] = useState(false);
   const filterPanelRef = useRef<HTMLDivElement>(null);
 
   // Accordion states for collapsible sections
@@ -57,7 +56,7 @@ export default function SearchFilterBarCompact({
   }, [showAdvancedFilters]);
 
   const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
-    if (key === 'skills' && Array.isArray(value)) return value.length > 0;
+    if (key === 'skills') return false; // Skills filter removed
     if (key === 'experienceRange') return value && (value.min !== undefined || value.max !== undefined);
     if (key === 'uploadDateRange') return value && (value.start || value.end);
     return value !== null && value !== undefined && value !== '';
@@ -74,21 +73,6 @@ export default function SearchFilterBarCompact({
     onFiltersChange(emptyFilters);
   };
 
-  const handleSkillToggle = (skill: string) => {
-    const currentSkills = tempFilters.skills || [];
-    if (currentSkills.includes(skill)) {
-      setTempFilters({
-        ...tempFilters,
-        skills: currentSkills.filter((s: string) => s !== skill)
-      });
-    } else {
-      setTempFilters({
-        ...tempFilters,
-        skills: [...currentSkills, skill]
-      });
-    }
-  };
-
   const toggleSection = (section: string) => {
     setExpandedSections(prev =>
       prev.includes(section)
@@ -96,14 +80,6 @@ export default function SearchFilterBarCompact({
         : [...prev, section]
     );
   };
-
-  // Skills list - first 8 shown, rest behind "+more"
-  const allSkills = [
-    'React', 'JavaScript', 'TypeScript', 'Python', 'Java', 'Node.js', 'Angular', 'Vue.js',
-    'AWS', 'Docker', 'Kubernetes', 'SQL', 'MongoDB', 'REST API', 'GraphQL'
-  ];
-  const visibleSkills = allSkills.slice(0, 8);
-  const moreSkills = allSkills.slice(8);
 
   const educationLevels = [
     'Any',
@@ -114,6 +90,38 @@ export default function SearchFilterBarCompact({
     'Doctorate (PhD)',
     'Professional Certification'
   ];
+
+  // Map display values to backend filter codes
+  const mapEducationToBackendCode = (displayValue: string): string | null => {
+    if (!displayValue || displayValue === 'Any') return null;
+
+    const mapping: Record<string, string> = {
+      "Bachelor's Degree": "bachelors",
+      "Master's Degree": "masters",
+      "Doctorate (PhD)": "doctorate",
+      "Associate Degree": "associate",
+      "High School": "diploma",
+      "Professional Certification": "certification"
+    };
+
+    return mapping[displayValue] || displayValue;
+  };
+
+  // Map backend codes back to display values
+  const mapBackendCodeToDisplay = (backendCode: string | null | undefined): string => {
+    if (!backendCode) return 'Any';
+
+    const reverseMapping: Record<string, string> = {
+      "bachelors": "Bachelor's Degree",
+      "masters": "Master's Degree",
+      "doctorate": "Doctorate (PhD)",
+      "associate": "Associate Degree",
+      "diploma": "High School",
+      "certification": "Professional Certification"
+    };
+
+    return reverseMapping[backendCode] || backendCode;
+  };
 
   const noticePeriods = [
     'Any',
@@ -140,27 +148,9 @@ export default function SearchFilterBarCompact({
     { value: 'Other', label: 'Other' }
   ];
 
-  // Team members (placeholder - in real app, fetch from API)
-  const teamMembers = [
-    { id: '', name: 'Any Team Member' }
-  ];
-
   // Active filter chips
   const getActiveFilterChips = () => {
     const chips: Array<{ label: string; key: string; onRemove: () => void }> = [];
-
-    if (filters.skills?.length > 0) {
-      filters.skills.forEach((skill: string) => {
-        chips.push({
-          label: skill,
-          key: `skill-${skill}`,
-          onRemove: () => onFiltersChange({
-            ...filters,
-            skills: filters.skills.filter((s: string) => s !== skill)
-          })
-        });
-      });
-    }
 
     if (filters.experienceRange?.min !== undefined || filters.experienceRange?.max !== undefined) {
       const min = filters.experienceRange.min ?? 0;
@@ -174,7 +164,7 @@ export default function SearchFilterBarCompact({
 
     if (filters.education && filters.education !== 'Any') {
       chips.push({
-        label: filters.education,
+        label: mapBackendCodeToDisplay(filters.education),
         key: 'education',
         onRemove: () => onFiltersChange({ ...filters, education: null })
       });
@@ -193,14 +183,6 @@ export default function SearchFilterBarCompact({
         label: `Company: ${filters.currentCompany}`,
         key: 'currentCompany',
         onRemove: () => onFiltersChange({ ...filters, currentCompany: null })
-      });
-    }
-
-    if (filters.previousCompany) {
-      chips.push({
-        label: `Prev: ${filters.previousCompany}`,
-        key: 'previousCompany',
-        onRemove: () => onFiltersChange({ ...filters, previousCompany: null })
       });
     }
 
@@ -297,55 +279,9 @@ export default function SearchFilterBarCompact({
           {showAdvancedFilters && (
             <div className="absolute right-0 top-12 w-[700px] bg-white rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden">
               <div className="max-h-[600px] overflow-y-auto">
-                {/* Skills and Experience Row */}
+                {/* Experience Row */}
                 <div className="p-5 border-b border-gray-100">
-                  <div className="grid grid-cols-2 gap-8">
-                    {/* Skills */}
-                    <div>
-                      <label className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-3">
-                        <Briefcase className="w-4 h-4 text-blue-600" />
-                        Skills
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {visibleSkills.map(skill => (
-                          <button
-                            key={skill}
-                            onClick={() => handleSkillToggle(skill)}
-                            className={`px-3 py-1.5 text-sm rounded-full border transition-all ${
-                              (tempFilters.skills || []).includes(skill)
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
-                            }`}
-                          >
-                            {skill}
-                          </button>
-                        ))}
-                        <button
-                          onClick={() => setShowMoreSkills(!showMoreSkills)}
-                          className="px-3 py-1.5 text-sm rounded-full border border-blue-300 text-blue-600 hover:bg-blue-50"
-                        >
-                          +{moreSkills.length} more
-                        </button>
-                      </div>
-                      {showMoreSkills && (
-                        <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-gray-100">
-                          {moreSkills.map(skill => (
-                            <button
-                              key={skill}
-                              onClick={() => handleSkillToggle(skill)}
-                              className={`px-3 py-1.5 text-sm rounded-full border transition-all ${
-                                (tempFilters.skills || []).includes(skill)
-                                  ? 'bg-blue-600 text-white border-blue-600'
-                                  : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
-                              }`}
-                            >
-                              {skill}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
+                  <div>
                     {/* Experience */}
                     <div>
                       <label className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-3">
@@ -410,8 +346,11 @@ export default function SearchFilterBarCompact({
                         <div>
                           <label className="block text-xs text-gray-600 mb-1.5">Education</label>
                           <select
-                            value={tempFilters.education || 'Any'}
-                            onChange={(e) => setTempFilters({ ...tempFilters, education: e.target.value === 'Any' ? null : e.target.value })}
+                            value={mapBackendCodeToDisplay(tempFilters.education)}
+                            onChange={(e) => {
+                              const backendCode = mapEducationToBackendCode(e.target.value);
+                              setTempFilters({ ...tempFilters, education: backendCode });
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
                           >
                             {educationLevels.map(level => (
@@ -424,7 +363,7 @@ export default function SearchFilterBarCompact({
                   )}
                 </div>
 
-                {/* Company & Notice Period Section */}
+                {/* Current Company & Notice Period Section */}
                 <div className="border-b border-gray-100">
                   <button
                     onClick={() => toggleSection('company-notice')}
@@ -432,8 +371,8 @@ export default function SearchFilterBarCompact({
                   >
                     <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
                       <Building2 className="w-4 h-4 text-gray-500" />
-                      <span>Company & Notice Period</span>
-                      {(tempFilters.currentCompany || tempFilters.previousCompany || (tempFilters.noticePeriod && tempFilters.noticePeriod !== 'Any')) && (
+                      <span>Current Company & Notice Period</span>
+                      {(tempFilters.currentCompany || (tempFilters.noticePeriod && tempFilters.noticePeriod !== 'Any')) && (
                         <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Active</span>
                       )}
                     </div>
@@ -441,7 +380,7 @@ export default function SearchFilterBarCompact({
                   </button>
                   {expandedSections.includes('company-notice') && (
                     <div className="px-5 pb-4">
-                      <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-xs text-gray-600 mb-1.5">Current Company</label>
                           <input
@@ -453,27 +392,17 @@ export default function SearchFilterBarCompact({
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1.5">Previous Company</label>
-                          <input
-                            type="text"
-                            placeholder="e.g., Amazon"
-                            value={tempFilters.previousCompany || ''}
-                            onChange={(e) => setTempFilters({ ...tempFilters, previousCompany: e.target.value || null })}
+                          <label className="block text-xs text-gray-600 mb-1.5">Notice Period</label>
+                          <select
+                            value={tempFilters.noticePeriod || 'Any'}
+                            onChange={(e) => setTempFilters({ ...tempFilters, noticePeriod: e.target.value === 'Any' ? null : e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                          />
+                          >
+                            {noticePeriods.map(period => (
+                              <option key={period} value={period}>{period}</option>
+                            ))}
+                          </select>
                         </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1.5">Notice Period</label>
-                        <select
-                          value={tempFilters.noticePeriod || 'Any'}
-                          onChange={(e) => setTempFilters({ ...tempFilters, noticePeriod: e.target.value === 'Any' ? null : e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                        >
-                          {noticePeriods.map(period => (
-                            <option key={period} value={period}>{period}</option>
-                          ))}
-                        </select>
                       </div>
                     </div>
                   )}
@@ -543,15 +472,13 @@ export default function SearchFilterBarCompact({
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-xs text-gray-600 mb-1.5">Uploaded By</label>
-                          <select
+                          <input
+                            type="text"
+                            placeholder="Enter name..."
                             value={tempFilters.uploadedBy || ''}
                             onChange={(e) => setTempFilters({ ...tempFilters, uploadedBy: e.target.value || null })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                          >
-                            {teamMembers.map(member => (
-                              <option key={member.id} value={member.id}>{member.name}</option>
-                            ))}
-                          </select>
+                          />
                         </div>
                         <div>
                           <label className="block text-xs text-gray-600 mb-1.5">Source Type</label>

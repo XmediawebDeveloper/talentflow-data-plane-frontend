@@ -12,6 +12,7 @@ interface Assessment {
   duration: number;
   difficulty: string;
   status: 'Active' | 'Draft';
+  is_archived?: boolean;
 }
 
 interface AssignAssessmentModalProps {
@@ -109,7 +110,7 @@ export default function AssignAssessmentModal({
             </label>
             
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {assessments.filter(assessment => assessment.status === 'Active').map(assessment => (
+              {assessments.filter(assessment => assessment.status === 'Active' && !assessment.is_archived).map(assessment => (
                 <button
                   key={assessment.id}
                   onClick={() => setSelectedAssessment(assessment.id)}
@@ -163,7 +164,7 @@ export default function AssignAssessmentModal({
               ))}
             </div>
 
-            {assessments.filter(assessment => assessment.status === 'Active').length === 0 && (
+            {assessments.filter(assessment => assessment.status === 'Active' && !assessment.is_archived).length === 0 && (
               <div className="text-center py-8 text-gray-500">
                 <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                 <p className="text-sm">No active assessments available.</p>

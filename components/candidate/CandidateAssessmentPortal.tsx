@@ -23,11 +23,14 @@ import { useProctoringMonitor, ProctoringWarning } from '@/hooks/useProctoringMo
 import { ProctoringWarningModal, useProctoringWarnings } from './ProctoringWarningModal';
 import { Monitor, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getUserMedia, getErrorMessage, detectBrowser } from '@/lib/utils/browserCompat';
 
 // ============================================
-// FULLSCREEN PROMPT SCREEN COMPONENT
+// FULLSCREEN PROMPT SCREEN COMPONENT - COMMENTED OUT (NOT NEEDED)
 // ============================================
 
+// DISABLED: Fullscreen requirement removed - assessments run in normal mode now
+/*
 interface FullscreenPromptScreenProps {
   onFullscreenReady: () => void;
 }
@@ -72,23 +75,19 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-12">
-        {/* Icon */}
         <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
           <Monitor className="w-12 h-12 text-blue-600" />
         </div>
 
-        {/* Title */}
         <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 text-center">
           Enter Fullscreen Mode
         </h1>
 
-        {/* Description */}
         <p className="text-lg text-gray-600 mb-8 text-center">
           This assessment requires fullscreen mode to prevent distractions and ensure a fair testing environment.
           Click the button below to enter fullscreen and begin your assessment.
         </p>
 
-        {/* Benefits */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-8">
           <p className="font-semibold text-blue-900 mb-3">Fullscreen Assessment Benefits:</p>
           <ul className="space-y-2 text-blue-800">
@@ -111,7 +110,6 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
           </ul>
         </div>
 
-        {/* Error Message */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
@@ -119,7 +117,6 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
           </div>
         )}
 
-        {/* Enter Fullscreen Button */}
         <Button
           onClick={enterFullscreenAndStart}
           disabled={isEnteringFullscreen}
@@ -138,15 +135,15 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
           )}
         </Button>
 
-        {/* Help Text */}
         <p className="text-sm text-gray-500 mt-6 text-center">
-          You can exit fullscreen anytime by pressing <kbd className="px-2 py-1 bg-gray-100 border border-gray-300 rounded text-xs font-mono">Esc</kbd>,
-          but you'll be prompted to return to continue.
+          Fullscreen mode will remain active during the assessment. Exiting fullscreen will be tracked as a violation.
+          After 3 violations, your assessment will be auto-submitted.
         </p>
       </div>
     </div>
   );
 }
+*/
 
 type AssessmentStep =
   | 'loading'
@@ -154,7 +151,7 @@ type AssessmentStep =
   | 'landing'
   | 'consent'
   | 'system_check'
-  | 'fullscreen_prompt'  // NEW: Show fullscreen prompt BEFORE starting assessment
+  // | 'fullscreen_prompt'  // DISABLED: Fullscreen requirement removed
   | 'generating_questions'
   | 'assessment'
   | 'completing'
@@ -408,14 +405,14 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
               // Try to complete the assessment and get results
               const result = await candidateService.completeAssessment(token);
               if (!isMountedRef.current) return;
-              setAssessmentResult(result);
+              setResults(result);
               setStepSafe('completed');
             } catch (completeError) {
               console.log('[DEBUG] Could not complete - trying to get results directly');
               try {
                 const result = await candidateService.getResults(token);
                 if (!isMountedRef.current) return;
-                setAssessmentResult(result);
+                setResults(result);
                 setStepSafe('completed');
               } catch {
                 // Show time expired message
@@ -502,21 +499,45 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
   const handleSystemCheckComplete = async (existingStream?: MediaStream) => {
     console.log('[DEBUG] handleSystemCheckComplete started');
 
-    // If SystemCheck passed us a stream, keep it alive for assessment
+    // If SystemCheck passed us a stream, validate it before use
     if (existingStream) {
-      console.log('[PORTAL] Received camera stream from SystemCheck - keeping it alive');
-      streamRef.current = existingStream;
-      setCameraStream(existingStream);
+      console.log('[PORTAL] Received camera stream from SystemCheck');
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = existingStream;
+      const videoTrack = existingStream.getVideoTracks()[0];
+      const audioTrack = existingStream.getAudioTracks()[0];
+
+      const isVideoLive = videoTrack && videoTrack.readyState === 'live';
+      const isAudioLive = audioTrack && audioTrack.readyState === 'live';
+
+      console.log('[PORTAL] Stream health check:', {
+        hasStream: !!existingStream,
+        videoTrack: videoTrack ? videoTrack.readyState : 'none',
+        audioTrack: audioTrack ? audioTrack.readyState : 'none',
+        isVideoLive,
+        isAudioLive
+      });
+
+      if (isVideoLive) {
+        console.log('[PORTAL] Stream is healthy - keeping it alive');
+        streamRef.current = existingStream;
+        setCameraStream(existingStream);
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = existingStream;
+        }
+      } else {
+        console.warn('[PORTAL] Stream appears stale (video track not live) - assessment will re-request camera if needed');
+        // Still store it but assessment component will likely need to re-request
+        streamRef.current = existingStream;
+        setCameraStream(existingStream);
       }
     }
 
-    // Don't start assessment yet - show fullscreen prompt first
-    console.log('[PORTAL] System check complete, showing fullscreen prompt...');
-    setStepSafe('fullscreen_prompt');
+    // DISABLED: Fullscreen requirement removed - start assessment directly
+    console.log('[PORTAL] System check complete, starting assessment directly (no fullscreen)...');
     setIsReadyToStart(true);
+    // Directly call the start handler instead of showing fullscreen prompt
+    handleFullscreenReady();
   };
 
   // NEW: Handler for when user enters fullscreen and is ready to start
@@ -735,15 +756,51 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         }
       }
     } catch (err) {
-      console.error('[PORTAL] Error in handleSystemCheckComplete:', err);
+      // Detect browser for error messaging
+      const getBrowserInfo = () => {
+        if (typeof navigator === 'undefined') return 'Unknown';
+        const ua = navigator.userAgent.toLowerCase();
+        return ua.includes('firefox') ? 'Firefox'
+            : ua.includes('safari') && !ua.includes('chrome') ? 'Safari'
+            : /iphone|ipad|ipod/.test(ua) ? 'iOS Safari'
+            : ua.includes('arc') ? 'Arc'
+            : ua.includes('brave') ? 'Brave'
+            : ua.includes('edg') ? 'Edge'
+            : ua.includes('chrome') ? 'Chrome'
+            : 'Unknown';
+      };
+
+      const browser = getBrowserInfo();
+
+      console.error('[PORTAL] Error in handleSystemCheckComplete:', {
+        error: err,
+        message: err instanceof Error ? err.message : 'unknown',
+        stack: err instanceof Error ? err.stack : undefined,
+        browser,
+        streamState: streamRef.current ? {
+          hasVideo: streamRef.current.getVideoTracks().length > 0,
+          hasAudio: streamRef.current.getAudioTracks().length > 0,
+          videoLive: streamRef.current.getVideoTracks()[0]?.readyState === 'live',
+          audioLive: streamRef.current.getAudioTracks()[0]?.readyState === 'live'
+        } : 'no stream'
+      });
+
       if (isMountedRef.current) {
         // Handle session already active error with user-friendly message
-        const errorMessage = err instanceof Error ? err.message : 'Failed to start assessment';
+        let errorMessage = err instanceof Error ? err.message : 'Failed to start assessment';
+
         if (errorMessage === 'SESSION_ALREADY_ACTIVE') {
-          setError('This assessment is already open in another browser or device. Please close the other session and try again. Only one active session is allowed per assessment.');
-        } else {
-          setError(errorMessage);
+          errorMessage = 'This assessment is already open in another browser or device. Please close the other session and try again. Only one active session is allowed per assessment.';
+        } else if (errorMessage.includes('Network error') || errorMessage.includes('Connection error')) {
+          // Add browser-specific hints for network errors
+          if (browser === 'Firefox') {
+            errorMessage += '\n\nFirefox Tip: Check if Enhanced Tracking Protection is blocking the connection (shield icon in address bar).';
+          } else if (browser === 'Safari' || browser === 'iOS Safari') {
+            errorMessage += '\n\nSafari Tip: Check if "Prevent Cross-Site Tracking" is enabled in Settings.';
+          }
         }
+
+        setError(errorMessage);
         setStepSafe('error');
         isStartingRef.current = false;
         isFlowActiveRef.current = false;
@@ -842,7 +899,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       // No existing stream - request a new one (fallback)
       console.log('[PROCTORING] No existing stream - requesting new camera access');
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const stream = await getUserMedia({
           video: true,
           audio: true
         });
@@ -943,8 +1000,9 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         />
       );
 
-    case 'fullscreen_prompt':
-      return <FullscreenPromptScreen onFullscreenReady={handleFullscreenReady} />;
+    // DISABLED: Fullscreen prompt removed - assessments run in normal mode
+    // case 'fullscreen_prompt':
+    //   return <FullscreenPromptScreen onFullscreenReady={handleFullscreenReady} />;
 
     case 'generating_questions':
       return (
@@ -994,7 +1052,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       // NEW: Show completion message - scoring runs in background
       return (
         <CompletedScreen
-          assessmentTitle={assessmentInfo?.title}
+          assessmentTitle={assessmentInfo?.assessment_title}
           candidateName={assessmentInfo?.candidate_name}
         />
       );

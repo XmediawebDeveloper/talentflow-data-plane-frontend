@@ -304,11 +304,13 @@ export const userSettingsApi = {
   },
 
   /**
-   * Disable 2FA
+   * Disable 2FA - requires OTP verification
    */
-  async disable2FA(): Promise<{ success: boolean; message: string }> {
+  async disable2FA(verificationCode: string): Promise<{ success: boolean; message: string }> {
     try {
-      const response = await api.post('/user-settings/disable-2fa');
+      const response = await api.post('/user-settings/disable-2fa', {
+        verification_code: verificationCode,
+      });
       return response.data;
     } catch (error) {
       return handleApiError(error);

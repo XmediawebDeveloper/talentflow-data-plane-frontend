@@ -3,6 +3,7 @@
 import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
+import { toast } from 'sonner';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -107,7 +108,14 @@ export default function CandidateResultDetails({
           name: details.candidate_name || 'Unknown',
           email: details.candidate_email || '',
           phone: details.candidate_phone || '',
-          completedDate: details.completed_at?.split('T')[0] || 'N/A',
+          completedDate: details.completed_at
+            ? new Date(details.completed_at).toLocaleDateString('en-US', {
+                timeZone: 'Asia/Kolkata',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+              })
+            : 'N/A',
           duration: details.time_spent_seconds ? `${Math.round(details.time_spent_seconds / 60)} min` : 'N/A',
           percentage: overallScore,
           status,
@@ -167,7 +175,7 @@ export default function CandidateResultDetails({
       }
     } catch (error) {
       console.error('Failed to generate insights:', error);
-      alert('Failed to generate AI insights. Please try again.');
+      toast.error('Failed to generate AI insights. Please try again.');
     } finally {
       setIsGeneratingInsights(false);
     }
@@ -236,7 +244,7 @@ export default function CandidateResultDetails({
                   document.body.removeChild(a);
                 } catch (error) {
                   console.error('Failed to export results:', error);
-                  alert('Failed to export results. Please try again.');
+                  toast.error('Failed to export results. Please try again.');
                 }
               }}
               className="px-6 py-2.5 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg transition-colors flex items-center gap-2 border border-white/30"
@@ -1007,7 +1015,7 @@ export default function CandidateResultDetails({
 
                     {/* Violations Grid */}
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {/* Window Blur */}
+                      {/* Mouse Movement */}
                       <div className={`rounded-xl p-5 border-2 ${
                         detailedResult.proctoring_stats.window_blur_count > 0
                           ? 'bg-red-50 border-red-200'
@@ -1024,7 +1032,7 @@ export default function CandidateResultDetails({
                               : 'text-gray-400'
                           }`} />
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Window Blur</div>
+                        <div className="text-sm text-gray-600 mb-1">Mouse Movement</div>
                         <div className={`text-3xl font-bold ${
                           detailedResult.proctoring_stats.window_blur_count > 0
                             ? 'text-red-600'
@@ -1176,7 +1184,8 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Fullscreen Exit */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      {/* Fullscreen Exit - Commented out for now */}
+                      {/* <div className={`rounded-xl p-5 border-2 ${
                         (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
                           ? 'bg-blue-50 border-blue-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1201,10 +1210,10 @@ export default function CandidateResultDetails({
                           {detailedResult.proctoring_stats.fullscreen_exit_count || 0}
                         </div>
                         <div className="text-xs text-gray-500 mt-1">times</div>
-                      </div>
+                      </div> */}
 
-                      {/* Other Violations (uncategorized) - only show if > 0 */}
-                      {(detailedResult.proctoring_stats.other_violation_count || 0) > 0 && (
+                      {/* Other Violations (uncategorized) - Commented out for now */}
+                      {/* {(detailedResult.proctoring_stats.other_violation_count || 0) > 0 && (
                         <div className="rounded-xl p-5 border-2 bg-gray-50 border-gray-300">
                           <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-3 bg-gray-200">
                             <AlertCircle className="w-6 h-6 text-gray-600" />
@@ -1215,7 +1224,7 @@ export default function CandidateResultDetails({
                           </div>
                           <div className="text-xs text-gray-500 mt-1">events</div>
                         </div>
-                      )}
+                      )} */}
 
                       {/* Total Violations */}
                       <div className={`rounded-xl p-5 border-2 ${

@@ -652,6 +652,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [isExtracting, setIsExtracting] = useState(false);
   const [newSkill, setNewSkill] = useState('');
   const [newComment, setNewComment] = useState('');
+  const [newCertification, setNewCertification] = useState('');
+  const [newDomainKeyword, setNewDomainKeyword] = useState('');
   const [newLocation, setNewLocation] = useState({ city: '', radius: '50' });
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [showLocationMenu, setShowLocationMenu] = useState(false);
@@ -1033,9 +1035,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
         employmentType: prev.employmentType,
         workModel: prev.workModel,
-        // Pre-fill salary from generation response
-        salaryFrom: params.salary_min ? params.salary_min.toString() : (isEditMode ? prev.salaryFrom : ''),
-        salaryTo: params.salary_max ? params.salary_max.toString() : (isEditMode ? prev.salaryTo : ''),
+        // Pre-fill salary from generation response, preserve existing values if extraction returns null
+        salaryFrom: params.salary_min ? params.salary_min.toString() : (prev.salaryFrom || ''),
+        salaryTo: params.salary_max ? params.salary_max.toString() : (prev.salaryTo || ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
@@ -1581,9 +1583,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
         employmentType: params.job_type || (isEditMode ? extractedData.employmentType : 'full_time'),
         workModel: params.work_mode || (isEditMode ? extractedData.workModel : 'onsite'),
-        salaryFrom: params.salary_min ? params.salary_min.toString() : (isEditMode ? extractedData.salaryFrom : ''),
-        salaryTo: params.salary_max ? params.salary_max.toString() : (isEditMode ? extractedData.salaryTo : ''),
-        compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || (isEditMode ? extractedData.compensationType : 'yearly'),
+        // Preserve salary from generation step if extraction doesn't find it in the JD text
+        salaryFrom: params.salary_min ? params.salary_min.toString() : (extractedData.salaryFrom || ''),
+        salaryTo: params.salary_max ? params.salary_max.toString() : (extractedData.salaryTo || ''),
+        compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
           radius: '50'  // Default radius
@@ -2120,6 +2123,108 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setEditingRecruiterCommentValue('');
   };
 
+  // Certification handlers
+  const handleAddCertification = async () => {
+    if (newCertification.trim()) {
+      const certToAdd = newCertification.trim();
+      const updatedCertifications = [...extractedData.certifications, certToAdd];
+
+      setExtractedData(prev => ({
+        ...prev,
+        certifications: updatedCertifications,
+      }));
+      setNewCertification('');
+      setEditingCategory(null);
+      setExtractedDataModified(true);
+
+      // Save to DB immediately
+      if (editingId) {
+        try {
+          await jdService.update(editingId, {
+            certifications: updatedCertifications,
+          });
+          console.log('[Add] Certification added and saved to DB');
+        } catch (error) {
+          console.error('[Add] Failed to save certification addition:', error);
+        }
+      }
+    }
+  };
+
+  const handleRemoveCertification = async (index: number) => {
+    const deletedCert = extractedData.certifications[index];
+    const updatedCertifications = extractedData.certifications.filter((_, i) => i !== index);
+
+    setExtractedData(prev => ({
+      ...prev,
+      certifications: updatedCertifications,
+    }));
+    setExtractedDataModified(true);
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          certifications: updatedCertifications,
+        });
+        console.log('[Delete] Certification deleted and saved to DB:', deletedCert);
+      } catch (error) {
+        console.error('[Delete] Failed to save certification deletion:', error);
+      }
+    }
+  };
+
+  // Domain Keywords handlers
+  const handleAddDomainKeyword = async () => {
+    if (newDomainKeyword.trim()) {
+      const keywordToAdd = newDomainKeyword.trim();
+      const updatedKeywords = [...extractedData.domainKeywords, keywordToAdd];
+
+      setExtractedData(prev => ({
+        ...prev,
+        domainKeywords: updatedKeywords,
+      }));
+      setNewDomainKeyword('');
+      setEditingCategory(null);
+      setExtractedDataModified(true);
+
+      // Save to DB immediately
+      if (editingId) {
+        try {
+          await jdService.update(editingId, {
+            domain_keywords: updatedKeywords,
+          });
+          console.log('[Add] Domain keyword added and saved to DB');
+        } catch (error) {
+          console.error('[Add] Failed to save domain keyword addition:', error);
+        }
+      }
+    }
+  };
+
+  const handleRemoveDomainKeyword = async (index: number) => {
+    const deletedKeyword = extractedData.domainKeywords[index];
+    const updatedKeywords = extractedData.domainKeywords.filter((_, i) => i !== index);
+
+    setExtractedData(prev => ({
+      ...prev,
+      domainKeywords: updatedKeywords,
+    }));
+    setExtractedDataModified(true);
+
+    // Save to DB immediately
+    if (editingId) {
+      try {
+        await jdService.update(editingId, {
+          domain_keywords: updatedKeywords,
+        });
+        console.log('[Delete] Domain keyword deleted and saved to DB:', deletedKeyword);
+      } catch (error) {
+        console.error('[Delete] Failed to save domain keyword deletion:', error);
+      }
+    }
+  };
+
   const handleDropSkill = (skill: string, fromCategory: 'mustHaveSkills' | 'niceToHaveSkills', toCategory: 'mustHaveSkills' | 'niceToHaveSkills') => {
     if (fromCategory !== toCategory) {
       handleMoveSkill(skill, fromCategory, toCategory);
@@ -2331,17 +2436,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           console.log('[DEBUG] Must-have skills:', extractedData.mustHaveSkills);
           console.log('[DEBUG] Nice-to-have skills:', extractedData.niceToHaveSkills);
 
-          // Parse experience for saving
+          // Parse experience for reformat API - look up code in experienceLevels array
           let experienceMin: number | undefined;
           let experienceMax: number | undefined;
           if (extractedData.experience) {
-            const rangeMatch = extractedData.experience.match(/(\d+)\s*-\s*(\d+)/);
-            const plusMatch = extractedData.experience.match(/(\d+)\+/);
-            if (rangeMatch) {
-              experienceMin = parseInt(rangeMatch[1]);
-              experienceMax = parseInt(rangeMatch[2]);
-            } else if (plusMatch) {
-              experienceMin = parseInt(plusMatch[1]);
+            const experienceLevel = experienceLevels.find(level => level.code === extractedData.experience);
+            if (experienceLevel) {
+              experienceMin = experienceLevel.min_years;
+              experienceMax = experienceLevel.max_years || undefined;
+              console.log('[DEBUG] Experience code for reformat:', {
+                code: extractedData.experience,
+                min_years: experienceMin,
+                max_years: experienceMax
+              });
+            } else {
+              console.warn('[DEBUG] Experience code not found for reformat:', extractedData.experience);
             }
           }
 
@@ -2427,24 +2536,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Save JD with creation_stage: 'review' so refresh preserves the stage
     try {
-      // Parse experience for saving
+      // Parse experience for saving - look up code in experienceLevels array
       let experienceMin: number | undefined;
       let experienceMax: number | undefined;
       if (extractedData.experience) {
-        const rangeMatch = extractedData.experience.match(/(\d+)\s*-\s*(\d+)/);
-        const plusMatch = extractedData.experience.match(/(\d+)\+/);
-        if (rangeMatch) {
-          experienceMin = parseInt(rangeMatch[1]);
-          experienceMax = parseInt(rangeMatch[2]);
-        } else if (plusMatch) {
-          experienceMin = parseInt(plusMatch[1]);
-          experienceMax = experienceMin + 5;
+        const experienceLevel = experienceLevels.find(level => level.code === extractedData.experience);
+        if (experienceLevel) {
+          experienceMin = experienceLevel.min_years;
+          experienceMax = experienceLevel.max_years || undefined;
+          console.log('[DEBUG] Experience code lookup:', {
+            code: extractedData.experience,
+            min_years: experienceMin,
+            max_years: experienceMax
+          });
         } else {
-          const singleMatch = extractedData.experience.match(/(\d+)/);
-          if (singleMatch) {
-            experienceMin = parseInt(singleMatch[1]);
-            experienceMax = experienceMin + 2;
-          }
+          console.warn('[DEBUG] Experience code not found in levels:', extractedData.experience);
         }
       }
 
@@ -2651,22 +2757,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setIsPublishing(true);
 
     try {
-      // Parse experience values - handle formats like "3-5", "5+", "0-2"
+      // Parse experience values - look up code in experienceLevels array
       let experienceMin: number | undefined;
       let experienceMax: number | undefined;
       if (extractedData.experience) {
-        const rangeMatch = extractedData.experience.match(/(\d+)\s*-\s*(\d+)/);
-        const plusMatch = extractedData.experience.match(/(\d+)\+/);
-        if (rangeMatch) {
-          experienceMin = parseInt(rangeMatch[1]);
-          experienceMax = parseInt(rangeMatch[2]);
-        } else if (plusMatch) {
-          experienceMin = parseInt(plusMatch[1]);
+        const experienceLevel = experienceLevels.find(level => level.code === extractedData.experience);
+        if (experienceLevel) {
+          experienceMin = experienceLevel.min_years;
+          experienceMax = experienceLevel.max_years || undefined;
+          console.log('[DEBUG] Experience code for publish:', {
+            code: extractedData.experience,
+            min_years: experienceMin,
+            max_years: experienceMax
+          });
         } else {
-          const singleMatch = extractedData.experience.match(/(\d+)/);
-          if (singleMatch) {
-            experienceMin = parseInt(singleMatch[1]);
-          }
+          console.warn('[DEBUG] Experience code not found for publish:', extractedData.experience);
         }
       }
 
@@ -2930,22 +3035,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setIsSavingDraft(true);
 
     try {
-      // Parse experience values - handle formats like "3-5", "5+", "0-2"
+      // Parse experience values - look up code in experienceLevels array
       let experienceMin: number | undefined;
       let experienceMax: number | undefined;
       if (extractedData.experience) {
-        const rangeMatch = extractedData.experience.match(/(\d+)\s*-\s*(\d+)/);
-        const plusMatch = extractedData.experience.match(/(\d+)\+/);
-        if (rangeMatch) {
-          experienceMin = parseInt(rangeMatch[1]);
-          experienceMax = parseInt(rangeMatch[2]);
-        } else if (plusMatch) {
-          experienceMin = parseInt(plusMatch[1]);
+        const experienceLevel = experienceLevels.find(level => level.code === extractedData.experience);
+        if (experienceLevel) {
+          experienceMin = experienceLevel.min_years;
+          experienceMax = experienceLevel.max_years || undefined;
+          console.log('[DEBUG] Experience code for draft:', {
+            code: extractedData.experience,
+            min_years: experienceMin,
+            max_years: experienceMax
+          });
         } else {
-          const singleMatch = extractedData.experience.match(/(\d+)/);
-          if (singleMatch) {
-            experienceMin = parseInt(singleMatch[1]);
-          }
+          console.warn('[DEBUG] Experience code not found for draft:', extractedData.experience);
         }
       }
 
@@ -4599,6 +4703,125 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </label>
                 </div>
               </div>
+
+              {/* Certifications & Domain Keywords - HIDDEN as per requirement */}
+              {/*
+              <div className="mt-6 grid grid-cols-2 gap-6">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-900">Certifications</h3>
+                    {!isRegenerating && (
+                      <button
+                        onClick={() => setEditingCategory('certifications')}
+                        className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add
+                      </button>
+                    )}
+                  </div>
+                  {editingCategory === 'certifications' && !isRegenerating && (
+                    <div className="flex gap-2 mb-4">
+                      <input
+                        type="text"
+                        value={newCertification}
+                        onChange={(e) => setNewCertification(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddCertification()}
+                        placeholder="e.g., AWS Certified Solutions Architect"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                        autoFocus
+                      />
+                      <button
+                        onClick={handleAddCertification}
+                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {extractedData.certifications.map((cert, index) => (
+                      <div
+                        key={index}
+                        className={`flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg ${isRegenerating ? 'opacity-60' : ''}`}
+                      >
+                        <span className="text-sm text-gray-900">{cert}</span>
+                        {!isRegenerating && (
+                          <button
+                            onClick={() => handleRemoveCertification(index)}
+                            className="text-red-600 hover:text-red-700 ml-2"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {extractedData.certifications.length === 0 && (
+                      <p className="text-sm text-gray-500 italic py-4 text-center">
+                        No certifications added yet
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-900">Domain Keywords</h3>
+                    {!isRegenerating && (
+                      <button
+                        onClick={() => setEditingCategory('domainKeywords')}
+                        className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-1"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add
+                      </button>
+                    )}
+                  </div>
+                  {editingCategory === 'domainKeywords' && !isRegenerating && (
+                    <div className="flex gap-2 mb-4">
+                      <input
+                        type="text"
+                        value={newDomainKeyword}
+                        onChange={(e) => setNewDomainKeyword(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddDomainKeyword()}
+                        placeholder="e.g., Banking, Fintech, Cloud"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                        autoFocus
+                      />
+                      <button
+                        onClick={handleAddDomainKeyword}
+                        className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {extractedData.domainKeywords.map((keyword, index) => (
+                      <div
+                        key={index}
+                        className={`flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg ${isRegenerating ? 'opacity-60' : ''}`}
+                      >
+                        <span className="text-sm text-gray-900">{keyword}</span>
+                        {!isRegenerating && (
+                          <button
+                            onClick={() => handleRemoveDomainKeyword(index)}
+                            className="text-red-600 hover:text-red-700 ml-2"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {extractedData.domainKeywords.length === 0 && (
+                      <p className="text-sm text-gray-500 italic py-4 text-center">
+                        No domain keywords added yet
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              */}
 
               {/* Assessment Guidance & Internal Recruiter Notes - Side by Side */}
               <div className="mt-6 grid grid-cols-2 gap-6">

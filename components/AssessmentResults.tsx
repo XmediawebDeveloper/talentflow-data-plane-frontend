@@ -2,6 +2,8 @@ import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, Chevr
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
+import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import {
   calculateFinalResult,
   QuestionScore,
@@ -67,6 +69,7 @@ interface QuestionResult {
 
 export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle }: AssessmentResultsProps) {
   const router = useRouter();
+  const dialog = useGlobalDialog();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -93,9 +96,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Round-based filtering with dropdown options (HR removed - only Tech and Coding)
   const [roundFilters, setRoundFilters] = useState<{
-    technical?: 'all' | '70' | '90';
-    coding?: 'all' | '70' | '90';
+    technical?: 'all' | '50-70' | '70-90' | '90+';
+    coding?: 'all' | '50-70' | '70-90' | '90+';
   }>({});
+
+  // Pass/Fail filter
+  const [passFailFilter, setPassFailFilter] = useState<'all' | 'pass' | 'fail'>('all');
 
   // AS-24: Column customization
   const COLUMN_PREFERENCES_KEY = 'assessment_results_columns_v2';
@@ -257,7 +263,18 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               coding_score,
               hr_score,
               status,
-              completedDate: item.completed_at?.split('T')[0] || (item.started_at?.split('T')[0] || (status === 'Pending' ? 'Not started' : 'N/A')),
+              completedDate: (() => {
+                const dateStr = item.completed_at || item.started_at;
+                if (!dateStr) return status === 'Pending' ? 'Not started' : 'N/A';
+                // Convert UTC to IST and format as date
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('en-US', {
+                  timeZone: 'Asia/Kolkata',
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric'
+                });
+              })(),
               duration,
               sections: [
                 assessmentDetails?.technical_enabled && tech_score != null && {
@@ -312,7 +329,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Handle delete result
   const handleDeleteResult = async (resultId: string, candidateName: string) => {
-    if (!confirm(`Are you sure you want to delete the result for ${candidateName}? This action cannot be undone.`)) {
+    if (!await dialog.confirm({ title: 'Delete Result', message: `Are you sure you want to delete the result for ${candidateName}? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) {
       return;
     }
     setIsDeleting(resultId);
@@ -332,7 +349,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       }
     } catch (error) {
       console.error('Failed to delete result:', error);
-      alert('Failed to delete result. Please try again.');
+      toast.error('Failed to delete result. Please try again.');
     } finally {
       setIsDeleting(null);
     }
@@ -374,7 +391,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download PDF:', error);
-      alert('Failed to download PDF report. Please try again.');
+      toast.error('Failed to download PDF report. Please try again.');
     } finally {
       setDownloadingPDF(null);
     }
@@ -386,7 +403,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
     setDownloadingBulkPDF(true);
     try {
-      const blob = await assessmentService.exportBulkPDFs(selectedRows);
+      const blob = await assessmentService.exportResultsBulkPDFs(assessmentId, selectedRows);
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -400,7 +417,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download bulk PDFs:', error);
-      alert('Failed to download PDF reports. Please try again.');
+      toast.error('Failed to download PDF reports. Please try again.');
     } finally {
       setDownloadingBulkPDF(false);
     }
@@ -442,7 +459,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // AS-23: Filter candidates by round type, search, and status
   let filteredCandidates = displayResults;
 
-  // Round-based filtering with percentage thresholds
+  // Round-based filtering with percentage ranges
   if (Object.keys(roundFilters).length > 0) {
     filteredCandidates = filteredCandidates.filter(candidate => {
       // Check if candidate meets ALL specified round filters (HR removed - only Tech and Coding)
@@ -450,21 +467,48 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
       // Check Technical round filter
       if (roundFilters.technical !== undefined && roundFilters.technical !== 'all') {
-        const threshold = Number(roundFilters.technical);
-        if (candidate.tech_score === undefined || candidate.tech_score < threshold) {
+        const techScore = candidate.tech_score;
+        if (techScore === undefined) {
           meetsAllFilters = false;
+        } else {
+          const range = roundFilters.technical;
+          if (range === '50-70' && !(techScore > 50 && techScore < 70)) {
+            meetsAllFilters = false;
+          } else if (range === '70-90' && !(techScore >= 70 && techScore < 90)) {
+            meetsAllFilters = false;
+          } else if (range === '90+' && techScore < 90) {
+            meetsAllFilters = false;
+          }
         }
       }
 
       // Check Coding round filter
       if (roundFilters.coding !== undefined && roundFilters.coding !== 'all') {
-        const threshold = Number(roundFilters.coding);
-        if (candidate.coding_score === undefined || candidate.coding_score < threshold) {
+        const codingScore = candidate.coding_score;
+        if (codingScore === undefined) {
           meetsAllFilters = false;
+        } else {
+          const range = roundFilters.coding;
+          if (range === '50-70' && !(codingScore > 50 && codingScore < 70)) {
+            meetsAllFilters = false;
+          } else if (range === '70-90' && !(codingScore >= 70 && codingScore < 90)) {
+            meetsAllFilters = false;
+          } else if (range === '90+' && codingScore < 90) {
+            meetsAllFilters = false;
+          }
         }
       }
 
       return meetsAllFilters;
+    });
+  }
+
+  // Pass/Fail filter
+  if (passFailFilter !== 'all') {
+    filteredCandidates = filteredCandidates.filter(candidate => {
+      // A candidate passes if they have completed and their percentage is >= 50
+      const isPassed = candidate.status === 'Completed' && candidate.percentage >= 50;
+      return passFailFilter === 'pass' ? isPassed : !isPassed;
     });
   }
 
@@ -570,7 +614,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     document.body.removeChild(a);
                   } catch (error) {
                     console.error('Failed to export results:', error);
-                    alert('Failed to export results. Please try again.');
+                    toast.error('Failed to export results. Please try again.');
                   }
                 }}
                 className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
@@ -672,6 +716,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </select>
             </div>
 
+            {/* Pass/Fail Filter */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 whitespace-nowrap">Result:</label>
+              <select
+                value={passFailFilter}
+                onChange={(e) => {
+                  setPassFailFilter(e.target.value as 'all' | 'pass' | 'fail');
+                  setCurrentPage(1);
+                }}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
+              >
+                <option value="all">All</option>
+                <option value="pass">Pass</option>
+                <option value="fail">Fail</option>
+              </select>
+            </div>
+
             {/* Round-based Filters */}
             {assessmentDetails?.technical_enabled && (
               <div className="flex items-center gap-2">
@@ -679,15 +740,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <select
                   value={roundFilters.technical || 'all'}
                   onChange={(e) => {
-                    const value = e.target.value as 'all' | '70' | '90';
+                    const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
                     setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
                     setCurrentPage(1);
                   }}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
                 >
                   <option value="all">All</option>
-                  <option value="70">More than 70%</option>
-                  <option value="90">More than 90%</option>
+                  <option value="50-70">50-70%</option>
+                  <option value="70-90">70-90%</option>
+                  <option value="90+">90%+</option>
                 </select>
               </div>
             )}
@@ -698,26 +760,28 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <select
                   value={roundFilters.coding || 'all'}
                   onChange={(e) => {
-                    const value = e.target.value as 'all' | '70' | '90';
+                    const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
                     setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
                     setCurrentPage(1);
                   }}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
                 >
                   <option value="all">All</option>
-                  <option value="70">More than 70%</option>
-                  <option value="90">More than 90%</option>
+                  <option value="50-70">50-70%</option>
+                  <option value="70-90">70-90%</option>
+                  <option value="90+">90%+</option>
                 </select>
               </div>
             )}
 
             {/* Clear Filters Button */}
-            {(Object.keys(roundFilters).length > 0 || searchQuery || statusFilter !== 'all') && (
+            {(Object.keys(roundFilters).length > 0 || searchQuery || statusFilter !== 'all' || passFailFilter !== 'all') && (
               <button
                 onClick={() => {
                   setRoundFilters({});
                   setSearchQuery('');
                   setStatusFilter('all');
+                  setPassFailFilter('all');
                   setCurrentPage(1);
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
@@ -885,7 +949,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <td colSpan={enabledColumnsCount + 2} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center">
                         <Users className="w-12 h-12 text-gray-300 mb-3" />
-                        {searchQuery || Object.keys(roundFilters).length > 0 || statusFilter !== 'all' ? (
+                        {searchQuery || Object.keys(roundFilters).length > 0 || statusFilter !== 'all' || passFailFilter !== 'all' ? (
                           <>
                             <p className="text-gray-600 mb-1">No candidates match your search criteria</p>
                             <p className="text-sm text-gray-500">Try adjusting your filters or search query</p>
@@ -946,16 +1010,30 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
                         <td className="px-4 py-4 text-center">
-                          <span className={`text-lg font-semibold ${candidate.tech_score !== undefined ? getScoreColor(candidate.tech_score) : 'text-gray-400'}`}>
-                            {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
-                          </span>
+                          <div className="flex flex-col items-center gap-1">
+                            <span className={`text-lg font-semibold ${candidate.tech_score !== undefined ? getScoreColor(candidate.tech_score) : 'text-gray-400'}`}>
+                              {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
+                            </span>
+                            {candidate.tech_score !== undefined && (
+                              <span className={`text-xs font-medium ${candidate.tech_score >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                                {candidate.tech_score >= 50 ? 'Pass' : 'Fail'}
+                              </span>
+                            )}
+                          </div>
                         </td>
                       )}
                       {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
                         <td className="px-4 py-4 text-center">
-                          <span className={`text-lg font-semibold ${candidate.coding_score !== undefined ? getScoreColor(candidate.coding_score) : 'text-gray-400'}`}>
-                            {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
-                          </span>
+                          <div className="flex flex-col items-center gap-1">
+                            <span className={`text-lg font-semibold ${candidate.coding_score !== undefined ? getScoreColor(candidate.coding_score) : 'text-gray-400'}`}>
+                              {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
+                            </span>
+                            {candidate.coding_score !== undefined && (
+                              <span className={`text-xs font-medium ${candidate.coding_score >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                                {candidate.coding_score >= 50 ? 'Pass' : 'Fail'}
+                              </span>
+                            )}
+                          </div>
                         </td>
                       )}
                       {isColumnEnabled('status') && (
@@ -994,12 +1072,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {/* AS-25: PDF Download Button */}
                           {candidate.status === 'Completed' ? (
                             <button
-                              onClick={() => handleDownloadPDF(candidate.id)}
-                              disabled={downloadingPDF === candidate.id}
+                              onClick={() => handleDownloadPDF(assessmentId)}
+                              disabled={downloadingPDF === assessmentId}
                               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Download PDF Report"
                             >
-                              {downloadingPDF === candidate.id ? (
+                              {downloadingPDF === assessmentId ? (
                                 <Loader2 className="w-3 h-3 animate-spin" />
                               ) : (
                                 <Download className="w-3 h-3" />

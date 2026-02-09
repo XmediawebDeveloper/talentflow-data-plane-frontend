@@ -785,7 +785,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             setSelectedVersioned([]);
             setSelectedDuplicated([]);
             const totalResolved = resolutions.length;
-            alert(`Resolved ${totalResolved} resume(s):\n${resolutions.map(r => `${r.fileName}: ${r.action}`).join('\n')}`);
+            toast.success(`Resolved ${totalResolved} resume(s) successfully`);
           }}
         />
       )}

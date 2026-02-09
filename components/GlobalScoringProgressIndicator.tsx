@@ -77,9 +77,6 @@ export default function GlobalScoringProgressIndicator() {
               <>Scoring Complete ({totalStats.completed}/{totalStats.total})</>
             )}
           </div>
-          <div className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
-            {overallProgress}%
-          </div>
         </div>
       </div>
     );
@@ -126,7 +123,6 @@ export default function GlobalScoringProgressIndicator() {
       <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
         <div className="flex items-center justify-between text-sm mb-2">
           <span className="text-gray-600">Overall Progress</span>
-          <span className="font-medium text-gray-900">{overallProgress}%</span>
         </div>
         <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
           <div className="h-full flex">
@@ -226,9 +222,6 @@ function JobProgressItem({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
-            {progress}%
-          </span>
           {isExpanded ? (
             <ChevronUp className="w-4 h-4 text-gray-400" />
           ) : (

@@ -31,6 +31,7 @@ import FeaturePermissionManager from './FeaturePermissionManager';
 import DependencyMatrix from './DependencyMatrix';
 import UserLimits, { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Types
 interface UserPermissions {
@@ -127,6 +128,8 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'jd:create', label: 'Create' },
       { code: 'jd:update', label: 'Edit' },
       { code: 'jd:delete', label: 'Delete' },
+      { code: 'jd:export', label: 'Export' },
+      { code: 'jd:duplicate', label: 'Duplicate' },
       { code: 'jd:archive', label: 'Archive' },
       { code: 'jd:disable', label: 'Disable' },
     ],
@@ -135,28 +138,44 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     id: 'resume_scoring',
     name: 'Resume Scoring',
     description: 'Resume scoring and evaluation permissions',
-    viewCode: 'resume_scoring:read',
+    viewCode: 'scoring:read',
     actions: [
-      { code: 'resume_scoring:create', label: 'Score Resumes' },
-      { code: 'resume_scoring:export', label: 'Export' },
-      { code: 'resume_scoring:download', label: 'Download Scorecard' },
-      { code: 'resume_scoring:delete', label: 'Delete' },
+      { code: 'scoring:score', label: 'Score Resumes' },
+      { code: 'scoring:export', label: 'Export' },
+      { code: 'scoring:download', label: 'Download Scorecard' },
+      { code: 'scoring:delete', label: 'Delete' },
     ],
     // Important: If Resume Scoring is enabled, Resume Upload is auto-enabled for both My Resumes and Internal Database
     dependencies: {
-      'resume_scoring:create': ['my_resumes:create', 'internal_db:create'],
+      'scoring:score': ['my_resumes:upload', 'internal_db:upload'],
     },
   },
   {
     id: 'ai_talent_match',
     name: 'AI Talent Match',
     description: 'AI-powered talent matching permissions',
-    viewCode: 'ai_talent_match:read',
+    viewCode: 'ai_match:read',
     actions: [
-      { code: 'ai_talent_match:create', label: 'Run AI Match' },
-      { code: 'ai_talent_match:apply', label: 'Apply for Job' },
-      { code: 'ai_talent_match:delete', label: 'Delete' },
-      { code: 'ai_talent_match:export', label: 'Export' },
+      { code: 'ai_match:run', label: 'Run AI Match' },
+      { code: 'ai_match:apply', label: 'Apply for Job' },
+      { code: 'ai_match:delete', label: 'Delete' },
+      { code: 'ai_match:export', label: 'Export' },
+    ],
+  },
+  {
+    id: 'resumes_all_users',
+    name: 'Resumes (All Users)',
+    description: 'Access to all resumes in the system',
+    viewCode: 'resumes:read',
+    actions: [
+      { code: 'resumes:create', label: 'Create' },
+      { code: 'resumes:update', label: 'Edit' },
+      { code: 'resumes:delete', label: 'Delete' },
+      { code: 'resumes:download', label: 'Download' },
+      { code: 'resumes:parse', label: 'Parse' },
+      { code: 'resumes:score', label: 'Score' },
+      { code: 'resumes:export', label: 'Export' },
+      { code: 'resumes:bulk_upload', label: 'Bulk Upload' },
     ],
   },
   {
@@ -168,32 +187,43 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
         name: 'My Resumes',
         viewCode: 'my_resumes:read',
         actions: [
-          { code: 'my_resumes:create', label: 'Resume Upload' },
+          { code: 'my_resumes:upload', label: 'Resume Upload' },
+          { code: 'my_resumes:update', label: 'Edit' },
           { code: 'my_resumes:delete', label: 'Delete' },
           { code: 'my_resumes:archive', label: 'Archive' },
-          { code: 'my_resumes:apply_assessment', label: 'Apply to Assessment' },
         ],
       },
       {
         name: 'Internal Database',
         viewCode: 'internal_db:read',
         actions: [
-          { code: 'internal_db:create', label: 'Resume Upload' },
+          { code: 'internal_db:upload', label: 'Resume Upload' },
+          { code: 'internal_db:export', label: 'Export' },
           { code: 'internal_db:delete', label: 'Delete' },
           { code: 'internal_db:archive', label: 'Archive' },
-          { code: 'internal_db:apply_assessment', label: 'Apply to Assessment' },
         ],
       },
       {
         name: 'Assessment',
         viewCode: 'assessments:read',
         actions: [
-          { code: 'assessments:create', label: 'Create' },
-          { code: 'assessments:update', label: 'Edit' },
+          { code: 'assessments:invite', label: 'Invite' },
+          { code: 'assessments:review', label: 'Review' },
+          { code: 'assessments:export', label: 'Export' },
           { code: 'assessments:delete', label: 'Delete' },
-          { code: 'assessments:archive', label: 'Archive' },
         ],
       },
+    ],
+  },
+  {
+    id: 'analytics',
+    name: 'Analytics',
+    description: 'Dashboard and analytics permissions',
+    isMenuToggle: true,
+    viewCode: 'analytics:read',
+    actions: [
+      { code: 'analytics:export', label: 'Export' },
+      { code: 'analytics:custom_reports', label: 'Custom Reports' },
     ],
   },
   {
@@ -618,6 +648,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1
 
 export default function UserManagement() {
   const router = useRouter();
+  const { user: currentUser, refreshUser } = useAuth();
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -636,6 +667,7 @@ export default function UserManagement() {
   const [selectedPermissionCodes, setSelectedPermissionCodes] = useState<Set<string>>(new Set());
   const [editSelectedPermissionCodes, setEditSelectedPermissionCodes] = useState<Set<string>>(new Set());
   const [editOriginalRoleId, setEditOriginalRoleId] = useState<number | null>(null);
+  const [editOriginalPermissionCodes, setEditOriginalPermissionCodes] = useState<Set<string>>(new Set());
 
   // RBAC06-07: Feature permission states
   const [featurePermissionUser, setFeaturePermissionUser] = useState<ApiUser | null>(null);
@@ -753,13 +785,37 @@ export default function UserManagement() {
     initializeUsers();
   }, []);
 
+  // Component lifecycle tracking
+  useEffect(() => {
+    console.log('[COMPONENT LIFECYCLE] UserManagement component mounted');
+    return () => {
+      console.log('[COMPONENT LIFECYCLE] UserManagement component unmounting');
+    };
+  }, []);
+
+  // Track allPermissions state changes
+  useEffect(() => {
+    console.log('[STATE CHANGE] allPermissions changed. New count:', allPermissions.length);
+    if (allPermissions.length > 0) {
+      console.log('[STATE CHANGE] First 3 permissions:', allPermissions.slice(0, 3));
+    } else {
+      console.warn('[STATE CHANGE] ⚠️  allPermissions is EMPTY!');
+    }
+  }, [allPermissions]);
 
   const loadAllPermissions = async () => {
+    console.log('[LOAD PERMISSIONS] Starting to load permissions...');
     try {
       const data = await rbacService.getPermissions();
+      console.log('[LOAD PERMISSIONS] Received data:', data);
+      console.log('[LOAD PERMISSIONS] Permissions count:', data.permissions?.length || 0);
+      if (data.permissions && data.permissions.length > 0) {
+        console.log('[LOAD PERMISSIONS] First 3 permissions:', data.permissions.slice(0, 3));
+      }
       setAllPermissions(data.permissions);
+      console.log('[LOAD PERMISSIONS] ✓ allPermissions state updated successfully');
     } catch (error) {
-      console.warn('Failed to load permissions:', error);
+      console.error('[LOAD PERMISSIONS] ✗ Failed to load permissions:', error);
     }
   };
 
@@ -826,11 +882,94 @@ export default function UserManagement() {
   const togglePermission = (permissionId: number) => {
     setSelectedPermissionIds(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(permissionId)) {
-        newSet.delete(permissionId);
-      } else {
+      const toggledPermission = allPermissions.find(p => p.id === permissionId);
+
+      if (!toggledPermission) return newSet;
+
+      const isEnabling = !newSet.has(permissionId);
+
+      if (isEnabling) {
         newSet.add(permissionId);
+      } else {
+        newSet.delete(permissionId);
       }
+
+      // CASCADING LOGIC: If toggling a view permission (parent), toggle all related actions (children)
+      // Find which category this permission belongs to
+      for (const category of CUSTOM_PERMISSION_CATEGORIES) {
+        // Check if this is a top-level viewCode
+        if (category.viewCode === toggledPermission.code) {
+          // Get all related action permissions
+          const relatedCodes = new Set<string>();
+
+          if (category.actions) {
+            category.actions.forEach(action => relatedCodes.add(action.code));
+          }
+
+          if (category.subCategories) {
+            category.subCategories.forEach(sub => {
+              sub.actions?.forEach(action => relatedCodes.add(action.code));
+            });
+          }
+
+          // SPECIAL CASE: If toggling Assessments, also toggle "Apply for Assessment" in other categories
+          if (toggledPermission.code === 'assessments:read') {
+            relatedCodes.add('my_resumes:apply_assessment');
+            relatedCodes.add('internal_db:apply_assessment');
+          }
+
+          // Toggle all related permissions
+          allPermissions.forEach(perm => {
+            if (relatedCodes.has(perm.code)) {
+              if (isEnabling) {
+                newSet.add(perm.id);
+              } else {
+                newSet.delete(perm.id);
+              }
+            }
+          });
+
+          console.log(`[CASCADING] ${isEnabling ? 'Enabled' : 'Disabled'} ${toggledPermission.code} and ${relatedCodes.size} related permissions`);
+          break;
+        }
+
+        // Check if this is a subcategory viewCode
+        if (category.subCategories) {
+          for (const sub of category.subCategories) {
+            if (sub.viewCode === toggledPermission.code) {
+              // Get all actions in this subcategory
+              const relatedCodes = new Set<string>();
+              sub.actions?.forEach(action => relatedCodes.add(action.code));
+
+              // SPECIAL CASE: If toggling Assessments, also toggle "Apply for Assessment" in other categories
+              if (toggledPermission.code === 'assessments:read') {
+                relatedCodes.add('my_resumes:apply_assessment');
+                relatedCodes.add('internal_db:apply_assessment');
+                console.log('[CASCADING] Added cross-category: my_resumes:apply_assessment, internal_db:apply_assessment');
+              }
+
+              // Toggle all related permissions
+              const toggledPermissions: string[] = [];
+              allPermissions.forEach(perm => {
+                if (relatedCodes.has(perm.code)) {
+                  if (isEnabling) {
+                    newSet.add(perm.id);
+                  } else {
+                    newSet.delete(perm.id);
+                  }
+                  toggledPermissions.push(perm.code);
+                }
+              });
+
+              console.log(`[CASCADING] ${isEnabling ? 'Enabled' : 'Disabled'} ${toggledPermission.code}`);
+              console.log(`[CASCADING] Related codes to toggle:`, Array.from(relatedCodes));
+              console.log(`[CASCADING] Actually toggled ${toggledPermissions.length} permissions:`, toggledPermissions);
+              break;
+            }
+          }
+        }
+      }
+
       return newSet;
     });
   };
@@ -839,11 +978,94 @@ export default function UserManagement() {
   const toggleEditPermission = (permissionId: number) => {
     setEditSelectedPermissionIds(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(permissionId)) {
-        newSet.delete(permissionId);
-      } else {
+      const toggledPermission = allPermissions.find(p => p.id === permissionId);
+
+      if (!toggledPermission) return newSet;
+
+      const isEnabling = !newSet.has(permissionId);
+
+      if (isEnabling) {
         newSet.add(permissionId);
+      } else {
+        newSet.delete(permissionId);
       }
+
+      // CASCADING LOGIC: If toggling a view permission (parent), toggle all related actions (children)
+      // Find which category this permission belongs to
+      for (const category of CUSTOM_PERMISSION_CATEGORIES) {
+        // Check if this is a top-level viewCode
+        if (category.viewCode === toggledPermission.code) {
+          // Get all related action permissions
+          const relatedCodes = new Set<string>();
+
+          if (category.actions) {
+            category.actions.forEach(action => relatedCodes.add(action.code));
+          }
+
+          if (category.subCategories) {
+            category.subCategories.forEach(sub => {
+              sub.actions?.forEach(action => relatedCodes.add(action.code));
+            });
+          }
+
+          // SPECIAL CASE: If toggling Assessments, also toggle "Apply for Assessment" in other categories
+          if (toggledPermission.code === 'assessments:read') {
+            relatedCodes.add('my_resumes:apply_assessment');
+            relatedCodes.add('internal_db:apply_assessment');
+          }
+
+          // Toggle all related permissions
+          allPermissions.forEach(perm => {
+            if (relatedCodes.has(perm.code)) {
+              if (isEnabling) {
+                newSet.add(perm.id);
+              } else {
+                newSet.delete(perm.id);
+              }
+            }
+          });
+
+          console.log(`[CASCADING EDIT] ${isEnabling ? 'Enabled' : 'Disabled'} ${toggledPermission.code} and ${relatedCodes.size} related permissions`);
+          break;
+        }
+
+        // Check if this is a subcategory viewCode
+        if (category.subCategories) {
+          for (const sub of category.subCategories) {
+            if (sub.viewCode === toggledPermission.code) {
+              // Get all actions in this subcategory
+              const relatedCodes = new Set<string>();
+              sub.actions?.forEach(action => relatedCodes.add(action.code));
+
+              // SPECIAL CASE: If toggling Assessments, also toggle "Apply for Assessment" in other categories
+              if (toggledPermission.code === 'assessments:read') {
+                relatedCodes.add('my_resumes:apply_assessment');
+                relatedCodes.add('internal_db:apply_assessment');
+                console.log('[CASCADING EDIT] Added cross-category: my_resumes:apply_assessment, internal_db:apply_assessment');
+              }
+
+              // Toggle all related permissions
+              const toggledPermissions: string[] = [];
+              allPermissions.forEach(perm => {
+                if (relatedCodes.has(perm.code)) {
+                  if (isEnabling) {
+                    newSet.add(perm.id);
+                  } else {
+                    newSet.delete(perm.id);
+                  }
+                  toggledPermissions.push(perm.code);
+                }
+              });
+
+              console.log(`[CASCADING EDIT] ${isEnabling ? 'Enabled' : 'Disabled'} ${toggledPermission.code}`);
+              console.log(`[CASCADING EDIT] Related codes to toggle:`, Array.from(relatedCodes));
+              console.log(`[CASCADING EDIT] Actually toggled ${toggledPermissions.length} permissions:`, toggledPermissions);
+              break;
+            }
+          }
+        }
+      }
+
       return newSet;
     });
   };
@@ -990,6 +1212,11 @@ export default function UserManagement() {
         is_active: user.is_active ?? true,
         last_login: user.last_login_at,
       }));
+
+      // DEBUG: Log loaded users
+      console.log('[LOAD USERS] Loaded', mappedUsers.length, 'users');
+      console.log('[LOAD USERS] User IDs:', mappedUsers.map(u => `${u.email}: ${u.id}`).join(', '));
+
       setUsers(mappedUsers);
     } catch (error: any) {
       console.error('Error loading users:', error);
@@ -1285,6 +1512,7 @@ export default function UserManagement() {
         }
       });
       setEditSelectedPermissionCodes(currentPermissionCodes);
+      setEditOriginalPermissionCodes(new Set(currentPermissionCodes));
 
       console.log(`[EDIT USER] Pre-selected ${currentPermissionIds.size} permissions for user ${user.email}`);
       console.log(`[EDIT USER] Permission codes:`, Array.from(currentPermissionCodes));
@@ -1394,6 +1622,13 @@ export default function UserManagement() {
   };
 
   const handleUpdateUser = async () => {
+    console.log('[UPDATE USER] Function called');
+    console.log('[UPDATE USER] allPermissions state at function start:', {
+      count: allPermissions.length,
+      isArray: Array.isArray(allPermissions),
+      isEmpty: allPermissions.length === 0
+    });
+
     if (!editingUser) return;
 
     if (!editSelectedRoleId) {
@@ -1407,10 +1642,38 @@ export default function UserManagement() {
     // Check if role has changed
     const roleChanged = editSelectedRoleId !== editOriginalRoleId;
 
-    // Check if permissions have changed
+    // Check if permissions have changed (compare codes - single source of truth)
     const permissionsChanged =
-      editSelectedPermissionIds.size !== editOriginalPermissionIds.size ||
-      ![...editSelectedPermissionIds].every(id => editOriginalPermissionIds.has(id));
+      editSelectedPermissionCodes.size !== editOriginalPermissionCodes.size ||
+      ![...editSelectedPermissionCodes].every(code => editOriginalPermissionCodes.has(code));
+
+    // Derive permission IDs from codes at save time (avoids stale dual-state bugs)
+    const derivedPermissionIds: number[] = [];
+
+    // DEBUG: Check if allPermissions is loaded
+    if (allPermissions.length === 0) {
+      console.error('[UPDATE USER CRITICAL] allPermissions is EMPTY! Cannot derive permission IDs');
+      console.error('[UPDATE USER CRITICAL] This will cause permissions to NOT be saved!');
+      toast.error('Permission system not loaded. Please refresh the page and try again.');
+      setIsSaving(false);
+      return;
+    }
+
+    console.log('[UPDATE USER] Deriving permission IDs from codes...');
+    console.log('[UPDATE USER] allPermissions count:', allPermissions.length);
+    console.log('[UPDATE USER] editSelectedPermissionCodes:', Array.from(editSelectedPermissionCodes));
+
+    editSelectedPermissionCodes.forEach(code => {
+      const perm = allPermissions.find(p => p.code === code);
+      if (perm) {
+        derivedPermissionIds.push(perm.id);
+        console.log(`[UPDATE USER] ✓ ${code} → ID ${perm.id}`);
+      } else {
+        console.warn(`[UPDATE USER] ✗ ${code} → NOT FOUND in allPermissions!`);
+      }
+    });
+
+    console.log('[UPDATE USER] Final derivedPermissionIds:', derivedPermissionIds);
 
     // Reconstruct full email from username + domain
     const fullEmail = editEmailUsername && tenantEmailDomain
@@ -1425,25 +1688,28 @@ export default function UserManagement() {
       role_id: editSelectedRoleId,
     };
 
-    // Only include permission_ids if they were explicitly changed
-    // Backend logic:
-    // - If permission_ids provided → use those
-    // - If role changed and no permission_ids → use new role defaults
-    // - If role NOT changed and no permission_ids → preserve existing
+    // ALWAYS send permission_ids to ensure custom permissions are respected
+    // This prevents the backend from applying role defaults when role changes
+    requestBody.permission_ids = derivedPermissionIds;
+    requestBody.permission_codes = Array.from(editSelectedPermissionCodes);
+
     if (permissionsChanged) {
-      requestBody.permission_ids = Array.from(editSelectedPermissionIds);
-      requestBody.permission_codes = Array.from(editSelectedPermissionCodes); // Also send codes for future backend support
-      console.log('[EDIT USER] Permissions changed, sending updated permission_ids');
-      console.log('[EDIT USER] Selected permission codes:', Array.from(editSelectedPermissionCodes));
+      console.log('[EDIT USER] Permissions changed, sending updated permission_ids:', derivedPermissionIds);
     } else if (roleChanged) {
-      // Role changed but permissions weren't explicitly modified
-      // Don't send permission_ids - backend will apply new role defaults
-      console.log('[EDIT USER] Role changed, backend will apply new role defaults');
+      console.log('[EDIT USER] Role changed, sending current permission_ids to preserve custom permissions:', derivedPermissionIds);
     } else {
-      // Neither role nor permissions changed
-      // Don't send permission_ids - backend will preserve existing
-      console.log('[EDIT USER] No changes to role or permissions, backend will preserve existing');
+      console.log('[EDIT USER] No changes detected, but sending current permission_ids to ensure consistency:', derivedPermissionIds);
     }
+
+    // DEBUG LOGGING
+    console.log('='.repeat(80));
+    console.log('[UPDATE USER] Starting user update...');
+    console.log('[UPDATE USER] User ID:', editingUser.id);
+    console.log('[UPDATE USER] User Email:', editingUser.email);
+    console.log('[UPDATE USER] API URL:', `${API_URL}/users/${editingUser.id}`);
+    console.log('[UPDATE USER] Request Body:', JSON.stringify(requestBody, null, 2));
+    console.log('[UPDATE USER] Token exists:', !!localStorage.getItem('accessToken'));
+    console.log('='.repeat(80));
 
     setIsSaving(true);
     try {
@@ -1464,6 +1730,17 @@ export default function UserManagement() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+
+        // DEBUG: Log error details
+        console.error('='.repeat(80));
+        console.error('[UPDATE USER ERROR] Update failed!');
+        console.error('[UPDATE USER ERROR] Status:', response.status);
+        console.error('[UPDATE USER ERROR] Status Text:', response.statusText);
+        console.error('[UPDATE USER ERROR] Error Data:', JSON.stringify(errorData, null, 2));
+        console.error('[UPDATE USER ERROR] User ID that failed:', editingUser.id);
+        console.error('[UPDATE USER ERROR] User Email that failed:', editingUser.email);
+        console.error('='.repeat(80));
+
         if (errorData.detail?.error === 'LAST_ADMIN_ROLE_CHANGE_BLOCKED') {
           toast.error(errorData.detail.message || 'Cannot change role of the last admin user');
         } else {
@@ -1473,11 +1750,28 @@ export default function UserManagement() {
       }
 
       toast.success('User updated successfully');
+
+      // If the updated user is the current logged-in user, refresh their session
+      // This ensures permission changes take effect immediately without logout/login
+      if (currentUser && editingUser.id === currentUser.id) {
+        console.log('[UserManagement] Updated user is current user, refreshing session...');
+        await refreshUser();
+        console.log('[UserManagement] Current user session refreshed');
+      }
+
       resetEditModal();
       loadUsers();
     } catch (error: any) {
       console.error('Error updating user:', error);
-      toast.error(error.message || 'Failed to update user');
+
+      // Handle 404 - user not found (deleted or wrong tenant)
+      if (error.response?.status === 404) {
+        toast.error('User not found. The user may have been deleted or belongs to a different organization. Refreshing list...');
+        resetEditModal();
+        loadUsers(); // Refresh the list to remove stale data
+      } else {
+        toast.error(error.message || 'Failed to update user');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -1569,6 +1863,9 @@ export default function UserManagement() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm text-gray-600">Total Users</p>
           <p className="text-3xl font-semibold text-gray-900 mt-1">{users.length}</p>
+          <p className="text-xs text-gray-500 mt-1">
+            ({users.filter(u => u.is_active).length} Active, {users.filter(u => !u.is_active).length} Inactive)
+          </p>
         </div>
         {availableRoles.slice(0, 3).map((role, index) => (
           <div key={role.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -2017,212 +2314,377 @@ export default function UserManagement() {
         </div>
       )}
 
-      {/* Edit User Modal */}
+      {/* Edit User Modal - Redesigned */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Edit User</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Edit User</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{editingUser.email}</p>
+              </div>
               <button
                 onClick={resetEditModal}
-                className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={editingUser.name}
-                  onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                {/* Email input with locked domain */}
-                <div className="relative flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-600 overflow-hidden">
-                  {/* Username input */}
+            {/* Body - Scrollable */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+              {/* User Details Row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Name</label>
                   <input
                     type="text"
-                    value={editEmailUsername}
-                    onChange={(e) => {
-                      let value = e.target.value;
-                      // Remove @ symbol if user tries to type it
-                      value = value.replace(/@/g, '');
-                      setEditEmailUsername(value);
-                    }}
-                    placeholder="username"
-                    className="flex-1 px-4 py-2.5 border-0 focus:outline-none focus:ring-0"
+                    value={editingUser.name}
+                    onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent transition-shadow"
                   />
-
-                  {/* @ symbol and locked domain */}
-                  <div className="flex items-center px-4 py-2.5 bg-gray-100 text-gray-600 font-medium border-l border-gray-300">
-                    <span className="text-gray-900">@</span>
-                    <span className="ml-1">
-                      {tenantEmailDomain || 'loading...'}
-                    </span>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Email</label>
+                  <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-gray-800 transition-shadow">
+                    <input
+                      type="text"
+                      value={editEmailUsername}
+                      onChange={(e) => setEditEmailUsername(e.target.value.replace(/@/g, ''))}
+                      placeholder="username"
+                      className="flex-1 px-3 py-2 border-0 text-sm focus:outline-none focus:ring-0"
+                    />
+                    <div className="px-3 py-2 bg-gray-50 text-xs text-gray-500 border-l border-gray-200 whitespace-nowrap">
+                      @{tenantEmailDomain || '...'}
+                    </div>
                   </div>
                 </div>
-
-                {/* Preview of full email */}
-                {editEmailUsername && tenantEmailDomain && (
-                  <div className="mt-1 text-xs text-gray-500">
-                    Full email: <span className="font-medium">{editEmailUsername}@{tenantEmailDomain}</span>
-                  </div>
-                )}
               </div>
+
+              {/* Role Selection - Compact Pills */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Role <span className="text-red-500">*</span>
-                </label>
-                {/* Role Selection Grid */}
-                <div className="grid grid-cols-2 gap-2">
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Role</label>
+                <div className="flex flex-wrap gap-2">
                   {availableRoles.map(role => {
                     const isSelected = editSelectedRoleId === role.id;
-                    const isSystemRole = role.is_system;
-
                     return (
                       <button
                         key={role.id}
                         type="button"
-                        onClick={() => selectRole(role.id, true)}
-                        className={`relative p-3 rounded-lg border-2 text-left transition-all ${
+                        onClick={() => {
+                          if (editSelectedRoleId === role.id) return;
+                          selectRole(role.id, true);
+                        }}
+                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                           isSelected
-                            ? 'border-gray-800 bg-gray-50 ring-1 ring-gray-800'
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                            ? 'bg-gray-900 text-white shadow-sm'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className={`font-medium ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
-                            {role.name}
-                          </span>
-                          {isSelected && (
-                            <div className="w-5 h-5 bg-gray-800 rounded-full flex items-center justify-center">
-                              <Check className="w-3 h-3 text-white" />
-                            </div>
-                          )}
-                        </div>
-                        {role.description && (
-                          <p className="text-xs text-gray-500 mt-1 line-clamp-1">{role.description}</p>
-                        )}
-                        {isSystemRole && (
-                          <span className="absolute top-1 right-1 text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
-                            System
-                          </span>
-                        )}
+                        {role.name}
+                        {isSelected && <Check className="w-3.5 h-3.5 ml-1.5 inline" />}
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Role Permissions - Read-only display of what the selected role has */}
+              {/* Permissions Section */}
               {editSelectedRoleId && (
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Role Permissions
-                    </label>
-                    <span className="text-xs text-gray-500">
-                      {editSelectedPermissionCodes.size} permissions assigned
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Permissions</label>
+                    <span className="text-xs text-gray-400">
+                      {editSelectedPermissionCodes.size} active
                     </span>
                   </div>
+
                   {isLoadingPermissions ? (
-                    <div className="flex items-center justify-center py-3 border border-gray-200 rounded-lg bg-gray-50">
-                      <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-                      <span className="ml-2 text-sm text-gray-500">Loading...</span>
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                      <span className="ml-2 text-sm text-gray-400">Loading permissions...</span>
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-[250px] overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                    <div className="space-y-1">
                       {CUSTOM_PERMISSION_CATEGORIES.map(category => {
-                        // Check if any permission in this category is selected
-                        const hasAnyPermission = () => {
-                          if (category.actions) {
-                            if (category.actions.some(a => editSelectedPermissionCodes.has(a.code))) return true;
-                          }
-                          if (category.subCategories) {
-                            for (const sub of category.subCategories) {
-                              if (sub.actions.some(a => editSelectedPermissionCodes.has(a.code))) return true;
+                        // Pure codes-only toggle — no dual-state sync needed
+                        const toggleCode = (code: string) => {
+                          setEditSelectedPermissionCodes(prev => {
+                            const next = new Set(prev);
+                            if (next.has(code)) {
+                              next.delete(code);
+                              // Auto-remove viewCode if no actions remain in category
+                              if (category.viewCode) {
+                                const allActions = [
+                                  ...(category.actions || []),
+                                  ...(category.subCategories?.flatMap(s => s.actions) || []),
+                                ];
+                                if (!allActions.some(a => a.code !== code && next.has(a.code))) {
+                                  next.delete(category.viewCode);
+                                  // Also remove sub-category viewCodes
+                                  category.subCategories?.forEach(s => {
+                                    if (s.viewCode) next.delete(s.viewCode);
+                                  });
+                                }
+                              }
+                            } else {
+                              next.add(code);
+                              // Auto-enable viewCode
+                              if (category.viewCode) next.add(category.viewCode);
+                              // Handle dependencies
+                              getPermissionDependencies(code).forEach(dep => next.add(dep));
                             }
-                          }
-                          return false;
+                            return next;
+                          });
                         };
 
-                        // Only show categories that have at least one permission
-                        if (!hasAnyPermission()) return null;
+                        const isCategoryActive = category.viewCode
+                          ? editSelectedPermissionCodes.has(category.viewCode) ||
+                            (category.actions?.some(a => editSelectedPermissionCodes.has(a.code)) ?? false) ||
+                            (category.subCategories?.some(s => s.actions.some(a => editSelectedPermissionCodes.has(a.code))) ?? false)
+                          : true;
 
-                        // Collect all selected actions for this category
-                        const selectedActions: string[] = [];
-                        if (category.actions) {
-                          category.actions.filter(a => editSelectedPermissionCodes.has(a.code)).forEach(a => selectedActions.push(a.label));
-                        }
-                        if (category.subCategories) {
-                          category.subCategories.forEach(sub => {
-                            sub.actions.filter(a => editSelectedPermissionCodes.has(a.code)).forEach(a => {
-                              selectedActions.push(`${sub.name}: ${a.label}`);
-                            });
+                        const toggleCategory = () => {
+                          setEditSelectedPermissionCodes(prev => {
+                            const next = new Set(prev);
+                            if (isCategoryActive) {
+                              // Remove all codes in this category
+                              if (category.viewCode) next.delete(category.viewCode);
+                              category.actions?.forEach(a => next.delete(a.code));
+                              category.subCategories?.forEach(s => {
+                                if (s.viewCode) next.delete(s.viewCode);
+                                s.actions.forEach(a => next.delete(a.code));
+                              });
+                            } else {
+                              // Enable viewCode only (user picks individual actions)
+                              if (category.viewCode) next.add(category.viewCode);
+                            }
+                            return next;
                           });
-                        }
+                        };
 
                         return (
-                          <div key={category.id} className="flex items-start gap-2">
-                            <div className="flex-shrink-0 w-5 h-5 bg-green-100 rounded flex items-center justify-center mt-0.5">
-                              <Check className="w-3 h-3 text-green-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-gray-900">
-                                {category.name}
-                                {category.isMenuToggle && (
-                                  <span className="ml-2 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
-                                    Menu Access
+                          <div
+                            key={category.id}
+                            className={`rounded-lg border transition-colors ${
+                              isCategoryActive ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50/50'
+                            }`}
+                          >
+                            {/* Category Header */}
+                            <div
+                              className="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none"
+                              onClick={category.viewCode ? toggleCategory : undefined}
+                            >
+                              <div className="flex items-center gap-3">
+                                {category.viewCode && (
+                                  <div className={`w-8 h-[18px] rounded-full relative transition-colors ${isCategoryActive ? 'bg-gray-900' : 'bg-gray-300'}`}>
+                                    <div className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${isCategoryActive ? 'left-[17px]' : 'left-[2px]'}`} />
+                                  </div>
+                                )}
+                                <span className={`text-sm font-medium ${isCategoryActive ? 'text-gray-900' : 'text-gray-400'}`}>
+                                  {category.name}
+                                </span>
+                                {category.isMenuToggle && isCategoryActive && (
+                                  <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full font-medium">
+                                    Menu
                                   </span>
                                 )}
                               </div>
-                              <div className="text-xs text-gray-500 mt-0.5">
-                                {selectedActions.join(' • ')}
-                              </div>
+                              {isCategoryActive && (
+                                <span className="text-[10px] text-gray-400">
+                                  {[
+                                    ...(category.actions || []),
+                                    ...(category.subCategories?.flatMap(s => s.actions) || []),
+                                  ].filter(a => editSelectedPermissionCodes.has(a.code)).length} selected
+                                </span>
+                              )}
                             </div>
+
+                            {/* Action Pills - shown when category is active */}
+                            {isCategoryActive && (
+                              <div className="px-4 pb-3 space-y-2.5">
+                                {/* View pill for categories with only sub-categories (no direct actions) */}
+                                {(!category.actions || category.actions.length === 0) && category.viewCode && editSelectedPermissionCodes.has(category.viewCode) && (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    <span className="px-3 py-1 rounded-md text-xs font-medium bg-emerald-600 text-white">
+                                      View
+                                    </span>
+                                  </div>
+                                )}
+                                {/* Direct actions with View pill */}
+                                {category.actions && category.actions.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {/* Show View pill when viewCode is active */}
+                                    {category.viewCode && editSelectedPermissionCodes.has(category.viewCode) && (
+                                      <span className="px-3 py-1 rounded-md text-xs font-medium bg-emerald-600 text-white">
+                                        View
+                                      </span>
+                                    )}
+                                    {category.actions.map(action => {
+                                      const isOn = editSelectedPermissionCodes.has(action.code);
+                                      return (
+                                        <button
+                                          key={action.code}
+                                          type="button"
+                                          onClick={() => toggleCode(action.code)}
+                                          className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                                            isOn
+                                              ? 'bg-gray-900 text-white'
+                                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
+                                          }`}
+                                        >
+                                          {action.label}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {/* Sub-categories */}
+                                {category.subCategories?.map(sub => {
+                                  const isSubActive = sub.viewCode
+                                    ? editSelectedPermissionCodes.has(sub.viewCode) || sub.actions.some(a => editSelectedPermissionCodes.has(a.code))
+                                    : sub.actions.some(a => editSelectedPermissionCodes.has(a.code));
+
+                                  const toggleSub = () => {
+                                    setEditSelectedPermissionCodes(prev => {
+                                      const next = new Set(prev);
+                                      if (isSubActive) {
+                                        if (sub.viewCode) next.delete(sub.viewCode);
+                                        sub.actions.forEach(a => next.delete(a.code));
+                                        // Remove parent viewCode if no siblings active
+                                        if (category.viewCode) {
+                                          const anyOtherSub = category.subCategories?.some(s =>
+                                            s !== sub && (
+                                              (s.viewCode && next.has(s.viewCode)) ||
+                                              s.actions.some(a => next.has(a.code))
+                                            )
+                                          );
+                                          const anyDirectAction = category.actions?.some(a => next.has(a.code));
+                                          if (!anyOtherSub && !anyDirectAction) {
+                                            next.delete(category.viewCode);
+                                          }
+                                        }
+                                      } else {
+                                        // Enable sub: add viewCode if present, otherwise add all actions
+                                        if (sub.viewCode) {
+                                          next.add(sub.viewCode);
+                                        } else {
+                                          // No viewCode — enable all actions so pills become visible
+                                          sub.actions.forEach(a => next.add(a.code));
+                                        }
+                                        if (category.viewCode) next.add(category.viewCode);
+                                      }
+                                      return next;
+                                    });
+                                  };
+
+                                  return (
+                                    <div key={sub.name} className="pt-1">
+                                      <div className="flex items-center gap-2 mb-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={toggleSub}
+                                          className={`w-6 h-[14px] rounded-full relative transition-colors flex-shrink-0 ${isSubActive ? 'bg-gray-700' : 'bg-gray-300'}`}
+                                        >
+                                          <div className={`absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white shadow-sm transition-transform ${isSubActive ? 'left-[13px]' : 'left-[2px]'}`} />
+                                        </button>
+                                        <span className={`text-xs font-medium ${isSubActive ? 'text-gray-700' : 'text-gray-400'}`}>
+                                          {sub.name}
+                                        </span>
+                                      </div>
+                                      {isSubActive && (
+                                        <div className="flex flex-wrap gap-1.5 ml-8">
+                                          {/* Show View pill for sub-category when viewCode is active */}
+                                          {sub.viewCode && editSelectedPermissionCodes.has(sub.viewCode) && (
+                                            <span className="px-3 py-1 rounded-md text-xs font-medium bg-emerald-600 text-white">
+                                              View
+                                            </span>
+                                          )}
+                                          {sub.actions.map(action => {
+                                            const isOn = editSelectedPermissionCodes.has(action.code);
+                                            return (
+                                              <button
+                                                key={action.code}
+                                                type="button"
+                                                onClick={() => {
+                                                  setEditSelectedPermissionCodes(prev => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(action.code)) {
+                                                      next.delete(action.code);
+                                                      // Remove sub viewCode if no actions left
+                                                      if (sub.viewCode && !sub.actions.some(a => a.code !== action.code && next.has(a.code))) {
+                                                        next.delete(sub.viewCode);
+                                                      }
+                                                      // Remove parent viewCode if nothing left
+                                                      if (category.viewCode) {
+                                                        const anyLeft = [
+                                                          ...(category.actions || []),
+                                                          ...(category.subCategories?.flatMap(s => s.actions) || []),
+                                                        ].some(a => a.code !== action.code && next.has(a.code));
+                                                        if (!anyLeft) next.delete(category.viewCode);
+                                                      }
+                                                    } else {
+                                                      next.add(action.code);
+                                                      if (sub.viewCode) next.add(sub.viewCode);
+                                                      if (category.viewCode) next.add(category.viewCode);
+                                                      getPermissionDependencies(action.code).forEach(dep => next.add(dep));
+                                                    }
+                                                    return next;
+                                                  });
+                                                }}
+                                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                                                  isOn
+                                                    ? 'bg-gray-800 text-white'
+                                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
+                                                }`}
+                                              >
+                                                {action.label}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
-
-                      {/* Show message if no custom permissions found */}
-                      {editSelectedPermissionCodes.size === 0 && (
-                        <div className="text-center py-3 text-gray-500 text-sm">
-                          No permissions assigned to this role.
-                          <span className="block text-xs mt-1">Configure in Role Management.</span>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
               )}
             </div>
 
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={resetEditModal}
-                className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                disabled={isSaving}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpdateUser}
-                disabled={isSaving}
-                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
-              >
-                {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                Save Changes
-              </button>
+            {/* Footer */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl">
+              <span className="text-xs text-gray-400">
+                {editSelectedPermissionCodes.size !== editOriginalPermissionCodes.size ||
+                 ![...editSelectedPermissionCodes].every(c => editOriginalPermissionCodes.has(c))
+                  ? 'Unsaved changes'
+                  : ''}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={resetEditModal}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                  disabled={isSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateUser}
+                  disabled={isSaving}
+                  className="px-5 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Save
+                </button>
+              </div>
             </div>
           </div>
         </div>

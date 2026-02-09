@@ -82,8 +82,8 @@ interface ResumeTableProps {
 const highlightText = (text: string, query: string): React.ReactNode => {
   if (!query || !text) return text;
 
-  // Split query into words for multi-keyword matching
-  const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 0);
+  // Split query into words for multi-keyword matching (handle both commas and spaces)
+  const keywords = query.toLowerCase().replace(/,/g, ' ').split(/\s+/).filter(k => k.length > 0);
   if (keywords.length === 0) return text;
 
   // Create regex pattern for all keywords
@@ -375,7 +375,7 @@ export default function ResumeTable({
                       {onViewDetails ? (
                         <button
                           onClick={() => onViewDetails(resume)}
-                          className="text-sm text-gray-900 hover:text-blue-600 hover:underline text-left transition-colors"
+                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
                         >
                           {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
                         </button>

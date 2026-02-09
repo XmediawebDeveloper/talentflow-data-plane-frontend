@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft } from 'lucide-react';
+import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, KeyRound } from 'lucide-react';
 import { User } from '@/lib/types/tenant';
-import { authService } from '@/lib/services';
+import { authService, isTwoFactorRequired, LoginResponse } from '@/lib/services';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ForgotPasswordModal from './ForgotPasswordModal';
 
@@ -32,6 +32,13 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
+  // 2FA State
+  const [show2FA, setShow2FA] = useState(false);
+  const [tempToken, setTempToken] = useState('');
+  const [otpCode, setOtpCode] = useState(['', '', '', '', '', '']);
+  const [userEmail2FA, setUserEmail2FA] = useState('');
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
     checkMobile();
@@ -54,6 +61,62 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     }
   }, [emailFromUrl]);
 
+  const handleLoginSuccess = (response: LoginResponse) => {
+    const user: User = {
+      id: response.user.id,
+      tenantId: response.user.tenant_id,
+      email: response.user.email,
+      name: response.user.name,
+      role: response.user.role,
+      phone: response.user.phone,
+      avatarUrl: response.user.avatar_url,
+      isActive: response.user.is_active,
+      permissions: {
+        canCreateJD: response.user.permissions.can_create_jd,
+        canManageJD: response.user.permissions.can_manage_jd,
+        canUploadResumes: response.user.permissions.can_upload_resumes,
+        canViewResumes: response.user.permissions.can_view_resumes,
+        canAccessInternalDB: response.user.permissions.can_access_internal_db,
+        canCreateAssessments: response.user.permissions.can_create_assessments,
+        canViewAnalytics: response.user.permissions.can_view_analytics,
+        canManageSettings: response.user.permissions.can_manage_settings,
+        canManageUsers: response.user.permissions.can_manage_users,
+      },
+      lastLogin: response.user.last_login,
+      createdAt: response.user.created_at,
+    };
+
+    // Pass tenant name from login response
+    login(user, response.tenant_name);
+
+    // Save or clear email based on "Remember me" checkbox
+    try {
+      if (rememberMe) {
+        localStorage.setItem('rememberedEmail', email);
+        localStorage.setItem('rememberMe', 'true');
+      } else {
+        localStorage.removeItem('rememberedEmail');
+        localStorage.removeItem('rememberMe');
+      }
+    } catch (error) {
+      console.error('Error saving remember me preference:', error);
+    }
+
+    // Check if tenant has pending payment - redirect to payment page first
+    if (response.pending_payment && response.pending_payment_redirect) {
+      console.log('[LOGIN] Tenant has pending payment, redirecting to:', response.pending_payment_redirect);
+      router.push(response.pending_payment_redirect);
+      return;
+    }
+
+    // Redirect to current-plan page with selected plan if coming from pricing
+    if (encodedPlanFromUrl) {
+      router.push(`/subscription/current-plan?plan=${encodedPlanFromUrl}`);
+    } else {
+      router.push('/dashboard');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -62,64 +125,90 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     try {
       const response = await authService.login({ email, password });
 
-      const user: User = {
-        id: response.user.id,
-        tenantId: response.user.tenant_id,
-        email: response.user.email,
-        name: response.user.name,
-        role: response.user.role,
-        phone: response.user.phone,
-        avatarUrl: response.user.avatar_url,
-        isActive: response.user.is_active,
-        permissions: {
-          canCreateJD: response.user.permissions.can_create_jd,
-          canManageJD: response.user.permissions.can_manage_jd,
-          canUploadResumes: response.user.permissions.can_upload_resumes,
-          canViewResumes: response.user.permissions.can_view_resumes,
-          canAccessInternalDB: response.user.permissions.can_access_internal_db,
-          canCreateAssessments: response.user.permissions.can_create_assessments,
-          canViewAnalytics: response.user.permissions.can_view_analytics,
-          canManageSettings: response.user.permissions.can_manage_settings,
-          canManageUsers: response.user.permissions.can_manage_users,
-        },
-        lastLogin: response.user.last_login,
-        createdAt: response.user.created_at,
-      };
-
-      login(user);
-
-      // Save or clear email based on "Remember me" checkbox
-      try {
-        if (rememberMe) {
-          localStorage.setItem('rememberedEmail', email);
-          localStorage.setItem('rememberMe', 'true');
-        } else {
-          localStorage.removeItem('rememberedEmail');
-          localStorage.removeItem('rememberMe');
-        }
-      } catch (error) {
-        console.error('Error saving remember me preference:', error);
-      }
-
-      // Check if tenant has pending payment - redirect to payment page first
-      if (response.pending_payment && response.pending_payment_redirect) {
-        console.log('[LOGIN] Tenant has pending payment, redirecting to:', response.pending_payment_redirect);
-        router.push(response.pending_payment_redirect);
+      // Check if 2FA is required
+      if (isTwoFactorRequired(response)) {
+        console.log('[LOGIN] 2FA required, showing OTP input');
+        setTempToken(response.temp_token);
+        setUserEmail2FA(response.user_email);
+        setShow2FA(true);
+        setIsLoading(false);
+        // Focus first OTP input
+        setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
         return;
       }
 
-      // Redirect to current-plan page with selected plan if coming from pricing
-      if (encodedPlanFromUrl) {
-        router.push(`/subscription/current-plan?plan=${encodedPlanFromUrl}`);
-      } else {
-        router.push('/dashboard');
-      }
+      // Normal login success
+      handleLoginSuccess(response);
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Invalid email or password. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleOtpChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return; // Only allow digits
+
+    const newOtp = [...otpCode];
+    newOtp[index] = value.slice(-1); // Only take last digit
+    setOtpCode(newOtp);
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !otpCode[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const newOtp = [...otpCode];
+    for (let i = 0; i < pastedData.length; i++) {
+      newOtp[i] = pastedData[i];
+    }
+    setOtpCode(newOtp);
+    if (pastedData.length === 6) {
+      otpInputRefs.current[5]?.focus();
+    }
+  };
+
+  const handleVerify2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = otpCode.join('');
+    if (code.length !== 6) {
+      setError('Please enter a 6-digit verification code');
+      return;
+    }
+
+    setError('');
+    setIsLoading(true);
+
+    try {
+      const response = await authService.verify2FALogin(tempToken, code);
+      handleLoginSuccess(response);
+    } catch (err: any) {
+      console.error('2FA verification error:', err);
+      setError(err.message || 'Invalid verification code. Please try again.');
+      setOtpCode(['', '', '', '', '', '']);
+      otpInputRefs.current[0]?.focus();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBack2FA = () => {
+    setShow2FA(false);
+    setTempToken('');
+    setOtpCode(['', '', '', '', '', '']);
+    setUserEmail2FA('');
+    setError('');
   };
 
   // Styles
@@ -479,17 +568,123 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
               </div>
             </div>
 
-            <h2 style={formTitleStyle}>Welcome Back</h2>
-            <p style={formSubtitleStyle}>Sign in to access your recruitment dashboard</p>
+            {/* 2FA Verification View */}
+            {show2FA ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                  <button type="button" onClick={handleBack2FA} style={backButtonStyle}>
+                    <ArrowLeft style={{ width: 16, height: 16 }} />
+                    <span>Back</span>
+                  </button>
+                </div>
 
-            {error && (
-              <div style={errorBoxStyle}>
-                <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
-                <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
-              </div>
-            )}
+                <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+                  <div style={{
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #10B981, #059669)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 16px',
+                    boxShadow: '0 10px 40px rgba(16, 185, 129, 0.3)',
+                  }}>
+                    <Shield style={{ width: 32, height: 32, color: '#ffffff' }} />
+                  </div>
+                  <h2 style={formTitleStyle}>Two-Factor Authentication</h2>
+                  <p style={{ ...formSubtitleStyle, marginBottom: '8px' }}>
+                    Enter the 6-digit code from your authenticator app
+                  </p>
+                  <p style={{ fontSize: '14px', color: '#9CA3AF' }}>
+                    Logging in as <strong style={{ color: '#374151' }}>{userEmail2FA}</strong>
+                  </p>
+                </div>
 
-            <form onSubmit={handleSubmit}>
+                {error && (
+                  <div style={errorBoxStyle}>
+                    <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
+                    <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleVerify2FA}>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '32px' }}>
+                    {otpCode.map((digit, index) => (
+                      <input
+                        key={index}
+                        ref={(el) => { otpInputRefs.current[index] = el; }}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(index, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                        onPaste={index === 0 ? handleOtpPaste : undefined}
+                        style={{
+                          width: '48px',
+                          height: '56px',
+                          textAlign: 'center',
+                          fontSize: '24px',
+                          fontWeight: 600,
+                          border: '2px solid #D1D5DB',
+                          borderRadius: '12px',
+                          backgroundColor: '#F9FAFB',
+                          outline: 'none',
+                          transition: 'all 0.2s',
+                        }}
+                        onFocus={(e) => {
+                          e.target.style.borderColor = '#2563EB';
+                          e.target.style.backgroundColor = '#ffffff';
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.borderColor = '#D1D5DB';
+                          e.target.style.backgroundColor = '#F9FAFB';
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || otpCode.join('').length !== 6}
+                    style={{
+                      ...submitButtonStyle,
+                      opacity: isLoading || otpCode.join('').length !== 6 ? 0.5 : 1,
+                      cursor: isLoading || otpCode.join('').length !== 6 ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {isLoading ? (
+                      <>
+                        <div style={{ width: 20, height: 20, border: '2px solid #ffffff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                        Verifying...
+                      </>
+                    ) : (
+                      <>
+                        <KeyRound style={{ width: 20, height: 20 }} />
+                        Verify & Sign In
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                <p style={{ marginTop: '24px', textAlign: 'center', fontSize: '14px', color: '#6B7280' }}>
+                  Open your authenticator app (Google Authenticator, Authy, etc.) to view your verification code.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 style={formTitleStyle}>Welcome Back</h2>
+                <p style={formSubtitleStyle}>Sign in to access your recruitment dashboard</p>
+
+                {error && (
+                  <div style={errorBoxStyle}>
+                    <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
+                    <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit}>
               {/* Email */}
               <div style={inputGroupStyle}>
                 <label style={labelStyle}>Email Address</label>
@@ -580,6 +775,8 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                 </p>
               )}
             </div>
+              </>
+            )}
           </div>
 
           <div style={copyrightStyle}>

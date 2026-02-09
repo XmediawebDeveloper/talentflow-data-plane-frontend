@@ -1,6 +1,8 @@
 import { X, Save, AlertCircle, Clock, FileText, Award, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useState } from 'react';
 import { assessmentService } from '@/lib/services';
+import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 
 interface AssessmentEditModalProps {
   isOpen: boolean;
@@ -10,6 +12,7 @@ interface AssessmentEditModalProps {
 }
 
 export default function AssessmentEditModal({ isOpen, onClose, assessment, onSave }: AssessmentEditModalProps) {
+  const dialog = useGlobalDialog();
   const [editedAssessment, setEditedAssessment] = useState({
     ...assessment,
     sections: assessment.sections || []
@@ -107,7 +110,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
       onClose();
     } catch (error) {
       console.error('Failed to update assessment:', error);
-      alert(`Failed to update assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Failed to update assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }
@@ -125,8 +128,8 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
     });
   };
 
-  const deleteSection = (index: number) => {
-    if (confirm('Are you sure you want to delete this section?')) {
+  const deleteSection = async (index: number) => {
+    if (await dialog.confirm({ title: 'Delete Section', message: 'Are you sure you want to delete this section?', variant: 'warning', confirmText: 'Delete' })) {
       const updatedSections = editedAssessment.sections.filter((_: any, i: number) => i !== index);
       setEditedAssessment({
         ...editedAssessment,

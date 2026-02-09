@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { candidateService, SystemCheckResult } from '@/lib/services/candidateService';
+import { getUserMedia, getErrorMessage, detectBrowser, checkBrowserCompatibility } from '@/lib/utils/browserCompat';
 
 interface SystemCheckProps {
   token: string;
@@ -39,6 +40,9 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const [isChecking, setIsChecking] = useState(false);
   const [allChecksComplete, setAllChecksComplete] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [browserType, setBrowserType] = useState<string>('');
+  const [isIOS, setIsIOS] = useState(false);
+  const [cameraInUseError, setCameraInUseError] = useState<string>('');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -137,12 +141,13 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const runAllChecks = async () => {
     setIsChecking(true);
 
-    // Reset all checks
+    // Reset all checks including camera in use error
     setCameraCheck({ status: 'checking', message: 'Checking...' });
     setMicCheck({ status: 'checking', message: 'Checking...' });
     setScreenCheck({ status: 'checking', message: 'Checking...' });
     setInternetCheck({ status: 'checking', message: 'Checking...' });
     setBrowserCheck({ status: 'checking', message: 'Checking...' });
+    setCameraInUseError(''); // Clear previous camera in use error
 
     // Run checks
     await checkBrowser();
@@ -155,18 +160,22 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
   const checkBrowser = async () => {
     try {
-      const userAgent = navigator.userAgent.toLowerCase();
-      const isChrome = userAgent.includes('chrome') && !userAgent.includes('edg');
-      const isEdge = userAgent.includes('edg');
-      const isFirefox = userAgent.includes('firefox');
-      const isSafari = userAgent.includes('safari') && !userAgent.includes('chrome');
+      const browser = detectBrowser();
+      const compat = checkBrowserCompatibility();
 
-      if (isChrome || isEdge || isFirefox) {
-        setBrowserCheck({ status: 'success', message: 'Browser supported' });
-      } else if (isSafari) {
+      // Store browser type and iOS detection for error messaging
+      setBrowserType(browser.name);
+      setIsIOS(browser.isIOS);
+
+      // Check for compatibility issues
+      if (!compat.isCompatible) {
+        setBrowserCheck({ status: 'error', message: compat.issues.join(' ') });
+      } else if (browser.name === 'Safari' || browser.name === 'iOS Safari') {
         setBrowserCheck({ status: 'success', message: 'Safari detected (limited features)' });
+      } else if (browser.name === 'Chrome' || browser.name === 'Edge' || browser.name === 'Firefox' || browser.name === 'Arc' || browser.name === 'Brave') {
+        setBrowserCheck({ status: 'success', message: 'Browser supported' });
       } else {
-        setBrowserCheck({ status: 'error', message: 'Browser not supported. Use Chrome, Edge, or Firefox.' });
+        setBrowserCheck({ status: 'success', message: `${browser.name} detected` });
       }
     } catch {
       setBrowserCheck({ status: 'error', message: 'Could not detect browser' });
@@ -195,7 +204,8 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const checkCameraAndMicrophone = async () => {
     // Request both camera and microphone together to avoid permission conflicts
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      // Use enhanced getUserMedia with cross-browser support
+      const stream = await getUserMedia({ video: true, audio: true });
       streamRef.current = stream;
 
       if (videoRef.current) {
@@ -219,31 +229,56 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       }
 
     } catch (err: any) {
-      console.error('Media device error:', err.name, err.message);
+      console.error('[SYSTEM CHECK] Media device error:', {
+        name: err.name,
+        message: err.message,
+        browser: browserType,
+        isIOS: isIOS,
+        fullError: err
+      });
 
-      // Handle specific error types
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setCameraCheck({ status: 'error', message: 'Camera permission denied' });
-        setMicCheck({ status: 'error', message: 'Microphone permission denied' });
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        setCameraCheck({ status: 'error', message: 'No camera found' });
-        setMicCheck({ status: 'error', message: 'No microphone found' });
-      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-        // Device is being used by another application
-        setCameraCheck({ status: 'error', message: 'Camera in use by another app' });
-        setMicCheck({ status: 'error', message: 'Microphone in use by another app' });
-      } else if (err.name === 'OverconstrainedError') {
-        setCameraCheck({ status: 'error', message: 'Camera constraints not satisfied' });
-        setMicCheck({ status: 'error', message: 'Microphone constraints not satisfied' });
-      } else if (err.name === 'SecurityError') {
-        setCameraCheck({ status: 'error', message: 'Security error - use HTTPS' });
-        setMicCheck({ status: 'error', message: 'Security error - use HTTPS' });
+      // Get browser info for error messages
+      const browser = detectBrowser();
+      const errorMessage = err.message || '';
+
+      // Handle standardized error codes from getUserMedia
+      if (errorMessage === 'PERMISSION_DENIED') {
+        const msg = getErrorMessage('PERMISSION_DENIED', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: msg });
+      } else if (errorMessage === 'DEVICE_NOT_FOUND') {
+        const msg = getErrorMessage('DEVICE_NOT_FOUND', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: msg });
+      } else if (errorMessage === 'DEVICE_IN_USE') {
+        const msg = getErrorMessage('DEVICE_IN_USE', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: 'Microphone may be in use by another app or tab' });
+        setCameraInUseError(msg); // Store for prominent display
+
+        console.log('[SYSTEM CHECK] Camera in use detected - NOT calling fallback checks', {
+          browser: browser.name,
+          errorType: err.name
+        });
+
+        // IMPORTANT: Return early to prevent fallback checks from overwriting this error
+        return;
+      } else if (errorMessage === 'SECURITY_ERROR_HTTPS_REQUIRED') {
+        const msg = getErrorMessage('SECURITY_ERROR_HTTPS_REQUIRED', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: msg });
+      } else if (errorMessage === 'MEDIA_API_NOT_SUPPORTED') {
+        const msg = getErrorMessage('MEDIA_API_NOT_SUPPORTED', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: msg });
       } else {
-        setCameraCheck({ status: 'error', message: `Camera error: ${err.name}` });
-        setMicCheck({ status: 'error', message: `Microphone error: ${err.name}` });
+        // For unknown errors, show user-friendly message
+        setCameraCheck({ status: 'error', message: 'Camera error - please check if camera is available' });
+        setMicCheck({ status: 'error', message: 'Microphone error - please check if microphone is available' });
       }
 
       // Try to get more specific info - maybe only one device is the problem
+      // (This will only run for non-AbortError/NotReadableError cases due to early return above)
       await checkCameraSeparately();
       await checkMicrophoneSeparately();
     }
@@ -251,7 +286,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
   const checkCameraSeparately = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await getUserMedia({ video: true });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -265,7 +300,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
   const checkMicrophoneSeparately = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getUserMedia({ audio: true });
       stream.getTracks().forEach(track => track.stop());
       setMicCheck({ status: 'success', message: 'Microphone working' });
     } catch (err: any) {
@@ -301,9 +336,50 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
       await candidateService.submitSystemCheck(token, results);
 
+      // Validate stream before handoff to ensure it's still live
+      let streamToPass = streamRef.current;
+
+      if (streamRef.current) {
+        const videoTrack = streamRef.current.getVideoTracks()[0];
+        const audioTrack = streamRef.current.getAudioTracks()[0];
+
+        const isVideoLive = videoTrack && videoTrack.readyState === 'live';
+        const isAudioLive = audioTrack && audioTrack.readyState === 'live';
+
+        console.log('[SYSTEM CHECK] Stream validation before handoff:', {
+          hasStream: !!streamRef.current,
+          videoTrack: videoTrack ? videoTrack.readyState : 'none',
+          audioTrack: audioTrack ? audioTrack.readyState : 'none',
+          isVideoLive,
+          isAudioLive
+        });
+
+        // If video track is not live, try to request a fresh stream
+        if (!isVideoLive) {
+          console.log('[SYSTEM CHECK] Video track not live - requesting fresh stream');
+          try {
+            const freshStream = await getUserMedia({ video: true, audio: true });
+            streamRef.current = freshStream;
+            streamToPass = freshStream;
+
+            // Update video preview with fresh stream
+            if (videoRef.current) {
+              videoRef.current.srcObject = freshStream;
+            }
+
+            console.log('[SYSTEM CHECK] Fresh stream acquired successfully');
+          } catch (err) {
+            console.warn('[SYSTEM CHECK] Failed to get fresh stream - assessment will handle camera re-initialization', err);
+            // Continue anyway - assessment component will handle camera re-request
+          }
+        } else {
+          console.log('[SYSTEM CHECK] Stream is healthy and live');
+        }
+      }
+
       // Pass the stream to parent to keep camera alive (prevents black screen)
       console.log('[SYSTEM CHECK] Passing stream to parent - keeping camera alive');
-      onComplete(streamRef.current || undefined);
+      onComplete(streamToPass || undefined);
     } catch (err) {
       console.error('Failed to submit system check:', err);
       // Still proceed even if submission fails - pass stream to keep camera alive
@@ -531,6 +607,39 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                 <div className="mt-6 p-5 bg-amber-50 rounded-xl flex items-center gap-4">
                   <AlertCircle className="w-6 h-6 text-amber-600" />
                   <p className="text-amber-700 font-medium">Some checks failed. Please resolve the issues above.</p>
+                </div>
+              )}
+
+              {/* Prominent Camera In Use Error Box */}
+              {cameraInUseError && (
+                <div className="mt-6 p-6 bg-red-50 border-2 border-red-300 rounded-xl">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0">
+                      <XCircle className="w-8 h-8 text-red-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-lg font-bold text-red-900 mb-2">Camera Is In Use</h4>
+                      <p className="text-red-800 mb-4">{cameraInUseError}</p>
+                      <div className="bg-white rounded-lg p-4 border border-red-200">
+                        <p className="font-semibold text-red-900 mb-2">How to fix this:</p>
+                        <ol className="list-decimal list-inside space-y-2 text-red-800 text-sm">
+                          <li>Close any apps using your camera (Zoom, Teams, Skype, FaceTime, Google Meet)</li>
+                          <li>Close other browser tabs that may be using your camera</li>
+                          {isIOS && (
+                            <li>On iPhone/iPad: Go to Settings → Privacy → Camera and check which apps have access</li>
+                          )}
+                          {browserType === 'Firefox' && (
+                            <li>In Firefox: Check if Enhanced Tracking Protection is blocking camera access (shield icon in address bar)</li>
+                          )}
+                          {browserType === 'Safari' && (
+                            <li>In Safari: Check Safari → Preferences → Websites → Camera permissions</li>
+                          )}
+                          <li>If problems persist, restart your browser</li>
+                          <li>Click "Run Checks" again once you've closed other apps</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

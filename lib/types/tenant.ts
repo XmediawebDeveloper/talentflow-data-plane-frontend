@@ -23,7 +23,9 @@ export interface Permission {
   canDeleteResumes?: boolean;   // Delete Resumes
 
   // Resume Database - Granular CRUD
-  canAccessInternalDB: boolean; // View/Read Internal Database
+  canAccessInternalDB: boolean; // Legacy: View/Read Internal Database
+  canViewInternalDB?: boolean;  // Granular: View/Read Internal Database (RBAC)
+  canCreateInternalDB?: boolean;// Create records in Internal Database
   canUpdateInternalDB?: boolean;// Update records in Internal Database
   canDeleteInternalDB?: boolean;// Delete records from Internal Database
 

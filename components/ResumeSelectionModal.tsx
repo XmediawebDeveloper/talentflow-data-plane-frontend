@@ -2,8 +2,10 @@ import { X, FolderOpen, Database, Search, CheckSquare, Square, User, Mail, Award
 import { useState, useRef } from 'react';
 import { Resume, Folder as FolderType } from '@/lib/types/types';
 import ScoringVersionSelectionModal from './ScoringVersionSelectionModal';
+import DuplicateResumeDetectedModal from './DuplicateResumeDetectedModal';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 interface VersionSelection {
   resumeId: string;
@@ -32,6 +34,7 @@ export default function ResumeSelectionModal({
   availableUnits,
   onResumeUploaded
 }: ResumeSelectionModalProps) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'database'>('my-resumes');
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,14 +46,47 @@ export default function ResumeSelectionModal({
   const [localResumes, setLocalResumes] = useState<Resume[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Check if user has Internal DB access permission
+  const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
+
+  // Duplicate detection modal
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState<{
+    fileName: string;
+    existingResume: any;
+  } | null>(null);
+
   // Debug: Log folders data
   console.log('[ResumeSelectionModal] Folders received:', folders);
   console.log('[ResumeSelectionModal] MyResumes count:', myResumes.length);
   console.log('[ResumeSelectionModal] MyResumes sample:', myResumes.slice(0, 3).map(r => ({ id: r.id, name: r.name, folderId: r.folderId })));
 
-  // Combine myResumes with locally uploaded resumes
-  const allMyResumes = [...localResumes, ...myResumes];
-  const allDatabaseResumes = [...localResumes, ...databaseResumes];
+  // Combine myResumes with locally uploaded resumes - DEDUPLICATE by ID to prevent showing same resume twice
+  const deduplicateByResumeId = (localUploads: Resume[], propsResumes: Resume[]): Resume[] => {
+    const seenIds = new Set<string>();
+    const result: Resume[] = [];
+
+    // Add props resumes first (source of truth from API)
+    for (const resume of propsResumes) {
+      if (!seenIds.has(resume.id)) {
+        seenIds.add(resume.id);
+        result.push(resume);
+      }
+    }
+
+    // Add local uploads only if not already in props
+    for (const resume of localUploads) {
+      if (!seenIds.has(resume.id)) {
+        seenIds.add(resume.id);
+        result.push(resume);
+      }
+    }
+
+    return result;
+  };
+
+  const allMyResumes = deduplicateByResumeId(localResumes, myResumes);
+  const allDatabaseResumes = deduplicateByResumeId(localResumes, databaseResumes);
 
   // Handle file upload
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,8 +152,33 @@ export default function ResumeSelectionModal({
     } catch (error: any) {
       console.error('Upload failed:', error);
 
-      // Handle duplicate error
-      if (error.message?.includes('409') || error.message?.includes('DUPLICATE')) {
+      // Handle duplicate error (409)
+      if (error.status === 409 || error.response?.status === 409) {
+        toast.dismiss(toastId);
+
+        // Parse the existing resume details from error response
+        const errorData = error.response?.data || error.data || {};
+        const existingResume = errorData.existing_resume;
+
+        if (existingResume) {
+          // Show duplicate detection modal
+          setDuplicateInfo({
+            fileName: file.name,
+            existingResume: {
+              id: existingResume.id,
+              candidate_name: existingResume.candidate_name,
+              email: existingResume.email,
+              current_title: existingResume.current_title,
+              folder_name: existingResume.folder_name,
+              uploaded_at: existingResume.upload_date,
+              version: existingResume.version,
+            },
+          });
+          setShowDuplicateModal(true);
+        } else {
+          toast.error('A resume with this email already exists.', { id: toastId });
+        }
+      } else if (error.message?.includes('DUPLICATE')) {
         toast.error('A resume with this email already exists.', { id: toastId });
       } else {
         toast.error(error.message || 'Failed to upload resume', { id: toastId });
@@ -190,6 +251,63 @@ export default function ResumeSelectionModal({
     setSelectedResumes([]);
     setSearchTerm('');
     setSelectedFolder('all');
+  };
+
+  // Handle duplicate modal actions
+  const handleProceedWithScoring = async (resumeId: string) => {
+    // Add existing resume to local resumes if not already present
+    const existingInList = allMyResumes.find(r => r.id === resumeId);
+
+    if (!existingInList && duplicateInfo?.existingResume) {
+      const existingResume = duplicateInfo.existingResume;
+
+      // Fetch full resume details to add to the list
+      try {
+        const fullResume = await resumeService.getById(resumeId);
+
+        const resumeToAdd: Resume = {
+          id: fullResume.id,
+          name: fullResume.candidate_name || existingResume.candidate_name,
+          email: fullResume.candidate_email || existingResume.email || 'No email',
+          phone: fullResume.phone || 'No phone',
+          title: fullResume.current_title || existingResume.current_title || 'N/A',
+          experience: fullResume.experience_years ? `${fullResume.experience_years} years` : 'N/A',
+          education: fullResume.education?.[0]?.degree || 'N/A',
+          location: fullResume.location || 'N/A',
+          skills: fullResume.skills || [],
+          source: 'Manual' as const,
+          folderId: existingResume.folder_id || '',
+          uploadDate: existingResume.uploaded_at || new Date().toISOString(),
+          attachments: 1,
+          uploadedBy: 'Existing',
+          version: existingResume.version || 1,
+          versionCount: 1,
+          fileName: fullResume.file_name,
+        };
+
+        setLocalResumes(prev => [resumeToAdd, ...prev]);
+      } catch (error) {
+        console.error('Failed to fetch resume details:', error);
+        // Continue anyway with basic info
+      }
+    }
+
+    // Add the existing resume to selected resumes for scoring
+    setSelectedResumes(prev => {
+      if (!prev.includes(resumeId)) {
+        return [...prev, resumeId];
+      }
+      return prev;
+    });
+
+    toast.success('Existing resume added to selection for scoring');
+    setShowDuplicateModal(false);
+    setDuplicateInfo(null);
+  };
+
+  const handleViewExisting = (resumeId: string) => {
+    // Open resume detail in new tab
+    window.open(`/recruitment/resume-view/${resumeId}`, '_blank');
   };
 
   const handleScore = () => {
@@ -363,26 +481,29 @@ export default function ResumeSelectionModal({
                 </span>
               </div>
             </button>
-            <button
-              onClick={() => handleTabChange('database')}
-              className={`px-5 py-3 text-sm font-medium rounded-t-lg transition-all ${
-                activeTab === 'database'
-                  ? 'bg-gray-50 text-gray-900 border-b-2 border-gray-800'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4" />
-                Internal Database
-                <span className={`px-2 py-0.5 rounded-full text-xs ${
+            {/* Only show Internal Database tab if user has permission */}
+            {hasInternalDBAccess && (
+              <button
+                onClick={() => handleTabChange('database')}
+                className={`px-5 py-3 text-sm font-medium rounded-t-lg transition-all ${
                   activeTab === 'database'
-                    ? 'bg-gray-800 text-white'
-                    : 'bg-gray-200 text-gray-600'
-                }`}>
-                  {allDatabaseResumes.length}
-                </span>
-              </div>
-            </button>
+                    ? 'bg-gray-50 text-gray-900 border-b-2 border-gray-800'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4" />
+                  Internal Database
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${
+                    activeTab === 'database'
+                      ? 'bg-gray-800 text-white'
+                      : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {allDatabaseResumes.length}
+                  </span>
+                </div>
+              </button>
+            )}
           </div>
         </div>
 
@@ -703,6 +824,22 @@ export default function ResumeSelectionModal({
           jobTitle={jobTitle}
           onClose={() => setShowVersionSelection(false)}
           onConfirm={handleVersionSelectionConfirm}
+        />
+      )}
+
+      {/* Duplicate Resume Detected Modal */}
+      {showDuplicateModal && duplicateInfo && (
+        <DuplicateResumeDetectedModal
+          isOpen={showDuplicateModal}
+          onClose={() => {
+            setShowDuplicateModal(false);
+            setDuplicateInfo(null);
+          }}
+          fileName={duplicateInfo.fileName}
+          existingResume={duplicateInfo.existingResume}
+          jobTitle={jobTitle}
+          onViewExisting={handleViewExisting}
+          onProceedWithScoring={handleProceedWithScoring}
         />
       )}
     </div>

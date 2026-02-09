@@ -198,10 +198,12 @@ import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 
 export default function ResumeViewPage() {
   const params = useParams();
   const router = useRouter();
+  const dialog = useGlobalDialog();
   const resumeId = params.id as string;
 
   const [resume, setResume] = useState<Resume | null>(null);
@@ -226,104 +228,94 @@ export default function ResumeViewPage() {
   // Version changes visibility state
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
 
-  // Helper function to get version differences compared to previous version
+  // Helper function to get version differences compared to previous version using line-by-line text comparison
   const getVersionChanges = (currentVersion: any, previousVersion: any | null) => {
     const changes: { category: string; added: string[]; removed: string[]; changed?: { from: string; to: string } }[] = [];
-
-    // Helper to compare arrays
-    const compareArrays = (current: string[] = [], previous: string[] = []) => {
-      const added = current.filter(item => !previous.includes(item));
-      const removed = previous.filter(item => !current.includes(item));
-      return { added, removed };
-    };
-
-    // Helper to compare single values
-    const compareSingle = (category: string, current: string | undefined, previous: string | undefined) => {
-      if (current !== previous) {
-        if (current && previous) {
-          changes.push({ category, added: [], removed: [], changed: { from: previous, to: current } });
-        } else if (current && !previous) {
-          changes.push({ category, added: [current], removed: [] });
-        } else if (!current && previous) {
-          changes.push({ category, added: [], removed: [previous] });
-        }
-      }
-    };
 
     // If no previous version, this is the first version - show as "Initial"
     if (!previousVersion) {
       return [{ category: 'Initial Version', added: ['First upload - no changes to compare'], removed: [] }];
     }
 
-    // Compare Skills
-    const skillsChanges = compareArrays(
-      currentVersion.skills || [],
-      previousVersion.skills || []
-    );
-    if (skillsChanges.added.length > 0 || skillsChanges.removed.length > 0) {
-      changes.push({ category: 'Skills', ...skillsChanges });
+    // Get extracted text from both versions
+    const currentText = currentVersion.extractedText || '';
+    const previousText = previousVersion.extractedText || '';
+
+    // If neither version has extracted text, fall back to parsed content comparison
+    if (!currentText && !previousText) {
+      return [{ category: 'Note', added: ['Text content not available for comparison'], removed: [] }];
     }
 
-    // Compare Technical Skills
-    const techSkillsChanges = compareArrays(
-      currentVersion.technicalSkills || [],
-      previousVersion.technicalSkills || []
-    );
-    if (techSkillsChanges.added.length > 0 || techSkillsChanges.removed.length > 0) {
-      changes.push({ category: 'Technical Skills', ...techSkillsChanges });
+    // If only one version has text
+    if (!currentText || !previousText) {
+      return [{ category: 'Note', added: ['New file uploaded - text comparison not available'], removed: [] }];
     }
 
-    // Compare Job Title
-    compareSingle('Job Title', currentVersion.currentTitle, previousVersion.currentTitle);
-
-    // Compare Company
-    compareSingle('Company', currentVersion.currentCompany, previousVersion.currentCompany);
-
-    // Compare Location
-    compareSingle('Location', currentVersion.location, previousVersion.location);
-
-    // Compare Experience count
-    const currExpCount = currentVersion.experience?.length || 0;
-    const prevExpCount = previousVersion.experience?.length || 0;
-    if (currExpCount !== prevExpCount) {
-      changes.push({
-        category: 'Experience',
-        added: currExpCount > prevExpCount ? [`+${currExpCount - prevExpCount} position(s)`] : [],
-        removed: currExpCount < prevExpCount ? [`-${prevExpCount - currExpCount} position(s)`] : [],
-      });
+    // If text is identical, no changes
+    if (currentText.trim() === previousText.trim()) {
+      return [{ category: 'Note', added: ['No changes detected - content is identical'], removed: [] }];
     }
 
-    // Compare Education count
-    const currEduCount = currentVersion.education?.length || 0;
-    const prevEduCount = previousVersion.education?.length || 0;
-    if (currEduCount !== prevEduCount) {
-      changes.push({
-        category: 'Education',
-        added: currEduCount > prevEduCount ? [`+${currEduCount - prevEduCount} entry(ies)`] : [],
-        removed: currEduCount < prevEduCount ? [`-${prevEduCount - currEduCount} entry(ies)`] : [],
-      });
-    }
+    // Line-by-line comparison
+    // Normalize and split text into lines, filtering out empty lines
+    const normalizeText = (text: string) => {
+      return text
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+    };
 
-    // Compare Certifications
-    const currCerts = (currentVersion.certifications || []).map((c: any) => c.name || c);
-    const prevCerts = (previousVersion.certifications || []).map((c: any) => c.name || c);
-    const certsChanges = compareArrays(currCerts, prevCerts);
-    if (certsChanges.added.length > 0 || certsChanges.removed.length > 0) {
-      changes.push({ category: 'Certifications', ...certsChanges });
-    }
+    const currentLines = normalizeText(currentText);
+    const previousLines = normalizeText(previousText);
 
-    // Compare Professional Summary
-    if (currentVersion.professionalSummary !== previousVersion.professionalSummary) {
-      if (currentVersion.professionalSummary && previousVersion.professionalSummary) {
-        changes.push({ category: 'Summary', added: ['Updated'], removed: [] });
-      } else if (currentVersion.professionalSummary) {
-        changes.push({ category: 'Summary', added: ['Added'], removed: [] });
-      } else {
-        changes.push({ category: 'Summary', added: [], removed: ['Removed'] });
+    // Create sets for efficient lookup
+    const currentLinesSet = new Set(currentLines);
+    const previousLinesSet = new Set(previousLines);
+
+    // Find added lines (in current but not in previous)
+    const addedLines = currentLines.filter(line => !previousLinesSet.has(line));
+
+    // Find removed lines (in previous but not in current)
+    const removedLines = previousLines.filter(line => !currentLinesSet.has(line));
+
+    // Group changes by type for better display
+    if (addedLines.length > 0 || removedLines.length > 0) {
+      // Limit to show max 10 items each to avoid overwhelming the UI
+      const maxItems = 10;
+
+      if (addedLines.length > 0) {
+        const displayAdded = addedLines.slice(0, maxItems);
+        const moreCount = addedLines.length - maxItems;
+        changes.push({
+          category: 'Added Lines',
+          added: moreCount > 0
+            ? [...displayAdded, `... and ${moreCount} more`]
+            : displayAdded,
+          removed: [],
+        });
       }
+
+      if (removedLines.length > 0) {
+        const displayRemoved = removedLines.slice(0, maxItems);
+        const moreCount = removedLines.length - maxItems;
+        changes.push({
+          category: 'Removed Lines',
+          added: [],
+          removed: moreCount > 0
+            ? [...displayRemoved, `... and ${moreCount} more`]
+            : displayRemoved,
+        });
+      }
+    } else {
+      // Lines are same but order might be different, or whitespace differences
+      changes.push({
+        category: 'Note',
+        added: ['Minor formatting changes detected'],
+        removed: [],
+      });
     }
 
-    return changes.length > 0 ? changes : null;
+    return changes;
   };
 
   useEffect(() => {
@@ -341,7 +333,46 @@ export default function ResumeViewPage() {
         resumeService.get(resumeId),
         resumeService.getVersions(resumeId).catch(() => [])
       ]);
-      const converted = convertApiResume(r, versionsData);
+
+      // Fetch full details for each version to get extracted_text for comparison
+      // This is needed because the versions endpoint doesn't return the full text
+      let versionsWithFullData = versionsData;
+      if (versionsData && versionsData.length > 0) {
+        try {
+          // Fetch full data for each version (limit to last 5 versions to avoid too many requests)
+          const versionsToFetch = versionsData.slice(0, 5);
+          const fullVersionsData = await Promise.all(
+            versionsToFetch.map((v: any) =>
+              resumeService.get(v.id).catch(() => v) // Fallback to original if fetch fails
+            )
+          );
+
+          // Merge full data with original version data
+          versionsWithFullData = versionsData.map((v: any, index: number) => {
+            if (index < fullVersionsData.length && fullVersionsData[index]) {
+              return {
+                ...v,
+                extracted_text: fullVersionsData[index].extracted_text,
+                skills: fullVersionsData[index].skills || v.skills,
+                technical_skills: fullVersionsData[index].technical_skills || v.technical_skills,
+                experience: fullVersionsData[index].experience || v.experience,
+                education: fullVersionsData[index].education || v.education,
+                certifications: fullVersionsData[index].certifications || v.certifications,
+                current_title: fullVersionsData[index].current_title || v.current_title,
+                current_company: fullVersionsData[index].current_company || v.current_company,
+                location: fullVersionsData[index].location || v.location,
+                professional_summary: fullVersionsData[index].professional_summary || v.professional_summary,
+              };
+            }
+            return v;
+          });
+        } catch (err) {
+          console.warn('Failed to fetch full version data:', err);
+          // Continue with original versions data
+        }
+      }
+
+      const converted = convertApiResume(r, versionsWithFullData);
       setResume(converted);
     } catch (err: any) {
       console.error('Failed to fetch resume:', err);
@@ -424,6 +455,8 @@ export default function ResumeViewPage() {
       currentCompany: v.current_company,
       location: v.location,
       professionalSummary: v.professional_summary,
+      // Full extracted text for line-by-line comparison
+      extractedText: v.extracted_text || '',
     })),
     versionCount: r.version_count || versionsData.length || 1,
     extractedText: r.extracted_text,
@@ -514,7 +547,7 @@ Best regards`);
   };
 
   const handleDelete = async () => {
-    if (confirm('Are you sure you want to delete this resume?')) {
+    if (await dialog.confirm({ title: 'Delete Resume', message: 'Are you sure you want to delete this resume? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) {
       try {
         await resumeService.delete(resumeId);
         toast.success('Resume deleted');
@@ -829,10 +862,21 @@ Best regards`);
                         </div>
                       </div>
                       {exp.description && (
-                        <p className="text-gray-700 mb-3">{exp.description}</p>
+                        <div className="space-y-1.5 mb-3">
+                          {exp.description
+                            .split(/(?<=[.!?])\s+|\n+/)
+                            .map((point: string) => point.trim())
+                            .filter((point: string) => point.length > 0)
+                            .map((point: string, pointIndex: number) => (
+                              <div key={pointIndex} className="flex items-start gap-2 text-sm text-gray-700">
+                                <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                                <span>{point}</span>
+                              </div>
+                            ))}
+                        </div>
                       )}
                       {exp.achievements && exp.achievements.length > 0 && (
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {exp.achievements.map((achievement, achIndex) => (
                             <div key={achIndex} className="flex items-start gap-2 text-sm text-gray-700">
                               <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
@@ -1294,32 +1338,34 @@ Best regards`);
                               Changes in Version {versionNumber}
                             </div>
                             {changes && changes.length > 0 ? (
-                              <div className="space-y-2">
+                              <div className="space-y-3">
                                 {changes.map((change, idx) => (
-                                  <div key={idx} className="flex items-start gap-2">
-                                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-200 text-gray-700 min-w-[90px] text-center flex-shrink-0">
+                                  <div key={idx} className="space-y-1">
+                                    <span className="px-2 py-1 text-[10px] font-semibold rounded bg-gray-700 text-white inline-block">
                                       {change.category}
                                     </span>
-                                    <div className="flex-1 flex flex-wrap gap-1">
+                                    <div className="space-y-1 pl-1">
                                       {/* Show changed value (from -> to) */}
                                       {change.changed && (
-                                        <span className="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 flex items-center gap-1">
+                                        <div className="text-xs p-2 rounded bg-yellow-50 border border-yellow-200 text-yellow-800">
                                           <span className="line-through opacity-60">{change.changed.from}</span>
-                                          <span>→</span>
+                                          <span className="mx-2">→</span>
                                           <span className="font-medium">{change.changed.to}</span>
-                                        </span>
+                                        </div>
                                       )}
                                       {/* Show added items */}
                                       {change.added.map((val, i) => (
-                                        <span key={`add-${i}`} className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 flex items-center gap-1">
-                                          <span className="font-bold">+</span> {val}
-                                        </span>
+                                        <div key={`add-${i}`} className="text-xs p-2 rounded bg-green-50 border border-green-200 text-green-800 flex items-start gap-2">
+                                          <span className="font-bold text-green-600 flex-shrink-0">+</span>
+                                          <span className="break-words" title={val}>{val.length > 150 ? val.substring(0, 150) + '...' : val}</span>
+                                        </div>
                                       ))}
                                       {/* Show removed items */}
                                       {change.removed.map((val, i) => (
-                                        <span key={`rem-${i}`} className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 flex items-center gap-1">
-                                          <span className="font-bold">−</span> {val}
-                                        </span>
+                                        <div key={`rem-${i}`} className="text-xs p-2 rounded bg-red-50 border border-red-200 text-red-800 flex items-start gap-2">
+                                          <span className="font-bold text-red-600 flex-shrink-0">−</span>
+                                          <span className="break-words" title={val}>{val.length > 150 ? val.substring(0, 150) + '...' : val}</span>
+                                        </div>
                                       ))}
                                     </div>
                                   </div>

@@ -119,6 +119,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
         <div className="text-center text-sm text-gray-400">
           <p>
             Assessment ID: {assessmentId} • Submitted on {completedAt.toLocaleDateString('en-US', {
+              timeZone: 'Asia/Kolkata',
               month: '2-digit',
               day: '2-digit',
               year: 'numeric'

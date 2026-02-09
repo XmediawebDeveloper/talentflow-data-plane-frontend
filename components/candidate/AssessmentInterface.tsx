@@ -105,7 +105,7 @@ export function AssessmentInterface({
   );
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [allQuestionsAnswered, setAllQuestionsAnswered] = useState(false);
-  const [showUnansweredPopup, setShowUnansweredPopup] = useState(false);
+  // const [showUnansweredPopup, setShowUnansweredPopup] = useState(false); // REMOVED: Combined into showCompleteConfirm modal
   const [unansweredQuestions, setUnansweredQuestions] = useState<number[]>([]);
 
   // Track answer statuses: questionId -> { hasDraft: boolean, isLocked: boolean }
@@ -171,12 +171,17 @@ export function AssessmentInterface({
   // 🛡️ PROCTORING: Force Fullscreen on Start
   const enterFullscreen = async () => {
     try {
-      const el = document.documentElement;
-      if (el.requestFullscreen) {
-        await el.requestFullscreen();
-        console.log('[PROCTORING] ✅ Entered fullscreen mode');
+      // Only enter fullscreen if not already in fullscreen
+      if (!document.fullscreenElement) {
+        const el = document.documentElement;
+        if (el.requestFullscreen) {
+          await el.requestFullscreen();
+          console.log('[PROCTORING] ✅ Entered fullscreen mode');
+        } else {
+          console.warn('[PROCTORING] ⚠️ Fullscreen API not supported');
+        }
       } else {
-        console.warn('[PROCTORING] ⚠️ Fullscreen API not supported');
+        console.log('[PROCTORING] Already in fullscreen mode');
       }
     } catch (error) {
       console.error('[PROCTORING] ❌ Failed to enter fullscreen:', error);
@@ -202,38 +207,24 @@ export function AssessmentInterface({
       console.log(`[LOCKDOWN] Fullscreen: ${isCurrentlyFullscreen ? 'ACTIVE' : 'INACTIVE'}`);
       setIsFullscreen(isCurrentlyFullscreen);
 
-      // CRITICAL: If fullscreen is exited, IMMEDIATELY FINISH ASSESSMENT
-      // But don't trigger if they're completing the assessment normally
+      // VIOLATIONS DISABLED: Just log fullscreen changes, no penalties
       if (!isCurrentlyFullscreen && !isDisqualified && !showCompleteConfirm) {
-        console.error('[DISQUALIFICATION] Fullscreen exited - FINISHING ASSESSMENT IMMEDIATELY');
+        console.log('[PROCTORING] Fullscreen exited - logging only (no penalties)');
 
-        // Report to server
+        // Report to server for record-keeping only
         candidateService.reportProctorEvent(token, {
           event_type: 'fullscreen_exit',
           timestamp: new Date().toISOString(),
           details: {
-            reason: 'User exited fullscreen mode - Assessment auto-submitted',
-            severity: 'CRITICAL',
+            reason: 'User exited fullscreen mode',
+            severity: 'INFO',
           },
         }).catch(err => console.error('[VIOLATION] Failed to report fullscreen exit:', err));
 
-        // IMMEDIATELY DISQUALIFY AND SUBMIT
-        setIsDisqualified(true);
-
-        // Auto-submit current answer and complete assessment
-        try {
-          const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
-          if (hasAnswer) {
-            console.log('[AUTO-SUBMIT] Submitting current answer...');
-            await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
-          }
-          console.log('[AUTO-SUBMIT] Completing assessment due to fullscreen exit...');
-          onComplete();
-        } catch (error) {
-          console.error('[AUTO-SUBMIT] Error during submission:', error);
-          // Complete anyway even if submission fails
-          onComplete();
-        }
+        // COMMENTED OUT: No violation tracking, no warnings, no auto-complete
+        // violationCountRef.current += 1;
+        // setViolationCount(violationCountRef.current);
+        // setShowViolationWarning(true);
       }
     };
 
@@ -248,92 +239,11 @@ export function AssessmentInterface({
     };
   }, [token, isDisqualified, showCompleteConfirm, answer, currentQuestion, onAnswerSubmit, onComplete]);
 
-  // SECURITY: Block keyboard shortcuts (F12, Ctrl+Shift+I, ESC, Alt+Tab, etc.)
+  // SECURITY: Block developer tools shortcuts (F12, Ctrl+Shift+I)
+  // NOTE: ESC and Alt+Tab are NO LONGER blocked here to prevent false positives
+  // Fullscreen enforcement is handled by the fullscreen change handler (3-strike system)
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      // CRITICAL: Block ESC key - IMMEDIATE FINISH ASSESSMENT
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (!isDisqualified) {
-          console.error('[DISQUALIFICATION] ESC pressed - FINISHING ASSESSMENT IMMEDIATELY');
-
-          // Report to server
-          candidateService.reportProctorEvent(token, {
-            event_type: 'escape_key_attempt',
-            timestamp: new Date().toISOString(),
-            details: {
-              reason: 'User pressed ESC key - Assessment auto-submitted',
-              severity: 'CRITICAL',
-            },
-          }).catch(err => console.error('[VIOLATION] Failed to report ESC attempt:', err));
-
-          // IMMEDIATELY DISQUALIFY AND SUBMIT
-          setIsDisqualified(true);
-
-          // Auto-submit current answer and complete assessment
-          try {
-            const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
-            if (hasAnswer) {
-              console.log('[AUTO-SUBMIT] Submitting current answer...');
-              await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
-            }
-            console.log('[AUTO-SUBMIT] Completing assessment due to ESC key...');
-            await exitFullscreen();
-            onComplete();
-          } catch (error) {
-            console.error('[AUTO-SUBMIT] Error during submission:', error);
-            // Complete anyway even if submission fails
-            await exitFullscreen();
-            onComplete();
-          }
-        }
-
-        return false;
-      }
-
-      // CRITICAL: Block Alt+Tab - IMMEDIATE FINISH ASSESSMENT
-      if (e.altKey && e.key === 'Tab') {
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (!isDisqualified) {
-          console.error('[DISQUALIFICATION] Alt+Tab pressed - FINISHING ASSESSMENT IMMEDIATELY');
-
-          // Report to server
-          candidateService.reportProctorEvent(token, {
-            event_type: 'alt_tab_attempt',
-            timestamp: new Date().toISOString(),
-            details: {
-              reason: 'User pressed Alt+Tab (window switching) - Assessment auto-submitted',
-              severity: 'CRITICAL',
-            },
-          }).catch(err => console.error('[VIOLATION] Failed to report Alt+Tab attempt:', err));
-
-          // IMMEDIATELY DISQUALIFY AND SUBMIT
-          setIsDisqualified(true);
-
-          // Auto-submit current answer and complete assessment
-          try {
-            const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
-            if (hasAnswer) {
-              console.log('[AUTO-SUBMIT] Submitting current answer...');
-              await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
-            }
-            console.log('[AUTO-SUBMIT] Completing assessment due to Alt+Tab...');
-            await exitFullscreen();
-            onComplete();
-          } catch (error) {
-            console.error('[AUTO-SUBMIT] Error during submission:', error);
-            // Complete anyway even if submission fails
-            await exitFullscreen();
-            onComplete();
-          }
-        }
-
-        return false;
-      }
 
       // Block F12 (DevTools)
       if (e.key === 'F12') {
@@ -399,7 +309,7 @@ export function AssessmentInterface({
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [token, isDisqualified, answer, currentQuestion, onAnswerSubmit, onComplete, exitFullscreen]);
+  }, []); // Empty deps - only register once on mount
 
   // SECURITY: Detect DevTools opening (by checking window size changes)
   useEffect(() => {
@@ -438,48 +348,13 @@ export function AssessmentInterface({
     return () => clearInterval(interval);
   }, [token]);
 
-  // 🛡️ PROCTORING: Detect window blur (Alt+Tab, switching windows, clicking outside)
-  // CRITICAL: Window blur triggers IMMEDIATE DISQUALIFICATION
-  useEffect(() => {
-    const handleWindowBlur = () => {
-      // Ignore if already disqualified or if showing completion confirmation
-      if (isDisqualified || showCompleteConfirm) {
-        return;
-      }
+  // 🛡️ PROCTORING: Window blur/focus is now handled by useProctoringMonitor hook
+  // No immediate disqualification - proctoring monitor logs events for review
+  // Fullscreen enforcement is the primary security measure (3-strike system)
 
-      console.error('[DISQUALIFICATION] 🚨 Window focus lost - DISQUALIFYING CANDIDATE');
-
-      // Report to server
-      if (token) {
-        candidateService.reportProctorEvent(token, {
-          event_type: 'window_focus_lost',
-          timestamp: new Date().toISOString(),
-          details: {
-            reason: 'User switched away from assessment window (Alt+Tab or window switch)',
-            severity: 'CRITICAL',
-          },
-        }).catch(err => console.error('[DISQUALIFICATION] Failed to report window blur:', err));
-      }
-
-      // DISQUALIFY IMMEDIATELY - NO WARNINGS
-      setIsDisqualified(true);
-      setShowDisqualificationModal(true);
-    };
-
-    const handleWindowFocus = () => {
-      console.log('[LOCKDOWN] Window focus regained');
-    };
-
-    window.addEventListener('blur', handleWindowBlur);
-    window.addEventListener('focus', handleWindowFocus);
-
-    return () => {
-      window.removeEventListener('blur', handleWindowBlur);
-      window.removeEventListener('focus', handleWindowFocus);
-    };
-  }, [token, isDisqualified, showCompleteConfirm]);
-
-  // 🛡️ PROCTORING: Auto-Submit Countdown Timer
+  // 🛡️ PROCTORING: Auto-Submit Countdown Timer - DISABLED
+  // COMMENTED OUT: No auto-submit based on violations
+  /*
   useEffect(() => {
     if (showViolationWarning && violationCountRef.current >= 3) {
       console.log('[PROCTORING] 💀 Auto-submit countdown started: 5 seconds');
@@ -490,6 +365,7 @@ export function AssessmentInterface({
           if (prev <= 1) {
             clearInterval(countdownInterval);
             console.error('[PROCTORING] 💀 AUTO-SUBMIT TRIGGERED');
+            setIsDisqualified(true);
             exitFullscreen();
             onComplete();
             return 0;
@@ -501,40 +377,33 @@ export function AssessmentInterface({
       return () => clearInterval(countdownInterval);
     }
   }, [showViolationWarning, onComplete]);
+  */
 
-  // 🛡️ PROCTORING: 4️⃣ Visibility API - Detect Tab Hidden/Switching
+  // 🛡️ PROCTORING: 4️⃣ Visibility API - DISABLED
+  // COMMENTED OUT: No violation tracking for tab switching
+  /*
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && !isDisqualified && !showCompleteConfirm) {
-        console.warn('[PROCTORING] ⚠️ Tab hidden detected - VIOLATION');
+        console.log('[PROCTORING] Tab hidden detected - logging only (no penalties)');
 
-        // Track violation
-        violationCountRef.current += 1;
-        setViolationCount(violationCountRef.current);
-
-        // Report to server
+        // Report to server for record-keeping only
         if (token) {
           candidateService.reportProctorEvent(token, {
             event_type: 'tab_hidden',
             timestamp: new Date().toISOString(),
             details: {
               reason: 'User switched to another tab or minimized window',
-              attempt_number: violationCountRef.current,
             },
           }).catch(err => console.error('[PROCTORING] Failed to report tab hidden:', err));
-        }
-
-        // Show warning on 3rd violation - countdown will auto-trigger in separate useEffect
-        if (violationCountRef.current >= 3) {
-          console.error('[PROCTORING] 💀 3 VIOLATIONS - SHOWING AUTO-SUBMIT MODAL');
-          setShowViolationWarning(true);
         }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [token, isDisqualified, showCompleteConfirm, onComplete]);
+  }, [token, isDisqualified, showCompleteConfirm]);
+  */
 
   // 🛡️ PROCTORING: 5️⃣ Block Copy/Paste/Right-Click
   useEffect(() => {
@@ -828,13 +697,11 @@ export function AssessmentInterface({
       }
     }
 
-    // If there are unanswered, show popup
+    // Show single combined popup (includes unanswered questions if any)
     if (unanswered.length > 0) {
       setUnansweredQuestions(unanswered);
-      setShowUnansweredPopup(true);
-    } else {
-      setShowCompleteConfirm(true);
     }
+    setShowCompleteConfirm(true);
   };
 
   // Legacy handleSubmit for auto-submit on timer expire
@@ -1546,55 +1413,9 @@ export function AssessmentInterface({
       </main>
 
       {/* Unanswered Questions Popup */}
-      {showUnansweredPopup && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
-            {/* Close Button */}
-            <button
-              onClick={() => {
-                setShowUnansweredPopup(false);
-                setShowCompleteConfirm(true);
-              }}
-              className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100 transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
+      {/* REMOVED: Separate unanswered popup - now combined with Complete Confirmation Modal */}
 
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
-                <AlertCircle className="w-6 h-6 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800">Unanswered Questions</h3>
-                <p className="text-sm text-gray-500">You have some questions without answers</p>
-              </div>
-            </div>
-
-            <div className="bg-amber-50 rounded-xl p-4 mb-4">
-              <p className="text-sm text-amber-700 mb-3">
-                You haven't answered <span className="font-bold">{unansweredQuestions.length}</span> question(s):
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {unansweredQuestions.map((qNum) => (
-                  <span
-                    key={qNum}
-                    className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium"
-                  >
-                    Q{qNum}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <p className="text-xs text-gray-500 text-center">
-              Click X to close and proceed to submit, or go back to answer them.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Complete Confirmation Modal */}
+      {/* Complete Confirmation Modal - Combined with Unanswered Questions Warning */}
       {showCompleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
@@ -1608,8 +1429,12 @@ export function AssessmentInterface({
             </button>
 
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-green-600" />
+              <div className={`w-12 h-12 ${unansweredQuestions.length > 0 ? 'bg-amber-100' : 'bg-green-100'} rounded-full flex items-center justify-center`}>
+                {unansweredQuestions.length > 0 ? (
+                  <AlertCircle className="w-6 h-6 text-amber-600" />
+                ) : (
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                )}
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-800">Complete Assessment?</h3>
@@ -1622,6 +1447,28 @@ export function AssessmentInterface({
               </div>
             </div>
 
+            {/* Unanswered Questions Warning - shown if there are unanswered questions */}
+            {unansweredQuestions.length > 0 && (
+              <div className="bg-amber-50 rounded-xl p-4 mb-4 border border-amber-200">
+                <p className="text-sm text-amber-700 mb-3 font-semibold">
+                  ⚠️ You haven't answered <span className="font-bold">{unansweredQuestions.length}</span> question(s):
+                </p>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {unansweredQuestions.map((qNum) => (
+                    <span
+                      key={qNum}
+                      className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium"
+                    >
+                      Q{qNum}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-amber-600">
+                  You can still submit, but unanswered questions will be marked as incorrect.
+                </p>
+              </div>
+            )}
+
             <div className="bg-gray-50 rounded-xl p-4 mb-6">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-gray-600">Questions Answered</span>
@@ -1631,15 +1478,15 @@ export function AssessmentInterface({
               </div>
               <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-green-500"
+                  className={`h-full ${progress.percent === 100 ? 'bg-green-500' : 'bg-amber-500'}`}
                   style={{ width: `${progress.percent}%` }}
                 />
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-xl mb-6">
-              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-700">
+            <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl mb-6 border border-blue-200">
+              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-blue-700">
                 Once submitted, you cannot modify your answers. Make sure you've reviewed all your responses.
               </p>
             </div>

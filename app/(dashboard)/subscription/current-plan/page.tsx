@@ -10,6 +10,7 @@ import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
+import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -301,6 +302,68 @@ const getDaysRemaining = (endDate: string): number => {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 };
 
+// Helper function to calculate remaining time from end date
+// Returns: { isExpired, days, hours, minutes, displayText }
+const calculateRemainingTime = (endDateString: string | undefined): {
+  isExpired: boolean;
+  days: number;
+  hours: number;
+  minutes: number;
+  displayText: string;
+} => {
+  if (!endDateString) {
+    return { isExpired: true, days: 0, hours: 0, minutes: 0, displayText: 'Expired' };
+  }
+
+  const now = new Date();
+  const endDate = new Date(endDateString);
+  const diffMs = endDate.getTime() - now.getTime();
+
+  // If difference is negative or zero, it's expired
+  if (diffMs <= 0) {
+    return { isExpired: true, days: 0, hours: 0, minutes: 0, displayText: 'Expired' };
+  }
+
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  // More than 1 day remaining
+  if (diffDays > 0) {
+    return {
+      isExpired: false,
+      days: diffDays,
+      hours: diffHours % 24,
+      minutes: diffMinutes % 60,
+      displayText: `${diffDays} day${diffDays > 1 ? 's' : ''} remaining`
+    };
+  }
+
+  // Less than a day but hours remaining
+  const remainingHours = diffHours;
+  const remainingMinutes = diffMinutes % 60;
+
+  if (remainingHours > 0) {
+    const minutePart = remainingMinutes > 0 ? ` ${remainingMinutes}m` : '';
+    return {
+      isExpired: false,
+      days: 0,
+      hours: remainingHours,
+      minutes: remainingMinutes,
+      displayText: `${remainingHours}h${minutePart} remaining`
+    };
+  }
+
+  // Only minutes remaining
+  return {
+    isExpired: false,
+    days: 0,
+    hours: 0,
+    minutes: remainingMinutes,
+    displayText: `${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''} remaining`
+  };
+};
+
 const formatCardNumber = (value: string): string => {
   const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
   const matches = v.match(/\d{4,16}/g);
@@ -403,6 +466,16 @@ function CurrentPlanContent() {
     zipCode: '',
     country: 'India',
   });
+
+  // Downgrade warning modal state
+  const [showDowngradeWarning, setShowDowngradeWarning] = useState(false);
+  const [downgradeWarningData, setDowngradeWarningData] = useState<{
+    activeUsers: number;
+    newPlanMaxSeats: number;
+    usersToDeactivate: number;
+    newPlanName: string;
+    actionRequired?: string;
+  } | null>(null);
   const [formErrors, setFormErrors] = useState<Partial<PaymentFormData>>({});
 
   // Plan settings from admin API (yearly discount, database extra charge)
@@ -1123,6 +1196,20 @@ function CurrentPlanContent() {
       } else {
         // Handle both string and object error formats
         const errorDetail = data.detail;
+
+        // Check if this is a downgrade blocked error
+        if (errorDetail && typeof errorDetail === 'object' && errorDetail.error === 'DOWNGRADE_BLOCKED_USER_LIMIT') {
+          setDowngradeWarningData({
+            activeUsers: errorDetail.active_users || 0,
+            newPlanMaxSeats: errorDetail.new_plan_max_seats || 0,
+            usersToDeactivate: errorDetail.users_to_deactivate || 0,
+            newPlanName: errorDetail.new_plan_name || 'selected plan',
+            actionRequired: errorDetail.action_required,
+          });
+          setShowDowngradeWarning(true);
+          return; // Don't show generic error toast
+        }
+
         let errorMessage = typeof errorDetail === 'string'
           ? errorDetail
           : errorDetail?.message || data.message || 'Failed to upgrade plan';
@@ -1212,12 +1299,16 @@ function CurrentPlanContent() {
   const statusBadge = getStatusBadge(quotaSubscriptionStatus, companySettings?.payment_status, sharedQuotaData?.trial_info?.days_remaining);
   const StatusIcon = statusBadge.icon;
 
-  // Get remaining days from quota-status API (single source of truth)
-  // For trial users: use trial_info.days_remaining from Admin API
-  // For paid users: calculate from plan expiry date
-  const trialDaysRemaining = isOnTrial
-    ? (sharedQuotaData?.trial_info?.days_remaining ?? (companySettings?.trial_end_date ? getDaysRemaining(companySettings.trial_end_date) : undefined))
-    : (companySettings?.plan_expiry_date ? getDaysRemaining(companySettings.plan_expiry_date) : undefined);
+  // Get remaining time from end date (single source of truth)
+  // For trial users: use trial_end_date
+  // For paid users: use plan_expiry_date
+  // This calculates actual remaining time including hours/minutes on expiry day
+  const endDateForRemaining = isOnTrial
+    ? (sharedQuotaData?.trial_info?.trial_end_date || companySettings?.trial_end_date)
+    : companySettings?.plan_expiry_date;
+  const remainingTime = calculateRemainingTime(endDateForRemaining);
+  // Keep trialDaysRemaining for backward compatibility (numeric days)
+  const trialDaysRemaining = remainingTime.isExpired ? 0 : remainingTime.days;
 
   // Calculate prices for payment (using actual API prices)
   const calculatePrices = () => {
@@ -1421,9 +1512,9 @@ function CurrentPlanContent() {
                 {isLocked
                   ? 'Your account is locked. Please select a plan and complete payment.'
                   : isOnTrial
-                    ? `You are on a Free Trial${trialDaysRemaining ? ` - ${trialDaysRemaining} days remaining` : ''}`
+                    ? `You are on a Free Trial${!remainingTime.isExpired ? ` - ${remainingTime.displayText}` : ' - Expired'}`
                     : isActive
-                      ? `You are on the ${(companySettings?.current_plan_name || currentPlan?.name || '').replace(/\s*\([^)]*\)\s*$/, '')} plan`
+                      ? `You are on the ${(companySettings?.current_plan_name || currentPlan?.name || '').replace(/\s*\([^)]*\)\s*$/, '')} plan${!remainingTime.isExpired ? ` - ${remainingTime.displayText}` : ''}`
                       : isPendingPayment
                         ? 'Complete payment to activate your selected plan'
                         : companySettings?.current_plan_name ? `You are on the ${companySettings.current_plan_name.replace(/\s*\([^)]*\)\s*$/, '')} plan` : ''
@@ -2702,6 +2793,22 @@ function CurrentPlanContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Downgrade Warning Modal */}
+      {showDowngradeWarning && downgradeWarningData && (
+        <DowngradeWarningModal
+          isOpen={showDowngradeWarning}
+          onClose={() => {
+            setShowDowngradeWarning(false);
+            setDowngradeWarningData(null);
+          }}
+          activeUsers={downgradeWarningData.activeUsers}
+          newPlanMaxSeats={downgradeWarningData.newPlanMaxSeats}
+          usersToDeactivate={downgradeWarningData.usersToDeactivate}
+          newPlanName={downgradeWarningData.newPlanName}
+          actionRequired={downgradeWarningData.actionRequired}
+        />
       )}
     </main>
   );

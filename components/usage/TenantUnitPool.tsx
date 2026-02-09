@@ -28,6 +28,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/hooks/useAuth';
 import {
   unitPoolService,
   UnitType,
@@ -91,6 +92,9 @@ type ExportFormat = 'csv' | 'excel';
 type ExportType = 'consumption' | 'summary';
 
 export default function TenantUnitPool({ compact = false, showHistory = true }: TenantUnitPoolProps) {
+  // Role-based access control
+  const { user, isTenantAdmin, isBillingManager, isStandardUser, isRecruiter } = useAuth();
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pools, setPools] = useState<AllPoolsResponse | null>(null);
@@ -117,14 +121,37 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [poolsData, summaryData] = await Promise.all([
-        unitPoolService.getPoolStatus(),
-        unitPoolService.getUsageSummary(30),
-      ]);
-      setPools(poolsData);
-      setSummary(summaryData);
+      // Role-based data fetching
+      if (isTenantAdmin || isRecruiter) {
+        // Tenant Admin & Recruiter: Full access to pool status and summary
+        const [poolsData, summaryData] = await Promise.all([
+          unitPoolService.getPoolStatus(),
+          unitPoolService.getUsageSummary(30),
+        ]);
+        setPools(poolsData);
+        setSummary(summaryData);
+      } else if (isBillingManager) {
+        // Billing Manager: Only billing summary (filtered by API)
+        const [poolsData, summaryData] = await Promise.all([
+          unitPoolService.getPoolStatus(),
+          unitPoolService.getUsageSummary(30),
+        ]);
+        setPools(poolsData);
+        setSummary(summaryData);
+      } else if (isStandardUser) {
+        // Standard User: No access to pool status or tenant-wide summary
+        // Will only show own consumption history
+        setPools(null);
+        setSummary(null);
+      }
     } catch (error: any) {
-      toast.error(error.message || 'Failed to load unit pool data');
+      // Handle permission errors gracefully
+      if (error?.response?.status === 403) {
+        // Permission denied - this is expected for standard users
+        console.log('Role-based access restriction applied');
+      } else {
+        toast.error(error.message || 'Failed to load unit pool data');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -229,6 +256,39 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
     );
   }
 
+  // Standard User: Show restricted view (own consumption only)
+  if (isStandardUser) {
+    return (
+      <div className={`${compact ? 'p-4' : 'p-6'} bg-white rounded-lg border border-gray-200`}>
+        <div className="flex items-center gap-3 mb-4">
+          <User className="w-5 h-5 text-blue-600" />
+          <div>
+            <h3 className="font-medium text-gray-900">My Consumption</h3>
+            <p className="text-sm text-gray-500">View your personal unit usage</p>
+          </div>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-blue-900 font-medium">Access Restricted</p>
+              <p className="text-sm text-blue-700 mt-1">
+                Standard users can view their own consumption history but cannot access tenant-wide unit pool details.
+              </p>
+              <Link
+                href="/organization/usage-history"
+                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium mt-2"
+              >
+                View My Consumption History
+                <ExternalLink className="w-3 h-3" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!pools) {
     return (
       <div className={`${compact ? 'p-4' : 'p-6'} bg-white rounded-lg border border-gray-200`}>
@@ -295,10 +355,21 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
       {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Unit Pool</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {isBillingManager ? 'Billing Summary' : 'Unit Pool'}
+          </h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            Track and manage your organization's consumption units
+            {isBillingManager
+              ? 'Aggregated billing and usage overview'
+              : 'Track and manage your organization\'s consumption units'
+            }
           </p>
+          {isBillingManager && (
+            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+              <Info className="w-3 h-3" />
+              <span>Billing role: Some operational details are restricted</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {overallStatus !== 'normal' && (
@@ -308,16 +379,19 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
               {overallStatus === 'critical' ? 'Low Units' : 'Running Low'}
             </span>
           )}
-          <button
-            onClick={() => {
-              resetExportModal();
-              setShowExportModal(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
+          {/* Export button only for Tenant Admin & Recruiter */}
+          {(isTenantAdmin || isRecruiter) && (
+            <button
+              onClick={() => {
+                resetExportModal();
+                setShowExportModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+          )}
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
@@ -367,12 +441,18 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                     status === 'critical' ? 'text-red-600' :
                     status === 'warning' ? 'text-amber-600' : 'text-gray-900'
                   }`}>
-                    {pool.available_units.toLocaleString()}
+                    {isBillingManager && typeof pool.available_units === 'string' && pool.available_units.includes('RESTRICTED')
+                      ? '•••'
+                      : pool.available_units.toLocaleString()
+                    }
                   </span>
                   <span className="text-sm text-gray-500">
                     / {pool.total_allocated.toLocaleString()} allocated
                   </span>
                 </div>
+                {isBillingManager && typeof pool.available_units === 'string' && pool.available_units.includes('RESTRICTED') && (
+                  <p className="text-xs text-amber-600 mt-1">Available units hidden for billing role</p>
+                )}
 
                 <div className="mt-2 h-2 bg-white rounded-full overflow-hidden">
                   <div
@@ -398,7 +478,8 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                   </div>
                 )}
 
-                {pool.last_consumption_at && (
+                {/* Last consumption hidden for Billing Manager */}
+                {!isBillingManager && pool.last_consumption_at && (
                   <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
                     <Clock className="w-3 h-3" />
                     <span>Last used: {new Date(pool.last_consumption_at).toLocaleDateString()}</span>
@@ -406,7 +487,8 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                 )}
               </div>
 
-              {showHistory && (
+              {/* View History button hidden for Billing Manager */}
+              {showHistory && !isBillingManager && (
                 <button
                   onClick={() => loadHistory(type)}
                   className={`mt-4 w-full py-2 text-sm font-medium rounded-lg transition-colors ${colors.text} ${colors.bg} hover:opacity-80`}

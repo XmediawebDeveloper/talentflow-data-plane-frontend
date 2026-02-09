@@ -6,6 +6,7 @@ import JobsListing from '@/components/JobsListing';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
@@ -37,7 +38,8 @@ export default function JobOpeningsPage() {
   }>({ open: false, job: null });
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const dialog = useGlobalDialog();
+  const { user, isTenantAdmin } = useAuth();
 
   // Sync filter with URL parameter
   useEffect(() => {
@@ -288,7 +290,7 @@ export default function JobOpeningsPage() {
   };
 
   const handleDeleteJob = async (job: Job) => {
-    if (!confirm(`Are you sure you want to delete "${job.title}"?`)) return;
+    if (!await dialog.confirm({ title: 'Delete Job Opening', message: `Are you sure you want to delete "${job.title}"? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) return;
     try {
       await jdService.delete(job.id);
       setJobs(prev => prev.filter(j => j.id !== job.id));
@@ -311,17 +313,17 @@ export default function JobOpeningsPage() {
     <>
       <JobsListing
         jobs={jobs}
-        onCreateNew={handleCreateNew}
+        onCreateNew={user?.permissions?.canCreateJD || isTenantAdmin ? handleCreateNew : undefined}
         onViewJob={handleViewJob}
-        onAIMatch={handleAIMatch}
+        onAIMatch={user?.permissions?.canRunAiMatch || isTenantAdmin ? handleAIMatch : undefined}
         onUpdateJobStatus={handleUpdateJobStatus}
-        onEditJob={handleEditJob}
-        onPublishJob={handlePublishJob}
-        onDisableJob={handleDisableJob}
-        onRepublishJob={handleRepublishJob}
-        onArchiveJob={handleArchiveJob}
-        onUnarchiveJob={handleUnarchiveJob}
-        onDeleteJob={handleDeleteJob}
+        onEditJob={user?.permissions?.canUpdateJD || isTenantAdmin ? handleEditJob : undefined}
+        onPublishJob={user?.permissions?.canCreateJD || isTenantAdmin ? handlePublishJob : undefined}
+        onDisableJob={isTenantAdmin ? handleDisableJob : undefined}
+        onRepublishJob={user?.permissions?.canUpdateJD || isTenantAdmin ? handleRepublishJob : undefined}
+        onArchiveJob={isTenantAdmin ? handleArchiveJob : undefined}
+        onUnarchiveJob={user?.permissions?.canUpdateJD || isTenantAdmin ? handleUnarchiveJob : undefined}
+        onDeleteJob={user?.permissions?.canDeleteJD || isTenantAdmin ? handleDeleteJob : undefined}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
       />
