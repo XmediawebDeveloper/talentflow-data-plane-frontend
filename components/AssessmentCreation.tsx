@@ -130,33 +130,32 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         // Store JD-extracted languages
         setJdExtractedLanguages(codingLanguages);
 
-        // ✅ SMART CONFIG: Determine if coding should be locked by smart config
-        if (shouldEnableCoding && codingLanguages.length > 0) {
-          // Smart config enabled coding - LOCK IT (admin cannot disable)
-          setIsCodingLockedBySmartConfig(true);
-          setCodingLockReason('Coding round was auto-enabled by Smart Config based on JD requirements and cannot be disabled.');
-        } else {
-          // Smart config disabled coding - LOCK IT (admin cannot enable)
-          setIsCodingLockedBySmartConfig(true);
-          setCodingLockReason('Coding round is not required for this JD based on Smart Config analysis and cannot be enabled.');
-        }
+        // ✅ SIMPLIFIED LOGIC: Only enable coding if JD has supported languages
+        // No smart config lock - users can toggle manually
+        setIsCodingLockedBySmartConfig(false);
+        setCodingLockReason('');
 
-        // Set sections with correct percentages based on coding requirement
-        if (shouldEnableCoding && codingLanguages.length > 0) {
+        // Only auto-enable if JD has languages we support
+        const hasValidLanguages = codingLanguages.length > 0;
+
+        if (hasValidLanguages) {
+          // JD has supported languages - enable coding with those languages
           setSections([
             { name: 'HR', percentage: 20, topics: [], enabled: true },
             { name: 'Technical', percentage: 70, topics: [], enabled: true },
             { name: 'Coding', percentage: 10, topics: [], enabled: true },
           ]);
           setSelectedCodingLanguages(codingLanguages);
+          console.log('[TalentFlow] Coding auto-enabled with languages:', codingLanguages);
         } else {
-          // No coding required - HR 30%, Technical 70%
+          // No supported languages found - disable coding (user can manually enable via toggle)
           setSections([
             { name: 'HR', percentage: 30, topics: [], enabled: true },
             { name: 'Technical', percentage: 70, topics: [], enabled: true },
             { name: 'Coding', percentage: 0, topics: [], enabled: false },
           ]);
           setSelectedCodingLanguages([]);
+          console.log('[TalentFlow] No supported languages detected - coding disabled (can be manually enabled)');
         }
 
         setSelectedJob(job);
@@ -602,38 +601,27 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     // Store JD-extracted languages so we can restore them when re-enabling coding
     setJdExtractedLanguages(codingLanguages);
 
-    // Auto-configure sections based on coding requirement
-    if (shouldEnableCoding && codingLanguages.length > 0) {
-      // Coding is required AND we have languages - enable coding section with languages
+    // ✅ SIMPLIFIED LOGIC: Only enable coding if JD has supported languages
+    const hasValidLanguages = codingLanguages.length > 0;
+
+    if (hasValidLanguages) {
+      // JD has supported languages - enable coding with those languages
       setSections([
         { name: 'HR', percentage: 20, topics: [], enabled: true },
         { name: 'Technical', percentage: 70, topics: [], enabled: true },
         { name: 'Coding', percentage: 10, topics: [], enabled: true },
       ]);
       setSelectedCodingLanguages(codingLanguages);
-      console.log('[TalentFlow] Coding enabled with languages:', codingLanguages);
-    } else if (shouldEnableCoding && codingLanguages.length === 0) {
-      // Coding is required but NO languages detected - enable coding but show language popup
-      setSections([
-        { name: 'HR', percentage: 20, topics: [], enabled: true },
-        { name: 'Technical', percentage: 70, topics: [], enabled: true },
-        { name: 'Coding', percentage: 10, topics: [], enabled: true },
-      ]);
-      setSelectedCodingLanguages([]);
-      // Show language selection popup since JD requires coding but no languages were extracted
-      setTimeout(() => {
-        setCodingPopupMode('enable');
-        setShowCodingConfirm(true);
-      }, 100);
-      console.log('[TalentFlow] Coding enabled but no languages detected - showing popup');
+      console.log('[TalentFlow] Coding auto-enabled with languages:', codingLanguages);
     } else {
-      // JD does NOT require coding - coding section is hidden (not just disabled)
+      // No supported languages found - disable coding (user can manually enable via toggle)
       setSections([
         { name: 'HR', percentage: 30, topics: [], enabled: true },
         { name: 'Technical', percentage: 70, topics: [], enabled: true },
         { name: 'Coding', percentage: 0, topics: [], enabled: false },
       ]);
       setSelectedCodingLanguages([]);
+      console.log('[TalentFlow] No supported languages detected - coding disabled (can be manually enabled)');
     }
     setStep('configure', job.id);
   };
@@ -1613,29 +1601,25 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     </div>
                   </div>
 
-                  {/* Coding Round Toggle - Only shown when JD requires coding or languages detected */}
+                  {/* Coding Round Toggle - Always visible but locked if no languages */}
                   {(() => {
                     // Determine if coding section should be shown at all
                     const isCodingDisabledBySettings = topicSettings?.coding_enabled === false;
 
-                    // Check if JD requires coding or languages were extracted/detected
-                    const jdRequiresCoding = selectedJob?.coding_required === true;
+                    // Check if languages were detected from JD skills
                     const hasExtractedLanguages = jdExtractedLanguages.length > 0;
 
-                    // Only show coding section if JD requires it OR languages were detected
-                    // Hide completely if JD doesn't require coding (no toggle at all)
-                    const shouldShowCodingSection = (jdRequiresCoding || hasExtractedLanguages) && !isCodingDisabledBySettings;
-
-                    if (!shouldShowCodingSection) {
-                      // Don't render the coding section at all - it's not needed for this JD
+                    // Hide only if disabled in tenant settings
+                    if (isCodingDisabledBySettings) {
                       return null;
                     }
 
                     const codingEnabled = sections.find(s => s.name === 'Coding')?.enabled;
-                    const wasAutoDetected = !jdRequiresCoding && hasExtractedLanguages;
+                    // ✅ ALWAYS LOCKED: User cannot change what's auto-detected
+                    const isLocked = true;
 
                     return (
-                      <div className={`p-4 border rounded-lg transition-all ${codingEnabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                      <div className={`p-4 border rounded-lg transition-all ${isLocked ? 'border-gray-200 bg-gray-100 opacity-60' : codingEnabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <Code className="w-5 h-5 text-gray-600" />
@@ -1647,40 +1631,31 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                                 ) : (
                                   <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
                                 )}
-                                {wasAutoDetected && (
-                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-xs">Auto-Detected from Skills</span>
-                                )}
-                                {jdRequiresCoding && (
-                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Auto-Enabled</span>
-                                )}
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-xs">
+                                  {hasExtractedLanguages ? 'Auto-Enabled' : 'Not Available'}
+                                </span>
                               </div>
                               <p className="text-sm text-gray-500">
-                                {wasAutoDetected
-                                  ? `Programming languages detected from skills: ${selectedCodingLanguages.length > 0 ? selectedCodingLanguages.join(', ') : jdExtractedLanguages.join(', ')}`
-                                  : `Programming languages: ${selectedCodingLanguages.length > 0 ? selectedCodingLanguages.join(', ') : jdExtractedLanguages.join(', ')}`
+                                {hasExtractedLanguages
+                                  ? `Languages: ${selectedCodingLanguages.length > 0 ? selectedCodingLanguages.join(', ') : jdExtractedLanguages.join(', ')}`
+                                  : 'No programming languages detected in JD skills'
                                 }
                               </p>
                             </div>
                           </div>
-                          {/* ✅ SMART CONFIG: Toggle locked when smart config controls coding */}
+                          {/* Toggle for enabling/disabling coding round - Locked but shows color */}
                           <div className="flex items-center gap-2">
-                            {isCodingLockedBySmartConfig && (
-                              <div className="group relative">
-                                <Lock className="w-4 h-4 text-gray-400" />
-                                <div className="absolute right-0 top-full mt-2 w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                  {codingLockReason}
-                                </div>
-                              </div>
-                            )}
                             <button
-                              onClick={() => !isCodingLockedBySmartConfig && handleCodingToggle()}
-                              disabled={isCodingLockedBySmartConfig}
-                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                isCodingLockedBySmartConfig
-                                  ? 'bg-gray-200 cursor-not-allowed opacity-60'
-                                  : codingEnabled ? 'bg-gray-800' : 'bg-gray-300'
+                              onClick={undefined}
+                              disabled={true}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-not-allowed ${
+                                codingEnabled ? 'bg-gray-800' : 'bg-gray-300'
                               }`}
-                              title={isCodingLockedBySmartConfig ? codingLockReason : ''}
+                              title={
+                                hasExtractedLanguages
+                                  ? 'Coding round is auto-enabled based on JD languages (cannot be changed)'
+                                  : 'No programming languages detected in JD (cannot be enabled)'
+                              }
                             >
                               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                             </button>
@@ -1696,7 +1671,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   <div className="flex items-start gap-2">
                     <Sparkles className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-blue-700">
-                      <strong>Smart Configuration:</strong> Coding round is only shown when the JD requires coding or programming languages are detected in the skills. Languages are automatically extracted from the JD and preserved when toggling the coding round. Disabled rounds are hidden from the section distribution below.
+                      <strong>Smart Configuration:</strong> Coding round is automatically enabled/disabled based on programming languages detected in JD skills (Python, JavaScript, TypeScript, Java, C++, C#, Go, Rust, Ruby, PHP, Swift, Kotlin, Scala, R, SQL). This cannot be changed manually - what is auto-detected is final. Disabled rounds are hidden from the section distribution below.
                     </p>
                   </div>
                 </div>
