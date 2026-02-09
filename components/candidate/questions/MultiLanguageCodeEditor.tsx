@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
-import { CurrentQuestion, candidateService } from '@/lib/services/candidateService';
+import { CurrentQuestion, candidateService, CodeSubmissionResult, TestCaseResult } from '@/lib/services/candidateService';
 import {
   LANGUAGE_CONFIGS,
   AVAILABLE_LANGUAGES,
@@ -49,6 +49,7 @@ interface MultiLanguageCodeEditorProps {
   }) => void;
   allowLanguageChange?: boolean; // If false, language is locked to what's assigned
   isLocked?: boolean; // True if answer is submitted and cannot be edited
+  attemptId?: string; // For code submission
 }
 
 interface TestResult {
@@ -72,6 +73,7 @@ export function MultiLanguageCodeEditor({
   onAnswerChange,
   allowLanguageChange = true,
   isLocked = false,
+  attemptId,
 }: MultiLanguageCodeEditorProps) {
   const dialog = useGlobalDialog();
 
@@ -107,6 +109,11 @@ export function MultiLanguageCodeEditor({
   const [fontSize, setFontSize] = useState(14);
   const editorRef = useRef<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Code submission state
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionResult, setSubmissionResult] = useState<CodeSubmissionResult | null>(null);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
   // Get available languages for this question
   const availableLanguages = question.starter_code
@@ -271,6 +278,65 @@ export function MultiLanguageCodeEditor({
       });
     } finally {
       setIsRunning(false);
+    }
+  };
+
+  const handleSubmitCode = async () => {
+    if (!attemptId) {
+      dialog.showDialog({
+        title: 'Submission Error',
+        message: 'Unable to submit: Missing attempt ID',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (!code.trim()) {
+      dialog.showDialog({
+        title: 'Empty Code',
+        message: 'Please write some code before submitting',
+        type: 'error',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmissionResult(null);
+
+    try {
+      const result = await candidateService.submitCodeSolution(
+        attemptId,
+        question.question_id,
+        selectedLanguage,
+        code
+      );
+
+      setSubmissionResult(result);
+      setHasSubmitted(true);
+
+      if (result.success) {
+        const passRate = (result.tests_passed / result.tests_total * 100).toFixed(0);
+        dialog.showDialog({
+          title: 'Submission Complete',
+          message: `${result.tests_passed}/${result.tests_total} test cases passed (${passRate}%)`,
+          type: result.score_percentage >= 50 ? 'success' : 'error',
+        });
+      } else {
+        dialog.showDialog({
+          title: 'Submission Failed',
+          message: result.error || 'Failed to submit code',
+          type: 'error',
+        });
+      }
+    } catch (error) {
+      console.error('Code submission error:', error);
+      dialog.showDialog({
+        title: 'Submission Error',
+        message: error instanceof Error ? error.message : 'Failed to submit code',
+        type: 'error',
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -506,6 +572,93 @@ export function MultiLanguageCodeEditor({
                     ))}
                   </div>
                 )}
+
+                {/* Submission Results */}
+                {submissionResult && (
+                  <div
+                    className={`p-4 rounded-lg border-2 ${
+                      submissionResult.success && submissionResult.tests_passed === submissionResult.tests_total
+                        ? 'bg-green-50 border-green-300'
+                        : submissionResult.success
+                        ? 'bg-yellow-50 border-yellow-300'
+                        : 'bg-red-50 border-red-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      {submissionResult.success && submissionResult.tests_passed === submissionResult.tests_total ? (
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                      ) : submissionResult.success ? (
+                        <AlertCircle className="w-6 h-6 text-yellow-600" />
+                      ) : (
+                        <XCircle className="w-6 h-6 text-red-600" />
+                      )}
+                      <div className="flex-1">
+                        <p className={`font-semibold text-sm ${
+                          submissionResult.success && submissionResult.tests_passed === submissionResult.tests_total
+                            ? 'text-green-800'
+                            : submissionResult.success
+                            ? 'text-yellow-800'
+                            : 'text-red-800'
+                        }`}>
+                          {submissionResult.message}
+                        </p>
+                        <p className="text-xs text-gray-600 mt-0.5">
+                          Score: {submissionResult.score_percentage.toFixed(0)}%
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Individual Test Results */}
+                    <div className="space-y-2 mt-3">
+                      {submissionResult.test_results.map((test, idx) => (
+                        <div
+                          key={idx}
+                          className={`p-2 rounded text-xs ${
+                            test.passed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {test.passed ? (
+                              <CheckCircle className="w-3 h-3" />
+                            ) : (
+                              <XCircle className="w-3 h-3" />
+                            )}
+                            <span className="font-medium">
+                              Test {test.test_number}: {test.passed ? 'Passed' : 'Failed'}
+                              {test.is_hidden && ' (Hidden)'}
+                            </span>
+                          </div>
+
+                          {/* Show details for visible tests */}
+                          {!test.is_hidden && !test.passed && (
+                            <div className="mt-2 space-y-1 ml-5">
+                              {test.input && (
+                                <div>
+                                  <span className="text-gray-600">Input:</span> <code className="ml-1">{test.input}</code>
+                                </div>
+                              )}
+                              {test.expected_output && (
+                                <div>
+                                  <span className="text-gray-600">Expected:</span> <code className="ml-1">{test.expected_output}</code>
+                                </div>
+                              )}
+                              {test.actual_output && (
+                                <div>
+                                  <span className="text-gray-600">Your Output:</span> <code className="ml-1">{test.actual_output}</code>
+                                </div>
+                              )}
+                              {test.error && (
+                                <div className="text-red-700">
+                                  <span className="text-gray-600">Error:</span> {test.error}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-center py-6 text-gray-400 bg-white rounded-lg border border-dashed border-gray-300">
@@ -595,8 +748,8 @@ export function MultiLanguageCodeEditor({
             {/* Run Button */}
             <Button
               onClick={handleRunCode}
-              disabled={isRunning}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2"
+              disabled={isRunning || isSubmitting || hasSubmitted}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isRunning ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -604,6 +757,22 @@ export function MultiLanguageCodeEditor({
                 <Play className="w-4 h-4" />
               )}
               Run
+            </Button>
+
+            {/* Submit Button */}
+            <Button
+              onClick={handleSubmitCode}
+              disabled={isSubmitting || hasSubmitted || isLocked}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : hasSubmitted ? (
+                <CheckCircle className="w-4 h-4" />
+              ) : (
+                <Terminal className="w-4 h-4" />
+              )}
+              {hasSubmitted ? 'Submitted' : 'Submit Solution'}
             </Button>
           </div>
         </div>

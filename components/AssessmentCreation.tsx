@@ -645,6 +645,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   const addTopic = (sectionName: 'HR' | 'Technical' | 'Coding') => {
     if (!newTopic.value.trim()) return;
+
     setSections(sections.map(s =>
       s.name === sectionName
         ? { ...s, topics: [...s.topics, newTopic.value.trim()] }

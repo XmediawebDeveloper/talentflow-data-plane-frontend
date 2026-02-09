@@ -1272,6 +1272,7 @@ export function AssessmentInterface({
                   onAnswerChange={setAnswer}
                   allowLanguageChange={false}
                   isLocked={isCurrentAnswerLocked}
+                  attemptId={assessmentInfo.attempt_id || ''}
                 />
               )}
             </div>

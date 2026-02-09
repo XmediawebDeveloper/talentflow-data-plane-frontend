@@ -404,6 +404,26 @@ export interface CodeExecutionResult {
   exit_code: number;
 }
 
+export interface TestCaseResult {
+  test_number: number;
+  passed: boolean;
+  input?: string | null;  // Hidden for hidden tests
+  expected_output?: string | null;  // Hidden for hidden tests
+  actual_output?: string | null;
+  error?: string | null;
+  is_hidden: boolean;
+}
+
+export interface CodeSubmissionResult {
+  success: boolean;
+  tests_passed: number;
+  tests_total: number;
+  test_results: TestCaseResult[];
+  score_percentage: number;
+  message: string;
+  error?: string;
+}
+
 export interface PrepareAssessmentResponse {
   attempt_id: string;
   status: 'pending_system_check' | 'generating' | 'ready';
@@ -903,6 +923,45 @@ export const candidateService = {
         success: false,
         error: 'Code execution failed',
         exit_code: 1
+      };
+    }
+  },
+
+  /**
+   * Submit code solution for evaluation against all test cases
+   */
+  async submitCodeSolution(attemptId: string, questionId: string, language: string, code: string): Promise<CodeSubmissionResult> {
+    try {
+      const response = await candidateApi.post<CodeSubmissionResult>(
+        `/candidate/code/submit`,
+        {
+          attempt_id: attemptId,
+          question_id: questionId,
+          language,
+          code,
+        }
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          tests_passed: 0,
+          tests_total: 0,
+          test_results: [],
+          score_percentage: 0,
+          message: 'Submission failed',
+          error: error.response?.data?.detail || 'Code submission failed',
+        };
+      }
+      return {
+        success: false,
+        tests_passed: 0,
+        tests_total: 0,
+        test_results: [],
+        score_percentage: 0,
+        message: 'Submission failed',
+        error: 'Code submission failed',
       };
     }
   },
