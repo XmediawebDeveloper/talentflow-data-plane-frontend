@@ -681,7 +681,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
 
               {/* Footer */}
               <div className="bg-gray-50 px-8 py-6 text-center border-t border-gray-200">
-                <p className="text-gray-500 text-xs mb-2">© 2025 TalentFlow. All rights reserved.</p>
+                <p className="text-gray-500 text-xs mb-2">© 2026 TalentFlow. All rights reserved.</p>
                 <p className="text-gray-400 text-xs">If you did not expect this email, please ignore it.</p>
               </div>
             </div>

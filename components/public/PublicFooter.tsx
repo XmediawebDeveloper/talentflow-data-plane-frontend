@@ -143,7 +143,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
 
         <div className="border-t border-[#374151] pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-[#9CA3AF] text-[14px]">
-            &copy; 2025 BusinessIntegra. All rights reserved.
+            &copy; 2026 BusinessIntegra. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <a
