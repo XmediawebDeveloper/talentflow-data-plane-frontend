@@ -100,6 +100,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           if (/\b(kotlin|android)\b/i.test(skillsText)) detected.add('Kotlin');
           if (/\b(swift|ios)\b/i.test(skillsText)) detected.add('Swift');
           if (/\b(rust)\b/i.test(skillsText)) detected.add('Rust');
+          if (/\b(scala)\b/i.test(skillsText)) detected.add('Scala');
+          if (/\b(r\s*programming|r\s*language|rstudio|tidyverse|ggplot)\b/i.test(skillsText) ||
+              (/\br\b/i.test(skillsText) && /\b(statistics|data\s*science|analytics)\b/i.test(skillsText))) detected.add('R');
+          if (/\b(sql|pl\/?sql|t-sql|mysql|postgresql|oracle|database)\b/i.test(skillsText)) detected.add('SQL');
           return Array.from(detected);
         };
 
@@ -515,8 +519,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
 
     // ============ SQL ============
-    // Database programming (not just querying)
-    if (/\b(pl\/?sql|t-sql|stored\s*procedure|sql\s*server|oracle\s*(db|database|developer)|mysql|postgresql|database\s*(development|programming|developer))\b/i.test(skillsText)) {
+    // Database programming - SQL Developer, PL/SQL, T-SQL, or any database-related skills
+    if (/\b(sql|pl\/?sql|t-sql|stored\s*procedure|sql\s*server|sql\s*developer|oracle\s*(db|database|developer)?|mysql|postgresql|mariadb|database\s*(development|programming|developer|admin)?|nosql|mongodb|cassandra|redis)\b/i.test(skillsText)) {
       detectedLanguages.add('SQL');
     }
 

@@ -123,7 +123,12 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
               month: '2-digit',
               day: '2-digit',
               year: 'numeric'
-            })}
+            })} at {completedAt.toLocaleTimeString('en-US', {
+              timeZone: 'Asia/Kolkata',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            })} IST (UTC+5:30)
           </p>
         </div>
       </div>
