@@ -2,9 +2,16 @@
 
 import { X, Upload, FileText, CheckCircle2, AlertCircle, AlertTriangle, Loader2, XCircle, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { resumeService } from '@/lib/services/resumeService';
-import DuplicateResumeModal, { DuplicateFile, ExistingResume } from './DuplicateResumeModal';
+import type { DuplicateFile, ExistingResume } from './DuplicateResumeModal';
+
+// Dynamic import to avoid SSR issues with docx-preview dependency
+const DuplicateResumeModal = dynamic(() => import('./DuplicateResumeModal'), {
+  ssr: false,
+  loading: () => <div>Loading...</div>
+});
 
 interface FileWithStatus {
   file: File;

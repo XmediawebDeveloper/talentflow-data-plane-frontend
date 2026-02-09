@@ -2,8 +2,14 @@
 
 import { CheckCircle, RefreshCw, Copy, AlertCircle, X, Download, Eye, ArrowLeft, FileText, GitBranch, Clock, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-import DuplicateResolutionModal from './DuplicateResolutionModal';
+import dynamic from 'next/dynamic';
 import { toast } from '@/components/ui/enhanced-toast';
+
+// Dynamic import to avoid SSR issues with docx-preview dependency
+const DuplicateResolutionModal = dynamic(() => import('./DuplicateResolutionModal'), {
+  ssr: false,
+  loading: () => <div>Loading...</div>
+});
 
 interface UploadStatus {
   fileName: string;
