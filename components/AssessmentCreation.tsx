@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -129,6 +129,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         // Store JD-extracted languages
         setJdExtractedLanguages(codingLanguages);
+
+        // ✅ SMART CONFIG: Determine if coding should be locked by smart config
+        if (shouldEnableCoding && codingLanguages.length > 0) {
+          // Smart config enabled coding - LOCK IT (admin cannot disable)
+          setIsCodingLockedBySmartConfig(true);
+          setCodingLockReason('Coding round was auto-enabled by Smart Config based on JD requirements and cannot be disabled.');
+        } else {
+          // Smart config disabled coding - LOCK IT (admin cannot enable)
+          setIsCodingLockedBySmartConfig(true);
+          setCodingLockReason('Coding round is not required for this JD based on Smart Config analysis and cannot be enabled.');
+        }
 
         // Set sections with correct percentages based on coding requirement
         if (shouldEnableCoding && codingLanguages.length > 0) {
@@ -279,6 +290,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Store JD-extracted languages separately so we can restore them when re-enabling coding
   const [jdExtractedLanguages, setJdExtractedLanguages] = useState<string[]>([]);
+
+  // ✅ SMART CONFIG: Track if coding was enabled/disabled by smart config (locked state)
+  const [isCodingLockedBySmartConfig, setIsCodingLockedBySmartConfig] = useState<boolean>(false);
+  const [codingLockReason, setCodingLockReason] = useState<string>('');
+
+  // ✅ SMART CONFIG: Track percentage changes (needs republish)
+  const [hasPercentageChanged, setHasPercentageChanged] = useState<boolean>(false);
+  const [isPublishing, setIsPublishing] = useState<boolean>(false);
 
   // Collapsible sections state
   const [isAIGenerationExpanded, setIsAIGenerationExpanded] = useState(false);
@@ -623,6 +642,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     setSections(sections.map(s =>
       s.name === sectionName ? { ...s, percentage: Math.max(0, Math.min(100, value)) } : s
     ));
+    // ✅ SMART CONFIG: Mark that percentage has changed (needs republish)
+    setHasPercentageChanged(true);
   };
 
   const handleDurationChange = (value: number) => {
@@ -982,6 +1003,49 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     );
   };
 
+  // ✅ SMART CONFIG: Handle "Publish Changes" button click
+  const handlePublishChanges = async () => {
+    if (!selectedJob) {
+      toast.error('No job selected');
+      return;
+    }
+
+    setIsPublishing(true);
+
+    try {
+      // Calculate question count from percentages (total 30 questions)
+      const totalQuestions = 30;
+      const enabledSections = sections.filter(s => s.enabled);
+
+      const questionDistribution = enabledSections.map(section => ({
+        section: section.name.toLowerCase(),
+        count: Math.round((section.percentage / 100) * totalQuestions),
+        topics: section.topics,
+      }));
+
+      // Prepare regeneration request
+      const regenerateRequest = {
+        jd_id: selectedJob.id,
+        experience_level: selectedJob.experience || 'Mid-Level',
+        skills: selectedJob.skills || [],
+        question_distribution: questionDistribution,
+      };
+
+      console.log('[TalentFlow] Publishing changes - regenerating questions:', regenerateRequest);
+
+      // Call backend API to regenerate questions
+      await assessmentService.regenerateQuestions(regenerateRequest);
+
+      toast.success('Questions regenerated successfully based on new percentages!');
+      setHasPercentageChanged(false); // Reset the flag
+    } catch (error: any) {
+      console.error('Failed to regenerate questions:', error);
+      toast.error(error.message || 'Failed to regenerate questions. Please try again.');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
   const handleGenerateAssessment = async (saveAsDraft: boolean = false) => {
     setIsGenerating(true);
 
@@ -1055,14 +1119,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       setGeneratedAssessment(assessmentDefinition);
       setIsGenerating(false);
 
-      // Always show preview after saving/publishing - user navigates manually
-      setStep('preview');
-
       // Show success message
       if (!saveAsDraft) {
         toast.success('Assessment published successfully! You can now invite candidates.');
+        // Redirect to assessments dashboard immediately after publishing
+        onCreateAssessment(assessmentDefinition);
+        router.push('/recruitment/assessments');
       } else {
         toast.success('Assessment saved as draft. You can publish it later.');
+        // Show preview page for drafts
+        setStep('preview');
       }
     } catch (error) {
       console.error('Failed to create/update assessment:', error);
@@ -1597,12 +1663,29 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               </p>
                             </div>
                           </div>
-                          <button
-                            onClick={() => handleCodingToggle()}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${codingEnabled ? 'bg-gray-800' : 'bg-gray-300'}`}
-                          >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                          </button>
+                          {/* ✅ SMART CONFIG: Toggle locked when smart config controls coding */}
+                          <div className="flex items-center gap-2">
+                            {isCodingLockedBySmartConfig && (
+                              <div className="group relative">
+                                <Lock className="w-4 h-4 text-gray-400" />
+                                <div className="absolute right-0 top-full mt-2 w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                  {codingLockReason}
+                                </div>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => !isCodingLockedBySmartConfig && handleCodingToggle()}
+                              disabled={isCodingLockedBySmartConfig}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                isCodingLockedBySmartConfig
+                                  ? 'bg-gray-200 cursor-not-allowed opacity-60'
+                                  : codingEnabled ? 'bg-gray-800' : 'bg-gray-300'
+                              }`}
+                              title={isCodingLockedBySmartConfig ? codingLockReason : ''}
+                            >
+                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1837,6 +1920,42 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     </div>
                   ))}
                 </div>
+
+                {/* ✅ SMART CONFIG: Publish Changes button when percentage modified */}
+                {hasPercentageChanged && (
+                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-blue-900 mb-1">
+                            Percentage Configuration Changed
+                          </p>
+                          <p className="text-xs text-blue-700">
+                            You've modified the section percentages. Click "Publish Changes" to regenerate questions based on the new distribution. Questions will be adjusted to match the updated percentages and will be tailored to the candidate's experience level, skills, and specified topics.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handlePublishChanges}
+                        disabled={isPublishing}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isPublishing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Publishing...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            Publish Changes
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2334,8 +2453,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             </div>
             <button
               onClick={() => {
-                // Just notify parent and go back - assessment is already saved
+                // Notify parent and navigate to assessments dashboard
                 onCreateAssessment(generatedAssessment);
+                router.push('/recruitment/assessments');
               }}
               className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
             >

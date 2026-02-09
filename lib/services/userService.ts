@@ -4,16 +4,71 @@
 
 import api, { handleApiError } from './api';
 
+// ✅ GRANULAR PERMISSIONS: Removed all "manage" permissions, using only granular CRUD
 export interface UserPermissions {
+  // JD Permissions (Granular CRUD)
+  can_view_jd: boolean;
   can_create_jd: boolean;
-  can_manage_jd: boolean;
-  can_upload_resumes: boolean;
+  can_update_jd: boolean;
+  can_delete_jd: boolean;
+
+  // Resume Permissions (Granular CRUD)
   can_view_resumes: boolean;
-  can_access_internal_db: boolean;
+  can_create_resumes: boolean;
+  can_update_resumes: boolean;
+  can_delete_resumes: boolean;
+  can_upload_resumes: boolean; // Alias for can_create_resumes
+
+  // Assessment Permissions (Granular CRUD)
+  can_view_assessments: boolean;
   can_create_assessments: boolean;
+  can_update_assessments: boolean;
+  can_delete_assessments: boolean;
+
+  // Internal DB Permissions (Granular CRUD)
+  can_view_internal_db: boolean;
+  can_create_internal_db: boolean;
+  can_update_internal_db: boolean;
+  can_delete_internal_db: boolean;
+  can_access_internal_db: boolean; // Alias for can_view_internal_db
+
+  // Analytics Permissions (Granular)
   can_view_analytics: boolean;
-  can_manage_settings: boolean;
-  can_manage_users: boolean;
+  can_export_analytics: boolean;
+
+  // Settings Permissions (Granular CRUD)
+  can_view_settings: boolean;
+  can_update_settings: boolean;
+
+  // User Management Permissions (Granular CRUD)
+  can_view_users: boolean;
+  can_create_users: boolean;
+  can_update_users: boolean;
+  can_delete_users: boolean;
+
+  // Role Management Permissions (Granular CRUD)
+  can_view_roles: boolean;
+  can_create_roles: boolean;
+  can_update_roles: boolean;
+  can_delete_roles: boolean;
+
+  // Billing Permissions (Granular)
+  can_view_billing: boolean;
+  can_update_billing: boolean;
+  can_view_invoices: boolean;
+  can_view_usage: boolean;
+
+  // Feature Permissions
+  can_run_scoring: boolean;
+  can_run_ai_interviews: boolean;
+  can_run_ai_match: boolean;
+  can_bulk_operations: boolean;
+  can_export: boolean;
+  can_api_access: boolean;
+
+  // Dashboard & Support (Default for all)
+  can_view_dashboard?: boolean;
+  can_view_support?: boolean;
 }
 
 export interface ApiUser {

@@ -12,6 +12,8 @@ import VersionHistoryModal from './VersionHistoryModal';
 import ResumeVersionSelector from './ResumeVersionSelector';
 import { toast } from 'sonner';
 import { resumeService } from '@/lib/services/resumeService';
+// ✅ PERMISSION FIX: Import permission hook for CRUD checks
+import { useModulePermissions } from '@/lib/hooks/usePermissions';
 
 // Drag item type for resumes
 const RESUME_DRAG_TYPE = 'RESUME';
@@ -124,6 +126,8 @@ export default function ResumeTable({
   onArchive,
 }: ResumeTableProps) {
   const router = useRouter();
+  // ✅ PERMISSION FIX: Get Resume CRUD permissions
+  const resumePerms = useModulePermissions('resume');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [versionHistoryResume, setVersionHistoryResume] = useState<Resume | null>(null);
   const [versionSelectorResume, setVersionSelectorResume] = useState<Resume | null>(null);
@@ -600,18 +604,21 @@ export default function ResumeTable({
                                 Archive Resume
                               </button>
                               <div className="border-t border-gray-100 my-1"></div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedResumeForAction(resume);
-                                  setShowDeleteModal(true);
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Delete Resume
-                              </button>
+                              {/* ✅ PERMISSION FIX: Only show Delete button if user has canDeleteResumes permission */}
+                              {resumePerms.canDelete && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedResumeForAction(resume);
+                                    setShowDeleteModal(true);
+                                    setActiveMenu(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete Resume
+                                </button>
+                              )}
                             </div>
                           </>
                         )}

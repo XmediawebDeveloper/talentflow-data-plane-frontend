@@ -32,15 +32,77 @@ import {
   UserX,
   Loader2,
   ExternalLink,
-  MoreHorizontal
+  MoreHorizontal,
+  Brain,
+  Plus,
+  Lock,
+  BarChart
 } from 'lucide-react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
+import { User, Tenant } from '@/lib/types/tenant';
 
 type TabType = 'overview' | 'scored-resumes' | 'assessment-results';
 
-export default function JobDetailsPage() {
+interface JobDetailsPageProps {
+  user?: User;
+  tenant?: Tenant;
+}
+
+// ✅ Reusable Quick Action Button Component
+interface QuickActionButtonProps {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  disabledTooltip?: string;
+  variant?: 'primary' | 'secondary' | 'success';
+}
+
+function QuickActionButton({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+  disabledTooltip,
+  variant = 'secondary'
+}: QuickActionButtonProps) {
+  const variantStyles = {
+    primary: 'bg-blue-600 text-white hover:bg-blue-700',
+    secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+    success: 'bg-green-600 text-white hover:bg-green-700',
+  };
+
+  return (
+    <div className="relative group">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={`
+          w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors
+          ${disabled
+            ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+            : variantStyles[variant]
+          }
+        `}
+      >
+        {icon}
+        <span className="flex-1 text-left">{label}</span>
+        {disabled && <Lock className="w-3 h-3" />}
+      </button>
+
+      {/* Tooltip on hover when disabled */}
+      {disabled && disabledTooltip && (
+        <div className="absolute left-0 top-full mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+          {disabledTooltip}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function JobDetailsPage({ user, tenant }: JobDetailsPageProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const jobId = searchParams.get('id');
@@ -48,6 +110,37 @@ export default function JobDetailsPage() {
   const [job, setJob] = useState<JDResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+
+  // ✅ Permission checking function
+  const hasPermission = (permission: string): boolean => {
+    if (!user) return false;
+    if (user.role === 'tenant_admin') return true; // Admin has all permissions
+    if (!user.permissions) return false;
+    return user.permissions[permission as keyof typeof user.permissions] === true;
+  };
+
+  // ✅ Feature flag checking (tenant-level)
+  const isFeatureEnabled = (feature: string): boolean => {
+    if (!tenant?.features) return true; // If no feature flags, assume enabled
+    return tenant.features[feature as keyof typeof tenant.features] === true;
+  };
+
+  // Get permissions for Quick Actions (using camelCase as per tenant.ts)
+  const permissions = {
+    canCreateAssessments: hasPermission('canCreateAssessments'),
+    canRunAiMatch: hasPermission('canRunAiMatch'),
+    canReadJD: hasPermission('canReadJD'),
+    canViewAssessments: hasPermission('canViewAssessments'),
+    canUploadResumes: hasPermission('canUploadResumes'),
+    canRunScoring: hasPermission('canRunScoring'),
+  };
+
+  // Get feature flags for Quick Actions
+  const features = {
+    assessment: isFeatureEnabled('assessment'),
+    ai_talent_match: isFeatureEnabled('ai_talent_match'),
+    resume_scoring: isFeatureEnabled('resume_scoring'),
+  };
 
   useEffect(() => {
     if (jobId) {
@@ -476,47 +569,92 @@ ${job.certifications?.join(', ') || 'N/A'}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Quick Actions</h3>
               <div className="space-y-2">
+                {/* Status Change Actions */}
                 {job.status === 'draft' && (
-                  <button
+                  <QuickActionButton
+                    icon={<CheckCircle className="w-4 h-4" />}
+                    label="Publish Job"
                     onClick={() => handleStatusChange('published')}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Publish Job
-                  </button>
+                    variant="success"
+                  />
                 )}
                 {job.status === 'published' && (
-                  <button
+                  <QuickActionButton
+                    icon={<Ban className="w-4 h-4" />}
+                    label="Disable Job"
                     onClick={() => handleStatusChange('disabled')}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    <Ban className="w-4 h-4" />
-                    Disable Job
-                  </button>
+                  />
                 )}
                 {job.status === 'disabled' && (
-                  <button
+                  <QuickActionButton
+                    icon={<RefreshCw className="w-4 h-4" />}
+                    label="Republish Job"
                     onClick={() => handleStatusChange('published')}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-white bg-gray-800 rounded-lg hover:bg-gray-900 transition-colors"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    Republish Job
-                  </button>
+                    variant="primary"
+                  />
                 )}
-                <button
-                  onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <Target className="w-4 h-4" />
-                  Score Resumes
-                </button>
-                <button
-                  onClick={() => router.push(`/recruitment/ai-talent-match?jd_id=${job.id}`)}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <Users className="w-4 h-4" />
-                  Find Talent
-                </button>
+
+                {/* 1. Invite for Assessment - Permission + Feature flag */}
+                {permissions.canCreateAssessments && (
+                  <QuickActionButton
+                    icon={<Users className="w-4 h-4" />}
+                    label="Invite for Assessment"
+                    onClick={() => router.push(`/recruitment/assessments/create?jd_id=${job.id}`)}
+                    disabled={!features.assessment}
+                    disabledTooltip="Assessments module is not enabled for your organization"
+                  />
+                )}
+
+                {/* 2. AI Talent Match - Permission + Feature flag */}
+                {permissions.canRunAiMatch && (
+                  <QuickActionButton
+                    icon={<Brain className="w-4 h-4" />}
+                    label="AI Talent Match"
+                    onClick={() => router.push(`/recruitment/ai-talent-match?jd_id=${job.id}`)}
+                    disabled={!features.ai_talent_match}
+                    disabledTooltip="AI Match feature is not enabled for your organization"
+                  />
+                )}
+
+                {/* 3. View JD History - Permission (always available if user can view JD) */}
+                {permissions.canReadJD && (
+                  <QuickActionButton
+                    icon={<FileText className="w-4 h-4" />}
+                    label="View JD History"
+                    onClick={() => router.push(`/recruitment/job-openings/${job.id}/history`)}
+                  />
+                )}
+
+                {/* 4. Assessment Status - Permission + Feature flag */}
+                {permissions.canViewAssessments && (
+                  <QuickActionButton
+                    icon={<BarChart className="w-4 h-4" />}
+                    label="Assessment Status"
+                    onClick={() => router.push(`/recruitment/assessments?jd_id=${job.id}`)}
+                    disabled={!features.assessment}
+                    disabledTooltip="Assessments module is not enabled"
+                  />
+                )}
+
+                {/* 5. Add Applicants - Permission (always available) */}
+                {permissions.canUploadResumes && (
+                  <QuickActionButton
+                    icon={<Plus className="w-4 h-4" />}
+                    label="Add Applicants"
+                    onClick={() => router.push(`/recruitment/my-resumes?jd_id=${job.id}`)}
+                  />
+                )}
+
+                {/* Score Resumes - Permission + Feature flag */}
+                {permissions.canRunScoring && (
+                  <QuickActionButton
+                    icon={<Target className="w-4 h-4" />}
+                    label="Score Resumes"
+                    onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
+                    disabled={!features.resume_scoring}
+                    disabledTooltip="Resume scoring is not enabled"
+                  />
+                )}
               </div>
             </div>
 

@@ -1,9 +1,10 @@
 'use client'
 
-import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
+import type { User, Tenant } from '@/lib/types/tenant';
 import ReactMarkdown from 'react-markdown';
 import { jdService, JDVersion, JDUsageStatus } from '@/lib/services/jdService';
 import ResumeUploadModal from './ResumeUploadModal';
@@ -59,6 +60,53 @@ const formatISTDateTime = (dateString: string): string => {
   return `${day} ${month} ${year}, ${hour12.toString().padStart(2, '0')}:${minutes} ${ampm}`;
 };
 
+// ✅ PERMISSIONS: Reusable Quick Action Button Component
+interface QuickActionButtonProps {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  disabledTooltip?: string;
+  className?: string;
+}
+
+function QuickActionButton({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+  disabledTooltip,
+  className = ''
+}: QuickActionButtonProps) {
+  return (
+    <div className="relative group">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={`
+          w-full px-4 py-2.5 text-sm rounded-md transition-all shadow-sm text-left flex items-center gap-2
+          ${disabled
+            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            : className || 'bg-gray-700 text-white hover:bg-gray-800'
+          }
+        `}
+        title={disabled ? disabledTooltip : undefined}
+      >
+        {icon}
+        <span className="flex-1">{label}</span>
+        {disabled && <Lock className="w-3 h-3" />}
+      </button>
+
+      {/* Tooltip on hover when disabled */}
+      {disabled && disabledTooltip && (
+        <div className="absolute left-0 top-full mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+          {disabledTooltip}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Extended Job interface with additional fields
 interface ExtendedJob extends Job {
   niceToHaveSkills?: string[];
@@ -90,9 +138,11 @@ interface JobDetailViewProps {
   onViewAssessmentResult?: (assessmentResult: any, jobTitle: string) => void; // Navigate to assessment result detail
   onRepublish?: (job: Job) => void; // JD13: Republish job after editing
   isTenantAdmin?: boolean; // JD15: Whether user is Owner (for disable/enable buttons)
+  user?: User; // ✅ PERMISSIONS: User object for permission checking
+  tenant?: Tenant; // ✅ PERMISSIONS: Tenant object for feature flag checking
 }
 
-export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant }: JobDetailViewProps) {
   const router = useRouter();
 
   const handleEdit = () => {
@@ -138,6 +188,36 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // Assessment results state
   const [assessmentResults, setAssessmentResults] = useState<any[]>([]);
   const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
+
+  // ✅ PERMISSIONS: Permission checking function
+  const hasPermission = (permission: string): boolean => {
+    if (!user) return false;
+    if (user.role === 'tenant_admin') return true; // Admin has all permissions
+    if (!user.permissions) return false;
+    return user.permissions[permission as keyof typeof user.permissions] === true;
+  };
+
+  // ✅ PERMISSIONS: Feature flag checking (tenant-level)
+  const isFeatureEnabled = (feature: string): boolean => {
+    if (!tenant?.features) return true; // If no feature flags, assume enabled
+    return tenant.features[feature as keyof typeof tenant.features] === true;
+  };
+
+  // ✅ PERMISSIONS: Get permissions for Quick Actions (using camelCase)
+  const permissions = {
+    canCreateAssessments: hasPermission('canCreateAssessments'),
+    canRunAiMatch: hasPermission('canRunAiMatch'),
+    canReadJD: hasPermission('canReadJD'),
+    canViewAssessments: hasPermission('canViewAssessments'),
+    canUploadResumes: hasPermission('canUploadResumes'),
+  };
+
+  // ✅ PERMISSIONS: Get feature flags for Quick Actions
+  const features = {
+    assessment: isFeatureEnabled('assessment'),
+    ai_talent_match: isFeatureEnabled('ai_talent_match'),
+    resume_upload: isFeatureEnabled('resume_upload'),
+  };
 
   // Track Invites modal state
   const [showTrackInvitesModal, setShowTrackInvitesModal] = useState(false);
@@ -1124,96 +1204,70 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h3 className="text-gray-900 mb-4">Quick Actions</h3>
             <div className="space-y-2">
-              {/* Invite for Assessment - Disabled for Disabled JDs */}
-              {job.status !== 'Disabled' ? (
-                <button
+              {/* 1. Invite for Assessment - Permission + Feature flag + JD Status */}
+              {permissions.canCreateAssessments && (
+                <QuickActionButton
+                  icon={<Mail className="w-4 h-4" />}
+                  label="Invite for Assessment"
                   onClick={() => setShowInviteToAssessmentModal(true)}
-                  className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors shadow-sm text-left flex items-center gap-2"
-                >
-                  <Mail className="w-4 h-4" />
-                  <span>Invite for Assessment</span>
-                </button>
-              ) : (
-                <button
-                  disabled
-                  className="w-full px-4 py-2.5 text-sm bg-gray-300 text-gray-500 rounded-md cursor-not-allowed shadow-sm text-left flex items-center gap-2"
-                  title="Assessments are not available for disabled JDs"
-                >
-                  <Mail className="w-4 h-4" />
-                  <span>Invite for Assessment</span>
-                </button>
+                  disabled={!features.assessment || job.status === 'Disabled'}
+                  disabledTooltip={
+                    !features.assessment
+                      ? 'Assessments module is not enabled for your organization'
+                      : 'Assessments are not available for disabled JDs'
+                  }
+                />
               )}
 
-              {/* AI Talent Match - Disabled for Disabled JDs */}
-              {job.status !== 'Disabled' ? (
-                <button
+              {/* 2. AI Talent Match - Permission + Feature flag + JD Status */}
+              {permissions.canRunAiMatch && (
+                <QuickActionButton
+                  icon={<Brain className="w-4 h-4" />}
+                  label="AI Talent Match"
                   onClick={() => {
                     if (onNavigateToAITalentMatch) {
                       onNavigateToAITalentMatch(job.id);
                     }
                   }}
-                  className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white hover:bg-gray-800 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>AI Talent Match</span>
-                </button>
-              ) : (
-                <button
-                  disabled
-                  className="w-full px-4 py-2.5 text-sm bg-gray-300 text-gray-500 rounded-md cursor-not-allowed shadow-sm text-left flex items-center gap-2"
-                  title="AI Talent Match is not available for disabled JDs"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>AI Talent Match</span>
-                </button>
+                  disabled={!features.ai_talent_match || job.status === 'Disabled'}
+                  disabledTooltip={
+                    !features.ai_talent_match
+                      ? 'AI Match feature is not enabled for your organization'
+                      : 'AI Talent Match is not available for disabled JDs'
+                  }
+                />
               )}
 
-              {/* View JD History */}
-              <button
-                onClick={() => setShowJDHistory(true)}
-                className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white hover:bg-gray-800 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
-              >
-                <History className="w-4 h-4" />
-                <span>View JD History</span>
-              </button>
+              {/* 3. View JD History - Permission (always available if user can view JD) */}
+              {permissions.canReadJD && (
+                <QuickActionButton
+                  icon={<History className="w-4 h-4" />}
+                  label="View JD History"
+                  onClick={() => setShowJDHistory(true)}
+                />
+              )}
 
-              {/* Assessment Status - Opens Track Invites Modal */}
-              <button
-                onClick={() => setShowTrackInvitesModal(true)}
-                className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white hover:bg-gray-800 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
-              >
-                <Target className="w-4 h-4" />
-                <span>Assessment Status</span>
-              </button>
+              {/* 4. Assessment Status - Permission + Feature flag */}
+              {permissions.canViewAssessments && (
+                <QuickActionButton
+                  icon={<BarChart className="w-4 h-4" />}
+                  label="Assessment Status"
+                  onClick={() => setShowTrackInvitesModal(true)}
+                  disabled={!features.assessment}
+                  disabledTooltip="Assessments module is not enabled"
+                />
+              )}
 
-              {/* Add Applicants */}
-              {job.status !== 'Disabled' ? (
-                <button
+              {/* 5. Add Applicants - Permission + Feature flag + JD Status */}
+              {permissions.canUploadResumes && features.resume_upload && (
+                <QuickActionButton
+                  icon={<UserPlus className="w-4 h-4" />}
+                  label="Add Applicants"
                   onClick={() => setShowSelectSourceModal(true)}
-                  className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white hover:bg-gray-800 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>Add Applicants</span>
-                </button>
-              ) : (
-                <button
-                  disabled
-                  className="w-full px-4 py-2.5 text-sm bg-gray-300 text-gray-500 rounded-md cursor-not-allowed shadow-sm text-left flex items-center gap-2"
-                  title="Cannot add applicants to disabled JDs"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>Add Applicants</span>
-                </button>
+                  disabled={job.status === 'Disabled'}
+                  disabledTooltip="Cannot add applicants to disabled JDs"
+                />
               )}
-
-              {/* {job.status === 'Published' && (
-                <button
-                  onClick={() => handleStatusChange('Closed')}
-                  className="w-full px-4 py-2.5 text-sm border border-red-300 text-red-700 rounded-md hover:bg-red-50 transition-colors text-left"
-                >
-                  Close Job Opening
-                </button>
-              )} */}
             </div>
           </div>
 
@@ -1483,7 +1537,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       </span>
                       <div className="text-sm text-gray-600">
                         <span className="flex items-center gap-1">
-                          <User className="w-4 h-4" />
+                          <UserIcon className="w-4 h-4" />
                           {selectedHistoryVersion.performedBy}
                         </span>
                       </div>

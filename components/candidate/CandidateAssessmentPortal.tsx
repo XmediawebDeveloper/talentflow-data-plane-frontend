@@ -213,6 +213,13 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       console.log('[DEBUG] Ignoring setStep - component unmounted');
       return;
     }
+
+    // ✅ SAFARI FIX: Only update if step actually changed to prevent history.replaceState() spam
+    if (stepRef.current === newStep) {
+      console.log('[DEBUG] Ignoring setStep - step unchanged:', newStep);
+      return;
+    }
+
     console.log('[DEBUG] Setting step:', stepRef.current, '->', newStep);
     stepRef.current = newStep;
     setStep(newStep);

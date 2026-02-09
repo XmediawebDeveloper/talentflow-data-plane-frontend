@@ -179,7 +179,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
         { id: 'user-management', label: 'Users', icon: Users, adminOnly: true },
         { id: 'role-management', label: 'Roles & Permissions', icon: Shield, adminOnly: true },
         { id: 'team-management', label: 'Teams', icon: Users, adminOnly: true },
-        { id: 'team-chat', label: 'Team Chat', icon: MessageCircle, adminOnly: true },
+        { id: 'team-chat', label: 'Chat', icon: MessageCircle },  // ✅ Available to ALL users (bypass permission check)
       ]
     },
 
