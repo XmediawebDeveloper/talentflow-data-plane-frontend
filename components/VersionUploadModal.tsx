@@ -1,7 +1,15 @@
+'use client';
+
 import { X, Upload, File, Trash2, GitBranch, AlertCircle } from 'lucide-react';
 import { useState, useRef } from 'react';
-import DuplicateResolutionModal from './DuplicateResolutionModal';
+import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
+
+// Dynamic import to avoid SSR issues with docx-preview dependency
+const DuplicateResolutionModal = dynamic(() => import('./DuplicateResolutionModal'), {
+  ssr: false,
+  loading: () => <div>Loading...</div>
+});
 
 // File validation constants
 const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
