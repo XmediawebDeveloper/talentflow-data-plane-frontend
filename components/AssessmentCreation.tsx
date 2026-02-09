@@ -1119,12 +1119,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       setGeneratedAssessment(assessmentDefinition);
       setIsGenerating(false);
 
-      // Show success message
+      // Show success message and redirect
       if (!saveAsDraft) {
         toast.success('Assessment published successfully! You can now invite candidates.');
-        // Redirect to assessments dashboard immediately after publishing
+        // Let parent handle navigation to avoid double router.push()
         onCreateAssessment(assessmentDefinition);
-        router.push('/recruitment/assessments');
       } else {
         toast.success('Assessment saved as draft. You can publish it later.');
         // Show preview page for drafts
@@ -2453,9 +2452,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             </div>
             <button
               onClick={() => {
-                // Notify parent and navigate to assessments dashboard
+                // Let parent handle navigation to avoid double router.push()
                 onCreateAssessment(generatedAssessment);
-                router.push('/recruitment/assessments');
               }}
               className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
             >
