@@ -646,7 +646,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     {job.job_id}
                   </span>
                 )}
-                <h1 className="text-gray-900">{job.title}</h1>
+                <h1 className="font-bold text-gray-900">{job.title}</h1>
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm border ${getStatusBadgeClass(getDisplayStatus(job.status, job.currentVersion))}`}>
                   {getDisplayStatus(job.status, job.currentVersion)}
                 </span>

@@ -363,6 +363,7 @@ export default function MyResumesPage() {
   const [isUploadHistoryModalOpen, setIsUploadHistoryModalOpen] = useState(false);
   const [isUploadHistoryMinimized, setIsUploadHistoryMinimized] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
+  const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | null>(null);
 
   // Apply to Job modal state
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
@@ -561,9 +562,10 @@ export default function MyResumesPage() {
       }
     }
 
-    // Close the modal
+    // Close the modal and reset filter
     setIsUploadHistoryModalOpen(false);
     setIsUploadHistoryMinimized(false);
+    setUploadHistoryFilter(null);
   };
 
   // Ref to store active polling intervals for cleanup
@@ -2924,10 +2926,15 @@ export default function MyResumesPage() {
 
                   return (
                     <>
-                      {/* Status Summary Cards - 6 Column Grid */}
+                      {/* Status Summary Cards - 6 Column Grid (Clickable Filters) */}
                       <div className="grid grid-cols-3 gap-3 mb-6">
                         {/* Completed */}
-                        <div className="bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200 rounded-xl p-4">
+                        <div
+                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'completed' ? null : 'completed')}
+                          className={`bg-gradient-to-br from-green-50 to-green-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                            uploadHistoryFilter === 'completed' ? 'border-green-500 ring-2 ring-green-300 shadow-md' : 'border-green-200'
+                          }`}
+                        >
                           <div className="flex items-center gap-3 mb-2">
                             <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
                               <CheckCircle className="w-4 h-4 text-white" />
@@ -2938,7 +2945,12 @@ export default function MyResumesPage() {
                         </div>
 
                         {/* Duplicates */}
-                        <div className="bg-gradient-to-br from-yellow-50 to-yellow-100/50 border border-yellow-200 rounded-xl p-4">
+                        <div
+                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'duplicated' ? null : 'duplicated')}
+                          className={`bg-gradient-to-br from-yellow-50 to-yellow-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                            uploadHistoryFilter === 'duplicated' ? 'border-yellow-500 ring-2 ring-yellow-300 shadow-md' : 'border-yellow-200'
+                          }`}
+                        >
                           <div className="flex items-center gap-3 mb-2">
                             <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
                               <Copy className="w-4 h-4 text-white" />
@@ -2949,7 +2961,12 @@ export default function MyResumesPage() {
                         </div>
 
                         {/* Versioned */}
-                        <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200 rounded-xl p-4">
+                        <div
+                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'versioned' ? null : 'versioned')}
+                          className={`bg-gradient-to-br from-purple-50 to-purple-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                            uploadHistoryFilter === 'versioned' ? 'border-purple-500 ring-2 ring-purple-300 shadow-md' : 'border-purple-200'
+                          }`}
+                        >
                           <div className="flex items-center gap-3 mb-2">
                             <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
                               <GitBranch className="w-4 h-4 text-white" />
@@ -2960,7 +2977,12 @@ export default function MyResumesPage() {
                         </div>
 
                         {/* Failed */}
-                        <div className="bg-gradient-to-br from-red-50 to-red-100/50 border border-red-200 rounded-xl p-4">
+                        <div
+                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'error' ? null : 'error')}
+                          className={`bg-gradient-to-br from-red-50 to-red-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                            uploadHistoryFilter === 'error' ? 'border-red-500 ring-2 ring-red-300 shadow-md' : 'border-red-200'
+                          }`}
+                        >
                           <div className="flex items-center gap-3 mb-2">
                             <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
                               <AlertCircle className="w-4 h-4 text-white" />
@@ -2971,7 +2993,12 @@ export default function MyResumesPage() {
                         </div>
 
                         {/* Pending */}
-                        <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-300 rounded-xl p-4">
+                        <div
+                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'pending' ? null : 'pending')}
+                          className={`bg-gradient-to-br from-gray-50 to-gray-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                            uploadHistoryFilter === 'pending' ? 'border-gray-600 ring-2 ring-gray-400 shadow-md' : 'border-gray-300'
+                          }`}
+                        >
                           <div className="flex items-center gap-3 mb-2">
                             <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center">
                               <Clock className="w-4 h-4 text-white" />
@@ -2992,6 +3019,65 @@ export default function MyResumesPage() {
                           <div className="text-2xl font-bold text-blue-700">{successRate}%</div>
                         </div>
                       </div>
+
+                      {/* Active Filter Indicator */}
+                      {uploadHistoryFilter && (
+                        <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                          <span className="text-xs text-gray-500">Filtering by:</span>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            uploadHistoryFilter === 'completed' ? 'bg-green-100 text-green-700' :
+                            uploadHistoryFilter === 'duplicated' ? 'bg-yellow-100 text-yellow-700' :
+                            uploadHistoryFilter === 'versioned' ? 'bg-purple-100 text-purple-700' :
+                            uploadHistoryFilter === 'error' ? 'bg-red-100 text-red-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {uploadHistoryFilter === 'completed' ? 'Completed' :
+                             uploadHistoryFilter === 'duplicated' ? 'Duplicates' :
+                             uploadHistoryFilter === 'versioned' ? 'Versioned' :
+                             uploadHistoryFilter === 'error' ? 'Failed' :
+                             'Pending'}
+                          </span>
+                          <button
+                            onClick={() => setUploadHistoryFilter(null)}
+                            className="ml-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Overall ETA Banner */}
+                      {(() => {
+                        const activeBatches = myResumesHistory.filter(r => r.pending > 0 && r.date);
+                        if (activeBatches.length === 0) return null;
+                        const totalPending = activeBatches.reduce((sum: number, r: any) => sum + r.pending, 0);
+                        const totalProcessed = activeBatches.reduce((sum: number, r: any) => sum + r.completed + r.errors + r.duplicated + (r.versioned || 0), 0);
+                        if (totalProcessed <= 0) {
+                          return (
+                            <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl animate-pulse">
+                              <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" />
+                              <span className="text-sm text-blue-700">Processing {totalPending} resume{totalPending !== 1 ? 's' : ''}... Estimating time remaining</span>
+                            </div>
+                          );
+                        }
+                        // Use the earliest active batch start time for overall ETA
+                        const earliestStart = Math.min(...activeBatches.map((r: any) => new Date(r.date).getTime()));
+                        const elapsed = Date.now() - earliestStart;
+                        const avgTimePerFile = elapsed / totalProcessed;
+                        const remainingMs = totalPending * avgTimePerFile;
+                        const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
+                        const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
+                        const etaText = lowMins === highMins
+                          ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
+                          : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
+                        return (
+                          <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+                            <Clock className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                            <span className="text-sm font-medium text-blue-700">{etaText}</span>
+                            <span className="text-xs text-blue-400 ml-auto">{totalPending} resume{totalPending !== 1 ? 's' : ''} left across {activeBatches.length} batch{activeBatches.length !== 1 ? 'es' : ''}</span>
+                          </div>
+                        );
+                      })()}
 
                       {/* Upload History List */}
                       <div className="flex items-center justify-between mb-4">
@@ -3113,11 +3199,51 @@ export default function MyResumesPage() {
                                     </div>
                                   </div>
 
+                                  {/* Estimated Time Remaining */}
+                                  {record.pending > 0 && record.date && (() => {
+                                    const elapsed = Date.now() - new Date(record.date).getTime();
+                                    if (processed <= 0 || elapsed <= 0) {
+                                      return (
+                                        <div className="flex items-center gap-1.5 mb-4 text-xs text-blue-600">
+                                          <Clock className="w-3.5 h-3.5" />
+                                          <span>Estimating time remaining...</span>
+                                        </div>
+                                      );
+                                    }
+                                    const avgTimePerFile = elapsed / processed;
+                                    const remainingMs = record.pending * avgTimePerFile;
+                                    const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
+                                    const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
+                                    const etaText = lowMins === highMins
+                                      ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
+                                      : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
+                                    return (
+                                      <div className="flex items-center gap-1.5 mb-4 text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
+                                        <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                                        <span>{etaText}</span>
+                                        <span className="text-blue-400 ml-auto">{record.pending} file{record.pending !== 1 ? 's' : ''} left</span>
+                                      </div>
+                                    );
+                                  })()}
+
                                   {/* Individual File Statuses */}
-                                  {record.statuses && record.statuses.length > 0 && (
+                                  {record.statuses && record.statuses.length > 0 && (() => {
+                                    const filteredStatuses = uploadHistoryFilter
+                                      ? record.statuses.filter((f: any) => {
+                                          if (uploadHistoryFilter === 'completed') return f.status === 'completed';
+                                          if (uploadHistoryFilter === 'duplicated') return f.status === 'duplicate' || f.status === 'duplicated';
+                                          if (uploadHistoryFilter === 'versioned') return f.status === 'versioned' || f.status === 'version';
+                                          if (uploadHistoryFilter === 'error') return f.status === 'error';
+                                          if (uploadHistoryFilter === 'pending') return f.status === 'pending' || f.status === 'processing';
+                                          return true;
+                                        })
+                                      : record.statuses;
+                                    return filteredStatuses.length > 0 ? (
                                     <div className="border-t border-gray-100 pt-4">
                                       <div className="flex items-center justify-between mb-3">
-                                        <div className="text-xs font-semibold text-gray-700">Files ({record.statuses.length})</div>
+                                        <div className="text-xs font-semibold text-gray-700">
+                                          Files ({filteredStatuses.length}{uploadHistoryFilter ? ` of ${record.statuses.length}` : ''})
+                                        </div>
                                         <div className="flex items-center gap-2 text-xs">
                                           <span className="flex items-center gap-1 text-green-600">
                                             <CheckCircle className="w-3 h-3" />
@@ -3134,7 +3260,7 @@ export default function MyResumesPage() {
                                         </div>
                                       </div>
                                       <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                                        {record.statuses.map((file: any, idx: number) => {
+                                        {filteredStatuses.map((file: any, idx: number) => {
                                           const isClickable = ['completed', 'versioned', 'duplicate', 'error'].includes(file.status);
                                           return (
                                           <div
@@ -3209,7 +3335,18 @@ export default function MyResumesPage() {
                                         })}
                                       </div>
                                     </div>
-                                  )}
+                                    ) : uploadHistoryFilter ? (
+                                      <div className="border-t border-gray-100 pt-4">
+                                        <p className="text-xs text-gray-400 text-center py-3">No {
+                                          uploadHistoryFilter === 'completed' ? 'completed' :
+                                          uploadHistoryFilter === 'duplicated' ? 'duplicate' :
+                                          uploadHistoryFilter === 'versioned' ? 'versioned' :
+                                          uploadHistoryFilter === 'error' ? 'failed' :
+                                          'pending'
+                                        } files in this batch</p>
+                                      </div>
+                                    ) : null;
+                                  })()}
                                 </div>
                               );
                             })}

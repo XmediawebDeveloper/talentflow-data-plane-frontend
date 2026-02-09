@@ -38,6 +38,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
   const [showResolutionModal, setShowResolutionModal] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryingFiles, setRetryingFiles] = useState<Set<string>>(new Set());
+  const [activeFilter, setActiveFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | null>(null);
 
   const completed = statuses.filter(s => s.status === 'completed');
   const updated = statuses.filter(s => s.status === 'updated');
@@ -234,9 +235,14 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             </button>
           </div>
 
-          {/* Summary Cards */}
+          {/* Summary Cards (Clickable Filters) */}
           <div className="grid grid-cols-6 gap-3">
-            <div className="bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200 rounded-lg p-4">
+            <div
+              onClick={() => setActiveFilter(activeFilter === 'completed' ? null : 'completed')}
+              className={`bg-gradient-to-br from-green-50 to-green-100/50 border rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+                activeFilter === 'completed' ? 'border-green-500 ring-2 ring-green-300 shadow-md' : 'border-green-200'
+              }`}
+            >
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
                   <CheckCircle className="w-5 h-5 text-white" />
@@ -246,7 +252,12 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div className="text-3xl text-green-700">{completed.length}</div>
             </div>
 
-            <div className="bg-gradient-to-br from-yellow-50 to-yellow-100/50 border border-yellow-200 rounded-lg p-4">
+            <div
+              onClick={() => setActiveFilter(activeFilter === 'duplicated' ? null : 'duplicated')}
+              className={`bg-gradient-to-br from-yellow-50 to-yellow-100/50 border rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+                activeFilter === 'duplicated' ? 'border-yellow-500 ring-2 ring-yellow-300 shadow-md' : 'border-yellow-200'
+              }`}
+            >
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
                   <Copy className="w-5 h-5 text-white" />
@@ -256,7 +267,12 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div className="text-3xl text-yellow-700">{duplicated.length}</div>
             </div>
 
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200 rounded-lg p-4">
+            <div
+              onClick={() => setActiveFilter(activeFilter === 'versioned' ? null : 'versioned')}
+              className={`bg-gradient-to-br from-purple-50 to-purple-100/50 border rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+                activeFilter === 'versioned' ? 'border-purple-500 ring-2 ring-purple-300 shadow-md' : 'border-purple-200'
+              }`}
+            >
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
                   <GitBranch className="w-5 h-5 text-white" />
@@ -266,7 +282,12 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div className="text-3xl text-purple-700">{versioned.length}</div>
             </div>
 
-            <div className="bg-gradient-to-br from-red-50 to-red-100/50 border border-red-200 rounded-lg p-4">
+            <div
+              onClick={() => setActiveFilter(activeFilter === 'error' ? null : 'error')}
+              className={`bg-gradient-to-br from-red-50 to-red-100/50 border rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+                activeFilter === 'error' ? 'border-red-500 ring-2 ring-red-300 shadow-md' : 'border-red-200'
+              }`}
+            >
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
                   <AlertCircle className="w-5 h-5 text-white" />
@@ -276,7 +297,12 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div className="text-3xl text-red-700">{errors.length}</div>
             </div>
 
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-300 rounded-lg p-4">
+            <div
+              onClick={() => setActiveFilter(activeFilter === 'pending' ? null : 'pending')}
+              className={`bg-gradient-to-br from-gray-50 to-gray-100/50 border rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+                activeFilter === 'pending' ? 'border-gray-600 ring-2 ring-gray-400 shadow-md' : 'border-gray-300'
+              }`}
+            >
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center">
                   <Clock className="w-5 h-5 text-white" />
@@ -296,10 +322,65 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div className="text-3xl text-blue-700">{successRate}%</div>
             </div>
           </div>
+
+          {/* Active Filter Indicator */}
+          {activeFilter && (
+            <div className="flex items-center gap-2 mt-3 px-3 py-2 bg-white border border-gray-200 rounded-lg">
+              <span className="text-xs text-gray-500">Filtering by:</span>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                activeFilter === 'completed' ? 'bg-green-100 text-green-700' :
+                activeFilter === 'duplicated' ? 'bg-yellow-100 text-yellow-700' :
+                activeFilter === 'versioned' ? 'bg-purple-100 text-purple-700' :
+                activeFilter === 'error' ? 'bg-red-100 text-red-700' :
+                'bg-gray-100 text-gray-700'
+              }`}>
+                {activeFilter === 'completed' ? 'Completed' :
+                 activeFilter === 'duplicated' ? 'Duplicates' :
+                 activeFilter === 'versioned' ? 'Versioned' :
+                 activeFilter === 'error' ? 'Errors' :
+                 'Pending'}
+              </span>
+              <button
+                onClick={() => setActiveFilter(null)}
+                className="ml-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Detailed Status List */}
         <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
+          {/* Estimated Time Remaining */}
+          {pending.length > 0 && (() => {
+            const elapsed = Date.now() - new Date(uploadDate).getTime();
+            const processedCount = completed.length + updated.length + duplicated.length + versioned.length + errors.length;
+            if (processedCount <= 0 || elapsed <= 0) {
+              return (
+                <div className="flex items-center gap-2 mb-6 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+                  <Clock className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                  <span className="text-sm text-blue-700">Estimating time remaining...</span>
+                  <span className="text-xs text-blue-400 ml-auto">{pending.length} file{pending.length !== 1 ? 's' : ''} pending</span>
+                </div>
+              );
+            }
+            const avgTimePerFile = elapsed / processedCount;
+            const remainingMs = pending.length * avgTimePerFile;
+            const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
+            const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
+            const etaText = lowMins === highMins
+              ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
+              : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
+            return (
+              <div className="flex items-center gap-2 mb-6 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+                <Clock className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <span className="text-sm font-medium text-blue-700">{etaText}</span>
+                <span className="text-xs text-blue-400 ml-auto">{pending.length} file{pending.length !== 1 ? 's' : ''} pending</span>
+              </div>
+            );
+          })()}
+
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg text-gray-900">File-by-File Status</h3>
             <button
@@ -313,7 +394,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
 
           <div className="space-y-6">
             {/* Completed Section */}
-            {completed.length > 0 && (
+            {completed.length > 0 && (!activeFilter || activeFilter === 'completed') && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-6 h-6 bg-green-500 rounded-md flex items-center justify-center">
@@ -361,7 +442,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             )}
 
             {/* Duplicated Section */}
-            {duplicated.length > 0 && (
+            {duplicated.length > 0 && (!activeFilter || activeFilter === 'duplicated') && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -424,7 +505,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             )}
 
             {/* Versioned Section */}
-            {versioned.length > 0 && (
+            {versioned.length > 0 && (!activeFilter || activeFilter === 'versioned') && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -492,7 +573,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             )}
 
             {/* Errors Section */}
-            {errors.length > 0 && (
+            {errors.length > 0 && (!activeFilter || activeFilter === 'error') && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-6 h-6 bg-red-500 rounded-md flex items-center justify-center">
@@ -535,7 +616,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             )}
 
             {/* Pending Section */}
-            {pending.length > 0 && (
+            {pending.length > 0 && (!activeFilter || activeFilter === 'pending') && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-6 h-6 bg-gray-500 rounded-md flex items-center justify-center">
@@ -578,7 +659,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             )}
 
             {/* Retry Failed/Pending Uploads Section */}
-            {(errors.length > 0 || pending.length > 0) && onRetryUpload && (
+            {(errors.length > 0 || pending.length > 0) && onRetryUpload && (!activeFilter || activeFilter === 'error' || activeFilter === 'pending') && (
               <div className="mt-6 p-5 bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-200 rounded-xl">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">

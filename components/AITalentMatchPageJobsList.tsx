@@ -10,6 +10,8 @@ interface Job {
   applicants: number;
   employmentType?: string;
   experience?: string;
+  jobId?: string;
+  currentVersion?: number;
 }
 
 interface MatchHistory {
@@ -269,6 +271,27 @@ export default function AITalentMatchPageJobsList({
                           <Briefcase className="w-6 h-6 text-white" />
                         </div>
                         <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {job.jobId && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                                {job.jobId}
+                              </span>
+                            )}
+                            {job.currentVersion && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                                v{job.currentVersion}
+                              </span>
+                            )}
+                            {job.currentVersion && (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+                                job.currentVersion > 1
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-green-50 text-green-700 border-green-200'
+                              }`}>
+                                {job.currentVersion > 1 ? 'Republished' : 'Published'}
+                              </span>
+                            )}
+                          </div>
                           <h3 className="text-xl text-gray-900 mb-2">
                             {job.title}
                           </h3>
