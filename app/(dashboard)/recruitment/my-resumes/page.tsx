@@ -23,6 +23,7 @@ import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeS
 import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/hooks/useAuth';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -326,6 +327,7 @@ function DraggableCardResumeRow({
 export default function MyResumesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, isTenantAdmin } = useAuth();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
