@@ -116,6 +116,7 @@ export interface ResumeSearchParams {
   source_type?: string;
   page?: number;
   page_size?: number;
+  sort_by?: string;
 }
 
 export const resumeService = {

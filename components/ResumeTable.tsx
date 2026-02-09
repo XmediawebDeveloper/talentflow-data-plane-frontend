@@ -78,6 +78,7 @@ interface ResumeTableProps {
   onVersion?: (resume: Resume) => void;
   highlightQuery?: string;
   onArchive?: (resumeId: string) => void;
+  disablePagination?: boolean;
 }
 
 // Helper function to highlight matching text
@@ -124,6 +125,7 @@ export default function ResumeTable({
   onVersion,
   highlightQuery,
   onArchive,
+  disablePagination = false,
 }: ResumeTableProps) {
   const router = useRouter();
   // ✅ PERMISSION FIX: Get Resume CRUD permissions
@@ -143,9 +145,9 @@ export default function ResumeTable({
   const [showAddTagsModal, setShowAddTagsModal] = useState(false);
   const [selectedResumeForAction, setSelectedResumeForAction] = useState<Resume | null>(null);
 
-  // Pagination
+  // Pagination (skipped when parent handles pagination server-side)
   const {
-    paginatedItems,
+    paginatedItems: paginatedItemsFromHook,
     currentPage,
     totalPages,
     itemsPerPage,
@@ -155,6 +157,9 @@ export default function ResumeTable({
     startIndex,
     endIndex,
   } = usePagination({ items: resumes, initialItemsPerPage: 25 });
+
+  // When pagination is disabled (server-side pagination), render all passed items
+  const paginatedItems = disablePagination ? resumes : paginatedItemsFromHook;
 
   const allSelected = resumes.length > 0 && resumes.every(r => selectedResumes.includes(r.id));
   const someSelected = selectedResumes.length > 0 && !allSelected;
@@ -714,7 +719,7 @@ export default function ResumeTable({
         ))}
       </div>
 
-      {totalPages > 1 && (
+      {!disablePagination && totalPages > 1 && (
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}

@@ -15,6 +15,8 @@ interface Job {
   applicants: number;
   employmentType?: string;
   experience?: string;
+  jobId?: string;
+  currentVersion?: number;
 }
 
 interface MatchHistory {
@@ -50,6 +52,8 @@ function transformJDToJob(jd: JDResponse): Job {
       : jd.experience_min
         ? `${jd.experience_min}+ years`
         : undefined,
+    jobId: jd.job_id,
+    currentVersion: jd.current_version,
   };
 }
 

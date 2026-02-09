@@ -387,6 +387,8 @@ function JDCreationContent() {
       must_have_comments: editingJD.must_have_comments,
       nice_to_have_comments: editingJD.nice_to_have_comments,
       allow_overqualified: editingJD.allow_overqualified,
+      job_id: editingJD.job_id,
+      current_version: editingJD.current_version,
       locations: editingJD.locations?.map(loc => ({
         city: loc.city || '',
         radius_km: loc.radius_km,
