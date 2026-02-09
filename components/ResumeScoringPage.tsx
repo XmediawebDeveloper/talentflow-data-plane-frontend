@@ -1639,6 +1639,10 @@ export default function ResumeScoringPage({
                     className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-start gap-4">
+                      {/* Scoring icon - like AI Talent Match */}
+                      <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
+                        <Target className="w-6 h-6 text-white" />
+                      </div>
                       <div className="flex-1 min-w-0">
                         {/* Title row with job details - like JD card */}
                         <div className="flex items-center gap-3 mb-2">
@@ -1959,7 +1963,6 @@ export default function ResumeScoringPage({
                           onClick={() => {
                             setSelectedHistoryItem(item);
                             setViewMode('details');
-                            // Save to localStorage for persistence
                             try {
                               localStorage.setItem('lastViewedScoringJdId', item.jobId);
                             } catch (e) {
