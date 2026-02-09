@@ -4,6 +4,7 @@
  */
 
 import axios from 'axios';
+import { safeLocalStorage, safeSessionStorage } from '@/lib/utils/browserCompat';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -24,11 +25,11 @@ export const sessionTokenManager = {
       const storageKey = currentAssessmentToken
         ? `assessment_session_${currentAssessmentToken}`
         : 'assessment_session_token';
-      sessionStorage.setItem(storageKey, token);
-      sessionStorage.setItem('assessment_session_token', token); // Fallback key
+      safeSessionStorage.setItem(storageKey, token);
+      safeSessionStorage.setItem('assessment_session_token', token); // Fallback key
       // Also store in localStorage for refresh resilience
-      localStorage.setItem(storageKey, token);
-      localStorage.setItem('assessment_session_token', token);
+      safeLocalStorage.setItem(storageKey, token);
+      safeLocalStorage.setItem('assessment_session_token', token);
       console.log('[SESSION] Token stored with key:', storageKey);
     }
   },
@@ -41,17 +42,17 @@ export const sessionTokenManager = {
       const storageKey = token ? `assessment_session_${token}` : 'assessment_session_token';
 
       // Try sessionStorage first (same tab)
-      let stored = sessionStorage.getItem(storageKey);
+      let stored = safeSessionStorage.getItem(storageKey);
       if (!stored) {
-        stored = sessionStorage.getItem('assessment_session_token');
+        stored = safeSessionStorage.getItem('assessment_session_token');
       }
 
       // Fall back to localStorage (survives refresh/browser close)
       if (!stored) {
-        stored = localStorage.getItem(storageKey);
+        stored = safeLocalStorage.getItem(storageKey);
       }
       if (!stored) {
-        stored = localStorage.getItem('assessment_session_token');
+        stored = safeLocalStorage.getItem('assessment_session_token');
       }
 
       if (stored) {
@@ -70,10 +71,10 @@ export const sessionTokenManager = {
     if (typeof window !== 'undefined') {
       const token = assessmentToken || currentAssessmentToken;
       const storageKey = token ? `assessment_session_${token}` : 'assessment_session_token';
-      sessionStorage.removeItem(storageKey);
-      sessionStorage.removeItem('assessment_session_token');
-      localStorage.removeItem(storageKey);
-      localStorage.removeItem('assessment_session_token');
+      safeSessionStorage.removeItem(storageKey);
+      safeSessionStorage.removeItem('assessment_session_token');
+      safeLocalStorage.removeItem(storageKey);
+      safeLocalStorage.removeItem('assessment_session_token');
     }
   }
 };

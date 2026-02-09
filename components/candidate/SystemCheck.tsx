@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { candidateService, SystemCheckResult } from '@/lib/services/candidateService';
+import { getUserMedia, getErrorMessage, detectBrowser, checkBrowserCompatibility } from '@/lib/utils/browserCompat';
 
 interface SystemCheckProps {
   token: string;
@@ -159,36 +160,22 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
   const checkBrowser = async () => {
     try {
-      const userAgent = navigator.userAgent.toLowerCase();
-
-      // Detect all major browsers
-      const isFirefox = userAgent.includes('firefox');
-      const isSafari = userAgent.includes('safari') && !userAgent.includes('chrome');
-      const isIOSSafari = /iphone|ipad|ipod/.test(userAgent) && isSafari;
-      const isArc = userAgent.includes('arc');
-      const isBrave = userAgent.includes('brave');
-      const isEdge = userAgent.includes('edg');
-      const isChrome = userAgent.includes('chrome') && !userAgent.includes('edg') && !isArc;
-      const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
+      const browser = detectBrowser();
+      const compat = checkBrowserCompatibility();
 
       // Store browser type and iOS detection for error messaging
-      if (isFirefox) setBrowserType('Firefox');
-      else if (isIOSSafari) setBrowserType('iOS Safari');
-      else if (isSafari) setBrowserType('Safari');
-      else if (isArc) setBrowserType('Arc');
-      else if (isBrave) setBrowserType('Brave');
-      else if (isEdge) setBrowserType('Edge');
-      else if (isChrome) setBrowserType('Chrome');
-      else setBrowserType('Unknown');
+      setBrowserType(browser.name);
+      setIsIOS(browser.isIOS);
 
-      setIsIOS(isIOSDevice);
-
-      if (isChrome || isEdge || isFirefox || isArc || isBrave) {
-        setBrowserCheck({ status: 'success', message: 'Browser supported' });
-      } else if (isSafari || isIOSSafari) {
+      // Check for compatibility issues
+      if (!compat.isCompatible) {
+        setBrowserCheck({ status: 'error', message: compat.issues.join(' ') });
+      } else if (browser.name === 'Safari' || browser.name === 'iOS Safari') {
         setBrowserCheck({ status: 'success', message: 'Safari detected (limited features)' });
+      } else if (browser.name === 'Chrome' || browser.name === 'Edge' || browser.name === 'Firefox' || browser.name === 'Arc' || browser.name === 'Brave') {
+        setBrowserCheck({ status: 'success', message: 'Browser supported' });
       } else {
-        setBrowserCheck({ status: 'error', message: 'Browser not supported. Use Chrome, Edge, or Firefox.' });
+        setBrowserCheck({ status: 'success', message: `${browser.name} detected` });
       }
     } catch {
       setBrowserCheck({ status: 'error', message: 'Could not detect browser' });
@@ -217,7 +204,8 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const checkCameraAndMicrophone = async () => {
     // Request both camera and microphone together to avoid permission conflicts
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      // Use enhanced getUserMedia with cross-browser support
+      const stream = await getUserMedia({ video: true, audio: true });
       streamRef.current = stream;
 
       if (videoRef.current) {
@@ -249,51 +237,40 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         fullError: err
       });
 
-      // Handle specific error types
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setCameraCheck({ status: 'error', message: 'Camera permission denied' });
-        setMicCheck({ status: 'error', message: 'Microphone permission denied' });
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        setCameraCheck({ status: 'error', message: 'No camera found' });
-        setMicCheck({ status: 'error', message: 'No microphone found' });
-      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError' || err.name === 'AbortError') {
-        // Device is being used by another application
-        // AbortError: Safari/Firefox throw this when camera is already in use
-        // NotReadableError: Chrome/Edge throw this when camera is already in use
+      // Get browser info for error messages
+      const browser = detectBrowser();
+      const errorMessage = err.message || '';
 
-        // Generate browser-specific error messages
-        let errorMessage = '';
-        if (browserType === 'Firefox') {
-          errorMessage = 'Camera is being used by another application or tab. Please close Zoom, Teams, Skype, or other tabs using your camera, then click "Run Checks" again.';
-        } else if (browserType === 'Safari') {
-          errorMessage = 'Camera is being used by another application or tab. Please close FaceTime, Zoom, or other apps using your camera, then click "Run Checks" again.';
-        } else if (browserType === 'iOS Safari') {
-          errorMessage = 'Camera is being used by another app. Please close all apps using your camera (FaceTime, Zoom, Instagram, etc.), or check Settings → Privacy → Camera, then try again.';
-        } else if (browserType === 'Arc') {
-          errorMessage = 'Camera is being used by another tab or application. Please close other tabs or apps using your camera, then click "Run Checks" again.';
-        } else if (browserType === 'Chrome' || browserType === 'Edge') {
-          errorMessage = 'Camera is being used by another tab or application. Please close other tabs or apps (Zoom, Teams, Google Meet) using your camera, then try again.';
-        } else {
-          errorMessage = 'Camera is being used by another application or browser tab. Please close other apps or tabs using your camera, then click "Run Checks" again.';
-        }
-
-        setCameraCheck({ status: 'error', message: errorMessage });
+      // Handle standardized error codes from getUserMedia
+      if (errorMessage === 'PERMISSION_DENIED') {
+        const msg = getErrorMessage('PERMISSION_DENIED', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: msg });
+      } else if (errorMessage === 'DEVICE_NOT_FOUND') {
+        const msg = getErrorMessage('DEVICE_NOT_FOUND', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: msg });
+      } else if (errorMessage === 'DEVICE_IN_USE') {
+        const msg = getErrorMessage('DEVICE_IN_USE', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
         setMicCheck({ status: 'error', message: 'Microphone may be in use by another app or tab' });
-        setCameraInUseError(errorMessage); // Store for prominent display
+        setCameraInUseError(msg); // Store for prominent display
 
         console.log('[SYSTEM CHECK] Camera in use detected - NOT calling fallback checks', {
-          browser: browserType,
+          browser: browser.name,
           errorType: err.name
         });
 
         // IMPORTANT: Return early to prevent fallback checks from overwriting this error
         return;
-      } else if (err.name === 'OverconstrainedError') {
-        setCameraCheck({ status: 'error', message: 'Camera constraints not satisfied' });
-        setMicCheck({ status: 'error', message: 'Microphone constraints not satisfied' });
-      } else if (err.name === 'SecurityError') {
-        setCameraCheck({ status: 'error', message: 'Security error - use HTTPS' });
-        setMicCheck({ status: 'error', message: 'Security error - use HTTPS' });
+      } else if (errorMessage === 'SECURITY_ERROR_HTTPS_REQUIRED') {
+        const msg = getErrorMessage('SECURITY_ERROR_HTTPS_REQUIRED', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: msg });
+      } else if (errorMessage === 'MEDIA_API_NOT_SUPPORTED') {
+        const msg = getErrorMessage('MEDIA_API_NOT_SUPPORTED', browser.name);
+        setCameraCheck({ status: 'error', message: msg });
+        setMicCheck({ status: 'error', message: msg });
       } else {
         // For unknown errors, show user-friendly message
         setCameraCheck({ status: 'error', message: 'Camera error - please check if camera is available' });
@@ -309,7 +286,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
   const checkCameraSeparately = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await getUserMedia({ video: true });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -323,7 +300,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
   const checkMicrophoneSeparately = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getUserMedia({ audio: true });
       stream.getTracks().forEach(track => track.stop());
       setMicCheck({ status: 'success', message: 'Microphone working' });
     } catch (err: any) {
@@ -381,7 +358,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         if (!isVideoLive) {
           console.log('[SYSTEM CHECK] Video track not live - requesting fresh stream');
           try {
-            const freshStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const freshStream = await getUserMedia({ video: true, audio: true });
             streamRef.current = freshStream;
             streamToPass = freshStream;
 

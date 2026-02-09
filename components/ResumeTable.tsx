@@ -82,8 +82,8 @@ interface ResumeTableProps {
 const highlightText = (text: string, query: string): React.ReactNode => {
   if (!query || !text) return text;
 
-  // Split query into words for multi-keyword matching
-  const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 0);
+  // Split query into words for multi-keyword matching (handle both commas and spaces)
+  const keywords = query.toLowerCase().replace(/,/g, ' ').split(/\s+/).filter(k => k.length > 0);
   if (keywords.length === 0) return text;
 
   // Create regex pattern for all keywords

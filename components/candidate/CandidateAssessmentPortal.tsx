@@ -23,6 +23,7 @@ import { useProctoringMonitor, ProctoringWarning } from '@/hooks/useProctoringMo
 import { ProctoringWarningModal, useProctoringWarnings } from './ProctoringWarningModal';
 import { Monitor, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getUserMedia, getErrorMessage, detectBrowser } from '@/lib/utils/browserCompat';
 
 // ============================================
 // FULLSCREEN PROMPT SCREEN COMPONENT - COMMENTED OUT (NOT NEEDED)
@@ -898,7 +899,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       // No existing stream - request a new one (fallback)
       console.log('[PROCTORING] No existing stream - requesting new camera access');
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const stream = await getUserMedia({
           video: true,
           audio: true
         });
