@@ -5,13 +5,20 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import dynamic from 'next/dynamic';
 import ResumeTable from '@/components/ResumeTable';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
 import FolderTree from '@/components/FolderTree';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadModal from '@/components/UploadModal';
-import DuplicateResumeModal, { DuplicateFile, ExistingResume } from '@/components/DuplicateResumeModal';
+import type { DuplicateFile, ExistingResume } from '@/components/DuplicateResumeModal';
+
+// Dynamic import to avoid SSR issues with docx-preview dependency
+const DuplicateResumeModal = dynamic(() => import('@/components/DuplicateResumeModal'), {
+  ssr: false,
+  loading: () => <div>Loading...</div>
+});
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import UploadHistoryDetailModal, { UploadHistoryItem } from '@/components/UploadHistoryDetailModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
@@ -562,12 +569,13 @@ export default function MyResumesPage() {
   // Ref to store active polling intervals for cleanup
   const pollingIntervalsRef = useRef<Set<NodeJS.Timeout>>(new Set());
 
-  const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string) => {
+  const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean) => {
     console.log('[FETCH] fetchData called', {
       searchTerm,
       filtersKeys: currentFilters ? Object.keys(currentFilters) : 'none',
       folderId,
-      isFetching: isFetchingRef.current
+      isFetching: isFetchingRef.current,
+      silent,
     });
 
     // Prevent concurrent fetches - stops flickering from rapid calls
@@ -577,7 +585,7 @@ export default function MyResumesPage() {
     }
 
     isFetchingRef.current = true;
-    setLoading(true);
+    if (!silent) setLoading(true);
     console.log('[FETCH] Starting fetch...');
     try {
       // Build search params for backend API
@@ -1551,9 +1559,16 @@ export default function MyResumesPage() {
     if (files.length === 1) {
       try {
         const r = await resumeService.upload(files[0], targetFolderId);
+        // Optimistic update for instant UI feedback
         const converted = convertApiResume(r);
         setResumes(prev => [converted, ...prev]);
         toast.success('Resume uploaded successfully');
+        // Background refresh to get correct uploaded_by_name, version counts, etc.
+        setTimeout(() => {
+          isFetchingRef.current = false; // Reset guard so fetchData can run
+          fetchData(undefined, undefined, undefined, true);
+          fetchUploadHistory();
+        }, 500);
         return {
           success: true,
           resumeId: r.id,
@@ -2043,28 +2058,26 @@ export default function MyResumesPage() {
           toast.success('New resume discarded, keeping existing', { id: toastId });
         } else {
           // Use the resolve duplicate and upload endpoint
-          const result = await resumeService.resolveDuplicateAndUpload(
+          await resumeService.resolveDuplicateAndUpload(
             duplicateFile.file,
             duplicateFile.existingResume.id,
             resolution.action,
             pendingUploadFolderId
           );
 
-          const converted = convertApiResume(result);
-
           if (resolution.action === 'overwrite') {
-            // Overwrite updates the SAME row (same ID), so REPLACE the existing item in list
-            setResumes(prev => prev.map(r =>
-              r.id === duplicateFile.existingResume.id ? converted : r
-            ));
             toast.success('Resume overwritten successfully', { id: toastId });
           } else {
-            // Version creates NEW row (new ID), so add new and remove old
-            setResumes(prev => [converted, ...prev.filter(r => r.id !== duplicateFile.existingResume.id)]);
             toast.success(`Resume saved as version ${(duplicateFile.existingResume.version || 1) + 1}`, { id: toastId });
           }
         }
       }
+      // Refresh full list from server to get correct data
+      setTimeout(() => {
+        isFetchingRef.current = false;
+        fetchData(undefined, undefined, undefined, true);
+        fetchUploadHistory();
+      }, 500);
     } catch (error: any) {
       console.error('Error resolving duplicates:', error);
       toast.error('Failed to resolve duplicate', { id: toastId });

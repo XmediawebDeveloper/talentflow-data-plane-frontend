@@ -603,15 +603,28 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <button
                 onClick={async () => {
                   try {
-                    const blob = await assessmentService.exportResults(assessmentId, 'csv');
+                    // Get list of enabled column IDs to pass to backend
+                    const enabledColumnIds = columns
+                      .filter(col => col.enabled)
+                      .map(col => col.id);
+
+                    console.log('[EXPORT] Exporting with columns:', enabledColumnIds);
+
+                    const blob = await assessmentService.exportResults(
+                      assessmentId,
+                      'excel', // Changed to excel for better formatting
+                      false, // include_details
+                      enabledColumnIds // Pass enabled columns
+                    );
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `${assessmentTitle.replace(/\s+/g, '_')}_results.csv`;
+                    a.download = `${assessmentTitle.replace(/\s+/g, '_')}_results.xlsx`;
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
                     document.body.removeChild(a);
+                    toast.success('Results exported successfully!');
                   } catch (error) {
                     console.error('Failed to export results:', error);
                     toast.error('Failed to export results. Please try again.');
@@ -620,7 +633,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
               >
                 <FileText className="w-5 h-5" />
-                Export Results
+                Export to Excel
               </button>
             </div>
           </div>

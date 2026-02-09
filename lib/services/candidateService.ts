@@ -89,28 +89,41 @@ const candidateApi = axios.create({
   withCredentials: false, // Disable credentials for CORS compatibility across all browsers
 });
 
-// Add request interceptor to include session token
+// Add request interceptor to include session token OR invitation token
 candidateApi.interceptors.request.use((config) => {
   // Try to get session token - the manager will check memory first, then storage
   let sessionToken = sessionTokenManager.getToken();
 
   // If no token found and URL contains assessment token, try to extract and recover
-  if (!sessionToken && config.url) {
+  let invitationToken: string | null = null;
+  if (config.url) {
     const match = config.url.match(/\/assessment\/([a-zA-Z0-9_-]+)/);
     if (match) {
-      const assessmentToken = match[1];
+      invitationToken = match[1];
       // Set the assessment context and try again
-      sessionTokenManager.setAssessmentToken(assessmentToken);
-      sessionToken = sessionTokenManager.getToken(assessmentToken);
+      sessionTokenManager.setAssessmentToken(invitationToken);
+      sessionToken = sessionTokenManager.getToken(invitationToken);
       if (sessionToken) {
-        console.log('[SESSION] Recovered token from URL-based lookup:', assessmentToken.substring(0, 10) + '...');
+        console.log('[SESSION] Recovered token from URL-based lookup:', invitationToken.substring(0, 10) + '...');
       }
     }
   }
 
+  // Priority: Session token first (for active sessions), then invitation token (for new sessions)
   if (sessionToken) {
     config.headers['X-Session-Token'] = sessionToken;
+  } else if (invitationToken) {
+    // CROSS-BROWSER FIX: Send invitation token as fallback for browsers without storage
+    config.headers['X-Invitation-Token'] = invitationToken;
+    console.log('[SESSION] Using invitation token as fallback (cross-browser support)');
   }
+
+  // iOS/Safari FIX: Add cache control to prevent iOS from caching failed requests
+  if (typeof navigator !== 'undefined' && /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase())) {
+    config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+    config.headers['Pragma'] = 'no-cache';
+  }
+
   return config;
 });
 
@@ -404,15 +417,57 @@ export interface GenerationStatusResponse {
   message: string;
 }
 
+// ===================== CROSS-BROWSER RETRY LOGIC =====================
+
+/**
+ * Retry wrapper for API calls - handles network failures on iOS/Safari
+ * Retries up to 3 times with exponential backoff
+ */
+async function retryApiCall<T>(
+  apiCall: () => Promise<T>,
+  maxRetries: number = 3,
+  retryDelay: number = 1000
+): Promise<T> {
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      lastError = error;
+
+      // Don't retry on 4xx errors (except 408 timeout and 429 rate limit)
+      if (axios.isAxiosError(error) && error.response) {
+        const status = error.response.status;
+        if (status >= 400 && status < 500 && status !== 408 && status !== 429) {
+          throw error; // Don't retry on client errors
+        }
+      }
+
+      // Only retry network errors or 5xx server errors
+      if (attempt < maxRetries) {
+        const delay = retryDelay * Math.pow(2, attempt - 1); // Exponential backoff
+        console.log(`[RETRY] Attempt ${attempt} failed, retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 // ===================== API Functions =====================
 
 export const candidateService = {
   /**
    * Get assessment information for a candidate token
+   * CROSS-BROWSER: Includes retry logic for iOS/Safari network issues
    */
   async getAssessmentInfo(token: string): Promise<AssessmentInfo> {
     try {
-      const response = await candidateApi.get<AssessmentInfo>(`/candidate/assessment/${token}`);
+      const response = await retryApiCall(() =>
+        candidateApi.get<AssessmentInfo>(`/candidate/assessment/${token}`)
+      );
 
       // Store session token if returned (for page refresh support)
       if (response.data.session_token) {
@@ -428,6 +483,21 @@ export const candidateService = {
         if (error.response?.status === 409 || (typeof errorDetail === 'object' && errorDetail?.code === 'DUPLICATE_SESSION')) {
           throw new Error('DUPLICATE_SESSION');
         }
+
+        // CROSS-BROWSER: Better error messages for different scenarios
+        if (!error.response) {
+          // Network error - no response received
+          throw new Error('Unable to connect to server. Please check your internet connection and try again.');
+        }
+
+        if (error.response.status === 401 || error.response.status === 403) {
+          throw new Error('Invalid or expired assessment link. Please contact your recruiter for a new link.');
+        }
+
+        if (error.response.status === 404) {
+          throw new Error('Assessment not found. Please verify the link is correct.');
+        }
+
         throw new Error(typeof errorDetail === 'string' ? errorDetail : (errorDetail?.message || 'Failed to get assessment info'));
       }
       throw error;
@@ -436,13 +506,16 @@ export const candidateService = {
 
   /**
    * Accept terms and consent
+   * CROSS-BROWSER: Includes retry logic for iOS/Safari network issues
    */
   async acceptConsent(token: string, termsAccepted: boolean = true, proctoringConsent: boolean = true): Promise<ConsentResponse> {
     try {
-      const response = await candidateApi.post<ConsentResponse>(`/candidate/assessment/${token}/consent`, {
-        terms_accepted: termsAccepted,
-        proctoring_consent: proctoringConsent,
-      });
+      const response = await retryApiCall(() =>
+        candidateApi.post<ConsentResponse>(`/candidate/assessment/${token}/consent`, {
+          terms_accepted: termsAccepted,
+          proctoring_consent: proctoringConsent,
+        })
+      );
 
       // Store session token if returned (for single-session enforcement)
       if (response.data.session_token) {
@@ -525,6 +598,7 @@ export const candidateService = {
 
   /**
    * Start assessment and get first question
+   * CROSS-BROWSER: Includes retry logic for iOS/Safari network issues
    */
   async startAssessment(token: string): Promise<StartAssessmentResponse> {
     // Detect browser for enhanced error logging and messaging
@@ -553,8 +627,10 @@ export const candidateService = {
         tokenPrefix: token.substring(0, 8)
       });
 
-      const response = await candidateApi.post<StartAssessmentResponse>(
-        `/candidate/assessment/${token}/start`
+      const response = await retryApiCall(() =>
+        candidateApi.post<StartAssessmentResponse>(
+          `/candidate/assessment/${token}/start`
+        )
       );
 
       // Store session token for single-session enforcement

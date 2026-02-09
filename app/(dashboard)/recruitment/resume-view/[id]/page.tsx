@@ -7,7 +7,7 @@ import {
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ExternalLink, Linkedin, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
-  AlignLeft, Hash, X
+  AlignLeft, Hash, X, Eye
 } from 'lucide-react';
 
 // Full Resume Content Component with better UI
@@ -225,97 +225,136 @@ export default function ResumeViewPage() {
   const [shareMessage, setShareMessage] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
-  // Version changes visibility state
-  const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
+  // Version comparison state
+  const [compareLeftId, setCompareLeftId] = useState<string | null>(null);
+  const [compareRightId, setCompareRightId] = useState<string | null>(null);
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [compareChecked, setCompareChecked] = useState<string[]>([]);
 
-  // Helper function to get version differences compared to previous version using line-by-line text comparison
-  const getVersionChanges = (currentVersion: any, previousVersion: any | null) => {
-    const changes: { category: string; added: string[]; removed: string[]; changed?: { from: string; to: string } }[] = [];
+  // Version preview state
+  const [versionPreviewUrl, setVersionPreviewUrl] = useState<string | null>(null);
+  const [versionPreviewLabel, setVersionPreviewLabel] = useState<string>('');
 
-    // If no previous version, this is the first version - show as "Initial"
-    if (!previousVersion) {
-      return [{ category: 'Initial Version', added: ['First upload - no changes to compare'], removed: [] }];
-    }
-
-    // Get extracted text from both versions
-    const currentText = currentVersion.extractedText || '';
-    const previousText = previousVersion.extractedText || '';
-
-    // If neither version has extracted text, fall back to parsed content comparison
-    if (!currentText && !previousText) {
-      return [{ category: 'Note', added: ['Text content not available for comparison'], removed: [] }];
-    }
-
-    // If only one version has text
-    if (!currentText || !previousText) {
-      return [{ category: 'Note', added: ['New file uploaded - text comparison not available'], removed: [] }];
-    }
-
-    // If text is identical, no changes
-    if (currentText.trim() === previousText.trim()) {
-      return [{ category: 'Note', added: ['No changes detected - content is identical'], removed: [] }];
-    }
-
-    // Line-by-line comparison
-    // Normalize and split text into lines, filtering out empty lines
-    const normalizeText = (text: string) => {
-      return text
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0);
-    };
-
-    const currentLines = normalizeText(currentText);
-    const previousLines = normalizeText(previousText);
-
-    // Create sets for efficient lookup
-    const currentLinesSet = new Set(currentLines);
-    const previousLinesSet = new Set(previousLines);
-
-    // Find added lines (in current but not in previous)
-    const addedLines = currentLines.filter(line => !previousLinesSet.has(line));
-
-    // Find removed lines (in previous but not in current)
-    const removedLines = previousLines.filter(line => !currentLinesSet.has(line));
-
-    // Group changes by type for better display
-    if (addedLines.length > 0 || removedLines.length > 0) {
-      // Limit to show max 10 items each to avoid overwhelming the UI
-      const maxItems = 10;
-
-      if (addedLines.length > 0) {
-        const displayAdded = addedLines.slice(0, maxItems);
-        const moreCount = addedLines.length - maxItems;
-        changes.push({
-          category: 'Added Lines',
-          added: moreCount > 0
-            ? [...displayAdded, `... and ${moreCount} more`]
-            : displayAdded,
-          removed: [],
-        });
+  const handleCompareCheck = (versionId: string) => {
+    setCompareChecked(prev => {
+      if (prev.includes(versionId)) {
+        return prev.filter(id => id !== versionId);
       }
-
-      if (removedLines.length > 0) {
-        const displayRemoved = removedLines.slice(0, maxItems);
-        const moreCount = removedLines.length - maxItems;
-        changes.push({
-          category: 'Removed Lines',
-          added: [],
-          removed: moreCount > 0
-            ? [...displayRemoved, `... and ${moreCount} more`]
-            : displayRemoved,
-        });
+      if (prev.length >= 2) {
+        return [prev[1], versionId];
       }
-    } else {
-      // Lines are same but order might be different, or whitespace differences
-      changes.push({
-        category: 'Note',
-        added: ['Minor formatting changes detected'],
-        removed: [],
-      });
+      return [...prev, versionId];
+    });
+  };
+
+  // Open compare modal - used by both "View Changes" (single version vs previous) and "Compare Selected" (2 checkboxes)
+  const openCompareModal = (leftId?: string, rightId?: string) => {
+    if (leftId && rightId && resume?.versions) {
+      setCompareLeftId(leftId);
+      setCompareRightId(rightId);
+      setShowCompareModal(true);
+    } else if (compareChecked.length === 2 && resume?.versions) {
+      const sorted = [...resume.versions].sort((a, b) => (a.version || 0) - (b.version || 0));
+      const v1 = sorted.find(v => v.id === compareChecked[0]);
+      const v2 = sorted.find(v => v.id === compareChecked[1]);
+      if (v1 && v2) {
+        if ((v1.version || 0) <= (v2.version || 0)) {
+          setCompareLeftId(v1.id);
+          setCompareRightId(v2.id);
+        } else {
+          setCompareLeftId(v2.id);
+          setCompareRightId(v1.id);
+        }
+      }
+      setShowCompareModal(true);
+    }
+  };
+
+  // State for fetched preview text (when extractedText not pre-loaded)
+  const [fetchedPreviewText, setFetchedPreviewText] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Preview a specific version or resume in modal
+  const handleVersionPreview = async (versionId: string, label: string) => {
+    // Check if extracted text is already available
+    const version = resume?.versions?.find(v => v.id === versionId);
+    const existingText = version?.extractedText || (versionId === resumeId ? resume?.extractedText : null);
+
+    if (existingText) {
+      setFetchedPreviewText(null);
+      setVersionPreviewLabel(label);
+      setVersionPreviewUrl(versionId);
+      return;
     }
 
-    return changes;
+    // Not available - fetch from API
+    setPreviewLoading(true);
+    setVersionPreviewLabel(label);
+    try {
+      const data = await resumeService.get(versionId);
+      if (data?.extracted_text) {
+        setFetchedPreviewText(data.extracted_text);
+        setVersionPreviewUrl(versionId);
+      } else {
+        toast.info('Preview not available. Use the download button.');
+      }
+    } catch (err) {
+      console.error('Failed to fetch preview text:', err);
+      toast.error('Failed to load preview');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Build unified diff: interleave added/removed/unchanged lines preserving reading order
+  const buildUnifiedDiff = (olderText: string, newerText: string) => {
+    const normalize = (text: string) =>
+      text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+    const olderLines = normalize(olderText);
+    const newerLines = normalize(newerText);
+
+    if (!olderText && !newerText) return { lines: [] as { text: string; type: 'added' | 'removed' | 'unchanged' }[], addedCount: 0, removedCount: 0, unchangedCount: 0 };
+
+    // Simple LCS-based diff for proper interleaving
+    const olderLen = olderLines.length;
+    const newerLen = newerLines.length;
+
+    // Build LCS table
+    const dp: number[][] = Array.from({ length: olderLen + 1 }, () => Array(newerLen + 1).fill(0));
+    for (let i = 1; i <= olderLen; i++) {
+      for (let j = 1; j <= newerLen; j++) {
+        if (olderLines[i - 1] === newerLines[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1] + 1;
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+    }
+
+    // Backtrack to build diff
+    type DiffLine = { text: string; type: 'added' | 'removed' | 'unchanged' };
+    const result: DiffLine[] = [];
+    let i = olderLen, j = newerLen;
+
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && olderLines[i - 1] === newerLines[j - 1]) {
+        result.unshift({ text: olderLines[i - 1], type: 'unchanged' });
+        i--; j--;
+      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+        result.unshift({ text: newerLines[j - 1], type: 'added' });
+        j--;
+      } else {
+        result.unshift({ text: olderLines[i - 1], type: 'removed' });
+        i--;
+      }
+    }
+
+    const addedCount = result.filter(l => l.type === 'added').length;
+    const removedCount = result.filter(l => l.type === 'removed').length;
+    const unchangedCount = result.filter(l => l.type === 'unchanged').length;
+
+    return { lines: result, addedCount, removedCount, unchangedCount };
   };
 
   useEffect(() => {
@@ -725,6 +764,13 @@ Best regards`);
       <div className="bg-gray-50 border-b border-gray-300 px-6 py-3 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleVersionPreview(resumeId, resume?.name || 'Resume')}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+            >
+              <Eye className="w-4 h-4" />
+              View
+            </button>
             <button
               onClick={handleDownload}
               className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
@@ -1226,17 +1272,32 @@ Best regards`);
                 <span className="px-2.5 py-0.5 bg-gray-300 text-gray-700 rounded-full text-xs">
                   {resume.versions.length} version{resume.versions.length !== 1 ? 's' : ''}
                 </span>
+                {resume.versions.length > 1 && (
+                  <button
+                    onClick={openCompareModal}
+                    disabled={compareChecked.length !== 2}
+                    className={`ml-auto px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                      compareChecked.length === 2
+                        ? 'bg-gray-800 text-white hover:bg-gray-900'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {compareChecked.length === 2
+                      ? 'Compare Selected'
+                      : compareChecked.length === 1
+                        ? 'Select 1 more to compare'
+                        : 'Select 2 versions to compare'}
+                  </button>
+                )}
               </div>
+
               <div className="space-y-3">
                 {(() => {
                   const sortedVersions = [...resume.versions].sort((a, b) => (b.version || 0) - (a.version || 0));
                   return sortedVersions.map((version, index) => {
                     const isLatest = index === 0;
                     const versionNumber = version.version || (resume.versions.length - index);
-                    // Get previous version for comparison (next in sorted array since sorted newest first)
                     const previousVersion = index < sortedVersions.length - 1 ? sortedVersions[index + 1] : null;
-                    const changes = getVersionChanges(version, previousVersion);
-                    const isExpanded = expandedVersionId === version.id;
 
                     return (
                       <div key={version.id} className={`rounded-lg border transition-all ${
@@ -1247,6 +1308,17 @@ Best regards`);
                         <div className="p-4">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3 flex-1">
+                              {/* Compare checkbox */}
+                              {resume.versions.length > 1 && (
+                                <label className="flex items-center cursor-pointer flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={compareChecked.includes(version.id)}
+                                    onChange={() => handleCompareCheck(version.id)}
+                                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500 cursor-pointer"
+                                  />
+                                </label>
+                              )}
                               <div className={`p-2 rounded-lg ${
                                 isLatest ? 'bg-blue-100' : 'bg-gray-200'
                               }`}>
@@ -1290,21 +1362,36 @@ Best regards`);
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
+                              {/* View Changes - opens popup comparing to previous version */}
+                              {previousVersion && (
+                                <button
+                                  onClick={() => openCompareModal(previousVersion.id, version.id)}
+                                  className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                >
+                                  <History className="w-3 h-3" />
+                                  View Changes
+                                </button>
+                              )}
+                              {!previousVersion && (
+                                <span className="px-3 py-1.5 text-xs text-gray-400 italic">First version</span>
+                              )}
+                              {/* View (preview) button */}
                               <button
-                                onClick={() => setExpandedVersionId(isExpanded ? null : version.id)}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${
-                                  isExpanded
-                                    ? 'bg-gray-800 text-white'
-                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                onClick={() => handleVersionPreview(version.id, `Version ${versionNumber}`)}
+                                className={`p-2 rounded-md transition-colors ${
+                                  isLatest
+                                    ? 'text-blue-600 hover:bg-blue-100'
+                                    : 'text-gray-600 hover:bg-gray-300'
                                 }`}
+                                title="View resume"
                               >
-                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                {isExpanded ? 'Hide' : 'View'} Changes
+                                <Eye className="w-4 h-4" />
                               </button>
+                              {/* Download button */}
                               <button
                                 onClick={async () => {
                                   try {
-                                    const blob = await resumeService.downloadVersion(resumeId, version.id);
+                                    const blob = await resumeService.download(version.id);
                                     const url = window.URL.createObjectURL(blob);
                                     const link = document.createElement('a');
                                     link.href = url;
@@ -1329,53 +1416,6 @@ Best regards`);
                             </div>
                           </div>
                         </div>
-
-                        {/* Version Changes - Expanded */}
-                        {isExpanded && (
-                          <div className={`px-4 pb-4 pt-2 border-t ${isLatest ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-gray-50/50'}`}>
-                            <div className="text-xs font-medium text-gray-700 mb-3 flex items-center gap-1">
-                              <History className="w-3 h-3" />
-                              Changes in Version {versionNumber}
-                            </div>
-                            {changes && changes.length > 0 ? (
-                              <div className="space-y-3">
-                                {changes.map((change, idx) => (
-                                  <div key={idx} className="space-y-1">
-                                    <span className="px-2 py-1 text-[10px] font-semibold rounded bg-gray-700 text-white inline-block">
-                                      {change.category}
-                                    </span>
-                                    <div className="space-y-1 pl-1">
-                                      {/* Show changed value (from -> to) */}
-                                      {change.changed && (
-                                        <div className="text-xs p-2 rounded bg-yellow-50 border border-yellow-200 text-yellow-800">
-                                          <span className="line-through opacity-60">{change.changed.from}</span>
-                                          <span className="mx-2">→</span>
-                                          <span className="font-medium">{change.changed.to}</span>
-                                        </div>
-                                      )}
-                                      {/* Show added items */}
-                                      {change.added.map((val, i) => (
-                                        <div key={`add-${i}`} className="text-xs p-2 rounded bg-green-50 border border-green-200 text-green-800 flex items-start gap-2">
-                                          <span className="font-bold text-green-600 flex-shrink-0">+</span>
-                                          <span className="break-words" title={val}>{val.length > 150 ? val.substring(0, 150) + '...' : val}</span>
-                                        </div>
-                                      ))}
-                                      {/* Show removed items */}
-                                      {change.removed.map((val, i) => (
-                                        <div key={`rem-${i}`} className="text-xs p-2 rounded bg-red-50 border border-red-200 text-red-800 flex items-start gap-2">
-                                          <span className="font-bold text-red-600 flex-shrink-0">−</span>
-                                          <span className="break-words" title={val}>{val.length > 150 ? val.substring(0, 150) + '...' : val}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-gray-500 italic">No changes detected compared to previous version.</p>
-                            )}
-                          </div>
-                        )}
                       </div>
                     );
                   });
@@ -1505,6 +1545,267 @@ Best regards`);
 
         </div>
       </div>
+
+      {/* Version Changes Popup Modal - Unified diff with all content highlighted */}
+      {showCompareModal && compareLeftId && compareRightId && resume?.versions && (() => {
+        const leftVersion = resume.versions.find(v => v.id === compareLeftId);
+        const rightVersion = resume.versions.find(v => v.id === compareRightId);
+        if (!leftVersion || !rightVersion) return null;
+
+        const olderText = leftVersion.extractedText || '';
+        const newerText = rightVersion.extractedText || '';
+        const diff = buildUnifiedDiff(olderText, newerText);
+
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
+                    <History className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      Changes in Version {rightVersion.version || '?'}
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                      Compared to Version {leftVersion.version || '?'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-200 rounded-full text-green-700">
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      +{diff.addedCount} added
+                    </span>
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 border border-red-200 rounded-full text-red-700">
+                      <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                      −{diff.removedCount} removed
+                    </span>
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-full text-gray-600">
+                      {diff.unchangedCount} unchanged
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowCompareModal(false);
+                      setCompareChecked([]);
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <X className="w-5 h-5 text-gray-500" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Resume document with diff highlights */}
+              <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
+                {!olderText && !newerText ? (
+                  <div className="text-center text-gray-500 py-12">
+                    <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p>Extracted text not available for comparison.</p>
+                  </div>
+                ) : diff.addedCount === 0 && diff.removedCount === 0 ? (
+                  <div className="text-center text-gray-500 py-12">
+                    <Check className="w-12 h-12 mx-auto mb-3 text-green-400" />
+                    <p className="font-medium">No changes detected</p>
+                    <p className="text-sm mt-1">Content is identical between these versions.</p>
+                  </div>
+                ) : (() => {
+                  const compareSectionHeaders = [
+                    'experience', 'work experience', 'employment', 'professional experience',
+                    'education', 'academic', 'qualifications',
+                    'skills', 'technical skills', 'core competencies', 'expertise', 'key skills',
+                    'summary', 'professional summary', 'objective', 'profile', 'about',
+                    'certifications', 'certificates', 'licenses',
+                    'projects', 'key projects',
+                    'achievements', 'accomplishments', 'awards',
+                    'languages', 'contact', 'personal', 'references', 'hobbies', 'interests'
+                  ];
+                  const firstNonEmpty = diff.lines.findIndex(l => l.text.trim().length > 0);
+
+                  return (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-3xl mx-auto">
+                      {diff.lines.map((line, idx) => {
+                        const trimmed = line.text.trim();
+                        if (!trimmed) return <div key={idx} className="h-3" />;
+
+                        const lowerLine = trimmed.toLowerCase().replace(/[:\-_]/g, ' ').trim();
+                        const isHeader = compareSectionHeaders.some(h =>
+                          lowerLine === h || lowerLine.startsWith(h + ' ') || lowerLine.endsWith(' ' + h)
+                        ) && trimmed.length < 50;
+
+                        // Highlight classes based on diff type
+                        const highlightClass = line.type === 'added'
+                          ? 'bg-green-100 border-l-4 border-green-500 pl-3'
+                          : line.type === 'removed'
+                          ? 'bg-red-50 border-l-4 border-red-400 pl-3 line-through opacity-70'
+                          : '';
+
+                        const textColor = line.type === 'added'
+                          ? 'text-green-900'
+                          : line.type === 'removed'
+                          ? 'text-red-700'
+                          : 'text-gray-800';
+
+                        // Section header
+                        if (isHeader) {
+                          return (
+                            <h3 key={idx} className={`text-base font-bold mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide rounded ${highlightClass} ${textColor}`}>
+                              {trimmed}
+                            </h3>
+                          );
+                        }
+
+                        // First line = candidate name
+                        if (idx === firstNonEmpty) {
+                          return (
+                            <h2 key={idx} className={`text-xl font-bold mb-1 rounded ${highlightClass} ${textColor}`}>
+                              {trimmed}
+                            </h2>
+                          );
+                        }
+
+                        // Bullet points
+                        if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
+                          return (
+                            <p key={idx} className={`text-sm leading-relaxed pl-4 mb-0.5 rounded ${highlightClass} ${textColor}`}>
+                              {trimmed}
+                            </p>
+                          );
+                        }
+
+                        // Regular text
+                        return (
+                          <p key={idx} className={`text-sm leading-relaxed mb-0.5 rounded ${highlightClass} ${textColor}`}>
+                            {trimmed}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end px-6 py-3 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    setShowCompareModal(false);
+                    setCompareChecked([]);
+                  }}
+                  className="px-5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Version Preview Modal - shows extracted text content */}
+      {/* Loading overlay for preview fetch */}
+      {previewLoading && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-8 flex items-center gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-gray-600" />
+            <span className="text-gray-700">Loading preview...</span>
+          </div>
+        </div>
+      )}
+
+      {versionPreviewUrl && (() => {
+        const previewVersion = resume?.versions?.find(v => v.id === versionPreviewUrl);
+        const previewText = previewVersion?.extractedText || resume?.extractedText || fetchedPreviewText || '';
+        if (!previewText) return null;
+
+        // Parse text into sections for document-like display
+        const lines = previewText.split('\n');
+        const sectionHeaders = [
+          'experience', 'work experience', 'employment', 'professional experience',
+          'education', 'academic', 'qualifications',
+          'skills', 'technical skills', 'core competencies', 'expertise', 'key skills',
+          'summary', 'professional summary', 'objective', 'profile', 'about',
+          'certifications', 'certificates', 'licenses',
+          'projects', 'key projects',
+          'achievements', 'accomplishments', 'awards',
+          'languages', 'contact', 'personal', 'references', 'hobbies', 'interests'
+        ];
+
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[90vh] flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
+                    <Eye className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">{versionPreviewLabel}</h2>
+                    <p className="text-sm text-gray-500">{previewVersion?.name || resume?.fileName}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setVersionPreviewUrl(null);
+                    setVersionPreviewLabel('');
+                    setFetchedPreviewText(null);
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {/* Resume content - document style */}
+              <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full">
+                  {lines.map((line, idx) => {
+                    const trimmed = line.trim();
+                    if (!trimmed) return <div key={idx} className="h-3" />;
+
+                    const lowerLine = trimmed.toLowerCase().replace(/[:\-_]/g, ' ').trim();
+                    const isHeader = sectionHeaders.some(h =>
+                      lowerLine === h || lowerLine.startsWith(h + ' ') || lowerLine.endsWith(' ' + h)
+                    ) && trimmed.length < 50;
+
+                    if (isHeader) {
+                      return (
+                        <h3 key={idx} className="text-base font-bold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide">
+                          {trimmed}
+                        </h3>
+                      );
+                    }
+
+                    // First non-empty line could be the name
+                    const firstNonEmpty = lines.findIndex(l => l.trim().length > 0);
+                    if (idx === firstNonEmpty) {
+                      return (
+                        <h2 key={idx} className="text-xl font-bold text-gray-900 mb-1">{trimmed}</h2>
+                      );
+                    }
+
+                    // Bullet points
+                    if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
+                      return (
+                        <p key={idx} className="text-sm text-gray-700 leading-relaxed pl-4 mb-0.5">{trimmed}</p>
+                      );
+                    }
+
+                    return (
+                      <p key={idx} className="text-sm text-gray-700 leading-relaxed mb-0.5">{trimmed}</p>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Version Selection Modal for Apply to Job */}
       {showVersionSelectModal && resume && resume.versions && (

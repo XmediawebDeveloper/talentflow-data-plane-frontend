@@ -654,15 +654,25 @@ export const assessmentService = {
   /**
    * 3. Export assessment results
    * Returns blob for file download
+   * ✅ UPDATED: Now accepts enabled columns list to match UI column visibility
    */
   async exportResults(
     assessmentId: string,
     format: ExportFormat = 'csv',
-    includeDetails: boolean = false
+    includeDetails: boolean = false,
+    columns?: string[] // Pass enabled columns to backend
   ): Promise<Blob> {
     try {
+      const params: any = { format, include_details: includeDetails };
+
+      // Include enabled columns if provided
+      if (columns && columns.length > 0) {
+        params.columns = columns.join(',');
+        console.log('[EXPORT API] Exporting columns:', params.columns);
+      }
+
       const response = await api.get(`/assessments/${assessmentId}/results/export`, {
-        params: { format, include_details: includeDetails },
+        params,
         responseType: 'blob',
       });
       return response.data;

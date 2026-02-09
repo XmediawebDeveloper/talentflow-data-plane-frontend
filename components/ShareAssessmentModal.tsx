@@ -1,6 +1,7 @@
 import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, FileText, Users, Upload, Database, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { assessmentService } from '@/lib/services';
 import api from '@/lib/services/api';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
@@ -46,6 +47,7 @@ interface Resume {
 
 export default function ShareAssessmentModal({ isOpen, onClose, assessment }: ShareAssessmentModalProps) {
   const router = useRouter();
+  const { user } = useAuth();
 
   // Remove "- Version X" from title for email display
   const assessmentTitleForEmail = stripVersionFromTitle(assessment.title);
@@ -71,23 +73,59 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
   const loadResumes = async () => {
     setIsLoadingResumes(true);
     try {
-      const response = await api.get('/resumes', {
-        params: { source: 'internal-db', page_size: 100 }
-      });
-      if (response.data?.items) {
-        const mapped = response.data.items.map((r: any) => ({
-          id: r.id,
-          name: r.candidate_name || 'Unknown',
-          email: r.email || '',
-          phone: r.phone || '',
-          position: r.current_title || 'Not specified',
-          experience: r.experience_years ? `${r.experience_years} years` : 'Not specified',
-          skills: r.skills || []
-        }));
-        setResumeDatabase(mapped);
+      // Load resumes from both Internal DB and My Resumes based on user permissions
+      const sources = [];
+
+      // Check if user has Internal Database access
+      if (user?.permissions?.canAccessInternalDb) {
+        sources.push('internal-db');
       }
+
+      // Check if user has My Resumes access
+      if (user?.permissions?.canUploadResumes || user?.permissions?.canViewMyResumes) {
+        sources.push('my-resumes');
+      }
+
+      // If no specific permissions, try both (fallback for admin)
+      if (sources.length === 0) {
+        sources.push('internal-db', 'my-resumes');
+      }
+
+      // Fetch resumes from all available sources
+      const allResumes: any[] = [];
+      for (const source of sources) {
+        try {
+          const response = await api.get('/resumes', {
+            params: { source, page_size: 100 }
+          });
+          if (response.data?.items) {
+            allResumes.push(...response.data.items);
+          }
+        } catch (err) {
+          console.warn(`Failed to load resumes from ${source}:`, err);
+        }
+      }
+
+      // Map and deduplicate resumes
+      const mapped = allResumes.map((r: any) => ({
+        id: r.id,
+        name: r.candidate_name || 'Unknown',
+        email: r.email || r.candidate_email || '',
+        phone: r.phone || '',
+        position: r.current_title || 'Not specified',
+        experience: r.experience_years ? `${r.experience_years} years` : 'Not specified',
+        skills: r.skills || []
+      }));
+
+      // Remove duplicates by email
+      const uniqueResumes = mapped.filter((resume, index, self) =>
+        index === self.findIndex((r) => r.email === resume.email && resume.email !== '')
+      );
+
+      setResumeDatabase(uniqueResumes);
     } catch (error) {
       console.error('Failed to load resumes:', error);
+      toast.error('Failed to load resumes from database');
     } finally {
       setIsLoadingResumes(false);
     }

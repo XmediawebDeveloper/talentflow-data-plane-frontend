@@ -395,6 +395,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     restoreSession();
   }, []);
 
+  // ✅ PERMISSION CACHE FIX: Listen for permission updates from API interceptor
+  // When permissions are edited in admin panel, the api.ts interceptor detects version change
+  // and dispatches 'permissions-updated' event. This listener catches it and refreshes user data.
+  useEffect(() => {
+    const handlePermissionsUpdated = async () => {
+      console.log('[AUTH] Permissions updated event received - refreshing user data');
+      try {
+        // Fetch fresh user data with new permissions
+        const apiUserData = await authService.getCurrentUser();
+        const userData = mapApiUserToUser(apiUserData);
+        setUser(userData);
+        saveUserToStorage(userData);
+        console.log('[AUTH] User data refreshed with new permissions:', userData.permissions);
+
+        // Optionally show toast notification (if you have a toast library)
+        // toast.success('Your permissions have been updated.');
+      } catch (error) {
+        console.error('[AUTH] Failed to refresh user after permission update:', error);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('permissions-updated', handlePermissionsUpdated);
+      console.log('[AUTH] Permission update listener registered');
+      return () => {
+        window.removeEventListener('permissions-updated', handlePermissionsUpdated);
+        console.log('[AUTH] Permission update listener cleaned up');
+      };
+    }
+  }, []); // Empty deps - only register once on mount
+
+  // ✅ PERMISSION CACHE FIX: Periodic permission version check (fallback)
+  // Checks every 30 seconds if permission version changed on server
+  // This catches updates even when user doesn't make API calls
+  useEffect(() => {
+    if (!user) return;
+
+    const checkPermissions = async () => {
+      try {
+        const storedVersion = localStorage.getItem('permission_version');
+        if (!storedVersion) return;
+
+        const { permission_version } = await authService.checkPermissionVersion();
+        const currentVersion = parseInt(storedVersion, 10);
+
+        if (permission_version > currentVersion) {
+          console.log(`[AUTH] Detected permission change via polling: ${currentVersion} → ${permission_version}`);
+          // Update the stored version
+          localStorage.setItem('permission_version', permission_version.toString());
+
+          // Trigger user data refresh
+          const apiUserData = await authService.getCurrentUser();
+          const userData = mapApiUserToUser(apiUserData);
+          setUser(userData);
+          saveUserToStorage(userData);
+          console.log('[AUTH] Permissions refreshed via polling ✅');
+        }
+      } catch (error) {
+        // Silent fail - don't disrupt user experience with polling errors
+        console.debug('[AUTH] Permission polling check failed (normal if idle):', error);
+      }
+    };
+
+    // Check every 30 seconds when user is active
+    const interval = setInterval(checkPermissions, 30000);
+    console.log('[AUTH] Permission polling started (30s interval)');
+
+    return () => {
+      clearInterval(interval);
+      console.log('[AUTH] Permission polling stopped');
+    };
+  }, [user]); // Re-run if user changes (login/logout)
+
   const login = (userData: User, tenantName?: string) => {
     console.log('[AUTH] Login called for:', userData.email, 'tenant:', tenantName);
     setUser(userData);
@@ -408,6 +481,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTenant(tenantData);
     saveUserToStorage(userData);
     saveTenantToStorage(tenantData);
+
+    // ✅ PERMISSION CACHE FIX: Clear permission version on login to force fresh check
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('permission_version');
+      console.log('[AUTH] Permission version cache cleared on login');
+    }
   };
 
   const logout = () => {
@@ -417,6 +496,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearTokens();
     clearUserFromStorage();
     clearTenantFromStorage();
+
+    // ✅ PERMISSION CACHE FIX: Clear permission version on logout
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('permission_version');
+      console.log('[AUTH] Permission version cache cleared on logout');
+    }
+
     router.push('/login');
   };
 

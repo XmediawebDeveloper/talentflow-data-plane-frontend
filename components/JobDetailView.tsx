@@ -2,6 +2,7 @@
 
 import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import ReactMarkdown from 'react-markdown';
 import { jdService, JDVersion, JDUsageStatus } from '@/lib/services/jdService';
@@ -20,6 +21,7 @@ import { Resume } from '@/lib/types/types';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
+import TrackInvitesModal from './TrackInvitesModal';
 import { toast } from 'sonner';
 
 // Helper function to format UTC date to IST
@@ -91,6 +93,8 @@ interface JobDetailViewProps {
 }
 
 export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false }: JobDetailViewProps) {
+  const router = useRouter();
+
   const handleEdit = () => {
     if (onEdit) {
       onEdit(job);
@@ -134,6 +138,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // Assessment results state
   const [assessmentResults, setAssessmentResults] = useState<any[]>([]);
   const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
+
+  // Track Invites modal state
+  const [showTrackInvitesModal, setShowTrackInvitesModal] = useState(false);
 
   // Fetch JD History when modal opens
   useEffect(() => {
@@ -1170,9 +1177,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <span>View JD History</span>
               </button>
 
-              {/* Assessment Status */}
+              {/* Assessment Status - Opens Track Invites Modal */}
               <button
-                onClick={() => setActiveTab('assessment-results')}
+                onClick={() => setShowTrackInvitesModal(true)}
                 className="w-full px-4 py-2.5 text-sm bg-gray-700 text-white hover:bg-gray-800 rounded-md transition-all shadow-sm text-left flex items-center gap-2"
               >
                 <Target className="w-4 h-4" />
@@ -1788,6 +1795,16 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           jobId={job.id}
           onComplete={handleAIMatchComplete}
           onError={handleAIMatchError}
+        />
+      )}
+
+      {/* Track Invites Modal */}
+      {showTrackInvitesModal && (
+        <TrackInvitesModal
+          isOpen={showTrackInvitesModal}
+          onClose={() => setShowTrackInvitesModal(false)}
+          jdId={job.id}
+          jdTitle={job.title}
         />
       )}
     </main>

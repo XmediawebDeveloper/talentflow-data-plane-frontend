@@ -988,6 +988,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                             <div className={`w-2 h-2 rounded-full ${creationMethodConfig.dot}`}></div>
                             {creationMethodConfig.label}
                           </span>
+                          {job.currentVersion && job.currentVersion >= 1 && (
+                            <span className="px-3 py-1.5 rounded-full text-sm bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-gray-500"></div>
+                              v{job.currentVersion}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mb-2">
@@ -1254,6 +1260,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                             <div className={`w-2 h-2 rounded-full ${creationMethodConfig.dot}`}></div>
                             {creationMethodConfig.label}
                           </span>
+                          {job.currentVersion && job.currentVersion >= 1 && (
+                            <span className="px-3 py-1.5 rounded-full text-sm bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-2 flex-shrink-0">
+                              <div className="w-2 h-2 rounded-full bg-gray-500"></div>
+                              v{job.currentVersion}
+                            </span>
+                          )}
                         </div>
 
                         {/* Primary Info Row */}
