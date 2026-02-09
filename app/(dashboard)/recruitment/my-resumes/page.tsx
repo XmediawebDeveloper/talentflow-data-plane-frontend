@@ -562,12 +562,13 @@ export default function MyResumesPage() {
   // Ref to store active polling intervals for cleanup
   const pollingIntervalsRef = useRef<Set<NodeJS.Timeout>>(new Set());
 
-  const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string) => {
+  const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean) => {
     console.log('[FETCH] fetchData called', {
       searchTerm,
       filtersKeys: currentFilters ? Object.keys(currentFilters) : 'none',
       folderId,
-      isFetching: isFetchingRef.current
+      isFetching: isFetchingRef.current,
+      silent,
     });
 
     // Prevent concurrent fetches - stops flickering from rapid calls
@@ -577,7 +578,7 @@ export default function MyResumesPage() {
     }
 
     isFetchingRef.current = true;
-    setLoading(true);
+    if (!silent) setLoading(true);
     console.log('[FETCH] Starting fetch...');
     try {
       // Build search params for backend API
@@ -1551,9 +1552,16 @@ export default function MyResumesPage() {
     if (files.length === 1) {
       try {
         const r = await resumeService.upload(files[0], targetFolderId);
+        // Optimistic update for instant UI feedback
         const converted = convertApiResume(r);
         setResumes(prev => [converted, ...prev]);
         toast.success('Resume uploaded successfully');
+        // Background refresh to get correct uploaded_by_name, version counts, etc.
+        setTimeout(() => {
+          isFetchingRef.current = false; // Reset guard so fetchData can run
+          fetchData(undefined, undefined, undefined, true);
+          fetchUploadHistory();
+        }, 500);
         return {
           success: true,
           resumeId: r.id,
@@ -2043,28 +2051,26 @@ export default function MyResumesPage() {
           toast.success('New resume discarded, keeping existing', { id: toastId });
         } else {
           // Use the resolve duplicate and upload endpoint
-          const result = await resumeService.resolveDuplicateAndUpload(
+          await resumeService.resolveDuplicateAndUpload(
             duplicateFile.file,
             duplicateFile.existingResume.id,
             resolution.action,
             pendingUploadFolderId
           );
 
-          const converted = convertApiResume(result);
-
           if (resolution.action === 'overwrite') {
-            // Overwrite updates the SAME row (same ID), so REPLACE the existing item in list
-            setResumes(prev => prev.map(r =>
-              r.id === duplicateFile.existingResume.id ? converted : r
-            ));
             toast.success('Resume overwritten successfully', { id: toastId });
           } else {
-            // Version creates NEW row (new ID), so add new and remove old
-            setResumes(prev => [converted, ...prev.filter(r => r.id !== duplicateFile.existingResume.id)]);
             toast.success(`Resume saved as version ${(duplicateFile.existingResume.version || 1) + 1}`, { id: toastId });
           }
         }
       }
+      // Refresh full list from server to get correct data
+      setTimeout(() => {
+        isFetchingRef.current = false;
+        fetchData(undefined, undefined, undefined, true);
+        fetchUploadHistory();
+      }, 500);
     } catch (error: any) {
       console.error('Error resolving duplicates:', error);
       toast.error('Failed to resolve duplicate', { id: toastId });

@@ -758,7 +758,7 @@ export default function SignUp({ onSignUp, onSwitchToLogin, onBackToPublic }: Si
           </div>
 
           <div style={copyrightStyle}>
-            © 2025 TalentFlow. All rights reserved.
+            © 2026 TalentFlow. All rights reserved.
           </div>
         </div>
       </div>

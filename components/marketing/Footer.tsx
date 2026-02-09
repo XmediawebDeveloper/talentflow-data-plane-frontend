@@ -139,7 +139,7 @@ export function Footer() {
 
         <div className="border-t border-gray-700 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-gray-400 text-sm">
-            &copy; 2025 BusinessIntegra. All rights reserved.
+            &copy; 2026 BusinessIntegra. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <a

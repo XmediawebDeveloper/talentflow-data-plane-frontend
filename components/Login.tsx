@@ -567,7 +567,7 @@ export default function Login({ onLogin, onSwitchToSignUp, onBackToPublic }: Log
           </div>
 
           <div style={copyrightStyle}>
-            © 2025 TalentFlow. All rights reserved.
+            © 2026 TalentFlow. All rights reserved.
           </div>
         </div>
       </div>

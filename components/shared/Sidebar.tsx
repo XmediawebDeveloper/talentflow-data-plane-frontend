@@ -48,7 +48,14 @@ import { User, Tenant } from '@/lib/types/tenant';
 interface SidebarProps {
   user?: User;
   tenant?: Tenant;
+  subscriptionExpired?: boolean;
 }
+
+// Paths allowed even when subscription is expired
+const SUBSCRIPTION_ALLOWED_PATHS = [
+  '/subscription/current-plan',
+  '/subscription/payment-methods',
+];
 
 interface NavItem {
   id: string;
@@ -68,7 +75,7 @@ interface NavSection {
   adminOnly?: boolean;
 }
 
-export default function Sidebar({ user, tenant }: SidebarProps) {
+export default function Sidebar({ user, tenant, subscriptionExpired }: SidebarProps) {
   const pathname = usePathname();
   const [expandedSections, setExpandedSections] = useState<string[]>([
     'administration', 'recruitment', 'resume-management', 'evaluation',
@@ -425,22 +432,40 @@ export default function Sidebar({ user, tenant }: SidebarProps) {
 
             {/* Section Items */}
             <div className="space-y-0.5">
-              {section.items.map((item) => (
-                <Link
-                  key={item.id}
-                  href={item.href || '#'}
-                  prefetch={false}
-                  className={`w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm transition-colors ${
-                    isActive(item.href)
-                      ? 'bg-gray-800 text-white font-medium shadow-sm'
-                      : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
-                  }`}
-                  style={{ width: 'calc(100% - 16px)' }}
-                >
-                  <item.icon className={`w-4 h-4 flex-shrink-0 ${isActive(item.href) ? 'text-white' : 'text-gray-500'}`} />
-                  <span>{item.label}</span>
-                </Link>
-              ))}
+              {section.items.map((item) => {
+                const isItemAllowed = !subscriptionExpired || SUBSCRIPTION_ALLOWED_PATHS.includes(item.href || '');
+
+                if (!isItemAllowed) {
+                  return (
+                    <div
+                      key={item.id}
+                      className="w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm text-gray-400 cursor-not-allowed opacity-50"
+                      style={{ width: 'calc(100% - 16px)' }}
+                      title="Renew your subscription to access this feature"
+                    >
+                      <item.icon className="w-4 h-4 flex-shrink-0 text-gray-300" />
+                      <span>{item.label}</span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={item.id}
+                    href={item.href || '#'}
+                    prefetch={false}
+                    className={`w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm transition-colors ${
+                      isActive(item.href)
+                        ? 'bg-gray-800 text-white font-medium shadow-sm'
+                        : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
+                    }`}
+                    style={{ width: 'calc(100% - 16px)' }}
+                  >
+                    <item.icon className={`w-4 h-4 flex-shrink-0 ${isActive(item.href) ? 'text-white' : 'text-gray-500'}`} />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         ))}
