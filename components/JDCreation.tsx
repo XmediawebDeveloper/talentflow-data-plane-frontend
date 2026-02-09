@@ -5445,20 +5445,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             <h2 className="text-2xl text-gray-900 mb-4">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
 
             {/* JD Name, Code and Version */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg px-6 py-4 mb-6 inline-block">
-              <div className="flex items-center justify-center gap-3 mb-2">
-                {publishedJobCode && (
-                  <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
-                    {publishedJobCode}
-                  </span>
-                )}
-                {publishedVersion && (
-                  <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                    v{publishedVersion}
-                  </span>
-                )}
-              </div>
-              <div className="text-lg font-semibold text-gray-900">{jobTitle}</div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg px-6 py-3 mb-6 inline-flex items-center gap-3">
+              {publishedJobCode && (
+                <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
+                  {publishedJobCode}
+                </span>
+              )}
+              <span className="text-lg font-semibold text-gray-900">{jobTitle}</span>
+              {publishedVersion && (
+                <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                  v{publishedVersion}
+                </span>
+              )}
             </div>
 
             <p className="text-gray-600 mb-2">
