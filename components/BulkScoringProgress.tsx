@@ -425,6 +425,7 @@ export default function BulkScoringProgress({
                     {item.scoredDate ? (
                       <div className="text-sm text-gray-900">
                         {new Date(item.scoredDate).toLocaleString('en-US', {
+                          timeZone: 'Asia/Kolkata',
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
