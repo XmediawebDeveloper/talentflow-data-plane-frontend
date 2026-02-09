@@ -22,6 +22,8 @@ interface ResumeSelectionModalProps {
   onScoreResumes: (selectedIds: string[], source: 'my-resumes' | 'database', versionSelections?: VersionSelection[]) => void;
   availableUnits?: number | null;
   onResumeUploaded?: (resume: Resume) => void;
+  error?: string | null;
+  onClearError?: () => void;
 }
 
 export default function ResumeSelectionModal({
@@ -32,7 +34,9 @@ export default function ResumeSelectionModal({
   onClose,
   onScoreResumes,
   availableUnits,
-  onResumeUploaded
+  onResumeUploaded,
+  error,
+  onClearError
 }: ResumeSelectionModalProps) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'database'>('my-resumes');
@@ -44,6 +48,7 @@ export default function ResumeSelectionModal({
   const [resumesForVersionSelection, setResumesForVersionSelection] = useState<Resume[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [localResumes, setLocalResumes] = useState<Resume[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Check if user has Internal DB access permission
@@ -95,19 +100,22 @@ export default function ResumeSelectionModal({
 
     const file = files[0];
 
+    // Clear previous upload error
+    setUploadError(null);
+
     // Validate file type
     const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/rtf', 'text/plain'];
     const allowedExtensions = ['.pdf', '.doc', '.docx', '.rtf', '.txt'];
     const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
 
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-      toast.error('Invalid file type. Please upload PDF, DOC, DOCX, RTF, or TXT files.');
+      setUploadError('Invalid file type. Please upload PDF, DOC, DOCX, RTF, or TXT files.');
       return;
     }
 
     // Validate file size (3MB max)
     if (file.size > 3 * 1024 * 1024) {
-      toast.error('File size exceeds 3MB limit.');
+      setUploadError('File size exceeds 3MB limit.');
       return;
     }
 
@@ -139,6 +147,9 @@ export default function ResumeSelectionModal({
         fileName: uploadedResume.file_name,
       };
 
+      // Clear any previous upload error
+      setUploadError(null);
+
       // Add to local resumes and auto-select
       setLocalResumes(prev => [newResume, ...prev]);
       setSelectedResumes(prev => [newResume.id, ...prev]);
@@ -151,11 +162,10 @@ export default function ResumeSelectionModal({
       toast.success(`Resume uploaded: ${newResume.name}`, { id: toastId });
     } catch (error: any) {
       console.error('Upload failed:', error);
+      toast.dismiss(toastId);
 
       // Handle duplicate error (409)
       if (error.status === 409 || error.response?.status === 409) {
-        toast.dismiss(toastId);
-
         // Parse the existing resume details from error response
         const errorData = error.response?.data || error.data || {};
         const existingResume = errorData.existing_resume;
@@ -176,12 +186,36 @@ export default function ResumeSelectionModal({
           });
           setShowDuplicateModal(true);
         } else {
-          toast.error('A resume with this email already exists.', { id: toastId });
+          setUploadError('A resume with this email already exists.');
         }
       } else if (error.message?.includes('DUPLICATE')) {
-        toast.error('A resume with this email already exists.', { id: toastId });
+        setUploadError('A resume with this email already exists.');
       } else {
-        toast.error(error.message || 'Failed to upload resume', { id: toastId });
+        // Extract detailed error message from API response
+        let errorMessage = 'Failed to upload resume. Please try again.';
+
+        if (error?.response?.status === 400 && error?.response?.data?.detail) {
+          const detail = error.response.data.detail;
+          if (typeof detail === 'string') {
+            errorMessage = detail;
+          } else if (detail.message) {
+            errorMessage = detail.message;
+            if (detail.file_name) {
+              errorMessage = `File: ${detail.file_name}\n${errorMessage}`;
+            }
+            if (detail.suggestion) {
+              errorMessage += `\n\nSuggestion: ${detail.suggestion}`;
+            }
+          } else if (detail.error) {
+            errorMessage = `${detail.error}: ${detail.message || 'Please check your file and try again.'}`;
+          }
+        } else if (error?.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error?.message) {
+          errorMessage = error.message;
+        }
+
+        setUploadError(errorMessage);
       }
     } finally {
       setIsUploading(false);
@@ -251,6 +285,7 @@ export default function ResumeSelectionModal({
     setSelectedResumes([]);
     setSearchTerm('');
     setSelectedFolder('all');
+    setUploadError(null); // Clear upload error when switching tabs
   };
 
   // Handle duplicate modal actions
@@ -506,6 +541,35 @@ export default function ResumeSelectionModal({
             )}
           </div>
         </div>
+
+        {/* Error Display */}
+        {(error || uploadError) && (
+          <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-red-900 mb-1">
+                {uploadError ? 'Upload Error' : 'Error'}
+              </div>
+              <div className="text-sm text-red-800 whitespace-pre-line">
+                {uploadError || error}
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (uploadError) {
+                  setUploadError(null);
+                }
+                if (error && onClearError) {
+                  onClearError();
+                }
+              }}
+              className="p-1 text-red-600 hover:text-red-800 hover:bg-red-100 rounded transition-colors"
+              aria-label="Close error"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Content Area */}
         <div className="flex flex-1 overflow-hidden">

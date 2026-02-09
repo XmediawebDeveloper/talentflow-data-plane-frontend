@@ -173,6 +173,7 @@ export default function ResumeScoringPage({
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [showResumeSelectionModal, setShowResumeSelectionModal] = useState(false);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [experienceFilter, setExperienceFilter] = useState<string>('all');
   const [isScoring, setIsScoring] = useState(false);
@@ -2224,7 +2225,12 @@ export default function ResumeScoringPage({
           databaseResumes={databaseResumes}
           folders={folders}
           availableUnits={availableUnits}
-          onClose={() => setShowResumeSelectionModal(false)}
+          error={selectionError}
+          onClearError={() => setSelectionError(null)}
+          onClose={() => {
+            setShowResumeSelectionModal(false);
+            setSelectionError(null); // Clear error when modal closes
+          }}
           onResumeUploaded={async (resume) => {
             // Add uploaded resume to local state temporarily for immediate display
             setUploadedResumes(prev => [resume, ...prev]);
@@ -2238,13 +2244,17 @@ export default function ResumeScoringPage({
             }
           }}
           onScoreResumes={async (selectedIds, source, versionSelections) => {
-            setShowResumeSelectionModal(false);
+            // Clear any previous error when attempting to score
+            setSelectionError(null);
 
             // Check for existing scores before proceeding
             try {
               toast.loading('Checking for existing scores...', { id: 'check-existing' });
               const checkResult = await scoringService.checkExistingScores(selectedJob, selectedIds);
               toast.dismiss('check-existing');
+
+              // Close modal only if check succeeds
+              setShowResumeSelectionModal(false);
 
               if (checkResult.existing_count > 0) {
                 // Build already-scored items for progress display
@@ -2282,10 +2292,33 @@ export default function ResumeScoringPage({
                 window.location.href = `/recruitment/resume-scoring?jd_id=${selectedJob}&start_scoring=true&show_progress=true`;
                 return;
               }
-            } catch (error) {
+            } catch (error: any) {
               console.error('Failed to check existing scores:', error);
               toast.dismiss('check-existing');
-              toast.error('Failed to verify existing scores. Please try again.');
+
+              // Extract detailed error message from API response
+              let errorMessage = 'Failed to verify existing scores. Please try again.';
+
+              if (error?.response?.status === 400 && error?.response?.data?.detail) {
+                const detail = error.response.data.detail;
+                if (typeof detail === 'string') {
+                  errorMessage = detail;
+                } else if (detail.message) {
+                  errorMessage = detail.message;
+                } else if (detail.error) {
+                  errorMessage = `${detail.error}: ${detail.message || 'Please check your selection and try again.'}`;
+                }
+              } else if (error?.response?.data?.message) {
+                errorMessage = error.response.data.message;
+              } else if (error?.message) {
+                errorMessage = error.message;
+              }
+
+              console.log('[ResumeScoringPage] Setting selection error:', errorMessage);
+
+              // Show error inline in the modal instead of toast
+              setSelectionError(errorMessage);
+              setShowResumeSelectionModal(true); // Keep/reopen modal with error
               return; // Don't proceed if check fails
             }
 

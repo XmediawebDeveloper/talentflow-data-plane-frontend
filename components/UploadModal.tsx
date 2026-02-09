@@ -4,6 +4,7 @@ import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
 import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
 import DuplicateResumeDetectedModal from './DuplicateResumeDetectedModal';
+import ErrorModal from './ErrorModal';
 
 // Default constants for fallback
 const DEFAULT_MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
@@ -502,10 +503,36 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
 
       // For bulk uploads or when scoring is not available, close modal
       onClose();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Upload error:', error);
+
+      // Handle INVALID_RESUME error from API
+      let errorMessage = 'Upload failed. Please try again.';
+      let fileName = selectedFiles[0]?.name || '';
+
+      if (error?.response?.status === 400 && error?.response?.data?.detail) {
+        const detail = error.response.data.detail;
+
+        if (detail.error === 'INVALID_RESUME') {
+          errorMessage = detail.message || 'Invalid Resume. The uploaded file does not appear to be a valid resume.';
+          fileName = detail.file_name || fileName;
+
+          // Add suggestion if available
+          if (detail.suggestion) {
+            errorMessage += `\n\n${detail.suggestion}`;
+          }
+        } else if (typeof detail === 'string') {
+          errorMessage = detail;
+        } else if (detail.message) {
+          errorMessage = detail.message;
+        }
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+
       setValidationErrors([{
-        fileName: '',
-        error: 'Upload failed. Please try again.',
+        fileName: fileName,
+        error: errorMessage,
         type: 'format'
       }]);
       setIsUploading(false);
@@ -788,7 +815,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                       {error.fileName && (
                         <div className="text-sm text-gray-900 truncate mb-1">{error.fileName}</div>
                       )}
-                      <div className={`text-sm ${
+                      <div className={`text-sm whitespace-pre-line ${
                         error.type === 'virus' ? 'text-red-800' :
                         error.type === 'storage' ? 'text-orange-700' :
                         error.type === 'duplicate' ? 'text-amber-800 font-medium' :
