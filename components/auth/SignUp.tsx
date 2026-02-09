@@ -1741,7 +1741,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           </div>
 
           <div style={{ marginTop: 24, textAlign: 'center', fontSize: 14, color: '#9CA3AF' }}>
-            © 2025 TalentFlow. All rights reserved.
+            © 2026 TalentFlow. All rights reserved.
           </div>
         </div>
       </div>
