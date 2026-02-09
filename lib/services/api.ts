@@ -113,23 +113,10 @@ export const getTokens = () => {
   return { accessToken, refreshToken };
 };
 
-export const clearTokens = () => {
-  accessToken = null;
-  refreshToken = null;
-  permissionVersion = null;
+// ✅ NEW: Permission version helper functions
+// These must be defined before clearTokens() since it uses clearPermissionVersion()
 
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('permission_version');
-
-    // Remove cookies with the same path used when setting them
-    Cookies.remove('accessToken', { path: '/' });
-    Cookies.remove('refreshToken', { path: '/' });
-  }
-};
-
-// ✅ NEW: Get current permission version from localStorage
+// Get current permission version from localStorage
 export const getPermissionVersion = (): number | null => {
   if (permissionVersion === null && typeof window !== 'undefined') {
     const storedVersion = localStorage.getItem('permission_version');
@@ -138,6 +125,41 @@ export const getPermissionVersion = (): number | null => {
     }
   }
   return permissionVersion;
+};
+
+// Set permission version in memory and localStorage
+export const setPermissionVersion = (version: number): void => {
+  permissionVersion = version;
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('permission_version', String(version));
+    console.log('[AUTH] Permission version updated:', version);
+  }
+};
+
+// Clear permission version from memory and localStorage
+export const clearPermissionVersion = (): void => {
+  permissionVersion = null;
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('permission_version');
+    console.log('[AUTH] Permission version cleared');
+  }
+};
+
+export const clearTokens = () => {
+  accessToken = null;
+  refreshToken = null;
+
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+
+    // Remove cookies with the same path used when setting them
+    Cookies.remove('accessToken', { path: '/' });
+    Cookies.remove('refreshToken', { path: '/' });
+  }
+
+  // Clear permission version using dedicated function
+  clearPermissionVersion();
 };
 
 // Handle 401 Unauthorized - clear tokens and redirect to login

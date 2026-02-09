@@ -175,14 +175,42 @@ function JDCreationContent() {
   const searchParams = useSearchParams();
   const jdId = searchParams.get('id');
   const stageFromUrl = searchParams.get('stage') as 'create' | 'extract' | 'review' | null;
-  const fromAssessment = searchParams.get('from') === 'assessment'; // Check if coming from assessment page
 
-  console.log('[JD-CREATION-PAGE] URL params:', {
-    from: searchParams.get('from'),
-    fromAssessment,
-    jdId,
-    stage: stageFromUrl
+  // Check multiple sources to determine if coming from assessments
+  const fromUrlParam = searchParams.get('from') === 'assessment';
+  const referrerIsAssessments = typeof document !== 'undefined' && document.referrer.includes('/recruitment/assessments');
+
+  // Store/retrieve assessment redirect intent in sessionStorage
+  const [fromAssessment, setFromAssessment] = useState(() => {
+    if (typeof window === 'undefined') return false;
+
+    // Check URL param first
+    if (fromUrlParam) {
+      sessionStorage.setItem('jd_return_to_assessments', 'true');
+      return true;
+    }
+
+    // Check referrer
+    if (referrerIsAssessments) {
+      sessionStorage.setItem('jd_return_to_assessments', 'true');
+      return true;
+    }
+
+    // Check sessionStorage for persisted intent
+    return sessionStorage.getItem('jd_return_to_assessments') === 'true';
   });
+
+  console.log('[JD-CREATION-PAGE] ========== INITIALIZATION ==========');
+  console.log('[JD-CREATION-PAGE] URL:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+  console.log('[JD-CREATION-PAGE] from param:', searchParams.get('from'));
+  console.log('[JD-CREATION-PAGE] fromUrlParam:', fromUrlParam);
+  console.log('[JD-CREATION-PAGE] referrer:', typeof document !== 'undefined' ? document.referrer : 'N/A');
+  console.log('[JD-CREATION-PAGE] referrerIsAssessments:', referrerIsAssessments);
+  console.log('[JD-CREATION-PAGE] sessionStorage value:', typeof window !== 'undefined' ? sessionStorage.getItem('jd_return_to_assessments') : null);
+  console.log('[JD-CREATION-PAGE] finalFromAssessment:', fromAssessment);
+  console.log('[JD-CREATION-PAGE] jdId:', jdId);
+  console.log('[JD-CREATION-PAGE] stage:', stageFromUrl);
+  console.log('[JD-CREATION-PAGE] =======================================');
 
   const [editingJD, setEditingJD] = useState<JDResponse | null>(null);
   const [loading, setLoading] = useState(true); // Start with loading true for access check
@@ -190,6 +218,16 @@ function JDCreationContent() {
   const [accessError, setAccessError] = useState<{ code: string; message: string } | null>(null);
   const [isJDInUse, setIsJDInUse] = useState(false);
   const [jdUsageMessage, setJdUsageMessage] = useState<string | undefined>(undefined);
+
+  // Monitor URL changes and update fromAssessment if needed
+  useEffect(() => {
+    const checkFromParam = searchParams.get('from');
+    if (checkFromParam === 'assessment' && !fromAssessment) {
+      console.log('[JD-CREATION-PAGE] 🔄 Detected from=assessment in URL, updating state');
+      sessionStorage.setItem('jd_return_to_assessments', 'true');
+      setFromAssessment(true);
+    }
+  }, [searchParams, fromAssessment]);
 
   // JD01: Pre-condition validation on page load
   useEffect(() => {
@@ -275,17 +313,51 @@ function JDCreationContent() {
     router.push('/recruitment/job-openings');
   };
 
-  // Handle successful JD publish - redirect to assessment creation if coming from assessments
+  // Handle successful JD publish - redirect to assessments page if coming from assessments
   const handleJDPublish = (publishedJD: any) => {
-    console.log('[JD-CREATION] onPublish callback triggered:', { fromAssessment, publishedJD });
+    console.log('[JD-CREATION-PAGE] ==================== PUBLISH CALLBACK ====================');
+    console.log('[JD-CREATION-PAGE] fromAssessment state:', fromAssessment);
+    console.log('[JD-CREATION-PAGE] URL from param:', searchParams.get('from'));
+    console.log('[JD-CREATION-PAGE] sessionStorage:', typeof window !== 'undefined' ? sessionStorage.getItem('jd_return_to_assessments') : null);
+    console.log('[JD-CREATION-PAGE] publishedJD:', publishedJD);
+    console.log('[JD-CREATION-PAGE] publishedJD.id:', publishedJD?.id);
+    console.log('[JD-CREATION-PAGE] publishedJD.title:', publishedJD?.title);
 
-    if (fromAssessment && publishedJD?.id) {
-      console.log('[JD-CREATION] Redirecting to assessment creation with JD:', publishedJD.id);
-      // Redirect to assessment creation with the new JD pre-selected
-      router.push(`/recruitment/assessments/create?jd_id=${publishedJD.id}&jd_title=${encodeURIComponent(publishedJD.title || 'New Job')}`);
+    // FORCE CHECK: Re-check all sources before redirecting
+    const shouldRedirect = fromAssessment ||
+                          searchParams.get('from') === 'assessment' ||
+                          (typeof window !== 'undefined' && sessionStorage.getItem('jd_return_to_assessments') === 'true');
+
+    console.log('[JD-CREATION-PAGE] shouldRedirect:', shouldRedirect);
+
+    if (shouldRedirect) {
+      if (publishedJD?.id) {
+        const redirectUrl = `/recruitment/assessments?create=true&jd_id=${publishedJD.id}&jd_title=${encodeURIComponent(publishedJD.title || 'New Job')}`;
+        console.log('[JD-CREATION-PAGE] ✅ ✅ ✅ REDIRECTING to:', redirectUrl);
+        console.log('[JD-CREATION-PAGE] Full URL will be:', window.location.origin + redirectUrl);
+
+        // Clear sessionStorage intent
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('jd_return_to_assessments');
+        }
+
+        // Use setTimeout to ensure the redirect happens after React finishes rendering
+        setTimeout(() => {
+          console.log('[JD-CREATION-PAGE] 🚀 🚀 🚀 EXECUTING NAVIGATION NOW...');
+          console.log('[JD-CREATION-PAGE] Calling router.push with:', redirectUrl);
+          router.push(redirectUrl);
+        }, 100);
+      } else {
+        console.error('[JD-CREATION-PAGE] ❌ ❌ ❌ Cannot redirect: publishedJD.id is missing!');
+      }
     } else {
-      console.log('[JD-CREATION] Not redirecting - fromAssessment:', fromAssessment, 'hasId:', !!publishedJD?.id);
+      console.log('[JD-CREATION-PAGE] ⚠️ ⚠️ ⚠️ Not redirecting - not from assessment page');
+      console.log('[JD-CREATION-PAGE] All checks failed:');
+      console.log('[JD-CREATION-PAGE]   - fromAssessment state:', fromAssessment);
+      console.log('[JD-CREATION-PAGE]   - URL from param:', searchParams.get('from'));
+      console.log('[JD-CREATION-PAGE]   - sessionStorage:', typeof window !== 'undefined' ? sessionStorage.getItem('jd_return_to_assessments') : null);
     }
+    console.log('[JD-CREATION-PAGE] ==========================================================');
   };
 
   // Memoize editingJD to prevent unnecessary re-renders and state resets in JDCreation

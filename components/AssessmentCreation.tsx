@@ -1055,13 +1055,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       setGeneratedAssessment(assessmentDefinition);
       setIsGenerating(false);
 
-      // If published (not draft), redirect to assessments list
+      // Always show preview after saving/publishing - user navigates manually
+      setStep('preview');
+
+      // Show success message
       if (!saveAsDraft) {
-        console.log('[AssessmentCreation] Assessment published, redirecting to assessments list');
-        router.push('/recruitment/assessments');
+        toast.success('Assessment published successfully! You can now invite candidates.');
       } else {
-        // If saved as draft, show preview
-        setStep('preview');
+        toast.success('Assessment saved as draft. You can publish it later.');
       }
     } catch (error) {
       console.error('Failed to create/update assessment:', error);
@@ -1761,11 +1762,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           <span className="text-xs text-gray-500">Auto-enabled (coding required)</span>
                         )}
                       </div>
-
-                      <p className="text-xs text-gray-500 mb-3">
-                        ~{Math.ceil((duration * section.percentage) / 100)} minutes • ~{Math.ceil((duration * section.percentage) / 100 / 2)} questions
-                        {section.name !== 'HR' && <span> • Pass: &gt;7/10</span>}
-                      </p>
 
                       {/* Percentage Allocation */}
                       <div className="mb-4">

@@ -162,22 +162,21 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'ai_match:export', label: 'Export' },
     ],
   },
-  {
-    id: 'resumes_all_users',
-    name: 'Resumes (All Users)',
-    description: 'Access to all resumes in the system',
-    viewCode: 'resumes:read',
-    actions: [
-      { code: 'resumes:create', label: 'Create' },
-      { code: 'resumes:update', label: 'Edit' },
-      { code: 'resumes:delete', label: 'Delete' },
-      { code: 'resumes:download', label: 'Download' },
-      { code: 'resumes:parse', label: 'Parse' },
-      { code: 'resumes:score', label: 'Score' },
-      { code: 'resumes:export', label: 'Export' },
-      { code: 'resumes:bulk_upload', label: 'Bulk Upload' },
-    ],
-  },
+  // COMMENTED OUT: Resumes (All Users) - Uncomment if needed for cross-user resume access
+  // Most use cases covered by "My Resumes" (personal) and "Internal Database" (shared)
+  // {
+  //   id: 'resumes_all_users',
+  //   name: 'Resumes (All Users)',
+  //   description: 'Access to all resumes in the system',
+  //   viewCode: 'resumes:read',
+  //   actions: [
+  //     { code: 'resumes:update', label: 'Edit' },
+  //     { code: 'resumes:delete', label: 'Delete' },
+  //     { code: 'resumes:download', label: 'Download' },
+  //     { code: 'resumes:export', label: 'Export' },
+  //     { code: 'resumes:bulk_upload', label: 'Bulk Upload' },
+  //   ],
+  // },
   {
     id: 'resume_management',
     name: 'Resume Management',
@@ -207,6 +206,7 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
         name: 'Assessment',
         viewCode: 'assessments:read',
         actions: [
+          { code: 'assessments:create', label: 'Create' },
           { code: 'assessments:invite', label: 'Invite' },
           { code: 'assessments:review', label: 'Review' },
           { code: 'assessments:export', label: 'Export' },

@@ -201,9 +201,9 @@ export default function AssessmentDetailsView({
                   )}
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                     assessment.status === 'Active'
-                      ? 'bg-green-500/20 text-green-100 border border-green-400/30'
+                      ? 'bg-gray-200/30 text-gray-100 border border-gray-300/30'
                       : assessment.status === 'Draft'
-                      ? 'bg-yellow-500/20 text-yellow-100 border border-yellow-400/30'
+                      ? 'bg-gray-400/30 text-gray-200 border border-gray-400/30'
                       : 'bg-gray-500/20 text-gray-100 border border-gray-400/30'
                   }`}>
                     {assessment.status}
@@ -324,9 +324,9 @@ export default function AssessmentDetailsView({
 
               <div className="p-6">
                 {/* Total Duration Card */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-center justify-between">
+                <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 mb-6 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                    <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
                       <Clock className="w-5 h-5 text-white" />
                     </div>
                     <div>
@@ -334,7 +334,7 @@ export default function AssessmentDetailsView({
                       <div className="text-xl font-semibold text-gray-900">{formattedDuration}</div>
                     </div>
                   </div>
-                  <span className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg">
+                  <span className="px-4 py-2 bg-gray-700 text-white text-sm font-medium rounded-lg">
                     100%
                   </span>
                 </div>
@@ -344,12 +344,12 @@ export default function AssessmentDetailsView({
                   <h4 className="text-sm font-medium text-gray-700">Assessment Rounds</h4>
 
                   {assessment.hr_enabled && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 bg-blue-500 text-white text-sm font-medium rounded">
+                        <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded">
                           HR Round
                         </span>
-                        <span className="px-3 py-1 bg-blue-500 text-white text-sm font-medium rounded-lg">
+                        <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded-lg">
                           {assessment.hr_percentage}%
                         </span>
                       </div>
@@ -358,12 +358,12 @@ export default function AssessmentDetailsView({
                         <div className="flex flex-wrap gap-2">
                           {(assessment.hr_topics || []).length > 0 ? (
                             (assessment.hr_topics || []).map((topic: string, idx: number) => (
-                              <span key={idx} className="px-2 py-1 bg-white border border-blue-200 text-blue-700 rounded text-xs">
+                              <span key={idx} className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
                                 {topic}
                               </span>
                             ))
                           ) : (
-                            <span className="px-2 py-1 bg-white border border-blue-200 text-blue-700 rounded text-xs">
+                            <span className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
                               N/A
                             </span>
                           )}
@@ -373,12 +373,12 @@ export default function AssessmentDetailsView({
                   )}
 
                   {assessment.technical_enabled && (
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 bg-purple-500 text-white text-sm font-medium rounded">
+                        <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded">
                           Technical Round
                         </span>
-                        <span className="px-3 py-1 bg-purple-500 text-white text-sm font-medium rounded-lg">
+                        <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded-lg">
                           {assessment.technical_percentage}%
                         </span>
                       </div>
@@ -387,12 +387,12 @@ export default function AssessmentDetailsView({
                         <div className="flex flex-wrap gap-2">
                           {(assessment.technical_topics || []).length > 0 ? (
                             (assessment.technical_topics || []).map((topic: string, idx: number) => (
-                              <span key={idx} className="px-2 py-1 bg-white border border-purple-200 text-purple-700 rounded text-xs">
+                              <span key={idx} className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
                                 {topic}
                               </span>
                             ))
                           ) : (
-                            <span className="px-2 py-1 bg-white border border-purple-200 text-purple-700 rounded text-xs">
+                            <span className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
                               N/A
                             </span>
                           )}
@@ -402,12 +402,12 @@ export default function AssessmentDetailsView({
                   )}
 
                   {assessment.coding_enabled && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 bg-green-500 text-white text-sm font-medium rounded">
+                        <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded">
                           Coding Round
                         </span>
-                        <span className="px-3 py-1 bg-green-500 text-white text-sm font-medium rounded-lg">
+                        <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded-lg">
                           {assessment.coding_percentage}%
                         </span>
                       </div>
@@ -416,12 +416,12 @@ export default function AssessmentDetailsView({
                         <div className="flex flex-wrap gap-2">
                           {(assessment.coding_topics || []).length > 0 ? (
                             (assessment.coding_topics || []).map((topic: string, idx: number) => (
-                              <span key={idx} className="px-2 py-1 bg-white border border-green-200 text-green-700 rounded text-xs">
+                              <span key={idx} className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
                                 {topic}
                               </span>
                             ))
                           ) : (
-                            <span className="px-2 py-1 bg-white border border-green-200 text-green-700 rounded text-xs">
+                            <span className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
                               N/A
                             </span>
                           )}
@@ -483,7 +483,7 @@ export default function AssessmentDetailsView({
                                 <div className="text-xs text-gray-600 mb-2 font-medium">Programming Languages</div>
                                 <div className="flex flex-wrap gap-2">
                                   {section.languages.map((lang, i) => (
-                                    <span key={i} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-mono">
+                                    <span key={i} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-mono">
                                       {lang}
                                     </span>
                                   ))}
@@ -535,20 +535,20 @@ export default function AssessmentDetailsView({
                     <div className={`grid grid-cols-1 ${assessment.technical_enabled && assessment.coding_enabled ? 'md:grid-cols-2' : ''} gap-6`}>
                       {/* Technical Performance */}
                       {assessment.technical_enabled && (
-                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                        <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
                           <h5 className="text-sm font-semibold text-gray-900 mb-4">Technical Performance</h5>
                           <div className="space-y-3">
                             {/* Passed (≥70%) */}
                             <div>
                               <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm text-gray-700">Passed (≥70%)</span>
-                                <span className="text-sm font-semibold text-green-600">
+                                <span className="text-sm font-semibold text-gray-800">
                                   {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 70).length / analyticsData.completed) * 100) || 0}%
                                 </span>
                               </div>
                               <div className="w-full bg-gray-200 rounded-full h-2">
                                 <div
-                                  className="bg-green-500 h-2 rounded-full transition-all"
+                                  className="bg-gray-700 h-2 rounded-full transition-all"
                                   style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 70).length / analyticsData.completed) * 100 || 0}%` }}
                                 ></div>
                               </div>
@@ -558,13 +558,13 @@ export default function AssessmentDetailsView({
                             <div>
                               <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm text-gray-700">Average (50-69%)</span>
-                                <span className="text-sm font-semibold text-yellow-600">
+                                <span className="text-sm font-semibold text-gray-600">
                                   {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 50 && (a.technical_score || 0) < 70).length / analyticsData.completed) * 100) || 0}%
                                 </span>
                               </div>
                               <div className="w-full bg-gray-200 rounded-full h-2">
                                 <div
-                                  className="bg-yellow-500 h-2 rounded-full transition-all"
+                                  className="bg-gray-500 h-2 rounded-full transition-all"
                                   style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.technical_score || 0) >= 50 && (a.technical_score || 0) < 70).length / analyticsData.completed) * 100 || 0}%` }}
                                 ></div>
                               </div>
@@ -591,20 +591,20 @@ export default function AssessmentDetailsView({
 
                       {/* Coding Performance */}
                       {assessment.coding_enabled && (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
                           <h5 className="text-sm font-semibold text-gray-900 mb-4">Coding Performance</h5>
                           <div className="space-y-3">
                             {/* Passed (≥70%) */}
                             <div>
                               <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm text-gray-700">Passed (≥70%)</span>
-                                <span className="text-sm font-semibold text-green-600">
+                                <span className="text-sm font-semibold text-gray-800">
                                   {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 70).length / analyticsData.completed) * 100) || 0}%
                                 </span>
                               </div>
                               <div className="w-full bg-gray-200 rounded-full h-2">
                                 <div
-                                  className="bg-green-500 h-2 rounded-full transition-all"
+                                  className="bg-gray-700 h-2 rounded-full transition-all"
                                   style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 70).length / analyticsData.completed) * 100 || 0}%` }}
                                 ></div>
                               </div>
@@ -614,13 +614,13 @@ export default function AssessmentDetailsView({
                             <div>
                               <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm text-gray-700">Average (50-69%)</span>
-                                <span className="text-sm font-semibold text-yellow-600">
+                                <span className="text-sm font-semibold text-gray-600">
                                   {Math.round((recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 50 && (a.coding_score || 0) < 70).length / analyticsData.completed) * 100) || 0}%
                                 </span>
                               </div>
                               <div className="w-full bg-gray-200 rounded-full h-2">
                                 <div
-                                  className="bg-yellow-500 h-2 rounded-full transition-all"
+                                  className="bg-gray-500 h-2 rounded-full transition-all"
                                   style={{ width: `${(recentActivity.filter((a: any) => a.status === 'completed' && (a.coding_score || 0) >= 50 && (a.coding_score || 0) < 70).length / analyticsData.completed) * 100 || 0}%` }}
                                 ></div>
                               </div>
@@ -659,7 +659,7 @@ export default function AssessmentDetailsView({
                 </h3>
                 <button
                   onClick={() => setActiveTab('activity')}
-                  className="px-4 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                  className="px-4 py-2 bg-gray-700 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2"
                 >
                   <ExternalLink className="w-4 h-4" />
                   View Full Tracking
@@ -677,8 +677,8 @@ export default function AssessmentDetailsView({
                     <div className="text-2xl font-semibold text-gray-900">{analyticsData.totalInvites}</div>
                   </div>
 
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-blue-600 text-xs mb-2">
+                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-gray-600 text-xs mb-2">
                       <Mail className="w-4 h-4" />
                       <span>Sent</span>
                     </div>
@@ -693,16 +693,16 @@ export default function AssessmentDetailsView({
                     <div className="text-2xl font-semibold text-gray-900">{analyticsData.failed || 0}</div>
                   </div>
 
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-yellow-600 text-xs mb-2">
+                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-gray-600 text-xs mb-2">
                       <Play className="w-4 h-4" />
                       <span>Started</span>
                     </div>
                     <div className="text-2xl font-semibold text-gray-900">{analyticsData.started || 0}</div>
                   </div>
 
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-green-600 text-xs mb-2">
+                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-gray-600 text-xs mb-2">
                       <CheckCircle className="w-4 h-4" />
                       <span>Completed</span>
                     </div>
@@ -729,11 +729,11 @@ export default function AssessmentDetailsView({
                       {recentActivity.slice(0, 5).map((activity: any) => {
                         const getStatusBadge = () => {
                           if (activity.status === 'completed') {
-                            return { color: 'bg-green-100 text-green-700', label: 'Completed' };
+                            return { color: 'bg-gray-700 text-white', label: 'Completed' };
                           } else if (activity.status === 'in_progress') {
-                            return { color: 'bg-yellow-100 text-yellow-700', label: 'In Progress' };
+                            return { color: 'bg-gray-400 text-white', label: 'In Progress' };
                           } else if (activity.status === 'sent') {
-                            return { color: 'bg-blue-100 text-blue-700', label: 'Sent' };
+                            return { color: 'bg-gray-200 text-gray-700', label: 'Sent' };
                           } else if (activity.status === 'failed') {
                             return { color: 'bg-red-100 text-red-700', label: 'Failed' };
                           }
@@ -754,7 +754,7 @@ export default function AssessmentDetailsView({
                         return (
                           <div key={activity.id} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
                             <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
+                              <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
                                 {activity.candidate_name?.charAt(0).toUpperCase() || 'U'}
                               </div>
                               <div className="flex-1 min-w-0">
@@ -801,7 +801,7 @@ export default function AssessmentDetailsView({
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-2">
                                       <div
-                                        className="bg-yellow-500 h-2 rounded-full transition-all"
+                                        className="bg-gray-600 h-2 rounded-full transition-all"
                                         style={{ width: `${activity.progress}%` }}
                                       ></div>
                                     </div>
@@ -917,9 +917,9 @@ export default function AssessmentDetailsView({
                     }
                   }}
                   disabled={actionLoading === 'duplicate'}
-                  className={`p-4 border-2 border-gray-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition-all text-left ${actionLoading === 'duplicate' ? 'opacity-50 cursor-wait' : ''}`}
+                  className={`p-4 border-2 border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-100 transition-all text-left ${actionLoading === 'duplicate' ? 'opacity-50 cursor-wait' : ''}`}
                 >
-                  <Copy className={`w-6 h-6 text-green-600 mb-2 ${actionLoading === 'duplicate' ? 'animate-pulse' : ''}`} />
+                  <Copy className={`w-6 h-6 text-gray-700 mb-2 ${actionLoading === 'duplicate' ? 'animate-pulse' : ''}`} />
                   <div className="text-sm font-medium text-gray-900">{actionLoading === 'duplicate' ? 'Duplicating...' : 'Duplicate'}</div>
                   <div className="text-xs text-gray-600 mt-1">Create a copy</div>
                 </button>
@@ -1011,9 +1011,9 @@ export default function AssessmentDetailsView({
                 {recentActivity.map((activity: any) => {
                   const getActivityInfo = () => {
                     if (activity.status === 'completed') {
-                      return { icon: CheckCircle, color: 'text-green-600 bg-green-100', label: 'Completed assessment' };
+                      return { icon: CheckCircle, color: 'text-gray-700 bg-gray-100', label: 'Completed assessment' };
                     } else if (activity.status === 'in_progress') {
-                      return { icon: Play, color: 'text-blue-600 bg-blue-100', label: 'Started assessment' };
+                      return { icon: Play, color: 'text-gray-600 bg-gray-100', label: 'Started assessment' };
                     } else if (activity.status === 'expired') {
                       return { icon: XCircle, color: 'text-red-600 bg-red-100', label: 'Assessment expired' };
                     }
@@ -1060,7 +1060,7 @@ export default function AssessmentDetailsView({
                               )}
                               {/* Show Passed/Failed badge */}
                               {activity.passed != null && (
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${activity.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${activity.passed ? 'bg-gray-700 text-white' : 'bg-red-100 text-red-700'}`}>
                                   {activity.passed ? 'Passed' : 'Failed'}
                                 </span>
                               )}
@@ -1125,12 +1125,12 @@ export default function AssessmentDetailsView({
                               Version {version.version} {version.version === 1 ? 'Published' : 'Updated'}
                             </h4>
                             {isCurrentVersion && (
-                              <span className="px-2.5 py-1 bg-green-100 text-green-700 text-xs font-medium rounded">
+                              <span className="px-2.5 py-1 bg-gray-700 text-white text-xs font-medium rounded">
                                 Current Version
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-blue-600 mb-3">
+                          <p className="text-sm text-gray-600 mb-3">
                             {version.version === 1 ? 'Initial assessment created and published' : (version.change_summary || 'Assessment configuration updated')}
                           </p>
 
@@ -1148,13 +1148,13 @@ export default function AssessmentDetailsView({
                           </div>
 
                           {/* Configuration Details */}
-                          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                          <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
                             <div className="text-sm font-medium text-gray-900 mb-3">
                               {version.version === 1 ? 'Initial Configuration:' : 'Updated Configuration:'}
                             </div>
                             <ul className="space-y-2">
                               <li className="text-sm text-gray-700 flex items-start gap-2">
-                                <span className="text-green-600 mt-0.5">•</span>
+                                <span className="text-gray-600 mt-0.5">•</span>
                                 <span>Assessment type: {[
                                   version.hr_enabled && 'HR',
                                   version.technical_enabled && 'Technical',
@@ -1162,17 +1162,17 @@ export default function AssessmentDetailsView({
                                 ].filter(Boolean).join(', ')}</span>
                               </li>
                               <li className="text-sm text-gray-700 flex items-start gap-2">
-                                <span className="text-green-600 mt-0.5">•</span>
+                                <span className="text-gray-600 mt-0.5">•</span>
                                 <span>Duration set to {assessment.duration_minutes || 60} min</span>
                               </li>
                               {assessment.title && (
                                 <li className="text-sm text-gray-700 flex items-start gap-2">
-                                  <span className="text-green-600 mt-0.5">•</span>
+                                  <span className="text-gray-600 mt-0.5">•</span>
                                   <span>Linked to job posting: {assessment.title}</span>
                                 </li>
                               )}
                               <li className="text-sm text-gray-700 flex items-start gap-2">
-                                <span className="text-green-600 mt-0.5">•</span>
+                                <span className="text-gray-600 mt-0.5">•</span>
                                 <span>Proctoring {assessment.proctoring_enabled ? 'enabled' : 'disabled'} with AI monitoring</span>
                               </li>
                             </ul>

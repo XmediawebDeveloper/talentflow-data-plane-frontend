@@ -4,7 +4,17 @@
  */
 
 // Base API
-export { default as api, setTokens, getTokens, clearTokens, handleApiError } from './api';
+export {
+  default as api,
+  setTokens,
+  getTokens,
+  clearTokens,
+  handleApiError,
+  // Permission version helpers
+  getPermissionVersion,
+  setPermissionVersion,
+  clearPermissionVersion,
+} from './api';
 
 // Auth
 export { authService, isTwoFactorRequired } from './authService';
