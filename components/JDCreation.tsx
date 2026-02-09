@@ -35,6 +35,16 @@ const isValidLength = (value: string, min: number, max: number): boolean => {
   return len >= min && len <= max;
 };
 
+const containsMeaningfulText = (text: string): boolean => {
+  if (!text || !text.trim()) return false;
+  // Remove all special characters, keeping only letters, numbers, and spaces
+  const cleanedText = text.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+  // Split into words that are at least 2 characters long
+  const meaningfulWords = cleanedText.split(/\s+/).filter(word => word.length >= 2);
+  // Require at least 3 meaningful words for a valid JD
+  return meaningfulWords.length >= 3;
+};
+
 interface ExtractedData {
   mustHaveSkills: string[];
   mustHaveComments: string[];
@@ -673,6 +683,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
   const [publishedJdId, setPublishedJdId] = useState<string | null>(null);
+  const [publishedJobCode, setPublishedJobCode] = useState<string | null>(null);
+  const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
   const [extractedDataModified, setExtractedDataModified] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showExtractedSummary, setShowExtractedSummary] = useState(false);
@@ -981,6 +993,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
+    // Validate AI prompt contains meaningful text (not just symbols or garbage)
+    if (!containsMeaningfulText(aiPrompt)) {
+      toast.error({
+        title: 'Please enter a valid AI Prompt',
+        description: 'AI prompt must contain meaningful text, not just symbols or special characters.',
+      });
+      return;
+    }
+
     // Note: Quota check moved to publish action - generation doesn't consume quota
     setIsGenerating(true);
     setIsStreaming(true);
@@ -1192,6 +1213,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       toast.error({
         title: 'Invalid JD',
         description: 'Please provide a valid job description with at least 50 characters.',
+      });
+      return;
+    }
+
+    // Validate JD contains meaningful text (not just symbols or garbage)
+    if (!containsMeaningfulText(jdText)) {
+      toast.error({
+        title: 'Please enter a valid Job Description',
+        description: 'JD must contain meaningful text, not just symbols or special characters.',
       });
       return;
     }
@@ -2848,6 +2878,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       setIsPublishing(false);
       setIsPublished(true);
       setPublishedJdId(publishedJd.id);
+      setPublishedJobCode(publishedJd.job_id || null);
+      setPublishedVersion(publishedJd.current_version || 1);
 
       // Create the job object for UI
       if (onPublish) {
@@ -3200,7 +3232,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           }`}>
             3
           </div>
-          <div className="text-sm text-gray-700 text-center whitespace-nowrap font-medium">Review & Publish</div>
+          <div className="text-sm text-gray-700 text-center whitespace-nowrap font-medium">{isEditingPublished ? 'Review & Republish' : 'Review & Publish'}</div>
         </div>
         </div>
       </div>
@@ -3691,14 +3723,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="Paste or write your job description here..."
                         rows={20}
                         className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
-                          manualJD.length > 0 && !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)
+                          manualJD.length > 0 && (!isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD))
                             ? 'border-red-300 bg-red-50'
                             : 'border-gray-300'
                         }`}
                       />
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${getCharCountColor(manualJD.length, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)}`}>
-                          {manualJD.length < VALIDATION.MANUAL_JD.min && manualJD.length > 0 && `Min ${VALIDATION.MANUAL_JD.min} characters required`}
+                        <p className={`text-xs ${manualJD.length > 0 && isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) && !containsMeaningfulText(manualJD) ? 'text-red-500' : getCharCountColor(manualJD.length, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)}`}>
+                          {manualJD.length > 0 && isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) && !containsMeaningfulText(manualJD)
+                            ? 'JD must contain meaningful text, not just symbols or special characters'
+                            : manualJD.length < VALIDATION.MANUAL_JD.min && manualJD.length > 0 && `Min ${VALIDATION.MANUAL_JD.min} characters required`}
                         </p>
                         <p className={`text-xs ${getCharCountColor(manualJD.length, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max)}`}>
                           {manualJD.length}/{VALIDATION.MANUAL_JD.max}
@@ -3911,7 +3945,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   isStreaming ||
                   isExtracting ||
                   !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max) ||
-                  (mode === 'ai' ? !generatedJD : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max))
+                  (mode === 'ai' ? !generatedJD || !containsMeaningfulText(generatedJD) : !isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD))
                 }
                 className="flex items-center gap-2 bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -4880,7 +4914,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   <div>
                     <h4 className="text-amber-800 font-medium">Cannot Proceed - Missing Required Fields</h4>
                     <p className="text-sm text-amber-700 mt-1">
-                      Please complete the following before publishing:
+                      Please complete the following before {isEditingPublished ? 'republishing' : 'publishing'}:
                     </p>
                     <ul className="text-sm text-amber-700 mt-2 list-disc list-inside">
                       {validationStatus.missingFields.map((field, index) => (
@@ -4940,9 +4974,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           <div className="space-y-6">
                 {/* Header */}
                 <div className="bg-gradient-to-r from-gray-800 to-gray-800 rounded-lg p-6 text-white">
-                  <h2 className="text-2xl mb-2">Review & Publish</h2>
+                  <h2 className="text-2xl mb-2">{isEditingPublished ? 'Review & Republish' : 'Review & Publish'}</h2>
                   <p className="text-gray-100">
-                    Review all details before publishing. Once published, this JD will be locked and available to all authorized users.
+                    {isEditingPublished
+                      ? 'Review all details before republishing. This will create a new version of the published JD.'
+                      : 'Review all details before publishing. Once published, this JD will be locked and available to all authorized users.'}
                   </p>
                 </div>
 
@@ -5381,17 +5417,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       ? 'bg-green-600 text-white hover:bg-green-700'
                       : 'bg-gray-300 text-gray-500'
                   }`}
-                  title={isJDInUse ? 'This JD is in use and cannot be modified' : !validationStatus.isValid ? 'Complete all required fields to publish' : ''}
+                  title={isJDInUse ? 'This JD is in use and cannot be modified' : !validationStatus.isValid ? `Complete all required fields to ${isEditingPublished ? 'republish' : 'publish'}` : ''}
                 >
                   {isPublishing ? (
                     <>
                       <span className="animate-spin">⏳</span>
-                      Publishing...
+                      {isEditingPublished ? 'Republishing...' : 'Publishing...'}
                     </>
                   ) : (
                     <>
                       <Save className="w-5 h-5" />
-                      Confirm & Publish
+                      {isEditingPublished ? 'Confirm & Republish' : 'Confirm & Publish'}
                     </>
                   )}
                 </button>
@@ -5406,12 +5442,30 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
               <CheckCircle className="w-12 h-12 text-green-600" />
             </div>
-            <h2 className="text-2xl text-gray-900 mb-4">Job Description Published!</h2>
+            <h2 className="text-2xl text-gray-900 mb-4">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
+
+            {/* JD Name, Code and Version */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg px-6 py-3 mb-6 inline-flex items-center gap-3">
+              <span className="text-lg font-semibold text-gray-900">{jobTitle}</span>
+              {publishedJobCode && (
+                <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
+                  {publishedJobCode}
+                </span>
+              )}
+              {publishedVersion && (
+                <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                  v{publishedVersion}
+                </span>
+              )}
+            </div>
+
             <p className="text-gray-600 mb-2">
-              Your job description has been successfully published and is now live.
+              {publishedVersion && publishedVersion > 1
+                ? 'Your job description has been successfully republished with a new version.'
+                : 'Your job description has been successfully published and is now live.'}
             </p>
             <p className="text-sm text-gray-500 mb-8">
-              🔒 This JD is now locked and available to all authorized users within your tenant.
+              This JD is now locked and available to all authorized users within your tenant.
             </p>
             <div className="flex gap-4 justify-center">
               <button
@@ -5422,6 +5476,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   setJobTitle('');
                   setIsPublished(false);
                   setPublishedJdId(null);
+                  setPublishedJobCode(null);
+                  setPublishedVersion(null);
                   setExtractedData({
                     mustHaveSkills: [],
                     mustHaveComments: [],

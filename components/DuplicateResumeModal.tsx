@@ -1,7 +1,9 @@
 'use client';
 
-import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, FolderOpen, HardDrive, ChevronLeft, ChevronRight, Check, Ban } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, FolderOpen, HardDrive, ChevronLeft, ChevronRight, Check, Ban, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { resumeService } from '@/lib/services';
+import { renderAsync } from 'docx-preview';
 
 // Maximum number of versions allowed per resume
 const MAX_VERSIONS_PER_RESUME = 5;
@@ -55,6 +57,127 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
   const [currentVersionIndex, setCurrentVersionIndex] = useState(0);
   const [resolutions, setResolutions] = useState<Map<number, 'discard' | 'overwrite' | 'version'>>(new Map());
   const [selectedAction, setSelectedAction] = useState<'discard' | 'overwrite' | 'version' | null>(null);
+  const [previewLoading, setPreviewLoading] = useState<'existing' | 'new' | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewTitle, setPreviewTitle] = useState<string>('');
+  const [previewDocxBlob, setPreviewDocxBlob] = useState<Blob | null>(null);
+  const docxContainerRef = useRef<HTMLDivElement>(null);
+
+  // Helper: check if a blob is actually a PDF by reading magic bytes
+  const isPdfBlob = async (blob: Blob): Promise<boolean> => {
+    try {
+      const header = await blob.slice(0, 5).text();
+      return header.startsWith('%PDF');
+    } catch {
+      return false;
+    }
+  };
+
+  // Render DOCX blob into container using docx-preview
+  const renderDocx = useCallback(async (blob: Blob) => {
+    if (docxContainerRef.current) {
+      docxContainerRef.current.innerHTML = '';
+      try {
+        await renderAsync(blob, docxContainerRef.current, undefined, {
+          className: 'docx-preview-wrapper',
+          inWrapper: true,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          ignoreFonts: false,
+          breakPages: true,
+          renderHeaders: true,
+          renderFooters: true,
+          renderFootnotes: true,
+        });
+      } catch (err) {
+        console.error('DOCX render error:', err);
+        docxContainerRef.current.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666;">Failed to render document</div>';
+      }
+    }
+  }, []);
+
+  // When docxBlob is set, render it
+  useEffect(() => {
+    if (previewDocxBlob && docxContainerRef.current) {
+      renderDocx(previewDocxBlob);
+    }
+  }, [previewDocxBlob, renderDocx]);
+
+  const handlePreviewExisting = async (resumeId: string) => {
+    setPreviewLoading('existing');
+    try {
+      const blob = await resumeService.preview(resumeId);
+      const isPdf = await isPdfBlob(blob);
+
+      if (isPdf) {
+        const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(pdfBlob);
+        setPreviewUrl(url);
+        setPreviewDocxBlob(null);
+        setPreviewTitle('Existing Resume');
+      } else {
+        // Backend returned DOCX/DOC - render using docx-preview
+        setPreviewUrl(null);
+        setPreviewDocxBlob(blob);
+        setPreviewTitle('Existing Resume');
+      }
+    } catch {
+      // Fallback: try download endpoint
+      try {
+        const blob = await resumeService.download(resumeId);
+        const isPdf = await isPdfBlob(blob);
+        if (isPdf) {
+          const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+          const url = window.URL.createObjectURL(pdfBlob);
+          setPreviewUrl(url);
+          setPreviewDocxBlob(null);
+          setPreviewTitle('Existing Resume');
+        } else {
+          setPreviewUrl(null);
+          setPreviewDocxBlob(blob);
+          setPreviewTitle('Existing Resume');
+        }
+      } catch {
+        setPreviewUrl(null);
+        setPreviewDocxBlob(null);
+        setPreviewTitle('');
+      }
+    } finally {
+      setPreviewLoading(null);
+    }
+  };
+
+  const handlePreviewNew = async (file: File) => {
+    setPreviewLoading('new');
+    try {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+      if (isPdf) {
+        const url = window.URL.createObjectURL(file);
+        setPreviewUrl(url);
+        setPreviewDocxBlob(null);
+        setPreviewTitle('New Resume');
+      } else {
+        // DOCX/DOC - render using docx-preview
+        setPreviewUrl(null);
+        setPreviewDocxBlob(file);
+        setPreviewTitle('New Resume');
+      }
+    } finally {
+      setPreviewLoading(null);
+    }
+  };
+
+  const closePreview = () => {
+    if (previewUrl) {
+      window.URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl(null);
+    setPreviewDocxBlob(null);
+    setPreviewTitle('');
+  };
+
+  const showPreviewModal = previewUrl || previewDocxBlob;
 
   // Auto-resolve exact duplicates as 'discard' on mount
   useEffect(() => {
@@ -246,6 +369,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
   }
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
@@ -335,9 +459,13 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                     <span className="text-gray-900">v{currentDuplicate.existingResume.version}</span>
                   </div>
                 )}
-                <button className="mt-2 w-full px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2">
-                  <Eye className="w-4 h-4" />
-                  Preview Existing
+                <button
+                  onClick={() => handlePreviewExisting(currentDuplicate.existingResume.id)}
+                  disabled={previewLoading === 'existing'}
+                  className="mt-2 w-full px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {previewLoading === 'existing' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                  {previewLoading === 'existing' ? 'Loading...' : 'Preview Existing'}
                 </button>
               </div>
             </div>
@@ -366,9 +494,13 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                   <span className="text-gray-600">File Size:</span>
                   <span className="text-gray-900">{formatFileSize(currentDuplicate.file.size)}</span>
                 </div>
-                <button className="mt-2 w-full px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2">
-                  <Eye className="w-4 h-4" />
-                  Preview New
+                <button
+                  onClick={() => handlePreviewNew(currentDuplicate.file)}
+                  disabled={previewLoading === 'new'}
+                  className="mt-2 w-full px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {previewLoading === 'new' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                  {previewLoading === 'new' ? 'Loading...' : 'Preview New'}
                 </button>
               </div>
             </div>
@@ -598,5 +730,34 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
         </div>
       </div>
     </div>
+
+    {/* Inline Preview Modal */}
+    {showPreviewModal && (
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[110]" onClick={closePreview}>
+        <div className="bg-white rounded-xl w-[90vw] h-[85vh] max-w-4xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+            <div className="flex items-center gap-2">
+              <Eye className="w-5 h-5 text-blue-600" />
+              <h3 className="font-semibold text-gray-900">{previewTitle}</h3>
+            </div>
+            <button onClick={closePreview} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            {previewUrl ? (
+              <iframe
+                src={previewUrl}
+                className="w-full h-full border-0"
+                title={previewTitle}
+              />
+            ) : (
+              <div ref={docxContainerRef} className="w-full h-full overflow-auto bg-white p-4" />
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
