@@ -7,7 +7,6 @@ import ScoredResumesTable from './ScoredResumesTable';
 import ResumeSelectionModal from './ResumeSelectionModal';
 import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
-import ScoringJobProgressModal, { JobScoringProgress } from './ScoringJobProgressModal';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import api from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
@@ -203,10 +202,34 @@ export default function ResumeScoringPage({
   const [filterByJobId, setFilterByJobId] = useState<string | undefined>(undefined);
   const [showJobTitleColumn, setShowJobTitleColumn] = useState(false);
 
-  // State for Job Progress Modal (per-job view)
-  const [showJobProgressModal, setShowJobProgressModal] = useState(false);
-  const [jobProgressData, setJobProgressData] = useState<JobScoringProgress[]>([]);
-  const [isJobProgressMinimized, setIsJobProgressMinimized] = useState(false);
+
+  // Helper: Convert job progress items to ScoringProgressItem[] for BulkScoringProgressModal
+  const showBulkProgressFromJob = (jobId: string, jobTitle: string, items: any[]) => {
+    const progressItems: ScoringProgressItem[] = items.map((item: any) => ({
+      id: item.resumeId || '',
+      resumeId: item.resumeId || '',
+      candidateName: item.candidateName || 'Unknown',
+      jobTitle: jobTitle,
+      jobId: jobId,
+      source: 'Internal DB' as const,
+      status: item.status === 'completed' || item.status === 'already_scored'
+        ? 'Scored successfully' as const
+        : item.status === 'failed'
+        ? 'Failed' as const
+        : item.status === 'processing'
+        ? 'Scoring in progress' as const
+        : 'Queued' as const,
+      errorReason: item.errorMessage,
+      score: item.score,
+      matchResult: item.score != null
+        ? (item.score >= 85 ? 'Exact Match' as const : item.score >= 70 ? 'Partial Match' as const : 'No Match' as const)
+        : undefined,
+    }));
+    setProgressData(progressItems);
+    setFilterByJobId(jobId);
+    setShowJobTitleColumn(false);
+    setShowProgressModal(true);
+  };
 
   // History filters
   const [historySearchQuery, setHistorySearchQuery] = useState('');
@@ -380,19 +403,8 @@ export default function ResumeScoringPage({
               status: 'completed' as const,
               score: r.overallScore ?? r.overall_score ?? 0,
             }));
-            const jobProgress: JobScoringProgress = {
-              jobId: historyItem.jobId,
-              jobTitle: historyItem.jobTitle,
-              total: historyItem.totalScored,
-              queued: 0,
-              inProgress: 0,
-              completed: historyItem.scoredResumes.length,
-              failed: historyItem.totalScored - historyItem.scoredResumes.length,
-              items: progressItems,
-            };
-            setJobProgressData([jobProgress]);
             shownJobsRef.current.add(historyItem.jobId);
-            setShowJobProgressModal(true);
+            showBulkProgressFromJob(historyItem.jobId, historyItem.jobTitle, progressItems);
           }
         } else {
           console.log('[ResumeScoringPage] No history item found for JD:', initialJdId);
@@ -474,19 +486,8 @@ export default function ResumeScoringPage({
     const allInitialItems = [...alreadyScoredProgressItems, ...initialNewItems];
 
     // Initialize progress modal immediately with items
-    const initialProgress: JobScoringProgress = {
-      jobId,
-      jobTitle,
-      total: totalItems,
-      queued: resumeIds.length,
-      inProgress: 0,
-      completed: alreadyScoredItems.length,
-      failed: 0,
-      items: allInitialItems,
-    };
-    setJobProgressData([initialProgress]);
     shownJobsRef.current.add(jobId);
-    setShowJobProgressModal(true);
+    showBulkProgressFromJob(jobId, jobTitle, allInitialItems);
 
     // Also start tracking in persistent context (survives page refresh)
     const progressItems = resumeIds.map((resumeId, index) => ({
@@ -507,6 +508,32 @@ export default function ResumeScoringPage({
         status: 'queued' as const,
       }));
 
+    // Helper to build ScoringProgressItem[] from current statuses and push to BulkScoringProgressModal
+    const updateBulkProgress = () => {
+      const allItems = [...alreadyScoredProgressItems, ...newItemStatuses];
+      const progressItems: ScoringProgressItem[] = allItems.map((item: any) => ({
+        id: item.resumeId || '',
+        resumeId: item.resumeId || '',
+        candidateName: item.candidateName || 'Unknown',
+        jobTitle: jobTitle,
+        jobId: jobId,
+        source: 'Internal DB' as const,
+        status: item.status === 'completed' || item.status === 'already_scored'
+          ? 'Scored successfully' as const
+          : item.status === 'failed'
+          ? 'Failed' as const
+          : item.status === 'processing'
+          ? 'Scoring in progress' as const
+          : 'Queued' as const,
+        errorReason: item.errorMessage,
+        score: item.score,
+        matchResult: item.score != null
+          ? (item.score >= 85 ? 'Exact Match' as const : item.score >= 70 ? 'Partial Match' as const : 'No Match' as const)
+          : undefined,
+      }));
+      setProgressData(progressItems);
+    };
+
     // Start scoring resumes
     const scoreResumes = async () => {
       let completed = alreadyScoredItems.length;
@@ -518,18 +545,7 @@ export default function ResumeScoringPage({
 
         // Update item status to processing
         newItemStatuses[i].status = 'processing';
-
-        // Update progress - move from queued to in progress
-        setJobProgressData([{
-          jobId,
-          jobTitle,
-          total: totalItems,
-          queued: resumeIds.length - i - 1,
-          inProgress: 1,
-          completed,
-          failed,
-          items: [...alreadyScoredProgressItems, ...newItemStatuses],
-        }]);
+        updateBulkProgress();
 
         // Update persistent context
         updateItemStatus(jobId, itemId, 'Scoring in progress');
@@ -564,29 +580,11 @@ export default function ResumeScoringPage({
         }
 
         // Update progress after scoring
-        setJobProgressData([{
-          jobId,
-          jobTitle,
-          total: totalItems,
-          queued: resumeIds.length - i - 1,
-          inProgress: 0,
-          completed,
-          failed,
-          items: [...alreadyScoredProgressItems, ...newItemStatuses],
-        }]);
+        updateBulkProgress();
       }
 
       // Final update - all done
-      setJobProgressData([{
-        jobId,
-        jobTitle,
-        total: totalItems,
-        queued: 0,
-        inProgress: 0,
-        completed,
-        failed,
-        items: [...alreadyScoredProgressItems, ...newItemStatuses],
-      }]);
+      updateBulkProgress();
 
       console.log(`[ResumeScoringPage] Scoring complete: ${completed} succeeded (${alreadyScoredItems.length} already scored), ${failed} failed`);
 
@@ -646,25 +644,37 @@ export default function ResumeScoringPage({
       errorMessage: item.errorMessage,
     }));
 
-    // Update job progress modal with batch status including individual resume items
-    const progress: JobScoringProgress = {
-      jobId: batchProgress.jobId,
+    // Convert to BulkScoringProgressModal format
+    const progressItems: ScoringProgressItem[] = items.map((item: any) => ({
+      id: item.resumeId || '',
+      resumeId: item.resumeId || '',
+      candidateName: item.candidateName || 'Unknown',
       jobTitle: batchProgress.jobTitle,
-      total: batchProgress.total,
-      queued: batchProgress.queued,
-      inProgress: batchProgress.processing,
-      completed: batchProgress.completed,
-      failed: batchProgress.failed,
-      items: items,
-    };
+      jobId: batchProgress.jobId,
+      source: 'Internal DB' as const,
+      status: item.status === 'completed'
+        ? 'Scored successfully' as const
+        : item.status === 'failed'
+        ? 'Failed' as const
+        : item.status === 'processing'
+        ? 'Scoring in progress' as const
+        : 'Queued' as const,
+      errorReason: item.errorMessage,
+      score: item.score,
+      matchResult: item.score != null
+        ? (item.score >= 85 ? 'Exact Match' as const : item.score >= 70 ? 'Partial Match' as const : 'No Match' as const)
+        : undefined,
+    }));
 
-    setJobProgressData([progress]);
+    // Always update progress data for live polling
+    setProgressData(progressItems);
+    setFilterByJobId(batchProgress.jobId);
+    setShowJobTitleColumn(false);
 
     // Only show modal for NEW jobs, not for updates to jobs already shown
-    // This prevents the modal from reopening after user closes it
     if (!shownJobsRef.current.has(batchProgress.jobId)) {
       shownJobsRef.current.add(batchProgress.jobId);
-      setShowJobProgressModal(true);
+      setShowProgressModal(true);
     }
   }, [batchProgress]);
 
@@ -1179,68 +1189,6 @@ export default function ResumeScoringPage({
           />
         )}
 
-        {/* Job Progress Modal - Per Job View */}
-        <ScoringJobProgressModal
-          isOpen={showJobProgressModal}
-          onClose={() => {
-            setShowJobProgressModal(false);
-            setIsJobProgressMinimized(false);
-          }}
-          onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
-          isMinimized={isJobProgressMinimized}
-          jobProgressData={jobProgressData}
-          onRetryFailed={async (resumeId, jobId) => {
-            try {
-              // Update item status to processing
-              setJobProgressData(prev => prev.map(job => ({
-                ...job,
-                items: job.items?.map(item =>
-                  item.resumeId === resumeId
-                    ? { ...item, status: 'processing' as const, errorMessage: undefined }
-                    : item
-                )
-              })));
-
-              // Call scoring API
-              const result = await scoringService.scoreResume(jobId, resumeId);
-
-              // Update item with success
-              setJobProgressData(prev => prev.map(job => ({
-                ...job,
-                failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
-                completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
-                items: job.items?.map(item =>
-                  item.resumeId === resumeId
-                    ? { ...item, status: 'completed' as const, score: result?.overall_score }
-                    : item
-                )
-              })));
-
-              toast.success('Retry successful');
-            } catch (error: any) {
-              // Update item with failure
-              setJobProgressData(prev => prev.map(job => ({
-                ...job,
-                items: job.items?.map(item =>
-                  item.resumeId === resumeId
-                    ? { ...item, status: 'failed' as const, errorMessage: error?.message || 'Retry failed' }
-                    : item
-                )
-              })));
-              toast.error('Retry failed');
-            }
-          }}
-          onViewJobDetails={(jobId) => {
-            setShowJobProgressModal(false);
-            setIsJobProgressMinimized(false);
-            // Navigate to job details or filter by job
-            const historyItem = scoredHistory.find(item => item.jobId === jobId);
-            if (historyItem) {
-              setSelectedHistoryItem(historyItem);
-              setViewMode('details');
-            }
-          }}
-        />
       </main>
     );
   }
@@ -2160,60 +2108,6 @@ export default function ResumeScoringPage({
           />
         )}
 
-        {/* Job Progress Modal - Per Job View */}
-        <ScoringJobProgressModal
-          isOpen={showJobProgressModal}
-          onClose={() => {
-            setShowJobProgressModal(false);
-            setIsJobProgressMinimized(false);
-          }}
-          onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
-          isMinimized={isJobProgressMinimized}
-          jobProgressData={jobProgressData}
-          onRetryFailed={async (resumeId, jobId) => {
-            try {
-              setJobProgressData(prev => prev.map(job => ({
-                ...job,
-                items: job.items?.map(item =>
-                  item.resumeId === resumeId
-                    ? { ...item, status: 'processing' as const, errorMessage: undefined }
-                    : item
-                )
-              })));
-              const result = await scoringService.scoreResume(jobId, resumeId);
-              setJobProgressData(prev => prev.map(job => ({
-                ...job,
-                failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
-                completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
-                items: job.items?.map(item =>
-                  item.resumeId === resumeId
-                    ? { ...item, status: 'completed' as const, score: result?.overall_score }
-                    : item
-                )
-              })));
-              toast.success('Retry successful');
-            } catch (error: any) {
-              setJobProgressData(prev => prev.map(job => ({
-                ...job,
-                items: job.items?.map(item =>
-                  item.resumeId === resumeId
-                    ? { ...item, status: 'failed' as const, errorMessage: error?.message || 'Retry failed' }
-                    : item
-                )
-              })));
-              toast.error('Retry failed');
-            }
-          }}
-          onViewJobDetails={(jobId) => {
-            setShowJobProgressModal(false);
-            setIsJobProgressMinimized(false);
-            const historyItem = scoredHistory.find(item => item.jobId === jobId);
-            if (historyItem) {
-              setSelectedHistoryItem(historyItem);
-              setViewMode('details');
-            }
-          }}
-        />
       </main>
     );
   }
@@ -2533,69 +2427,6 @@ export default function ResumeScoringPage({
         />
       )}
 
-      {/* Job Progress Modal - Per Job View */}
-      <ScoringJobProgressModal
-        isOpen={showJobProgressModal}
-        onClose={() => {
-          // Mark all current jobs as shown to prevent modal from reopening
-          jobProgressData.forEach(job => {
-            shownJobsRef.current.add(job.jobId);
-          });
-          setShowJobProgressModal(false);
-          setIsJobProgressMinimized(false);
-        }}
-        onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
-        isMinimized={isJobProgressMinimized}
-        jobProgressData={jobProgressData}
-        onRetryFailed={async (resumeId, jobId) => {
-          try {
-            console.log('[JobProgressRetry] Starting retry for resumeId:', resumeId, 'jobId:', jobId);
-            setJobProgressData(prev => prev.map(job => ({
-              ...job,
-              items: job.items?.map(item =>
-                item.resumeId === resumeId
-                  ? { ...item, status: 'processing' as const, errorMessage: undefined }
-                  : item
-              )
-            })));
-            const result = await scoringService.scoreResume(jobId, resumeId);
-            console.log('[JobProgressRetry] Score result:', result);
-            setJobProgressData(prev => prev.map(job => ({
-              ...job,
-              failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
-              completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
-              items: job.items?.map(item =>
-                item.resumeId === resumeId
-                  ? { ...item, status: 'completed' as const, score: result?.overall_score }
-                  : item
-              )
-            })));
-            toast.success('Retry successful');
-          } catch (error: any) {
-            console.error('[JobProgressRetry] Error:', error);
-            const errorDetail = error?.response?.data?.detail || error?.message || 'Retry failed';
-            const errorMsg = typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail);
-            setJobProgressData(prev => prev.map(job => ({
-              ...job,
-              items: job.items?.map(item =>
-                item.resumeId === resumeId
-                  ? { ...item, status: 'failed' as const, errorMessage: errorMsg }
-                  : item
-              )
-            })));
-            toast.error(`Failed: ${errorMsg}`);
-          }
-        }}
-        onViewJobDetails={(jobId) => {
-          setShowJobProgressModal(false);
-          setIsJobProgressMinimized(false);
-          const historyItem = scoredHistory.find(item => item.jobId === jobId);
-          if (historyItem) {
-            setSelectedHistoryItem(historyItem);
-            setViewMode('details');
-          }
-        }}
-      />
     </main>
   );
 }
