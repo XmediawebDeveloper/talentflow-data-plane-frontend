@@ -858,9 +858,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     }`}
                   >
                     {/* Card Header */}
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                    <div className="mb-4">
+                      <div className="flex items-center gap-2.5 mb-2">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
                           quota.is_exhausted
                             ? 'bg-gray-800 text-white'
                             : quota.is_low
@@ -869,20 +869,20 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         }`}>
                           {quotaIcons[quota.quota_type] || <Zap className="w-5 h-5" />}
                         </div>
-                        <span className="text-sm font-semibold text-gray-700">{quota.name}</span>
+                        <span className="text-sm font-semibold text-gray-700 truncate">{quota.name}</span>
                       </div>
                       {isUnlimited && (
-                        <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">
+                        <span className="inline-block text-[10px] font-bold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
                           ∞ UNLIMITED
                         </span>
                       )}
                       {!isUnlimited && quota.is_exhausted && (
-                        <span className="text-xs font-bold text-white bg-gray-800 px-2.5 py-1 rounded-full animate-pulse">
+                        <span className="inline-block text-[10px] font-bold text-white bg-gray-800 px-2 py-0.5 rounded-full animate-pulse">
                           EXHAUSTED
                         </span>
                       )}
                       {!isUnlimited && quota.is_low && !quota.is_exhausted && (
-                        <span className="text-xs font-bold text-gray-700 bg-gray-200 px-2.5 py-1 rounded-full">
+                        <span className="inline-block text-[10px] font-bold text-gray-700 bg-gray-200 px-2 py-0.5 rounded-full">
                           LOW
                         </span>
                       )}

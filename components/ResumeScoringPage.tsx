@@ -7,7 +7,6 @@ import ScoredResumesTable from './ScoredResumesTable';
 import ResumeSelectionModal from './ResumeSelectionModal';
 import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
-import ScoringJobProgressModal, { JobScoringProgress } from './ScoringJobProgressModal';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import api from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
@@ -25,6 +24,8 @@ interface Job {
   applicants: number;
   employmentType?: string;
   experience?: string;
+  job_id?: string;
+  current_version?: number;
 }
 
 interface Resume {
@@ -201,10 +202,34 @@ export default function ResumeScoringPage({
   const [filterByJobId, setFilterByJobId] = useState<string | undefined>(undefined);
   const [showJobTitleColumn, setShowJobTitleColumn] = useState(false);
 
-  // State for Job Progress Modal (per-job view)
-  const [showJobProgressModal, setShowJobProgressModal] = useState(false);
-  const [jobProgressData, setJobProgressData] = useState<JobScoringProgress[]>([]);
-  const [isJobProgressMinimized, setIsJobProgressMinimized] = useState(false);
+
+  // Helper: Convert job progress items to ScoringProgressItem[] for BulkScoringProgressModal
+  const showBulkProgressFromJob = (jobId: string, jobTitle: string, items: any[]) => {
+    const progressItems: ScoringProgressItem[] = items.map((item: any) => ({
+      id: item.resumeId || '',
+      resumeId: item.resumeId || '',
+      candidateName: item.candidateName || 'Unknown',
+      jobTitle: jobTitle,
+      jobId: jobId,
+      source: 'Internal DB' as const,
+      status: item.status === 'completed' || item.status === 'already_scored'
+        ? 'Scored successfully' as const
+        : item.status === 'failed'
+        ? 'Failed' as const
+        : item.status === 'processing'
+        ? 'Scoring in progress' as const
+        : 'Queued' as const,
+      errorReason: item.errorMessage,
+      score: item.score,
+      matchResult: item.score != null
+        ? (item.score >= 85 ? 'Exact Match' as const : item.score >= 70 ? 'Partial Match' as const : 'No Match' as const)
+        : undefined,
+    }));
+    setProgressData(progressItems);
+    setFilterByJobId(jobId);
+    setShowJobTitleColumn(false);
+    setShowProgressModal(true);
+  };
 
   // History filters
   const [historySearchQuery, setHistorySearchQuery] = useState('');
@@ -378,19 +403,8 @@ export default function ResumeScoringPage({
               status: 'completed' as const,
               score: r.overallScore ?? r.overall_score ?? 0,
             }));
-            const jobProgress: JobScoringProgress = {
-              jobId: historyItem.jobId,
-              jobTitle: historyItem.jobTitle,
-              total: historyItem.totalScored,
-              queued: 0,
-              inProgress: 0,
-              completed: historyItem.scoredResumes.length,
-              failed: historyItem.totalScored - historyItem.scoredResumes.length,
-              items: progressItems,
-            };
-            setJobProgressData([jobProgress]);
             shownJobsRef.current.add(historyItem.jobId);
-            setShowJobProgressModal(true);
+            showBulkProgressFromJob(historyItem.jobId, historyItem.jobTitle, progressItems);
           }
         } else {
           console.log('[ResumeScoringPage] No history item found for JD:', initialJdId);
@@ -472,19 +486,8 @@ export default function ResumeScoringPage({
     const allInitialItems = [...alreadyScoredProgressItems, ...initialNewItems];
 
     // Initialize progress modal immediately with items
-    const initialProgress: JobScoringProgress = {
-      jobId,
-      jobTitle,
-      total: totalItems,
-      queued: resumeIds.length,
-      inProgress: 0,
-      completed: alreadyScoredItems.length,
-      failed: 0,
-      items: allInitialItems,
-    };
-    setJobProgressData([initialProgress]);
     shownJobsRef.current.add(jobId);
-    setShowJobProgressModal(true);
+    showBulkProgressFromJob(jobId, jobTitle, allInitialItems);
 
     // Also start tracking in persistent context (survives page refresh)
     const progressItems = resumeIds.map((resumeId, index) => ({
@@ -505,6 +508,32 @@ export default function ResumeScoringPage({
         status: 'queued' as const,
       }));
 
+    // Helper to build ScoringProgressItem[] from current statuses and push to BulkScoringProgressModal
+    const updateBulkProgress = () => {
+      const allItems = [...alreadyScoredProgressItems, ...newItemStatuses];
+      const progressItems: ScoringProgressItem[] = allItems.map((item: any) => ({
+        id: item.resumeId || '',
+        resumeId: item.resumeId || '',
+        candidateName: item.candidateName || 'Unknown',
+        jobTitle: jobTitle,
+        jobId: jobId,
+        source: 'Internal DB' as const,
+        status: item.status === 'completed' || item.status === 'already_scored'
+          ? 'Scored successfully' as const
+          : item.status === 'failed'
+          ? 'Failed' as const
+          : item.status === 'processing'
+          ? 'Scoring in progress' as const
+          : 'Queued' as const,
+        errorReason: item.errorMessage,
+        score: item.score,
+        matchResult: item.score != null
+          ? (item.score >= 85 ? 'Exact Match' as const : item.score >= 70 ? 'Partial Match' as const : 'No Match' as const)
+          : undefined,
+      }));
+      setProgressData(progressItems);
+    };
+
     // Start scoring resumes
     const scoreResumes = async () => {
       let completed = alreadyScoredItems.length;
@@ -516,18 +545,7 @@ export default function ResumeScoringPage({
 
         // Update item status to processing
         newItemStatuses[i].status = 'processing';
-
-        // Update progress - move from queued to in progress
-        setJobProgressData([{
-          jobId,
-          jobTitle,
-          total: totalItems,
-          queued: resumeIds.length - i - 1,
-          inProgress: 1,
-          completed,
-          failed,
-          items: [...alreadyScoredProgressItems, ...newItemStatuses],
-        }]);
+        updateBulkProgress();
 
         // Update persistent context
         updateItemStatus(jobId, itemId, 'Scoring in progress');
@@ -562,29 +580,11 @@ export default function ResumeScoringPage({
         }
 
         // Update progress after scoring
-        setJobProgressData([{
-          jobId,
-          jobTitle,
-          total: totalItems,
-          queued: resumeIds.length - i - 1,
-          inProgress: 0,
-          completed,
-          failed,
-          items: [...alreadyScoredProgressItems, ...newItemStatuses],
-        }]);
+        updateBulkProgress();
       }
 
       // Final update - all done
-      setJobProgressData([{
-        jobId,
-        jobTitle,
-        total: totalItems,
-        queued: 0,
-        inProgress: 0,
-        completed,
-        failed,
-        items: [...alreadyScoredProgressItems, ...newItemStatuses],
-      }]);
+      updateBulkProgress();
 
       console.log(`[ResumeScoringPage] Scoring complete: ${completed} succeeded (${alreadyScoredItems.length} already scored), ${failed} failed`);
 
@@ -644,25 +644,37 @@ export default function ResumeScoringPage({
       errorMessage: item.errorMessage,
     }));
 
-    // Update job progress modal with batch status including individual resume items
-    const progress: JobScoringProgress = {
-      jobId: batchProgress.jobId,
+    // Convert to BulkScoringProgressModal format
+    const progressItems: ScoringProgressItem[] = items.map((item: any) => ({
+      id: item.resumeId || '',
+      resumeId: item.resumeId || '',
+      candidateName: item.candidateName || 'Unknown',
       jobTitle: batchProgress.jobTitle,
-      total: batchProgress.total,
-      queued: batchProgress.queued,
-      inProgress: batchProgress.processing,
-      completed: batchProgress.completed,
-      failed: batchProgress.failed,
-      items: items,
-    };
+      jobId: batchProgress.jobId,
+      source: 'Internal DB' as const,
+      status: item.status === 'completed'
+        ? 'Scored successfully' as const
+        : item.status === 'failed'
+        ? 'Failed' as const
+        : item.status === 'processing'
+        ? 'Scoring in progress' as const
+        : 'Queued' as const,
+      errorReason: item.errorMessage,
+      score: item.score,
+      matchResult: item.score != null
+        ? (item.score >= 85 ? 'Exact Match' as const : item.score >= 70 ? 'Partial Match' as const : 'No Match' as const)
+        : undefined,
+    }));
 
-    setJobProgressData([progress]);
+    // Always update progress data for live polling
+    setProgressData(progressItems);
+    setFilterByJobId(batchProgress.jobId);
+    setShowJobTitleColumn(false);
 
     // Only show modal for NEW jobs, not for updates to jobs already shown
-    // This prevents the modal from reopening after user closes it
     if (!shownJobsRef.current.has(batchProgress.jobId)) {
       shownJobsRef.current.add(batchProgress.jobId);
-      setShowJobProgressModal(true);
+      setShowProgressModal(true);
     }
   }, [batchProgress]);
 
@@ -1177,68 +1189,6 @@ export default function ResumeScoringPage({
           />
         )}
 
-        {/* Job Progress Modal - Per Job View */}
-        <ScoringJobProgressModal
-          isOpen={showJobProgressModal}
-          onClose={() => {
-            setShowJobProgressModal(false);
-            setIsJobProgressMinimized(false);
-          }}
-          onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
-          isMinimized={isJobProgressMinimized}
-          jobProgressData={jobProgressData}
-          onRetryFailed={async (resumeId, jobId) => {
-            try {
-              // Update item status to processing
-              setJobProgressData(prev => prev.map(job => ({
-                ...job,
-                items: job.items?.map(item =>
-                  item.resumeId === resumeId
-                    ? { ...item, status: 'processing' as const, errorMessage: undefined }
-                    : item
-                )
-              })));
-
-              // Call scoring API
-              const result = await scoringService.scoreResume(jobId, resumeId);
-
-              // Update item with success
-              setJobProgressData(prev => prev.map(job => ({
-                ...job,
-                failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
-                completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
-                items: job.items?.map(item =>
-                  item.resumeId === resumeId
-                    ? { ...item, status: 'completed' as const, score: result?.overall_score }
-                    : item
-                )
-              })));
-
-              toast.success('Retry successful');
-            } catch (error: any) {
-              // Update item with failure
-              setJobProgressData(prev => prev.map(job => ({
-                ...job,
-                items: job.items?.map(item =>
-                  item.resumeId === resumeId
-                    ? { ...item, status: 'failed' as const, errorMessage: error?.message || 'Retry failed' }
-                    : item
-                )
-              })));
-              toast.error('Retry failed');
-            }
-          }}
-          onViewJobDetails={(jobId) => {
-            setShowJobProgressModal(false);
-            setIsJobProgressMinimized(false);
-            // Navigate to job details or filter by job
-            const historyItem = scoredHistory.find(item => item.jobId === jobId);
-            if (historyItem) {
-              setSelectedHistoryItem(historyItem);
-              setViewMode('details');
-            }
-          }}
-        />
       </main>
     );
   }
@@ -1669,7 +1619,7 @@ export default function ResumeScoringPage({
 
         {/* History List or Empty State */}
         {filteredHistory.length > 0 ? (
-          <div className={historyViewMode === 'grid' ? 'grid gap-5' : 'space-y-3'}>
+          <div className={historyViewMode === 'grid' ? 'grid gap-5' : 'space-y-4'}>
             {filteredHistory.map((item) => {
               const avgScore = item.scoredResumes.length > 0
                 ? Math.round(item.scoredResumes.reduce((sum, r) => sum + (r.overall_score || r.scorePercentage || 0), 0) / item.scoredResumes.length)
@@ -1686,109 +1636,134 @@ export default function ResumeScoringPage({
                 return (
                   <div
                     key={item.id}
-                    className="bg-white rounded-lg border-2 transition-all p-4 border-gray-200 hover:border-gray-300"
+                    className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                      <div className="flex items-center gap-3 sm:gap-4">
-                        <div className="w-10 h-10 bg-gradient-to-br from-gray-800 to-gray-800 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
-                          <Target className="w-5 h-5 text-white" />
-                        </div>
-
-                        <div
-                          className="flex-1 min-w-0 cursor-pointer"
-                          onClick={() => {
-                            setSelectedHistoryItem(item);
-                            setViewMode('details');
-                            // Save to localStorage for persistence
-                            try {
-                              localStorage.setItem('lastViewedScoringJdId', item.jobId);
-                            } catch (e) {
-                              console.error('Failed to save last viewed JD:', e);
-                            }
-                            router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
-                          }}
-                        >
-                          <h3 className="text-base sm:text-lg text-gray-900 mb-1 hover:text-gray-800 transition-colors">
+                    <div className="flex items-start gap-4">
+                      {/* Scoring icon - like AI Talent Match */}
+                      <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
+                        <Target className="w-6 h-6 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {/* Title row with job details - like JD card */}
+                        <div className="flex items-center gap-3 mb-2">
+                          {jobDetails?.job_id && (
+                            <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-sm font-medium border border-blue-200 flex-shrink-0">
+                              {jobDetails.job_id}
+                            </span>
+                          )}
+                          <h3
+                            className="text-lg font-semibold text-gray-900 cursor-pointer hover:text-gray-700 transition-colors"
+                            onClick={() => {
+                              setSelectedHistoryItem(item);
+                              setViewMode('details');
+                              try {
+                                localStorage.setItem('lastViewedScoringJdId', item.jobId);
+                              } catch (e) {}
+                              router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
+                            }}
+                          >
                             {item.jobTitle}
                           </h3>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-4 lg:gap-6 text-sm ml-0 sm:ml-auto">
-                        <span className="flex items-center gap-1.5 text-gray-600">
-                          <Clock className="w-4 h-4" />
-                          {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}{', '}
-                          {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true
-                          })}
-                        </span>
-                        <span className="flex items-center gap-1.5 text-gray-600">
-                          <FileText className="w-4 h-4" />
-                          {item.totalScored} candidates
-                        </span>
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
-                          item.source === 'my-resumes'
-                            ? 'bg-gray-100 text-gray-900 border border-gray-200'
-                            : 'bg-gray-100 text-gray-900 border border-gray-200'
-                        }`}>
-                          {item.source === 'my-resumes' ? (
-                            <>
-                              <FolderOpen className="w-3 h-3" />
-                              My Resumes
-                            </>
-                          ) : (
-                            <>
-                              <Database className="w-3 h-3" />
-                              Database
-                            </>
-                          )}
-                        </span>
-
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-200">
-                          <span className="text-xs text-gray-600">Avg Score:</span>
-                          <span className={`text-base font-semibold ${
-                            avgScore >= 85 ? 'text-green-600' : avgScore >= 70 ? 'text-gray-800' : 'text-yellow-600'
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
+                            item.source === 'my-resumes'
+                              ? 'bg-gray-100 text-gray-900 border border-gray-200'
+                              : 'bg-gray-100 text-gray-900 border border-gray-200'
                           }`}>
-                            {avgScore}%
+                            {item.source === 'my-resumes' ? (
+                              <>
+                                <FolderOpen className="w-3 h-3" />
+                                My Resumes
+                              </>
+                            ) : (
+                              <>
+                                <Database className="w-3 h-3" />
+                                Database
+                              </>
+                            )}
+                          </span>
+                          {jobDetails?.current_version && jobDetails.current_version > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
+                              v{jobDetails.current_version}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Metadata row - like JD card */}
+                        <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
+                          {jobDetails?.department && (
+                            <span className="flex items-center gap-1">
+                              <Briefcase className="w-4 h-4" />
+                              {jobDetails.department}
+                            </span>
+                          )}
+                          {jobDetails?.location && (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-4 h-4" />
+                              {jobDetails.location}
+                            </span>
+                          )}
+                          {jobDetails?.employmentType && (
+                            <span className="flex items-center gap-1">
+                              <User className="w-4 h-4" />
+                              {jobDetails.employmentType}
+                            </span>
+                          )}
+                          {jobDetails?.experience && (
+                            <span className="flex items-center gap-1">
+                              <Award className="w-4 h-4" />
+                              {jobDetails.experience}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-4 h-4" />
+                            Scored {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}{', '}
+                            {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleTimeString('en-US', {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                              hour12: true
+                            })}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <FileText className="w-4 h-4" />
+                            {item.totalScored} candidates
                           </span>
                         </div>
 
+                      </div>
+
+                      {/* Action buttons - right side */}
+                      <div className="flex flex-col gap-2 flex-shrink-0">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Show COMPLETED progress for this specific job - don't re-score
+                            // Show progress in BulkScoringProgressModal
                             const resumes = item.scoredResumes || [];
-                            console.log('[ViewProgress] scoredResumes:', resumes);
-
-                            // Calculate actual completed/failed counts
-                            const failedCount = resumes.filter(r => r.status === 'failed' || r.errorReason).length;
-                            const completedCount = resumes.length - failedCount;
-
-                            const jobProgress: JobScoringProgress[] = [{
-                              jobId: item.jobId,
+                            const allProgressItems: ScoringProgressItem[] = resumes.map((resume: any) => ({
+                              id: resume.resumeId || resume.id || '',
+                              resumeId: resume.resumeId || resume.id || '',
+                              candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
                               jobTitle: item.jobTitle,
-                              total: resumes.length || item.totalScored,
-                              queued: 0,
-                              inProgress: 0,
-                              completed: completedCount,
-                              failed: failedCount,
-                              items: resumes.map(resume => ({
-                                resumeId: resume.resumeId || resume.id || '',
-                                candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
-                                status: (resume.status === 'failed' || resume.errorReason) ? 'failed' as const : 'completed' as const,
-                                score: resume.overall_score || resume.scorePercentage || resume.score,
-                                errorMessage: resume.errorReason || resume.error_reason,
-                              })),
-                            }];
-                            console.log('[ViewProgress] jobProgress items:', jobProgress[0].items);
-                            setJobProgressData(jobProgress);
-                            setShowJobProgressModal(true);
+                              jobId: item.jobId,
+                              source: item.source === 'my-resumes' ? 'My Resumes' as const : 'Internal DB' as const,
+                              status: (resume.status === 'failed' || resume.errorReason) ? 'Failed' as const : 'Scored successfully' as const,
+                              errorReason: resume.errorReason || resume.error_reason,
+                              scoredDateTime: new Date(item.scoredAt),
+                              matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
+                                           : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
+                                           : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
+                                           : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
+                                           : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
+                                           : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
+                              score: resume.overall_score || resume.scorePercentage || resume.score || 0,
+                            }));
+                            setProgressData(allProgressItems);
+                            setFilterByJobId(item.jobId);
+                            setShowJobTitleColumn(false);
+                            setShowProgressModal(true);
                           }}
                           className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-1.5"
                         >
@@ -1799,12 +1774,9 @@ export default function ResumeScoringPage({
                           onClick={() => {
                             setSelectedHistoryItem(item);
                             setViewMode('details');
-                            // Save to localStorage for persistence
                             try {
                               localStorage.setItem('lastViewedScoringJdId', item.jobId);
-                            } catch (e) {
-                              console.error('Failed to save last viewed JD:', e);
-                            }
+                            } catch (e) {}
                             router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
                           className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium"
@@ -1957,31 +1929,30 @@ export default function ResumeScoringPage({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Show COMPLETED progress for this specific job - don't re-score
+                            // Show progress in BulkScoringProgressModal
                             const resumes = item.scoredResumes || [];
-
-                            // Calculate actual completed/failed counts
-                            const failedCount = resumes.filter(r => r.status === 'failed' || r.errorReason).length;
-                            const completedCount = resumes.length - failedCount;
-
-                            const jobProgress: JobScoringProgress[] = [{
-                              jobId: item.jobId,
+                            const allProgressItems: ScoringProgressItem[] = resumes.map((resume: any) => ({
+                              id: resume.resumeId || resume.id || '',
+                              resumeId: resume.resumeId || resume.id || '',
+                              candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
                               jobTitle: item.jobTitle,
-                              total: resumes.length || item.totalScored,
-                              queued: 0,
-                              inProgress: 0,
-                              completed: completedCount,
-                              failed: failedCount,
-                              items: resumes.map(resume => ({
-                                resumeId: resume.resumeId || resume.id || '',
-                                candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
-                                status: (resume.status === 'failed' || resume.errorReason) ? 'failed' as const : 'completed' as const,
-                                score: resume.overall_score || resume.scorePercentage || resume.score,
-                                errorMessage: resume.errorReason || resume.error_reason,
-                              })),
-                            }];
-                            setJobProgressData(jobProgress);
-                            setShowJobProgressModal(true);
+                              jobId: item.jobId,
+                              source: item.source === 'my-resumes' ? 'My Resumes' as const : 'Internal DB' as const,
+                              status: (resume.status === 'failed' || resume.errorReason) ? 'Failed' as const : 'Scored successfully' as const,
+                              errorReason: resume.errorReason || resume.error_reason,
+                              scoredDateTime: new Date(item.scoredAt),
+                              matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
+                                           : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
+                                           : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
+                                           : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
+                                           : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
+                                           : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
+                              score: resume.overall_score || resume.scorePercentage || resume.score || 0,
+                            }));
+                            setProgressData(allProgressItems);
+                            setFilterByJobId(item.jobId);
+                            setShowJobTitleColumn(false);
+                            setShowProgressModal(true);
                           }}
                           className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-1.5 justify-center"
                         >
@@ -1992,7 +1963,6 @@ export default function ResumeScoringPage({
                           onClick={() => {
                             setSelectedHistoryItem(item);
                             setViewMode('details');
-                            // Save to localStorage for persistence
                             try {
                               localStorage.setItem('lastViewedScoringJdId', item.jobId);
                             } catch (e) {
@@ -2141,60 +2111,6 @@ export default function ResumeScoringPage({
           />
         )}
 
-        {/* Job Progress Modal - Per Job View */}
-        <ScoringJobProgressModal
-          isOpen={showJobProgressModal}
-          onClose={() => {
-            setShowJobProgressModal(false);
-            setIsJobProgressMinimized(false);
-          }}
-          onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
-          isMinimized={isJobProgressMinimized}
-          jobProgressData={jobProgressData}
-          onRetryFailed={async (resumeId, jobId) => {
-            try {
-              setJobProgressData(prev => prev.map(job => ({
-                ...job,
-                items: job.items?.map(item =>
-                  item.resumeId === resumeId
-                    ? { ...item, status: 'processing' as const, errorMessage: undefined }
-                    : item
-                )
-              })));
-              const result = await scoringService.scoreResume(jobId, resumeId);
-              setJobProgressData(prev => prev.map(job => ({
-                ...job,
-                failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
-                completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
-                items: job.items?.map(item =>
-                  item.resumeId === resumeId
-                    ? { ...item, status: 'completed' as const, score: result?.overall_score }
-                    : item
-                )
-              })));
-              toast.success('Retry successful');
-            } catch (error: any) {
-              setJobProgressData(prev => prev.map(job => ({
-                ...job,
-                items: job.items?.map(item =>
-                  item.resumeId === resumeId
-                    ? { ...item, status: 'failed' as const, errorMessage: error?.message || 'Retry failed' }
-                    : item
-                )
-              })));
-              toast.error('Retry failed');
-            }
-          }}
-          onViewJobDetails={(jobId) => {
-            setShowJobProgressModal(false);
-            setIsJobProgressMinimized(false);
-            const historyItem = scoredHistory.find(item => item.jobId === jobId);
-            if (historyItem) {
-              setSelectedHistoryItem(historyItem);
-              setViewMode('details');
-            }
-          }}
-        />
       </main>
     );
   }
@@ -2514,69 +2430,6 @@ export default function ResumeScoringPage({
         />
       )}
 
-      {/* Job Progress Modal - Per Job View */}
-      <ScoringJobProgressModal
-        isOpen={showJobProgressModal}
-        onClose={() => {
-          // Mark all current jobs as shown to prevent modal from reopening
-          jobProgressData.forEach(job => {
-            shownJobsRef.current.add(job.jobId);
-          });
-          setShowJobProgressModal(false);
-          setIsJobProgressMinimized(false);
-        }}
-        onMinimize={() => setIsJobProgressMinimized(!isJobProgressMinimized)}
-        isMinimized={isJobProgressMinimized}
-        jobProgressData={jobProgressData}
-        onRetryFailed={async (resumeId, jobId) => {
-          try {
-            console.log('[JobProgressRetry] Starting retry for resumeId:', resumeId, 'jobId:', jobId);
-            setJobProgressData(prev => prev.map(job => ({
-              ...job,
-              items: job.items?.map(item =>
-                item.resumeId === resumeId
-                  ? { ...item, status: 'processing' as const, errorMessage: undefined }
-                  : item
-              )
-            })));
-            const result = await scoringService.scoreResume(jobId, resumeId);
-            console.log('[JobProgressRetry] Score result:', result);
-            setJobProgressData(prev => prev.map(job => ({
-              ...job,
-              failed: job.items?.filter(i => i.resumeId === resumeId && i.status === 'failed').length ? job.failed - 1 : job.failed,
-              completed: job.items?.filter(i => i.resumeId === resumeId).length ? job.completed + 1 : job.completed,
-              items: job.items?.map(item =>
-                item.resumeId === resumeId
-                  ? { ...item, status: 'completed' as const, score: result?.overall_score }
-                  : item
-              )
-            })));
-            toast.success('Retry successful');
-          } catch (error: any) {
-            console.error('[JobProgressRetry] Error:', error);
-            const errorDetail = error?.response?.data?.detail || error?.message || 'Retry failed';
-            const errorMsg = typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail);
-            setJobProgressData(prev => prev.map(job => ({
-              ...job,
-              items: job.items?.map(item =>
-                item.resumeId === resumeId
-                  ? { ...item, status: 'failed' as const, errorMessage: errorMsg }
-                  : item
-              )
-            })));
-            toast.error(`Failed: ${errorMsg}`);
-          }
-        }}
-        onViewJobDetails={(jobId) => {
-          setShowJobProgressModal(false);
-          setIsJobProgressMinimized(false);
-          const historyItem = scoredHistory.find(item => item.jobId === jobId);
-          if (historyItem) {
-            setSelectedHistoryItem(historyItem);
-            setViewMode('details');
-          }
-        }}
-      />
     </main>
   );
 }

@@ -22,7 +22,10 @@ import {
   CreditCard,
   Zap,
   ShoppingCart,
-  TrendingUp
+  TrendingUp,
+  Globe,
+  Hash,
+  Tag,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -433,6 +436,14 @@ export default function AuditTrailPage() {
     'seats_purchase',
     'usage_recorded',
     'unit_consume',
+    'resume_upload',
+    'resume_upload_failed',
+    'scoring_complete',
+    'scoring_failed',
+    'assessment_complete',
+    'user_create',
+    'user_limit_exceeded',
+    'quota_exhausted',
     'subscription_upgrade',
     'subscription_downgrade',
     'subscription_cancel',
@@ -503,7 +514,7 @@ export default function AuditTrailPage() {
 
   return (
     <main className="flex-1 p-8 overflow-y-auto bg-gray-50/50">
-      <div className="max-w-7xl mx-auto">
+      <div>
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -806,7 +817,9 @@ export default function AuditTrailPage() {
                                 <div className="inline-flex items-center gap-1.5 bg-gray-100 px-3 py-1.5 rounded-lg">
                                   <Zap className="w-4 h-4 text-gray-600" />
                                   <span className="text-sm font-semibold text-gray-800">
-                                    {log.units_consumed}
+                                    {log.details?.units_consumed_actual != null
+                                      ? log.details.units_consumed_actual
+                                      : log.units_consumed}
                                   </span>
                                   {log.unit_type && (
                                     <span className="text-xs text-gray-500">
@@ -929,123 +942,116 @@ export default function AuditTrailPage() {
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto max-h-[60vh]">
-              {/* User & Timestamp Row */}
-              <div className="flex items-start gap-4 mb-6 pb-6 border-b border-gray-100">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center text-sm font-bold shadow-md shadow-gray-200">
+            <div className="p-6 overflow-y-auto max-h-[60vh] space-y-5">
+              {/* User & Action Header */}
+              <div className="flex items-start gap-4 pb-5 border-b border-gray-100">
+                <div className="w-11 h-11 rounded-xl bg-gray-800 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
                   {(selectedLog.user_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900">{selectedLog.user_name || 'Unknown User'}</p>
                   {selectedLog.user_email && (
-                    <p className="text-sm text-gray-500">{selectedLog.user_email}</p>
+                    <p className="text-sm text-gray-500 truncate">{selectedLog.user_email}</p>
                   )}
-                  <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
-                    <Clock className="w-3.5 h-3.5" />
-                    {formatDate(selectedLog.created_at)}
-                  </div>
                 </div>
-                <span className={`inline-flex px-3 py-1.5 rounded-lg text-xs font-semibold ${getActionColor(selectedLog.action)}`}>
+                <span className={`inline-flex px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 ${getActionColor(selectedLog.action)}`}>
                   {selectedLog.action_label}
                 </span>
               </div>
 
-              {/* Info Grid */}
-              <div className="grid grid-cols-2 gap-5 mb-6">
-                <div className="bg-gray-50 rounded-xl p-4">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                    <FolderOpen className="w-3.5 h-3.5" />
-                    Entity
-                  </div>
-                  <p className="font-semibold text-gray-900 capitalize">
-                    {selectedLog.entity_type?.replace(/_/g, ' ') || '—'}
-                  </p>
-                  {selectedLog.entity_id && (
-                    <p className="text-xs text-gray-500 font-mono mt-1 truncate" title={selectedLog.entity_id}>
-                      ID: {selectedLog.entity_id}
-                    </p>
-                  )}
+              {/* Summary Info */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-gray-50 rounded-xl p-3.5">
+                  <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">When</p>
+                  <p className="text-sm font-medium text-gray-900">{formatDate(selectedLog.created_at)}</p>
                 </div>
-                <div className="bg-gray-50 rounded-xl p-4">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                    <Activity className="w-3.5 h-3.5" />
-                    IP Address
-                  </div>
-                  <p className="font-mono font-semibold text-gray-900">{selectedLog.ip_address || '—'}</p>
+                <div className="bg-gray-50 rounded-xl p-3.5">
+                  <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Entity</p>
+                  <p className="text-sm font-medium text-gray-900 capitalize">{selectedLog.entity_type?.replace(/_/g, ' ') || '—'}</p>
                 </div>
-                {(selectedLog.units_consumed && selectedLog.units_consumed > 0) && (
-                  <div className="bg-gray-100 rounded-xl p-4">
-                    <div className="flex items-center gap-2 text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">
-                      <Zap className="w-3.5 h-3.5" />
-                      Units Consumed
-                    </div>
-                    <p className="font-bold text-gray-900 text-lg">{selectedLog.units_consumed}</p>
-                    {selectedLog.unit_type && (
-                      <p className="text-xs text-gray-600 mt-0.5">{selectedLog.unit_type}</p>
-                    )}
-                  </div>
-                )}
-                {/* Available Units (Balance Before/After) */}
-                {selectedLog.balance_before !== null && selectedLog.balance_before !== undefined && (
-                  <div className="bg-gray-50 rounded-xl p-4">
-                    <div className="flex items-center gap-2 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      Available Units
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg text-gray-600">{selectedLog.balance_before}</span>
-                      <span className="text-gray-400">→</span>
-                      <span className="text-lg font-bold text-gray-900">{selectedLog.balance_after ?? 0}</span>
-                    </div>
-                  </div>
-                )}
-                {/* Consumption Result/Status */}
-                {selectedLog.consumption_status && (
-                  <div className={`rounded-xl p-4 ${
-                    selectedLog.consumption_status === 'SUCCESS'
-                      ? 'bg-green-50'
-                      : selectedLog.consumption_status === 'INSUFFICIENT_UNITS' || selectedLog.consumption_status === 'FAILED'
-                      ? 'bg-red-50'
-                      : 'bg-yellow-50'
-                  }`}>
-                    <div className="flex items-center gap-2 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                      <Activity className="w-3.5 h-3.5" />
-                      Result
-                    </div>
-                    <span className={`inline-flex px-3 py-1.5 rounded-lg text-sm font-semibold ${
-                      selectedLog.consumption_status === 'SUCCESS'
-                        ? 'bg-green-100 text-green-800 border border-green-200'
-                        : selectedLog.consumption_status === 'INSUFFICIENT_UNITS' || selectedLog.consumption_status === 'FAILED'
-                        ? 'bg-red-100 text-red-800 border border-red-200'
-                        : selectedLog.consumption_status === 'ABANDONED'
-                        ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                        : 'bg-orange-100 text-orange-800 border border-orange-200'
-                    }`}>
-                      {selectedLog.consumption_status.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                )}
-                <div className="bg-gray-50 rounded-xl p-4 col-span-2">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                    <User className="w-3.5 h-3.5" />
-                    User Agent
-                  </div>
-                  <p className="text-sm text-gray-600 break-all">
-                    {selectedLog.user_agent || '—'}
-                  </p>
+                <div className="bg-gray-50 rounded-xl p-3.5">
+                  <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">IP Address</p>
+                  <p className="text-sm font-mono font-medium text-gray-900">{selectedLog.ip_address || '—'}</p>
                 </div>
               </div>
 
-              {/* Details JSON */}
-              {Object.keys(selectedLog.details).length > 0 && (
+              {/* Units & Balance Row (only show if relevant) */}
+              {((selectedLog.units_consumed && selectedLog.units_consumed > 0) ||
+                (selectedLog.balance_before !== null && selectedLog.balance_before !== undefined) ||
+                selectedLog.consumption_status) && (
+                <div className="grid grid-cols-3 gap-3">
+                  {(selectedLog.units_consumed && selectedLog.units_consumed > 0) ? (
+                    <div className="bg-gray-100 rounded-xl p-3.5">
+                      <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Units Used</p>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-lg font-bold text-gray-900">
+                          {selectedLog.details?.units_consumed_actual != null ? selectedLog.details.units_consumed_actual : selectedLog.units_consumed}
+                        </span>
+                        {selectedLog.unit_type && (
+                          <span className="text-xs font-medium text-gray-500">{selectedLog.unit_type}</span>
+                        )}
+                      </div>
+                    </div>
+                  ) : <div />}
+                  {selectedLog.balance_before !== null && selectedLog.balance_before !== undefined ? (
+                    <div className="bg-gray-50 rounded-xl p-3.5">
+                      <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Balance</p>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-sm text-gray-500">{selectedLog.balance_before}</span>
+                        <span className="text-gray-300">→</span>
+                        <span className="text-lg font-bold text-gray-900">{selectedLog.balance_after ?? 0}</span>
+                      </div>
+                    </div>
+                  ) : <div />}
+                  {selectedLog.consumption_status ? (
+                    <div className="bg-gray-50 rounded-xl p-3.5">
+                      <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Result</p>
+                      <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-semibold ${
+                        selectedLog.consumption_status === 'SUCCESS'
+                          ? 'bg-gray-200 text-gray-800'
+                          : selectedLog.consumption_status === 'INSUFFICIENT_UNITS' || selectedLog.consumption_status === 'FAILED'
+                          ? 'bg-gray-300 text-gray-800'
+                          : 'bg-gray-200 text-gray-700'
+                      }`}>
+                        {selectedLog.consumption_status.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                  ) : <div />}
+                </div>
+              )}
+
+              {/* Entity ID (if present) */}
+              {selectedLog.entity_id && (
+                <div className="bg-gray-50 rounded-xl p-3.5">
+                  <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Entity ID</p>
+                  <p className="text-sm font-mono text-gray-700 truncate" title={selectedLog.entity_id}>{selectedLog.entity_id}</p>
+                </div>
+              )}
+
+              {/* Event Details - Friendly key-value display */}
+              {selectedLog.details && Object.keys(selectedLog.details).filter(k => k !== 'units_consumed_actual').length > 0 && (
                 <div>
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
-                    <FileText className="w-3.5 h-3.5" />
-                    Event Details
+                  <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2.5">Event Details</p>
+                  <div className="bg-gray-50 rounded-xl divide-y divide-gray-100 overflow-hidden">
+                    {Object.entries(selectedLog.details)
+                      .filter(([key]) => key !== 'units_consumed_actual')
+                      .map(([key, value]) => (
+                      <div key={key} className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5 capitalize">
+                          {key.replace(/_/g, ' ')}
+                        </span>
+                        <span className="text-sm text-gray-900 break-all">
+                          {value === null || value === undefined
+                            ? '—'
+                            : typeof value === 'boolean'
+                            ? value ? 'Yes' : 'No'
+                            : typeof value === 'object'
+                            ? JSON.stringify(value)
+                            : String(value)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <pre className="bg-gray-900 text-gray-100 rounded-xl p-5 text-sm overflow-x-auto font-mono leading-relaxed">
-                    {JSON.stringify(selectedLog.details, null, 2)}
-                  </pre>
                 </div>
               )}
             </div>

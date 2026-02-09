@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
 import ResumeTable from '@/components/ResumeTable';
+import Pagination from '@/components/Pagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
 import FolderTree from '@/components/FolderTree';
@@ -344,6 +345,11 @@ export default function MyResumesPage() {
   const [appliedSearchQuery, setAppliedSearchQuery] = useState(''); // For highlighting
   const [filters, setFilters] = useState({});
   const [sortBy, setSortBy] = useState('date');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isPaginating, setIsPaginating] = useState(false);
   const [folderTreeWidth, setFolderTreeWidth] = useState(240);
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
   const [cardViewFolder, setCardViewFolder] = useState<string | null>(null); // Selected folder in card view
@@ -443,7 +449,7 @@ export default function MyResumesPage() {
     }
 
     // Create signature of params to detect ACTUAL changes (not just reference changes)
-    const currentParams = JSON.stringify({ appliedSearchQuery, filters, selectedFolder });
+    const currentParams = JSON.stringify({ appliedSearchQuery, filters, selectedFolder, currentPage, itemsPerPage, sortBy });
 
     // Skip if params haven't actually changed (prevents loop from object reference changes)
     if (currentParams === lastFetchParamsRef.current) {
@@ -451,26 +457,24 @@ export default function MyResumesPage() {
       return;
     }
 
-    // Skip if already fetching (prevents rapid successive calls)
-    if (isFetchingRef.current) {
-      console.log('[MyResumes] useEffect - Skipping (fetch in progress)');
-      return;
-    }
-
     console.log('[MyResumes] useEffect - Will fetch in 300ms', {
       appliedSearchQuery,
       filtersKeys: Object.keys(filters),
-      selectedFolder
+      selectedFolder,
+      currentPage,
+      itemsPerPage,
+      sortBy,
     });
 
     // Debounce: Wait 300ms before fetching
     const debounceTimer = setTimeout(() => {
       console.log('[MyResumes] useEffect - Fetching data now...');
       lastFetchParamsRef.current = currentParams;
-      isFetchingRef.current = true;
 
-      fetchData(appliedSearchQuery, filters, selectedFolder).finally(() => {
-        isFetchingRef.current = false;
+      // Use lighter loading for page/sort changes when data is already on screen
+      const isPageChange = resumes.length > 0;
+      fetchData(appliedSearchQuery, filters, selectedFolder, isPageChange ? true : false).finally(() => {
+        setIsPaginating(false);
         console.log('[MyResumes] useEffect - Fetch complete');
       });
     }, 300);
@@ -479,7 +483,7 @@ export default function MyResumesPage() {
       console.log('[MyResumes] useEffect - Cleanup (timer cleared)');
       clearTimeout(debounceTimer);
     };
-  }, [appliedSearchQuery, filters, selectedFolder]);
+  }, [appliedSearchQuery, filters, selectedFolder, currentPage, itemsPerPage, sortBy]);
 
   // Handle deep link from notifications
   useEffect(() => {
@@ -591,9 +595,19 @@ export default function MyResumesPage() {
     console.log('[FETCH] Starting fetch...');
     try {
       // Build search params for backend API
+      const sortByMap: Record<string, string> = {
+        'date': 'date-desc',
+        'latest': 'date-desc',
+        'oldest': 'date-asc',
+        'name-asc': 'name-asc',
+        'name-desc': 'name-desc',
+      };
+
       const searchParams: any = {
         source: 'my-resumes',
-        page_size: 100, // Backend API maximum limit
+        page: currentPage,
+        page_size: itemsPerPage,
+        sort_by: sortByMap[sortBy] || 'date-desc',
       };
 
       // Add folder filter if not viewing all
@@ -757,11 +771,13 @@ export default function MyResumesPage() {
       const allResumesFolder: FolderType = {
         id: 'all',
         name: 'All Resumes',
-        count: convertedResumes.length,
+        count: resumeResponse.total,
       };
       const convertedFolders: FolderType[] = [allResumesFolder, ...apiFolders];
 
       setResumes(convertedResumes);
+      setTotalItems(resumeResponse.total);
+      setTotalPages(resumeResponse.total_pages);
       setFolders(convertedFolders);
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -1836,210 +1852,15 @@ export default function MyResumesPage() {
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
     setAppliedSearchQuery(query);
+    setCurrentPage(1);
     // Don't call fetchData directly - let the useEffect handle it
     // This prevents double API calls
   }, []);
 
   // Client-side search helper - searches across all text fields including phone and skills
-  const matchesSearch = useCallback((resume: Resume, query: string): boolean => {
-    if (!query) return true;
-
-    // Split by spaces, commas, or both - and clean up each term
-    const searchTerms = query
-      .toLowerCase()
-      .split(/[\s,]+/)  // Split by spaces or commas
-      .map(term => term.trim())
-      .filter(term => term.length > 0);
-
-    if (searchTerms.length === 0) return true;
-
-    // Normalize phone number for searching (remove all non-alphanumeric chars)
-    const normalizePhone = (phone: string | undefined) => {
-      if (!phone) return '';
-      return phone.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    };
-
-    // Create searchable text from all relevant fields
-    const searchableFields = [
-      resume.name,
-      resume.email,
-      resume.phone,
-      normalizePhone(resume.phone), // Also add normalized phone
-      resume.title,
-      resume.location,
-      resume.currentCompany,
-      resume.experience,
-      resume.education,
-      ...(resume.skills || []),
-      ...(resume.technicalSkills || []),
-      ...(resume.softSkills || []),
-    ].filter(Boolean).map(field => field?.toLowerCase() || '');
-
-    const searchableText = searchableFields.join(' ');
-
-    // Normalize search term for phone matching (remove special chars)
-    const normalizeSearchTerm = (term: string) => {
-      // If term looks like a phone number (has digits), normalize it
-      if (/\d/.test(term)) {
-        return term.replace(/[^a-zA-Z0-9]/g, '');
-      }
-      return term;
-    };
-
-    // Check if ALL search terms match (AND logic for multiple terms)
-    return searchTerms.every(term => {
-      const normalizedTerm = normalizeSearchTerm(term);
-      return searchableText.includes(term) || searchableText.includes(normalizedTerm);
-    });
-  }, []);
-
-  // Filter and sort resumes client-side
-  const filteredResumes = useMemo(() => {
-    let filtered = resumes;
-
-    // Filter by folder (skip filtering if 'all' is selected - show all resumes)
-    if (selectedFolder && selectedFolder !== 'all') {
-      filtered = filtered.filter(r => r.folderId === selectedFolder);
-    }
-
-    // Apply search filter (name, email, phone, skills, keywords)
-    if (appliedSearchQuery) {
-      filtered = filtered.filter(resume => matchesSearch(resume, appliedSearchQuery));
-    }
-
-    // Apply filters from filter bar
-    if (filters && Object.keys(filters).length > 0) {
-      // Filter by skills (all selected skills must be present)
-      if (filters.skills && filters.skills.length > 0) {
-        filtered = filtered.filter(resume => {
-          const resumeSkills = [
-            ...(resume.skills || []),
-            ...(resume.technicalSkills || []),
-            ...(resume.softSkills || [])
-          ].map(s => s.toLowerCase());
-          return filters.skills.every((skill: string) =>
-            resumeSkills.some(rs => rs.includes(skill.toLowerCase()))
-          );
-        });
-      }
-
-      // Filter by experience range
-      if (filters.experienceRange) {
-        filtered = filtered.filter(resume => {
-          // Parse experience string to get years (e.g., "5 years", "3-5 years", "5+ years")
-          const expStr = resume.experience || '';
-          const expMatch = expStr.match(/(\d+)/);
-          if (!expMatch) return true; // If no experience data, include by default
-          const years = parseInt(expMatch[1], 10);
-          const { min, max } = filters.experienceRange;
-          if (min !== undefined && min !== null && years < min) return false;
-          if (max !== undefined && max !== null && years > max) return false;
-          return true;
-        });
-      }
-
-      // Filter by education
-      if (filters.education) {
-        filtered = filtered.filter(resume => {
-          const edu = (resume.education || '').toLowerCase();
-          const educationCode = filters.education.toLowerCase();
-
-          // Map backend codes to search patterns (matching backend logic)
-          if (educationCode === 'bachelors') {
-            return edu.includes('bachelor') || edu.includes('b.tech') ||
-                   edu.includes('b.e') || edu.includes('bca') ||
-                   edu.includes('b.a') || edu.includes('b.sc') || edu.includes('b.com');
-          } else if (educationCode === 'masters') {
-            return edu.includes('master') || edu.includes('m.tech') ||
-                   edu.includes('m.e') || edu.includes('mca') ||
-                   edu.includes('m.a') || edu.includes('m.sc') || edu.includes('mba');
-          } else if (educationCode === 'doctorate') {
-            return edu.includes('phd') || edu.includes('ph.d') ||
-                   edu.includes('doctorate') || edu.includes('doctor of');
-          } else if (educationCode === 'diploma') {
-            return edu.includes('diploma');
-          } else if (educationCode === 'associate') {
-            return edu.includes('associate');
-          } else {
-            // For other values, use substring match
-            return edu.includes(educationCode);
-          }
-        });
-      }
-
-      // Filter by location
-      if (filters.location) {
-        filtered = filtered.filter(resume => {
-          const loc = (resume.location || '').toLowerCase();
-          return loc.includes(filters.location.toLowerCase());
-        });
-      }
-
-      // Filter by current company
-      if (filters.currentCompany) {
-        filtered = filtered.filter(resume => {
-          const company = (resume.currentCompany || '').toLowerCase();
-          return company.includes(filters.currentCompany.toLowerCase());
-        });
-      }
-
-      // Filter by notice period
-      if (filters.noticePeriod) {
-        filtered = filtered.filter(resume => {
-          const notice = (resume.noticePeriod || '').toLowerCase();
-          return notice.includes(filters.noticePeriod.toLowerCase());
-        });
-      }
-
-      // Filter by source type
-      if (filters.sourceType) {
-        filtered = filtered.filter(resume => {
-          return resume.source === filters.sourceType;
-        });
-      }
-
-      // Filter by uploaded by
-      if (filters.uploadedBy) {
-        filtered = filtered.filter(resume => {
-          const uploader = (resume.uploadedBy || '').toLowerCase();
-          return uploader.includes(filters.uploadedBy.toLowerCase());
-        });
-      }
-
-      // Filter by upload date range
-      if (filters.uploadDateRange) {
-        filtered = filtered.filter(resume => {
-          const uploadDate = new Date(resume.uploadDate);
-          if (filters.uploadDateRange.start) {
-            const startDate = new Date(filters.uploadDateRange.start);
-            if (uploadDate < startDate) return false;
-          }
-          if (filters.uploadDateRange.end) {
-            const endDate = new Date(filters.uploadDateRange.end);
-            endDate.setHours(23, 59, 59, 999); // Include entire end day
-            if (uploadDate > endDate) return false;
-          }
-          return true;
-        });
-      }
-    }
-
-    // Sort resumes
-    const sorted = [...filtered];
-    switch (sortBy) {
-      case 'date':
-      case 'latest':
-        return sorted.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
-      case 'oldest':
-        return sorted.sort((a, b) => new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime());
-      case 'name-asc':
-        return sorted.sort((a, b) => a.name.localeCompare(b.name));
-      case 'name-desc':
-        return sorted.sort((a, b) => b.name.localeCompare(a.name));
-      default:
-        return sorted;
-    }
-  }, [resumes, selectedFolder, appliedSearchQuery, sortBy, matchesSearch, filters]);
+  // Server handles search, filtering, sorting, and pagination.
+  // filteredResumes is now just the server-returned page of resumes.
+  const filteredResumes = resumes;
 
   // Stats (all resumes returned are user's own resumes)
   const totalResumes = resumes.length;
@@ -2107,7 +1928,7 @@ export default function MyResumesPage() {
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-2xl font-semibold text-gray-900">My Resume Database</h1>
             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">
-              {resumes.length} Resumes
+              {totalItems} Resumes
             </span>
           </div>
           <p className="text-sm text-gray-600">Resumes uploaded by you</p>
@@ -2161,9 +1982,9 @@ export default function MyResumesPage() {
               searchQuery={searchQuery}
               onSearchChange={handleSearchChange}
               filters={filters}
-              onFiltersChange={setFilters}
+              onFiltersChange={(newFilters: any) => { setFilters(newFilters); setCurrentPage(1); }}
               sortBy={sortBy}
-              onSortChange={setSortBy}
+              onSortChange={(newSort: string) => { setSortBy(newSort); setCurrentPage(1); }}
             />
           </div>
           {/* View Toggle */}
@@ -2200,7 +2021,7 @@ export default function MyResumesPage() {
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-gray-500" />
               <span className="text-sm text-gray-700">
-                Found <span className="font-semibold">{filteredResumes.length}</span> matching resume{filteredResumes.length !== 1 ? 's' : ''}
+                Found <span className="font-semibold">{totalItems}</span> matching resume{totalItems !== 1 ? 's' : ''}
                 {appliedSearchQuery && (
                   <span> for "<span className="font-medium text-blue-600">{appliedSearchQuery}</span>"</span>
                 )}
@@ -2210,6 +2031,7 @@ export default function MyResumesPage() {
               onClick={() => {
                 setSearchQuery('');
                 setAppliedSearchQuery('');
+                setCurrentPage(1);
               }}
               className="text-sm text-red-600 hover:text-red-700 hover:underline"
             >
@@ -2224,7 +2046,7 @@ export default function MyResumesPage() {
             <FolderTree
               folders={folders}
               selectedFolder={selectedFolder}
-              onSelectFolder={setSelectedFolder}
+              onSelectFolder={(folderId: string) => { setSelectedFolder(folderId); setCurrentPage(1); }}
               onCreateFolder={handleCreateFolder}
               onRenameFolder={handleRenameFolder}
               onDeleteFolder={handleDeleteFolder}
@@ -2268,20 +2090,39 @@ export default function MyResumesPage() {
                 </div>
               )}
 
-              <ResumeTable
-                resumes={filteredResumes}
-                selectedResumes={selectedResumes}
-                onSelectResume={handleSelectResume}
-                onSelectAll={handleSelectAll}
-                onQuickView={(resume) => setQuickViewResume(resume)}
-                onApplyToJob={handleSingleResumeApplyToJob}
-                onDelete={(id) => handleDelete(id)}
-                onMoveToFolder={handleMoveToFolder}
-                folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
-                onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
-                highlightQuery={appliedSearchQuery}
-                onArchive={(resumeId) => handleArchiveResumes([resumeId])}
-              />
+              {/* Pagination overlay for lighter page transitions */}
+              <div className="relative">
+                {isPaginating && (
+                  <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-gray-600" />
+                  </div>
+                )}
+                <ResumeTable
+                  resumes={filteredResumes}
+                  selectedResumes={selectedResumes}
+                  onSelectResume={handleSelectResume}
+                  onSelectAll={handleSelectAll}
+                  onQuickView={(resume) => setQuickViewResume(resume)}
+                  onApplyToJob={handleSingleResumeApplyToJob}
+                  onDelete={(id) => handleDelete(id)}
+                  onMoveToFolder={handleMoveToFolder}
+                  folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
+                  onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
+                  highlightQuery={appliedSearchQuery}
+                  onArchive={(resumeId) => handleArchiveResumes([resumeId])}
+                  disablePagination={true}
+                />
+              </div>
+              {totalPages > 0 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={(page) => { setCurrentPage(page); setIsPaginating(true); }}
+                  onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); setIsPaginating(true); }}
+                />
+              )}
             </div>
           </div>
         ) : (
@@ -2461,7 +2302,7 @@ export default function MyResumesPage() {
                               </div>
                               <div className="flex-1">
                                 <h3 className="font-semibold text-gray-900">All Resumes</h3>
-                                <p className="text-sm text-gray-500">{filteredResumes.length} resume{filteredResumes.length !== 1 ? 's' : ''}</p>
+                                <p className="text-sm text-gray-500">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
                               </div>
                               <ChevronRight className="w-5 h-5 text-gray-400" />
                             </div>
@@ -2585,6 +2426,20 @@ export default function MyResumesPage() {
                           <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                           <h3 className="text-lg font-medium text-gray-900 mb-2">No resumes in this folder</h3>
                           <p className="text-gray-500">Upload resumes to this folder to get started</p>
+                        </div>
+                      )}
+
+                      {/* Card view pagination */}
+                      {totalPages > 0 && folderResumes.length > 0 && (
+                        <div className="mt-4">
+                          <Pagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            totalItems={totalItems}
+                            itemsPerPage={itemsPerPage}
+                            onPageChange={(page) => { setCurrentPage(page); setIsPaginating(true); }}
+                            onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); setIsPaginating(true); }}
+                          />
                         </div>
                       )}
                     </>

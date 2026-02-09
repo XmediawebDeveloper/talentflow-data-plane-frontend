@@ -26,6 +26,7 @@ export default function ResumeDetailPage() {
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [extractedText, setExtractedText] = useState<string | null>(null);
   const [loadingPdf, setLoadingPdf] = useState(false);
 
   useEffect(() => {
@@ -111,36 +112,48 @@ export default function ResumeDetailPage() {
   const fetchPdfPreview = async () => {
     setLoadingPdf(true);
     try {
-      // Use preview endpoint which converts DOCX to PDF
       const blob = await resumeService.preview(resumeId);
-      console.log('Preview blob received - type:', blob.type, 'size:', blob.size);
-
-      // Verify it's a PDF
       const firstBytes = await blob.slice(0, 10).text();
-      console.log('First bytes:', firstBytes);
 
       if (firstBytes.startsWith('%PDF')) {
         const pdfBlob = new Blob([blob], { type: 'application/pdf' });
         const url = URL.createObjectURL(pdfBlob);
         setPdfUrl(url);
-      } else if (blob.type.includes('wordprocessingml') || blob.type.includes('msword')) {
-        // LibreOffice not installed - received DOCX file, trigger download
-        console.log('Received DOCX file instead of PDF - LibreOffice not installed on server');
-        toast.info('Preview not available. Click Download to view the resume.');
-        setPdfUrl(null);
       } else {
-        console.error('Preview did not return PDF');
-        toast.error('Failed to generate preview');
+        // Not a PDF - fallback to extracted text
+        const data = await resumeService.get(resumeId);
+        if (data?.extracted_text) {
+          setExtractedText(data.extracted_text);
+        }
         setPdfUrl(null);
       }
     } catch (error) {
       console.error('Failed to fetch preview:', error);
-      toast.error('Failed to load preview');
+      // Fallback to extracted text
+      try {
+        const data = await resumeService.get(resumeId);
+        if (data?.extracted_text) {
+          setExtractedText(data.extracted_text);
+        }
+      } catch (err) {
+        // ignore
+      }
       setPdfUrl(null);
     } finally {
       setLoadingPdf(false);
     }
   };
+
+  const sectionHeaders = [
+    'experience', 'work experience', 'employment', 'professional experience',
+    'education', 'academic', 'qualifications',
+    'skills', 'technical skills', 'core competencies', 'expertise', 'key skills',
+    'summary', 'professional summary', 'objective', 'profile', 'about',
+    'certifications', 'certificates', 'licenses',
+    'projects', 'key projects',
+    'achievements', 'accomplishments', 'awards',
+    'languages', 'contact', 'personal', 'references', 'hobbies', 'interests'
+  ];
 
   const handleDownload = async () => {
     try {
@@ -292,16 +305,45 @@ export default function ResumeDetailPage() {
                   title="Resume Preview"
                   style={{ height: 'calc(100vh - 250px)' }}
                 />
+              ) : extractedText ? (
+                <div className="h-full overflow-y-auto bg-gray-100 rounded-lg p-6" style={{ height: 'calc(100vh - 250px)' }}>
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-3xl mx-auto">
+                    {extractedText.split('\n').map((line, idx, lines) => {
+                      const trimmed = line.trim();
+                      if (!trimmed) return <div key={idx} className="h-3" />;
+
+                      const lowerLine = trimmed.toLowerCase().replace(/[:\-_]/g, ' ').trim();
+                      const isHeader = sectionHeaders.some(h =>
+                        lowerLine === h || lowerLine.startsWith(h + ' ') || lowerLine.endsWith(' ' + h)
+                      ) && trimmed.length < 50;
+
+                      if (isHeader) {
+                        return <h3 key={idx} className="text-base font-bold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide">{trimmed}</h3>;
+                      }
+
+                      const firstNonEmpty = lines.findIndex(l => l.trim().length > 0);
+                      if (idx === firstNonEmpty) {
+                        return <h2 key={idx} className="text-xl font-bold text-gray-900 mb-1">{trimmed}</h2>;
+                      }
+
+                      if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
+                        return <p key={idx} className="text-sm text-gray-700 leading-relaxed pl-4 mb-0.5">{trimmed}</p>;
+                      }
+
+                      return <p key={idx} className="text-sm text-gray-700 leading-relaxed mb-0.5">{trimmed}</p>;
+                    })}
+                  </div>
+                </div>
               ) : (
                 <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg min-h-[600px]">
                   <div className="text-center">
                     <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                    <p className="text-gray-600">PDF preview not available</p>
+                    <p className="text-gray-600">Preview not available</p>
                     <button
-                      onClick={fetchPdfPreview}
+                      onClick={handleDownload}
                       className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm"
                     >
-                      Try Again
+                      Download Instead
                     </button>
                   </div>
                 </div>

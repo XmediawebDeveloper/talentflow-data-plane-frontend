@@ -467,6 +467,8 @@ export default function ResumeScoringRoute() {
         applicants: jd.applicants_count || 0,
         employmentType: jd.employment_type || 'Full-time',
         experience: jd.experience_min ? `${jd.experience_min}+ years` : undefined,
+        job_id: jd.job_id,
+        current_version: jd.current_version,
       }));
 
       // Convert API Resume to component Resume type
