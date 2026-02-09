@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import Sidebar from '@/components/shared/Sidebar';
 import Header from '@/components/Header';
 import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
@@ -10,6 +10,7 @@ import { SessionTimeoutProvider } from '@/components/SessionTimeoutProvider';
 import { toast } from 'sonner';
 import { scoringService } from '@/lib/services/scoringService';
 import { QuotaProvider } from '@/contexts/QuotaContext';
+import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail } from '@/lib/services/api';
 
 // Admin-only routes that require tenant_admin role
 const adminRoutes = [
@@ -18,6 +19,12 @@ const adminRoutes = [
   '/settings',
   '/analytics/team-usage',
   '/analytics/activity-logs',
+];
+
+// Paths allowed when subscription is expired/inactive
+const SUBSCRIPTION_ALLOWED_PATHS = [
+  '/subscription/current-plan',
+  '/subscription/payment-methods',
 ];
 
 // Storage key for scoring batch persistence
@@ -55,8 +62,42 @@ export default function DashboardLayout({
   const { user, tenant, isAuthenticated, isLoading, logout, isTenantAdmin } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [subscriptionExpired, setSubscriptionExpired] = useState(false);
 
   console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
+
+  // Listen for subscription-inactive events from API interceptor
+  useEffect(() => {
+    const handleSubscriptionInactive = (event: CustomEvent<SubscriptionInactiveDetail>) => {
+      console.log('[DASHBOARD] Subscription inactive detected:', event.detail?.status);
+      setSubscriptionExpired(true);
+    };
+
+    window.addEventListener(
+      SUBSCRIPTION_INACTIVE_EVENT,
+      handleSubscriptionInactive as EventListener
+    );
+
+    return () => {
+      window.removeEventListener(
+        SUBSCRIPTION_INACTIVE_EVENT,
+        handleSubscriptionInactive as EventListener
+      );
+    };
+  }, []);
+
+  // Redirect to current-plan page when subscription is expired and user is on a non-allowed page
+  useEffect(() => {
+    if (subscriptionExpired && pathname) {
+      const isAllowed = SUBSCRIPTION_ALLOWED_PATHS.some(path =>
+        pathname === path || pathname.startsWith(path + '/')
+      );
+      if (!isAllowed) {
+        console.log('[DASHBOARD] Subscription expired, redirecting to current-plan from:', pathname);
+        router.push('/subscription/current-plan');
+      }
+    }
+  }, [subscriptionExpired, pathname, router]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -216,7 +257,7 @@ export default function DashboardLayout({
           <SearchParamsErrorHandler />
         </Suspense>
         <div className="flex h-screen bg-gray-50">
-          <Sidebar user={user || undefined} tenant={tenant || undefined} />
+          <Sidebar user={user || undefined} tenant={tenant || undefined} subscriptionExpired={subscriptionExpired} />
 
           <div className="flex-1 flex flex-col overflow-hidden">
             <Header

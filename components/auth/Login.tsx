@@ -780,7 +780,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
           </div>
 
           <div style={copyrightStyle}>
-            © 2025 TalentFlow. All rights reserved.
+            © 2026 TalentFlow. All rights reserved.
           </div>
         </div>
       </div>
