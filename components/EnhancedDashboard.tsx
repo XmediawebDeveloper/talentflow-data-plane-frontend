@@ -25,6 +25,7 @@ import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
 import { User, Tenant } from '@/lib/types/tenant';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 // Module-level cache to prevent duplicate API calls across remounts
 const dashboardCache = {
@@ -75,6 +76,7 @@ interface QuotaStatusData {
 
 export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardProps) {
   const router = useRouter();
+  const { hasPermission, isTenantAdmin: isTenantAdminRole } = useAuth();
   const [publishedJDs, setPublishedJDs] = useState<JDResponse[]>([]);
   const [draftJDs, setDraftJDs] = useState<JDResponse[]>([]);
   const [loadingJDs, setLoadingJDs] = useState(true);
@@ -98,10 +100,9 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   const hasFetchedQuotaStatus = useRef(false);
 
   // Permission checks
-  const isTenantAdmin = user?.role === 'tenant_admin';
-  const canCreateJD = isTenantAdmin || user?.permissions?.canCreateJD;
-  const canUploadResumes = isTenantAdmin || user?.permissions?.canUploadResumes;
-  const canViewResumes = isTenantAdmin || user?.permissions?.canViewResumes;
+  const canCreateJD = hasPermission('canCreateJD') || isTenantAdminRole;
+  const canUploadResumes = hasPermission('canUploadResumes') || isTenantAdminRole;
+  const canViewResumes = hasPermission('canViewResumes') || isTenantAdminRole;
 
 
   // Fetch JDs and calculate stats

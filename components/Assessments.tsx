@@ -23,10 +23,12 @@ import VersionBadge from './VersionBadge';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 
-// Helper function to format dates in IST timezone
+// Helper function to format dates in IST timezone (matching resume-view implementation)
 const formatDateTimeIST = (dateStr: string | null | undefined, options?: { includeTime?: boolean }) => {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
+  // Add 'Z' if not present to ensure UTC interpretation
+  const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
+  const date = new Date(dateWithZ);
 
   const dateOptions: Intl.DateTimeFormatOptions = {
     timeZone: 'Asia/Kolkata', // IST = UTC+5:30
@@ -39,13 +41,15 @@ const formatDateTimeIST = (dateStr: string | null | undefined, options?: { inclu
     dateOptions.minute = '2-digit';
     dateOptions.hour12 = true;
   }
-  return date.toLocaleString('en-US', dateOptions);
+  return date.toLocaleString('en-IN', dateOptions);
 };
 
 const formatTimeIST = (dateStr: string | null | undefined) => {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
-  return date.toLocaleTimeString('en-US', {
+  // Add 'Z' if not present to ensure UTC interpretation
+  const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
+  const date = new Date(dateWithZ);
+  return date.toLocaleTimeString('en-IN', {
     timeZone: 'Asia/Kolkata', // IST = UTC+5:30
     hour: '2-digit',
     minute: '2-digit',
@@ -55,8 +59,10 @@ const formatTimeIST = (dateStr: string | null | undefined) => {
 
 const formatDateOnlyIST = (dateStr: string | null | undefined) => {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
+  // Add 'Z' if not present to ensure UTC interpretation
+  const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
+  const date = new Date(dateWithZ);
+  return date.toLocaleDateString('en-IN', {
     timeZone: 'Asia/Kolkata', // IST = UTC+5:30
     month: 'short',
     day: 'numeric',
@@ -76,7 +82,7 @@ interface AssessmentsProps {
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle }: AssessmentsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
-  const { user, isTenantAdmin } = useAuth();
+  const { user, isTenantAdmin, hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
   const [showCreation, setShowCreation] = useState(false);
@@ -210,7 +216,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           version: a.version || 1,
           jd_id: a.jd_id,
           jd_short_id: a.jd_short_id,
-          job: { title: a.jd_title || 'General Assessment', department: 'Engineering' },
+          jd_version: a.jd_version,
+          job: { title: a.jd_title || 'General Assessment', department: 'Engineering', version: a.jd_version },
           // Section configuration for detail view
           hr_enabled: a.hr_enabled,
           hr_percentage: a.hr_percentage,
@@ -549,7 +556,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
           passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
           created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-          job: { title: a.jd_title || 'General Assessment', department: 'Engineering' },
+          jd_version: a.jd_version,
+          job: { title: a.jd_title || 'General Assessment', department: 'Engineering', version: a.jd_version },
           // Section configuration for detail view
           hr_enabled: a.hr_enabled,
           hr_percentage: a.hr_percentage,
@@ -943,7 +951,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 Preview Candidate View
               </button>
             )}
-            {(user?.permissions?.canCreateAssessments || isTenantAdmin) && (
+            {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
               <button
                 onClick={handleOpenCreation}
                 disabled={!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0}
@@ -1832,12 +1840,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                     {/* Grid Card Title */}
                     <div className="mb-3">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      {/* Line 1: AS-022 SQL Developer - Assessment V1 */}
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         <span className="inline-flex items-center px-2.5 py-1 bg-gray-800 text-white rounded text-xs font-semibold">
                           {assessment.short_id}
                         </span>
-                        <h3 className="text-sm font-medium text-gray-900 line-clamp-2">
-                          {assessment.job ? `${assessment.job.title} - Assessment` : stripVersionFromTitle(assessment.title)}
+                        <h3 className="text-sm font-medium text-gray-900 line-clamp-1">
+                          {assessment.job?.title || stripVersionFromTitle(assessment.title)} - Assessment
                         </h3>
                         <VersionBadge title={assessment.title} size="sm" variant="secondary" />
                         {assessment.sections && (
@@ -1847,28 +1856,40 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-600 mb-1">
-                        {assessment.jd_short_id && (
-                          <span className="font-medium">Job Description ID: {assessment.jd_short_id}</span>
+
+                      {/* Line 2: JD-025 SQL Developer <jdversion> */}
+                      {assessment.jd_short_id && (
+                        <div className="text-xs text-gray-700 font-medium mb-1.5">
+                          <span>{assessment.jd_short_id}</span>
+                          {assessment.job && (
+                            <span className="ml-2">{assessment.job.title}</span>
+                          )}
+                          {(assessment.job?.version || assessment.jd_version) && (
+                            <span className="ml-1 text-gray-500">v{assessment.job?.version || assessment.jd_version}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Line 3: created by + Created date + Last Updated */}
+                      <div className="text-xs text-gray-600 mb-1.5 line-clamp-2">
+                        {assessment.created_by_name && (
+                          <span>created by: {assessment.created_by_name}</span>
                         )}
-                        {assessment.job && assessment.job.department && (
-                          <span className={assessment.jd_short_id ? "ml-2" : ""}>
-                            {assessment.jd_short_id ? "• " : ""}{assessment.job.department}
+                        {assessment.created_at && (
+                          <span className={assessment.created_by_name ? " ml-1" : ""}>
+                            {assessment.created_by_name ? "• " : ""}Created: {formatDateOnlyIST(assessment.created_at)}
                           </span>
                         )}
+                        {assessment.updated_at && (
+                          <span className="block">Last Updated: {formatDateOnlyIST(assessment.updated_at)}</span>
+                        )}
                       </div>
-                    </div>
 
-                    {/* Grid Card Meta */}
-                    <div className="flex items-center gap-3 text-xs text-gray-500 mb-4">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
-                        {assessment.duration}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Users className="w-3.5 h-3.5" />
-                        {assessment.candidates}
-                      </span>
+                      {/* Line 4: 30 min 1 Invitations Sent */}
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <span>{assessment.duration}</span>
+                        <span>{assessment.candidates} Invitations</span>
+                      </div>
                     </div>
 
                     {/* Grid Card Actions */}
@@ -1922,7 +1943,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           onClick={() => setOpenMenuId(null)}
                         />
                         <div className="absolute right-4 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-20">
-                          {(user?.permissions?.canUpdateAssessments || isTenantAdmin) && (
+                          {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
                             <button
                               onClick={() => {
                                 handleEditAssessment(assessment);
@@ -2008,7 +2029,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <Archive className="w-4 h-4 text-gray-600" />
                             Archive
                           </button>
-                          {(user?.permissions?.canDeleteAssessments || isTenantAdmin) && (
+                          {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (
                             <button
                               onClick={() => handleDeleteAssessment(assessment.id)}
                               className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2.5"
@@ -2046,12 +2067,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <FileText className="w-5 h-5 text-gray-700" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                          {/* Line 1: AS-022 SQL Developer - Assessment V1 */}
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                             <span className="inline-flex items-center px-2.5 py-1 bg-gray-800 text-white rounded text-xs font-semibold">
                               {assessment.short_id}
                             </span>
-                            <h3 className="text-sm font-medium text-gray-900 truncate">
-                              {assessment.job ? `${assessment.job.title} - Assessment` : stripVersionFromTitle(assessment.title)}
+                            <h3 className="text-sm font-medium text-gray-900">
+                              {assessment.job?.title || stripVersionFromTitle(assessment.title)} - Assessment
                             </h3>
                             <VersionBadge title={assessment.title} size="sm" variant="secondary" />
                             {assessment.sections && (
@@ -2062,30 +2084,38 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             )}
                           </div>
 
+                          {/* Line 2: JD-025 SQL Developer <jdversion> */}
+                          {assessment.jd_short_id && (
+                            <div className="text-xs text-gray-700 font-medium mb-1.5">
+                              <span>{assessment.jd_short_id}</span>
+                              {assessment.job && (
+                                <span className="ml-2">{assessment.job.title}</span>
+                              )}
+                              {(assessment.job?.version || assessment.jd_version) && (
+                                <span className="ml-1 text-gray-500">v{assessment.job?.version || assessment.jd_version}</span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Line 3: created by: abishekd • Created: 9 Feb 2026 at 06:46 pm Last Updated: <date> */}
                           <div className="text-xs text-gray-600 mb-1.5">
-                            {assessment.jd_short_id && (
-                              <span className="font-medium">Job Description ID: {assessment.jd_short_id}</span>
-                            )}
                             {assessment.created_by_name && (
-                              <span className={assessment.jd_short_id ? "ml-2" : ""}>
-                                {assessment.jd_short_id ? "• " : ""}Created by: {assessment.created_by_name}
-                              </span>
+                              <span>created by: {assessment.created_by_name}</span>
                             )}
                             {assessment.created_at && (
-                              <span className={(assessment.jd_short_id || assessment.created_by_name) ? "ml-2" : ""}>
-                                {(assessment.jd_short_id || assessment.created_by_name) ? "• " : ""}Created: {formatDateOnlyIST(assessment.created_at)} at {formatTimeIST(assessment.created_at)} IST (UTC+5:30)
+                              <span className={assessment.created_by_name ? " ml-1" : ""}>
+                                {assessment.created_by_name ? "• " : ""}Created: {formatDateOnlyIST(assessment.created_at)} at {formatTimeIST(assessment.created_at)}
                               </span>
                             )}
+                            {assessment.updated_at && (
+                              <span className="ml-2">Last Updated: {formatDateOnlyIST(assessment.updated_at)} at {formatTimeIST(assessment.updated_at)}</span>
+                            )}
                           </div>
-                          <div className="flex items-center gap-4 text-xs text-gray-500">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5" />
-                              {assessment.duration}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Users className="w-3.5 h-3.5" />
-                              {assessment.candidates} Invitations Sent
-                            </span>
+
+                          {/* Line 4: 30 min 1 Invitations Sent */}
+                          <div className="flex items-center gap-3 text-xs text-gray-500">
+                            <span>{assessment.duration}</span>
+                            <span>{assessment.candidates} Invitations Sent</span>
                           </div>
                         </div>
                       </div>
@@ -2177,7 +2207,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 onClick={() => setOpenMenuId(null)}
                               />
                               <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-20">
-                                {(user?.permissions?.canUpdateAssessments || isTenantAdmin) && (
+                                {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
                                   <button
                                     onClick={() => {
                                       handleEditAssessment(assessment);
@@ -2292,7 +2322,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Archive
                                 </button>
                                 <div className="border-t border-gray-100 my-1"></div>
-                                {(user?.permissions?.canDeleteAssessments || isTenantAdmin) && (
+                                {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (
                                   <button
                                     onClick={() => handleDeleteAssessment(assessment.id)}
                                     className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2.5"

@@ -192,16 +192,15 @@ export default function AssessmentDetailsView({
                 <FileText className="w-8 h-8 text-white" />
               </div>
               <div>
-                <div className="flex items-center gap-3 mb-1">
-                  <h1 className="text-2xl text-white">{stripVersionFromTitle(assessment.title)}</h1>
-                  {/* Version Badge - using custom styling for dark background */}
+                {/* Line 1: AS-022 SQL Developer - Assessment V1  Active AI-Generated */}
+                <div className="flex items-center gap-3 mb-2 flex-wrap">
+                  <span className="px-2.5 py-1 bg-white/90 text-gray-900 rounded text-sm font-bold">
+                    {assessment.short_id || `AS-${String(assessment.id).slice(0, 8).toUpperCase()}`}
+                  </span>
+                  <h1 className="text-2xl text-white font-semibold">
+                    {assessment.jd_title || stripVersionFromTitle(assessment.title)} - Assessment
+                  </h1>
                   <VersionBadge title={assessment.title} size="md" variant="primary" />
-                  {sections.length > 0 && (
-                    <span className="px-2 py-1 bg-gray-700/30 backdrop-blur-sm text-white rounded text-xs flex items-center gap-1 border border-white/20">
-                      <Sparkles className="w-3 h-3" />
-                      AI-Generated
-                    </span>
-                  )}
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                     assessment.status === 'Active'
                       ? 'bg-gray-200/30 text-gray-100 border border-gray-300/30'
@@ -211,51 +210,48 @@ export default function AssessmentDetailsView({
                   }`}>
                     {assessment.status}
                   </span>
-                </div>
-
-                {/* Assessment ID & JD ID */}
-                <div className="text-xs text-gray-300 mb-2">
-                  Assessment ID: <span className="font-medium text-white">{assessment.short_id || `AS-${String(assessment.id).slice(0, 8).toUpperCase()}`}</span>
-                  {assessment.jd_short_id && (
-                    <span className="ml-3">| JD ID: <span className="font-medium text-white">{assessment.jd_short_id}</span></span>
+                  {sections.length > 0 && (
+                    <span className="px-2 py-1 bg-gray-700/30 backdrop-blur-sm text-white rounded text-xs flex items-center gap-1 border border-white/20">
+                      <Sparkles className="w-3 h-3" />
+                      AI-Generated
+                    </span>
                   )}
                 </div>
 
-                {assessment.job && (
-                  <div className="flex items-center gap-2 mb-3">
-                    <Briefcase className="w-4 h-4 text-gray-200" />
-                    <span className="text-gray-100 text-sm">
-                      Linked to: {assessment.job.title}
-                    </span>
+                {/* Line 2: Linked to: JD-025 - SQL Developer v2 */}
+                {assessment.jd_short_id && (
+                  <div className="text-sm text-gray-100 mb-2">
+                    <span className="font-medium">Linked to: {assessment.jd_short_id}</span>
+                    {assessment.jd_title && (
+                      <span> - {assessment.jd_title}</span>
+                    )}
+                    {assessment.jd_version && (
+                      <span className="ml-1 text-gray-300">v{assessment.jd_version}</span>
+                    )}
                   </div>
                 )}
 
-                <div className="flex items-center gap-6 text-sm text-gray-100">
-                  <span className="flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
-                    {formattedDuration}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    {sections.length} section{sections.length !== 1 ? 's' : ''}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    {assessment.candidates || 0} candidates
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    Created {assessment.created_at
-                      ? (() => {
-                          const date = new Date(assessment.created_at);
-                          return `${date.toLocaleDateString('en-US', { timeZone: INDIA_TIMEZONE, month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString('en-US', { timeZone: INDIA_TIMEZONE, hour: '2-digit', minute: '2-digit', hour12: true })} IST (UTC+5:30)`;
-                        })()
-                      : assessment.created}
-                  </span>
-                  {assessment.created_by_name && (
-                    <span className="flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      By {assessment.created_by_name}
+                {/* Line 3: 30 min 3 sections 1 candidates Created 9 Feb 2026 at 06:46 pm Last Updated date_time */}
+                <div className="text-sm text-gray-100 flex items-center gap-4 flex-wrap">
+                  <span>{formattedDuration}</span>
+                  <span>{sections.length} section{sections.length !== 1 ? 's' : ''}</span>
+                  <span>{assessment.candidates || 0} candidates</span>
+                  {assessment.created_at && (
+                    <span>
+                      Created {(() => {
+                        const dateWithZ = assessment.created_at + (assessment.created_at.includes('Z') ? '' : 'Z');
+                        const date = new Date(dateWithZ);
+                        return `${date.toLocaleDateString('en-IN', { timeZone: INDIA_TIMEZONE, month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString('en-IN', { timeZone: INDIA_TIMEZONE, hour: '2-digit', minute: '2-digit', hour12: true })}`;
+                      })()}
+                    </span>
+                  )}
+                  {assessment.updated_at && (
+                    <span>
+                      Last Updated {(() => {
+                        const dateWithZ = assessment.updated_at + (assessment.updated_at.includes('Z') ? '' : 'Z');
+                        const date = new Date(dateWithZ);
+                        return `${date.toLocaleDateString('en-IN', { timeZone: INDIA_TIMEZONE, month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString('en-IN', { timeZone: INDIA_TIMEZONE, hour: '2-digit', minute: '2-digit', hour12: true })}`;
+                      })()}
                     </span>
                   )}
                 </div>
@@ -748,14 +744,17 @@ export default function AssessmentDetailsView({
 
                         const statusBadge = getStatusBadge();
                         const activityDate = activity.sent_at || activity.created_at;
-                        const formattedDate = activityDate ? new Date(activityDate).toLocaleString('en-US', {
-                          timeZone: 'Asia/Kolkata',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: true
-                        }) : 'N/A';
+                        const formattedDate = activityDate ? (() => {
+                          const dateWithZ = activityDate + (activityDate.includes('Z') ? '' : 'Z');
+                          return new Date(dateWithZ).toLocaleString('en-IN', {
+                            timeZone: 'Asia/Kolkata',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true
+                          });
+                        })() : 'N/A';
 
                         return (
                           <div key={activity.id} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
@@ -1029,9 +1028,12 @@ export default function AssessmentDetailsView({
                   const info = getActivityInfo();
                   const ActivityIcon = info.icon;
                   const activityDate = activity.completed_at || activity.started_at || activity.created_at;
-                  const formattedDate = activityDate ? new Date(activityDate).toLocaleString('en-US', {
-                    timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
-                  }) : 'N/A';
+                  const formattedDate = activityDate ? (() => {
+                    const dateWithZ = activityDate + (activityDate.includes('Z') ? '' : 'Z');
+                    return new Date(dateWithZ).toLocaleString('en-IN', {
+                      timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
+                    });
+                  })() : 'N/A';
 
                   return (
                     <div key={activity.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
@@ -1108,8 +1110,9 @@ export default function AssessmentDetailsView({
               <div className="p-6 space-y-6">
                 {versionHistory.map((version: any, idx: number) => {
                   const isCurrentVersion = idx === 0;
-                  const date = new Date(version.created_at);
-                  const versionDate = date.toLocaleString('en-US', {
+                  const dateWithZ = version.created_at + (version.created_at.includes('Z') ? '' : 'Z');
+                  const date = new Date(dateWithZ);
+                  const versionDate = date.toLocaleString('en-IN', {
                     timeZone: INDIA_TIMEZONE, // IST = UTC+5:30
                     year: 'numeric',
                     month: 'long',
