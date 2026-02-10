@@ -138,8 +138,11 @@ export default function AuditTrailPage() {
     'role_create', 'role_update', 'role_delete', 'permission_update',
     'jd_create', 'jd_update', 'jd_delete', 'jd_publish', 'jd_archive',
     'resume_upload', 'resume_update', 'resume_delete', 'resume_version', 'resume_move',
+    'duplicate_detected', 'duplicate_resolved',
+    'resume_upload_failed', 'resume_move_failed', 'search_failed',
     'folder_create', 'folder_update', 'folder_delete',
-    'scoring_submit', 'scoring_complete', 'ai_match_run',
+    'folder_create_failed', 'folder_update_failed', 'folder_delete_failed',
+    'scoring_submit', 'scoring_complete', 'ai_match_run', 'ai_match_failed',
     'assessment_create', 'assessment_update', 'assessment_delete', 'assessment_publish', 'assessment_invite', 'assessment_start', 'assessment_complete',
     'master_create', 'master_update', 'master_delete',
     'settings_update', 'company_settings_update',
@@ -428,6 +431,18 @@ export default function AuditTrailPage() {
     // Fallback: first string value
     const firstVal = Object.values(d).find(v => typeof v === 'string' && v.length > 0 && v.length < 80);
     return typeof firstVal === 'string' ? firstVal : '—';
+  };
+
+  // Get impact level (severity based on status)
+  const getImpactLevel = (log: AuditLog): { label: string; color: string } => {
+    const status = getActionStatus(log.action);
+    if (status.label === 'Failed') return { label: 'High', color: 'text-red-600' };
+    if (status.label === 'Blocked') return { label: 'High', color: 'text-red-600' };
+    if (status.label === 'Denied') return { label: 'Medium', color: 'text-amber-600' };
+    // Destructive actions
+    if (log.action.includes('delete') || log.action.includes('remove') || log.action.includes('cancel'))
+      return { label: 'Medium', color: 'text-amber-600' };
+    return { label: 'Low', color: 'text-green-600' };
   };
 
   // Get impact text (unit consumption impact)
@@ -804,9 +819,10 @@ export default function AuditTrailPage() {
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Details</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Impact</th>
                     {viewMode !== 'system' && (
                       <>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Impact</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Units Consumed</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Available</th>
                       </>
                     )}
@@ -857,9 +873,20 @@ export default function AuditTrailPage() {
                             {actionStatus.label}
                           </span>
                         </td>
+                        {/* Impact (severity level) */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {(() => {
+                            const impactLevel = getImpactLevel(log);
+                            return (
+                              <span className={`text-sm font-semibold ${impactLevel.color}`}>
+                                {impactLevel.label}
+                              </span>
+                            );
+                          })()}
+                        </td>
                         {viewMode !== 'system' && (
                           <>
-                            {/* Impact (unit consumption) */}
+                            {/* Units Consumed */}
                             <td className="px-6 py-4 whitespace-nowrap">
                               {impact.text !== '—' ? (
                                 <span className={`inline-flex items-center gap-1 text-sm font-semibold ${impact.negative ? 'text-red-700' : 'text-gray-500'}`}>

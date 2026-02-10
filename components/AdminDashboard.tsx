@@ -58,6 +58,8 @@ export default function AdminDashboard({
         // Set default stats on error
         setStats({
           total_resumes: 0,
+          my_resumes: 0,
+          internal_db_resumes: 0,
           resumes_this_week: 0,
           total_jds: 0,
           active_jds: 0,
@@ -195,14 +197,14 @@ export default function AdminDashboard({
                   className="text-xs text-blue-600 cursor-pointer hover:underline hover:text-blue-700 transition-colors"
                   onClick={() => router.push('/recruitment/my-resumes')}
                 >
-                  My Resumes
+                  {stats?.my_resumes || 0} My Resumes
                 </span>
                 <span className="text-xs text-gray-400">|</span>
                 <span
                   className="text-xs text-purple-600 cursor-pointer hover:underline hover:text-purple-700 transition-colors"
                   onClick={() => router.push('/recruitment/resume-database')}
                 >
-                  Internal Database
+                  {stats?.internal_db_resumes || 0} Internal DB
                 </span>
               </div>
             </div>
@@ -234,14 +236,14 @@ export default function AdminDashboard({
                   className="text-xs text-green-600 cursor-pointer hover:underline hover:text-green-700 transition-colors"
                   onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?status=published'); }}
                 >
-                  {stats?.active_jds || 0} published
+                  {stats?.active_jds || 0} Published
                 </span>
                 <span className="text-xs text-gray-400">|</span>
                 <span
                   className="text-xs text-yellow-600 cursor-pointer hover:underline hover:text-yellow-700 transition-colors"
                   onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?status=draft'); }}
                 >
-                  {stats?.draft_jds || 0} draft
+                  {stats?.draft_jds || 0} Draft
                 </span>
                 {/* JD02B: Show "my JDs" for recruiters */}
                 {!canManageUsers && (stats?.my_jds ?? 0) > 0 && (
@@ -251,7 +253,7 @@ export default function AdminDashboard({
                       className="text-xs text-blue-600 cursor-pointer hover:underline hover:text-blue-700 transition-colors"
                       onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?filter=mine'); }}
                     >
-                      {stats?.my_jds || 0} my job descriptions
+                      {stats?.my_jds || 0} My Job Descriptions
                     </span>
                   </>
                 )}
@@ -275,7 +277,7 @@ export default function AdminDashboard({
             <div>
               <p className="text-sm text-gray-600">Total Users</p>
               <p className="text-3xl font-semibold text-gray-900 mt-1">{stats?.total_users || 0}</p>
-              <p className="text-xs text-green-600 mt-1">{stats?.active_users || 0} active</p>
+              <p className="text-xs text-green-600 mt-1">{stats?.active_users || 0} Active</p>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
               <Users className="w-6 h-6 text-green-600" />
@@ -293,7 +295,7 @@ export default function AdminDashboard({
               <p className="text-sm text-gray-600">Assessments</p>
               <p className="text-3xl font-semibold text-gray-900 mt-1">{stats?.total_assessments || 0}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className="text-xs text-green-600">{stats?.assessment_completed_count || 0} completed</span>
+                <span className="text-xs text-green-600">{stats?.assessment_completed_count || 0} Completed</span>
                 {stats?.assessment_average_score !== null && stats?.assessment_average_score !== undefined && (
                   <>
                     <span className="text-xs text-gray-400">|</span>
