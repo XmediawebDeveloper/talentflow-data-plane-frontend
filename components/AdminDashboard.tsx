@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Building2, Users, BarChart3, Settings, Activity, FileText, Briefcase, Award, Loader2, Zap, ClipboardCheck, Video, Upload, UserCheck } from 'lucide-react';
+import { Building2, Users, Settings, Activity, FileText, Briefcase, Award, Loader2, Zap, ClipboardCheck, Video, Upload, UserCheck, CreditCard, Calendar, Shield, Layers, ArrowUpRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
 import { dashboardService, DashboardStats, RecentActivity, SubscriptionUnits, JDActivity } from '@/lib/services/dashboardService';
+import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
+import { useQuota } from '@/contexts/QuotaContext';
 
 interface AdminDashboardProps {
   user?: User;
@@ -24,6 +26,8 @@ export default function AdminDashboard({
   onNavigateToSettings,
 }: AdminDashboardProps) {
   const router = useRouter();
+  const { quotaData } = useQuota();
+  const isTenantAdmin = user?.role === 'tenant_admin';
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [subscriptionUnits, setSubscriptionUnits] = useState<SubscriptionUnits | null>(null);  // JD02A
@@ -109,21 +113,9 @@ export default function AdminDashboard({
 
   return (
     <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* Header */}
+      {/* Welcome Banner */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
-            <BarChart3 className="w-7 h-7 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">
-              Welcome back, {user?.name || 'User'}
-            </h1>
-            <p className="text-sm text-gray-600">
-              {tenant?.name || 'TalentFlow'} - Dashboard
-            </p>
-          </div>
-        </div>
+        <WelcomeBanner user={user} tenant={tenant} />
       </div>
 
       {error && (
@@ -132,18 +124,87 @@ export default function AdminDashboard({
         </div>
       )}
 
+      {/* Plan Overview - Admin Only */}
+      {isTenantAdmin && (tenant?.subscription || quotaData) && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-indigo-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Plan Overview</h2>
+            </div>
+            <button
+              onClick={() => router.push('/subscription/current-plan')}
+              className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
+            >
+              Manage Plan <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-4">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Current Plan</p>
+              <p className="text-sm font-semibold text-gray-900">
+                {quotaData?.plan_name || tenant?.subscription?.planName || '-'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Plan Tier</p>
+              <p className="text-sm font-semibold text-gray-900 capitalize">
+                {quotaData?.plan_info?.plan_tier || '-'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Status</p>
+              <p className="text-sm font-semibold capitalize">
+                <span className={
+                  (quotaData?.subscription_status || tenant?.subscription?.status) === 'active'
+                    ? 'text-green-700'
+                    : (quotaData?.subscription_status || tenant?.subscription?.status) === 'expired'
+                      ? 'text-red-700'
+                      : 'text-yellow-700'
+                }>
+                  {quotaData?.subscription_status || tenant?.subscription?.status || '-'}
+                </span>
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Billing Period</p>
+              <p className="text-sm font-semibold text-gray-900 capitalize">
+                {quotaData?.plan_info?.billing_period?.toLowerCase() || '-'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Isolation</p>
+              <p className="text-sm font-semibold text-gray-900 capitalize">
+                {(quotaData?.plan_info?.isolation_type || quotaData?.isolation_type || '-').toString().toLowerCase()}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-4 gap-6 mb-8">
-        {/* Resumes Card - Clickable */}
-        <div
-          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md hover:border-blue-300 transition-all"
-          onClick={() => router.push('/recruitment/my-resumes')}
-        >
+        {/* Resumes Card - Clickable with navigation links */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-blue-300 transition-all">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Resumes</p>
               <p className="text-3xl font-semibold text-gray-900 mt-1">{stats?.total_resumes || 0}</p>
-              <p className="text-xs text-green-600 mt-1">+{stats?.resumes_this_week || 0} this week</p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span
+                  className="text-xs text-blue-600 cursor-pointer hover:underline hover:text-blue-700 transition-colors"
+                  onClick={() => router.push('/recruitment/my-resumes')}
+                >
+                  My Resumes
+                </span>
+                <span className="text-xs text-gray-400">|</span>
+                <span
+                  className="text-xs text-purple-600 cursor-pointer hover:underline hover:text-purple-700 transition-colors"
+                  onClick={() => router.push('/recruitment/resume-database')}
+                >
+                  Internal Database
+                </span>
+              </div>
             </div>
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
               <FileText className="w-6 h-6 text-blue-600" />
