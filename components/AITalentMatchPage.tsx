@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, PlayCircle, Paperclip } from 'lucide-react';
+import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -716,13 +716,28 @@ export default function AITalentMatchPage({
                 {filteredCandidates.length} candidates
               </div>
               {selectedCandidates.length > 0 && (
-                <button
-                  onClick={handleSubmitToScoring}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium text-sm flex items-center gap-2"
-                >
-                  <Target className="w-4 h-4" />
-                  Score ({selectedCandidates.length})
-                </button>
+                <div className="flex items-center gap-2">
+                  {availableUnits !== null && selectedCandidates.length > availableUnits && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <span className="text-xs text-amber-700 font-medium">
+                        Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleSubmitToScoring}
+                    disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
+                    className={`px-4 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center gap-2 ${
+                      availableUnits !== null && selectedCandidates.length > availableUnits
+                        ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                        : 'bg-gray-800 hover:bg-gray-900'
+                    }`}
+                  >
+                    <Target className="w-4 h-4" />
+                    Score ({selectedCandidates.length})
+                  </button>
+                </div>
               )}
             </div>
             {/* Additional Filters */}
@@ -1416,13 +1431,28 @@ export default function AITalentMatchPage({
                 {filteredCandidates.length} candidates
               </div>
               {selectedCandidates.length > 0 && (
-                <button
-                  onClick={handleSubmitToScoring}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium text-sm flex items-center gap-2"
-                >
-                  <Target className="w-4 h-4" />
-                  Score ({selectedCandidates.length})
-                </button>
+                <div className="flex items-center gap-2">
+                  {availableUnits !== null && selectedCandidates.length > availableUnits && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <span className="text-xs text-amber-700 font-medium">
+                        Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleSubmitToScoring}
+                    disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
+                    className={`px-4 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center gap-2 ${
+                      availableUnits !== null && selectedCandidates.length > availableUnits
+                        ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                        : 'bg-gray-800 hover:bg-gray-900'
+                    }`}
+                  >
+                    <Target className="w-4 h-4" />
+                    Score ({selectedCandidates.length})
+                  </button>
+                </div>
               )}
             </div>
             {/* Additional Filters */}
