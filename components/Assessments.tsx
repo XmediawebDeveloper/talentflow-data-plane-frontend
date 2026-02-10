@@ -798,11 +798,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             setSelectedAssessmentForPreview(selectedAssessmentForDetails);
             setShowPreviewModal(true);
           }}
-          onShare={() => {
+          onShare={(hasPermission('canUpdateAssessments') || isTenantAdmin) ? () => {
             // Keep details view open, modal will overlay on top
             setSelectedAssessmentForShare(selectedAssessmentForDetails);
             setShowShareModal(true);
-          }}
+          } : undefined}
           onViewResults={() => {
             setShowDetailsView(false);
             setSelectedAssessmentForResults(selectedAssessmentForDetails);
@@ -1894,26 +1894,28 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                     {/* Grid Card Actions */}
                     <div className="flex items-center gap-2 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => {
-                          if (assessment.status === 'Draft') {
-                            toast.warning('Please publish the assessment before sharing');
-                            return;
-                          }
-                          setSelectedAssessmentForShare(assessment);
-                          setShowShareModal(true);
-                        }}
-                        disabled={assessment.status === 'Draft'}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs ${
-                          assessment.status === 'Draft'
-                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            : 'bg-gray-800 text-white hover:bg-gray-900'
-                        }`}
-                        title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
-                      >
-                        <Mail className="w-3.5 h-3.5" />
-                        Share
-                      </button>
+                      {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
+                        <button
+                          onClick={() => {
+                            if (assessment.status === 'Draft') {
+                              toast.warning('Please publish the assessment before sharing');
+                              return;
+                            }
+                            setSelectedAssessmentForShare(assessment);
+                            setShowShareModal(true);
+                          }}
+                          disabled={assessment.status === 'Draft'}
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs ${
+                            assessment.status === 'Draft'
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              : 'bg-gray-800 text-white hover:bg-gray-900'
+                          }`}
+                          title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          Share
+                        </button>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -2123,26 +2125,28 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {/* Right Side - Actions + Status + Menu */}
                       <div className="flex items-center gap-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                         {/* Share via Email Button */}
-                        <button
-                          onClick={() => {
-                            if (assessment.status === 'Draft') {
-                              toast.warning('Please publish the assessment before sharing');
-                              return;
-                            }
-                            setSelectedAssessmentForShare(assessment);
-                            setShowShareModal(true);
-                          }}
-                          disabled={assessment.status === 'Draft'}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs ${
-                            assessment.status === 'Draft'
-                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                              : 'bg-gray-700 text-white hover:bg-gray-800'
-                          }`}
-                          title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
-                        >
-                          <Mail className="w-3.5 h-3.5" />
-                          Share via Email
-                        </button>
+                        {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
+                          <button
+                            onClick={() => {
+                              if (assessment.status === 'Draft') {
+                                toast.warning('Please publish the assessment before sharing');
+                                return;
+                              }
+                              setSelectedAssessmentForShare(assessment);
+                              setShowShareModal(true);
+                            }}
+                            disabled={assessment.status === 'Draft'}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs ${
+                              assessment.status === 'Draft'
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-gray-700 text-white hover:bg-gray-800'
+                            }`}
+                            title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            Share via Email
+                          </button>
+                        )}
 
                         {/* Track Invites Button */}
                         {assessment.candidates > 0 && (

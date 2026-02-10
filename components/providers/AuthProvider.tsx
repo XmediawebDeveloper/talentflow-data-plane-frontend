@@ -177,8 +177,10 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canViewInvoices: apiUser.permissions.can_view_invoices,
       canViewUsage: apiUser.permissions.can_view_usage,
       // RBAC06: Feature permissions
+      canViewScoring: apiUser.permissions.can_view_scoring,
       canRunScoring: apiUser.permissions.can_run_scoring,
       canRunAiInterviews: apiUser.permissions.can_run_ai_interviews,
+      canViewAiMatch: apiUser.permissions.can_view_ai_match,
       canRunAiMatch: apiUser.permissions.can_run_ai_match,
       canBulkOperations: apiUser.permissions.can_bulk_operations,
       canExport: apiUser.permissions.can_export,

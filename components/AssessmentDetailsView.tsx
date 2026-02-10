@@ -12,7 +12,7 @@ interface AssessmentDetailsViewProps {
   onBack: () => void;
   onEdit: () => void;
   onPreview: () => void;
-  onShare: () => void;
+  onShare?: () => void;
   onViewResults: () => void;
   onRefresh?: () => void;
 }
@@ -260,13 +260,15 @@ export default function AssessmentDetailsView({
 
             {/* Action Buttons */}
             <div className="flex items-center gap-3">
-              <button
-                onClick={onShare}
-                className="px-4 py-2 bg-white text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2 font-medium"
-              >
-                <Mail className="w-4 h-4" />
-                Share
-              </button>
+              {onShare && (
+                <button
+                  onClick={onShare}
+                  className="px-4 py-2 bg-white text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2 font-medium"
+                >
+                  <Mail className="w-4 h-4" />
+                  Share
+                </button>
+              )}
             </div>
           </div>
         </div>

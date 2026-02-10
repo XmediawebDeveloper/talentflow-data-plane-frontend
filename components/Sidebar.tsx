@@ -103,6 +103,13 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
     if (permission === 'canViewInternalDB' || permission === 'canAccessInternalDB') {
       return user.permissions.canAccessInternalDB === true || user.permissions.canViewInternalDB === true;
     }
+    // New granular permissions with fallback to RUN permissions for backward compatibility
+    if (permission === 'canViewScoring') {
+      return user.permissions.canRunScoring === true;  // Fallback: if can run, can view
+    }
+    if (permission === 'canViewAiMatch') {
+      return user.permissions.canRunAiMatch === true;  // Fallback: if can run, can view
+    }
 
     return false;
   };
@@ -143,16 +150,16 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
         { id: 'jd-creation', label: 'JD Creation', icon: FileText, permission: 'canCreateJD', feature: 'jd_create' },
         // Job Openings - requires view permission (will show if user can view JDs)
         { id: 'job-openings', label: 'Job Openings', icon: Briefcase, permission: 'canViewJD', feature: 'jd_manage' },
-        // Resume Scoring - requires resume view permission
-        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, permission: 'canViewResumes', feature: 'resume_scoring' },
-        // AI Talent Match - requires resume view permission
-        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, permission: 'canViewResumes', feature: 'ai_talent_match' },
+        // Resume Scoring - requires scoring view permission
+        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, permission: 'canViewScoring', feature: 'resume_scoring' },
+        // AI Talent Match - requires AI match view permission
+        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, permission: 'canViewAiMatch', feature: 'ai_talent_match' },
         // Assessments - requires create assessment permission (or view for viewing results)
         { id: 'assessments', label: 'Assessments', icon: ClipboardList, permission: 'canViewAssessments', feature: 'assessment' },
         // AI Interviews - requires resume view permission
         { id: 'ai-interviews', label: 'AI Interviews', icon: Video, permission: 'canViewResumes', feature: 'ai_interview' },
-        // My Resumes - requires resume upload/create permission
-        { id: 'my-resumes', label: 'My Resumes', icon: Users, permission: 'canCreateResumes', feature: 'resume_upload' },
+        // My Resumes - requires resume view/upload permission
+        { id: 'my-resumes', label: 'My Resumes', icon: Users, permission: 'canUploadResumes', feature: 'resume_upload' },
         // Internal Resume Database - requires internal DB access
         { id: 'resume-database', label: 'Internal Resume Database', icon: Database, permission: 'canViewInternalDB', feature: 'resume_database_access' },
       ]
