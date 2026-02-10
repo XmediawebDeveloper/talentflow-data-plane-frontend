@@ -779,6 +779,88 @@ export const candidateService = {
   },
 
   /**
+   * Save answer as draft (auto-save, editable)
+   * This saves the answer without locking it, allowing the candidate to edit later
+   */
+  async saveDraft(
+    token: string,
+    questionId: string,
+    answer: Omit<AnswerSubmission, 'is_draft'>
+  ): Promise<{
+    success: boolean;
+    message: string;
+    auto_saved_at: string;
+  }> {
+    try {
+      const response = await candidateApi.post(
+        `/candidate/assessment/${token}/answer`,
+        {
+          question_id: questionId,
+          ...answer,
+          is_draft: true, // Always true for draft saves
+        }
+      );
+      return {
+        success: true,
+        message: 'Draft saved successfully',
+        auto_saved_at: new Date().toISOString(),
+      };
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        // Draft saves should fail silently to not disrupt the user experience
+        console.warn('Failed to save draft:', error.response?.data?.detail);
+        throw new Error(error.response?.data?.detail || 'Failed to save draft');
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Get available languages for a specific assessment attempt
+   * Filters out languages that don't have compilers available
+   */
+  async getAvailableLanguages(
+    attemptId: string
+  ): Promise<{
+    available_languages: Array<{
+      code: string;
+      display_name: string;
+      compiler_info: {
+        language: string;
+        version: string;
+      };
+      available: boolean;
+    }>;
+    unavailable_languages: Array<{
+      code: string;
+      display_name: string;
+      available: boolean;
+      reason: string;
+    }>;
+    total_assigned: number;
+    total_available: number;
+  }> {
+    try {
+      const response = await candidateApi.get(
+        `/candidate/assessment/${attemptId}/available-languages`
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        console.warn('Failed to fetch available languages:', error.response?.data?.detail);
+        // Return empty arrays if endpoint fails - fallback to showing all languages
+        return {
+          available_languages: [],
+          unavailable_languages: [],
+          total_assigned: 0,
+          total_available: 0,
+        };
+      }
+      throw error;
+    }
+  },
+
+  /**
    * Complete the assessment
    */
   async completeAssessment(token: string): Promise<CompleteAssessmentResponse> {

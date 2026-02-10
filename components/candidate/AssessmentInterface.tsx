@@ -116,6 +116,12 @@ export function AssessmentInterface({
   const localLockStatus = answerStatuses.get(`question_${currentQuestion.question_number}`)?.isLocked || false;
   const isCurrentAnswerLocked = currentQuestion.previous_answer?.is_locked || localLockStatus;
 
+  // Auto-save state
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Global assessment timer (30 minutes)
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
     // CRITICAL: Ensure startedAt is parsed as UTC by appending 'Z' if missing
@@ -167,6 +173,86 @@ export function AssessmentInterface({
 
     return () => clearTimeout(initTimeout);
   }, []); // Only run once on mount
+
+  // 💾 AUTO-SAVE: Periodically save draft every 30 seconds
+  useEffect(() => {
+    const performAutoSave = async () => {
+      // Don't auto-save if:
+      // 1. Already submitting or navigating
+      // 2. Answer is already locked (submitted)
+      // 3. No answer to save
+      const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+
+      if (isSubmitting || isNavigating || isCurrentAnswerLocked || !hasAnswer || isAutoSaving) {
+        return;
+      }
+
+      console.log('[AUTO-SAVE] Starting auto-save...');
+      setIsAutoSaving(true);
+      setAutoSaveStatus('saving');
+
+      try {
+        // Use the saveDraft method which sets is_draft: true automatically
+        await candidateService.saveDraft(token, currentQuestion.question_id, {
+          text_response: answer.text_response,
+          selected_options: answer.selected_options,
+          code_submission: answer.code_submission,
+          language: answer.language,
+          time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
+        });
+
+        // Update answer status to track that we have a draft
+        setAnswerStatuses(prev => {
+          const newMap = new Map(prev);
+          newMap.set(`question_${currentQuestion.question_number}`, {
+            hasDraft: true,
+            isLocked: false
+          });
+          return newMap;
+        });
+
+        setLastAutoSaveTime(new Date());
+        setAutoSaveStatus('saved');
+        console.log('[AUTO-SAVE] ✅ Draft saved successfully');
+
+        // Reset status to idle after 2 seconds
+        setTimeout(() => {
+          setAutoSaveStatus('idle');
+        }, 2000);
+      } catch (error) {
+        console.error('[AUTO-SAVE] ❌ Failed to save draft:', error);
+        setAutoSaveStatus('error');
+        // Reset to idle after 3 seconds
+        setTimeout(() => {
+          setAutoSaveStatus('idle');
+        }, 3000);
+      } finally {
+        setIsAutoSaving(false);
+      }
+    };
+
+    // Set up auto-save timer (30 seconds)
+    autoSaveTimerRef.current = setInterval(() => {
+      performAutoSave();
+    }, 30000); // 30 seconds
+
+    // Cleanup on unmount
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearInterval(autoSaveTimerRef.current);
+      }
+    };
+  }, [
+    answer,
+    token,
+    currentQuestion.question_id,
+    currentQuestion.question_number,
+    isSubmitting,
+    isNavigating,
+    isCurrentAnswerLocked,
+    isAutoSaving,
+    questionStartTime
+  ]);
 
   // 🛡️ PROCTORING: Force Fullscreen on Start
   const enterFullscreen = async () => {
@@ -1112,6 +1198,30 @@ export function AssessmentInterface({
                   />
                 </div>
               </div>
+
+              {/* Auto-Save Indicator */}
+              {autoSaveStatus !== 'idle' && (
+                <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200">
+                  {autoSaveStatus === 'saving' && (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 text-gray-500 animate-spin" />
+                      <span className="text-xs text-gray-600">Saving...</span>
+                    </>
+                  )}
+                  {autoSaveStatus === 'saved' && (
+                    <>
+                      <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                      <span className="text-xs text-green-700">Saved</span>
+                    </>
+                  )}
+                  {autoSaveStatus === 'error' && (
+                    <>
+                      <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                      <span className="text-xs text-red-600">Save failed</span>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Camera Preview */}
               <div className="w-20 h-14 bg-gray-900 rounded-lg overflow-hidden relative">

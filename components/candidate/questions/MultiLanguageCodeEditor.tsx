@@ -115,13 +115,21 @@ export function MultiLanguageCodeEditor({
   const [submissionResult, setSubmissionResult] = useState<CodeSubmissionResult | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  // Get available languages for this question
-  const availableLanguages = question.starter_code
+  // Language filtering state
+  const [filteredLanguages, setFilteredLanguages] = useState<LanguageConfig[]>([]);
+  const [unavailableLanguages, setUnavailableLanguages] = useState<string[]>([]);
+  const [isLoadingLanguages, setIsLoadingLanguages] = useState(true);
+
+  // Get available languages for this question (before filtering)
+  const assignedLanguages = question.starter_code
     ? Object.keys(question.starter_code).map((lang) => {
         const resolved = resolveLanguageAlias(lang);
         return getLanguageConfig(resolved);
       }).filter(Boolean) as LanguageConfig[]
     : AVAILABLE_LANGUAGES;
+
+  // Use filtered languages if available, otherwise use assigned languages
+  const availableLanguages = filteredLanguages.length > 0 ? filteredLanguages : assignedLanguages;
 
   // Initialize code on mount or language change
   useEffect(() => {
@@ -162,6 +170,48 @@ export function MultiLanguageCodeEditor({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Fetch available languages from backend (compiler filtering)
+  useEffect(() => {
+    const fetchAvailableLanguages = async () => {
+      if (!attemptId) {
+        // No attemptId provided, use all assigned languages
+        setFilteredLanguages(assignedLanguages);
+        setIsLoadingLanguages(false);
+        return;
+      }
+
+      try {
+        setIsLoadingLanguages(true);
+        const response = await candidateService.getAvailableLanguages(attemptId);
+
+        // Extract available language codes
+        const availableCodes = response.available_languages.map(lang => lang.code.toLowerCase());
+        const unavailableCodes = response.unavailable_languages.map(lang => lang.code.toLowerCase());
+
+        // Filter assigned languages to only include those with compilers
+        const filtered = assignedLanguages.filter(lang => {
+          const langCode = lang.id.toLowerCase();
+          return availableCodes.includes(langCode);
+        });
+
+        setFilteredLanguages(filtered);
+        setUnavailableLanguages(unavailableCodes);
+
+        console.log('[LANGUAGE-FILTER] Available languages:', availableCodes);
+        console.log('[LANGUAGE-FILTER] Filtered to:', filtered.map(l => l.id));
+        console.log('[LANGUAGE-FILTER] Unavailable:', unavailableCodes);
+      } catch (error) {
+        console.error('[LANGUAGE-FILTER] Failed to fetch available languages:', error);
+        // On error, fallback to showing all assigned languages
+        setFilteredLanguages(assignedLanguages);
+      } finally {
+        setIsLoadingLanguages(false);
+      }
+    };
+
+    fetchAvailableLanguages();
+  }, [attemptId]);
 
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor;
@@ -692,7 +742,24 @@ export function MultiLanguageCodeEditor({
             {/* Dropdown */}
             {showLanguageDropdown && (
               <div className="absolute top-full left-0 mt-1 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
-                {availableLanguages.map((lang) => (
+                {/* Loading state */}
+                {isLoadingLanguages && (
+                  <div className="px-4 py-3 text-center text-gray-400 text-sm">
+                    <Loader2 className="w-4 h-4 mx-auto mb-1 animate-spin" />
+                    Loading languages...
+                  </div>
+                )}
+
+                {/* Warning message if some languages are unavailable */}
+                {!isLoadingLanguages && unavailableLanguages.length > 0 && (
+                  <div className="px-3 py-2 text-xs text-yellow-400 bg-yellow-900/20 border-b border-gray-700">
+                    <AlertCircle className="w-3 h-3 inline mr-1" />
+                    {unavailableLanguages.length} language(s) hidden - compiler unavailable
+                  </div>
+                )}
+
+                {/* Available languages */}
+                {!isLoadingLanguages && availableLanguages.map((lang) => (
                   <button
                     key={lang.id}
                     onClick={() => handleLanguageChange(lang.id)}
@@ -705,6 +772,13 @@ export function MultiLanguageCodeEditor({
                     {lang.name}
                   </button>
                 ))}
+
+                {/* No languages available */}
+                {!isLoadingLanguages && availableLanguages.length === 0 && (
+                  <div className="px-4 py-3 text-center text-gray-400 text-sm">
+                    No languages available
+                  </div>
+                )}
               </div>
             )}
           </div>
