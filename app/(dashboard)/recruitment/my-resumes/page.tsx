@@ -3242,7 +3242,7 @@ export default function MyResumesPage() {
                                               <div className="font-medium text-gray-900 text-sm truncate">{file.fileName}</div>
                                               <div className="text-xs text-gray-500 mt-0.5">
                                                 {file.status === 'completed' && (file.candidateName ? `✓ ${file.candidateName}` : '✓ Uploaded successfully')}
-                                                {file.status === 'versioned' && (file.candidateName ? `↑ ${file.candidateName} - New version` : '↑ Saved as new version')}
+                                                {file.status === 'versioned' && (file.candidateName ? `↑ ${file.candidateName} - Version update detected` : '↑ Version update detected - Pending resolution')}
                                                 {file.status === 'processing' && '⚡ Processing...'}
                                                 {file.status === 'pending' && '⏳ Waiting in queue...'}
                                                 {file.status === 'duplicate' && (file.errorMessage || '⚠ Duplicate - already exists')}
@@ -3259,7 +3259,7 @@ export default function MyResumesPage() {
                                               'bg-gray-100 text-gray-600'
                                             }`}>
                                               {file.status === 'completed' ? '✓ Done' :
-                                               file.status === 'versioned' ? '↑ Version' :
+                                               file.status === 'versioned' ? '⏳ Pending' :
                                                file.status === 'processing' ? '⚡ Running' :
                                                file.status === 'duplicate' ? '⚠ Duplicate' :
                                                file.status === 'error' ? '✗ Failed' :
