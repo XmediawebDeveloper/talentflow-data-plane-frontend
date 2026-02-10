@@ -23,8 +23,6 @@ import {
   Zap,
   ShoppingCart,
   TrendingUp,
-  Globe,
-  Hash,
   Tag,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -399,22 +397,72 @@ export default function AuditTrailPage() {
     }
   };
 
+  // Derive status from action name
+  const getActionStatus = (action: string): { label: string; color: string } => {
+    if (action.includes('_failed') || action === 'login_failed')
+      return { label: 'Failed', color: 'bg-red-100 text-red-800 border border-red-200' };
+    if (action === 'quota_exhausted' || action === 'user_limit_exceeded')
+      return { label: 'Blocked', color: 'bg-orange-100 text-orange-800 border border-orange-200' };
+    if (action.includes('_blocked') || action.includes('_denied'))
+      return { label: 'Denied', color: 'bg-orange-100 text-orange-800 border border-orange-200' };
+    return { label: 'Success', color: 'bg-green-100 text-green-800 border border-green-200' };
+  };
+
+  // Get brief details summary from details JSONB
+  const getDetailsSummary = (log: AuditLog): string => {
+    if (!log.details || Object.keys(log.details).length === 0) return '—';
+    const d = log.details;
+    // Show most relevant field based on context
+    if (d.file_name) return d.file_name;
+    if (d.resume_name) return d.resume_name;
+    if (d.jd_title) return d.jd_title;
+    if (d.assessment_title || d.assessment_name) return d.assessment_title || d.assessment_name;
+    if (d.candidate_name) return d.candidate_name;
+    if (d.candidate_email) return d.candidate_email;
+    if (d.role_name) return d.role_name;
+    if (d.user_name || d.full_name) return d.user_name || d.full_name;
+    if (d.email) return d.email;
+    if (d.plan_name) return d.plan_name;
+    if (d.reason) return d.reason;
+    if (d.error) return typeof d.error === 'string' ? d.error.slice(0, 60) : '—';
+    // Fallback: first string value
+    const firstVal = Object.values(d).find(v => typeof v === 'string' && v.length > 0 && v.length < 80);
+    return typeof firstVal === 'string' ? firstVal : '—';
+  };
+
+  // Get impact text (unit consumption impact)
+  const getImpactText = (log: AuditLog): { text: string; negative: boolean } => {
+    const units = log.details?.units_consumed_actual ?? log.units_consumed;
+    if (units && units > 0 && log.unit_type) {
+      return { text: `-${units} ${log.unit_type}`, negative: true };
+    }
+    if (units === 0 && log.unit_type) {
+      return { text: `0 ${log.unit_type}`, negative: false };
+    }
+    return { text: '—', negative: false };
+  };
+
   const convertToCSV = (logs: AuditLog[]): string => {
-    const headers = ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Unit Type', 'Units Consumed', 'Balance Before', 'Balance After', 'Result', 'IP Address', 'Details'];
-    const rows = logs.map(log => [
-      log.created_at,
-      log.user_name,
-      log.action_label,
-      log.entity_type || '',
-      log.entity_id || '',
-      log.unit_type || '',
-      log.units_consumed || '',
-      log.balance_before ?? '',
-      log.balance_after ?? '',
-      log.consumption_status || '',
-      log.ip_address || '',
-      JSON.stringify(log.details),
-    ]);
+    const headers = ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Status', 'Details', 'Impact', 'Unit Type', 'Units Consumed', 'Available Before', 'Available After', 'IP Address'];
+    const rows = logs.map(log => {
+      const status = getActionStatus(log.action);
+      const impact = getImpactText(log);
+      return [
+        log.created_at,
+        log.user_name,
+        log.action_label,
+        log.entity_type || '',
+        log.entity_id || '',
+        status.label,
+        getDetailsSummary(log),
+        impact.text,
+        log.unit_type || '',
+        log.units_consumed || '',
+        log.balance_before ?? log.details?.balance_before ?? '',
+        log.balance_after ?? log.details?.balance_after ?? '',
+        log.ip_address || '',
+      ];
+    });
     return [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
   };
 
@@ -754,21 +802,23 @@ export default function AuditTrailPage() {
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Timestamp</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Entity</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Details</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                     {viewMode !== 'system' && (
                       <>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Units</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Impact</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Available</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Result</th>
                       </>
                     )}
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">IP Address</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredLogs.map((log) => {
-                    const EntityIcon = getEntityIcon(log.entity_type);
+                    const actionStatus = getActionStatus(log.action);
+                    const impact = getImpactText(log);
+                    const balanceBefore = log.balance_before ?? log.details?.balance_before;
+                    const balanceAfter = log.balance_after ?? log.details?.balance_after;
                     return (
                       <tr key={log.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -795,83 +845,45 @@ export default function AuditTrailPage() {
                             {log.action_label}
                           </span>
                         </td>
+                        {/* Details */}
+                        <td className="px-6 py-4">
+                          <span className="text-sm text-gray-700 max-w-[200px] truncate block" title={getDetailsSummary(log)}>
+                            {getDetailsSummary(log)}
+                          </span>
+                        </td>
+                        {/* Status (derived from action) */}
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {log.entity_type ? (
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center">
-                                <EntityIcon className="w-3.5 h-3.5 text-gray-500" />
-                              </div>
-                              <span className="text-sm text-gray-700 capitalize font-medium">
-                                {log.entity_type.replace(/_/g, ' ')}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-gray-400">—</span>
-                          )}
+                          <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${actionStatus.color}`}>
+                            {actionStatus.label}
+                          </span>
                         </td>
                         {viewMode !== 'system' && (
                           <>
-                            {/* Units Consumed */}
+                            {/* Impact (unit consumption) */}
                             <td className="px-6 py-4 whitespace-nowrap">
-                              {log.units_consumed && log.units_consumed > 0 ? (
-                                <div className="inline-flex items-center gap-1.5 bg-gray-100 px-3 py-1.5 rounded-lg">
-                                  <Zap className="w-4 h-4 text-gray-600" />
-                                  <span className="text-sm font-semibold text-gray-800">
-                                    {log.details?.units_consumed_actual != null
-                                      ? log.details.units_consumed_actual
-                                      : log.units_consumed}
-                                  </span>
-                                  {log.unit_type && (
-                                    <span className="text-xs text-gray-500">
-                                      {log.unit_type}
-                                    </span>
-                                  )}
-                                </div>
+                              {impact.text !== '—' ? (
+                                <span className={`inline-flex items-center gap-1 text-sm font-semibold ${impact.negative ? 'text-red-700' : 'text-gray-500'}`}>
+                                  {impact.negative && <Zap className="w-3.5 h-3.5" />}
+                                  {impact.text}
+                                </span>
                               ) : (
                                 <span className="text-sm text-gray-400">—</span>
                               )}
                             </td>
                             {/* Available Units (Balance Before -> After) */}
                             <td className="px-6 py-4 whitespace-nowrap">
-                              {log.balance_before !== null && log.balance_before !== undefined ? (
+                              {balanceBefore != null ? (
                                 <div className="text-sm">
-                                  <span className="text-gray-600">{log.balance_before}</span>
+                                  <span className="text-gray-600">{balanceBefore}</span>
                                   <span className="text-gray-400 mx-1">→</span>
-                                  <span className="font-medium text-gray-800">{log.balance_after ?? 0}</span>
+                                  <span className="font-medium text-gray-800">{balanceAfter ?? 0}</span>
                                 </div>
-                              ) : (
-                                <span className="text-sm text-gray-400">—</span>
-                              )}
-                            </td>
-                            {/* Result (Consumption Status) */}
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {log.consumption_status ? (
-                                <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                                  log.consumption_status === 'SUCCESS'
-                                    ? 'bg-green-100 text-green-800 border border-green-200'
-                                    : log.consumption_status === 'INSUFFICIENT_UNITS'
-                                    ? 'bg-red-100 text-red-800 border border-red-200'
-                                    : log.consumption_status === 'FAILED'
-                                    ? 'bg-red-100 text-red-800 border border-red-200'
-                                    : log.consumption_status === 'ABANDONED'
-                                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                                    : log.consumption_status === 'INTERRUPTED'
-                                    ? 'bg-orange-100 text-orange-800 border border-orange-200'
-                                    : 'bg-gray-100 text-gray-800 border border-gray-200'
-                                }`}>
-                                  {log.consumption_status.replace(/_/g, ' ')}
-                                </span>
                               ) : (
                                 <span className="text-sm text-gray-400">—</span>
                               )}
                             </td>
                           </>
                         )}
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm text-gray-600 font-mono bg-gray-50 px-2 py-1 rounded">
-                            {log.ip_address || '—'}
-                          </span>
-                        </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <button
                             onClick={() => setSelectedLog(log)}
@@ -975,50 +987,54 @@ export default function AuditTrailPage() {
                 </div>
               </div>
 
-              {/* Units & Balance Row (only show if relevant) */}
-              {((selectedLog.units_consumed && selectedLog.units_consumed > 0) ||
-                (selectedLog.balance_before !== null && selectedLog.balance_before !== undefined) ||
-                selectedLog.consumption_status) && (
-                <div className="grid grid-cols-3 gap-3">
-                  {(selectedLog.units_consumed && selectedLog.units_consumed > 0) ? (
-                    <div className="bg-gray-100 rounded-xl p-3.5">
-                      <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Units Used</p>
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-lg font-bold text-gray-900">
-                          {selectedLog.details?.units_consumed_actual != null ? selectedLog.details.units_consumed_actual : selectedLog.units_consumed}
-                        </span>
-                        {selectedLog.unit_type && (
-                          <span className="text-xs font-medium text-gray-500">{selectedLog.unit_type}</span>
-                        )}
+              {/* Units, Balance & Status Row */}
+              {(() => {
+                const modalImpact = getImpactText(selectedLog);
+                const modalBalanceBefore = selectedLog.balance_before ?? selectedLog.details?.balance_before;
+                const modalBalanceAfter = selectedLog.balance_after ?? selectedLog.details?.balance_after;
+                const hasUnits = selectedLog.units_consumed && selectedLog.units_consumed > 0;
+                const hasBalance = modalBalanceBefore != null;
+                if (!hasUnits && !hasBalance) {
+                  // Just show status alone
+                  return (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-gray-50 rounded-xl p-3.5">
+                        <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Status</p>
+                        {(() => { const s = getActionStatus(selectedLog.action); return <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
                       </div>
+                      <div /><div />
                     </div>
-                  ) : <div />}
-                  {selectedLog.balance_before !== null && selectedLog.balance_before !== undefined ? (
-                    <div className="bg-gray-50 rounded-xl p-3.5">
-                      <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Balance</p>
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-sm text-gray-500">{selectedLog.balance_before}</span>
-                        <span className="text-gray-300">→</span>
-                        <span className="text-lg font-bold text-gray-900">{selectedLog.balance_after ?? 0}</span>
+                  );
+                }
+                return (
+                  <div className="grid grid-cols-3 gap-3">
+                    {hasUnits ? (
+                      <div className="bg-gray-100 rounded-xl p-3.5">
+                        <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Impact</p>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className={`text-lg font-bold ${modalImpact.negative ? 'text-red-700' : 'text-gray-900'}`}>
+                            {modalImpact.text}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ) : <div />}
-                  {selectedLog.consumption_status ? (
+                    ) : <div />}
+                    {hasBalance ? (
+                      <div className="bg-gray-50 rounded-xl p-3.5">
+                        <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Available</p>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-sm text-gray-500">{modalBalanceBefore}</span>
+                          <span className="text-gray-300">→</span>
+                          <span className="text-lg font-bold text-gray-900">{modalBalanceAfter ?? 0}</span>
+                        </div>
+                      </div>
+                    ) : <div />}
                     <div className="bg-gray-50 rounded-xl p-3.5">
-                      <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Result</p>
-                      <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-semibold ${
-                        selectedLog.consumption_status === 'SUCCESS'
-                          ? 'bg-gray-200 text-gray-800'
-                          : selectedLog.consumption_status === 'INSUFFICIENT_UNITS' || selectedLog.consumption_status === 'FAILED'
-                          ? 'bg-gray-300 text-gray-800'
-                          : 'bg-gray-200 text-gray-700'
-                      }`}>
-                        {selectedLog.consumption_status.replace(/_/g, ' ')}
-                      </span>
+                      <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Status</p>
+                      {(() => { const s = getActionStatus(selectedLog.action); return <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
                     </div>
-                  ) : <div />}
-                </div>
-              )}
+                  </div>
+                );
+              })()}
 
               {/* Entity ID (if present) */}
               {selectedLog.entity_id && (
@@ -1029,12 +1045,12 @@ export default function AuditTrailPage() {
               )}
 
               {/* Event Details - Friendly key-value display */}
-              {selectedLog.details && Object.keys(selectedLog.details).filter(k => k !== 'units_consumed_actual').length > 0 && (
+              {selectedLog.details && Object.keys(selectedLog.details).filter(k => !['units_consumed_actual', 'balance_before', 'balance_after'].includes(k)).length > 0 && (
                 <div>
                   <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2.5">Event Details</p>
                   <div className="bg-gray-50 rounded-xl divide-y divide-gray-100 overflow-hidden">
                     {Object.entries(selectedLog.details)
-                      .filter(([key]) => key !== 'units_consumed_actual')
+                      .filter(([key]) => !['units_consumed_actual', 'balance_before', 'balance_after'].includes(key))
                       .map(([key, value]) => (
                       <div key={key} className="flex items-start px-4 py-3 gap-4">
                         <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5 capitalize">
