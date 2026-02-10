@@ -35,7 +35,7 @@ interface UnitDispute {
 
 interface ConsumptionLog {
   id: string;
-  unit_type: 'RS' | 'AS' | 'AIU';
+  unit_type: 'RU' | 'RS' | 'AS' | 'AIU' | 'max_seats';
   units_consumed: number;
   status: string;
   user_email: string | null;
@@ -69,9 +69,11 @@ const REASON_OPTIONS = [
 ];
 
 const UNIT_TYPE_LABELS: Record<string, string> = {
+  RU: 'Resume Upload',
   RS: 'Resume Scoring',
   AS: 'Assessment',
   AIU: 'AI Interview',
+  max_seats: 'Max Users',
 };
 
 // --- Component ---
@@ -210,7 +212,14 @@ export default function UnitDisputesPage() {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => null);
-        throw new Error(errData?.detail || 'Failed to submit dispute');
+        const detail = errData?.detail || '';
+        if (detail.toLowerCase().includes('already exists') || detail.toLowerCase().includes('duplicate')) {
+          toast.error('A dispute has already been filed for this consumption record. Please check your existing disputes.');
+          closeFileModal();
+          fetchDisputes();
+          return;
+        }
+        throw new Error(detail || 'Failed to submit dispute');
       }
 
       toast.success('Dispute submitted successfully! It will be reviewed within 2-3 business days.');
