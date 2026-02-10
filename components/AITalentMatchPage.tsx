@@ -76,7 +76,7 @@ export default function AITalentMatchPage({
   const [filterLocation, setFilterLocation] = useState('');
   const [filterExperienceMin, setFilterExperienceMin] = useState<number | ''>('');
   const [filterExperienceMax, setFilterExperienceMax] = useState<number | ''>('');
-  const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank');
+  const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank'); // Sort by highest rating first (DevRMS style)
 
   // Pagination state for match results
   const [currentPage, setCurrentPage] = useState(1);
@@ -760,8 +760,8 @@ export default function AITalentMatchPage({
                 onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
               >
-                <option value="rank">Sort by Rank</option>
-                <option value="name">Sort by Name</option>
+                <option value="rank">Sort by Rating (High to Low)</option>
+                <option value="name">Sort by Name (A to Z)</option>
                 <option value="score">Sort by Score</option>
                 <option value="experience">Sort by Experience</option>
               </select>
@@ -792,7 +792,7 @@ export default function AITalentMatchPage({
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
-                  Matched Rating
+                  Match Rating
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
                   Candidate Name
@@ -840,11 +840,11 @@ export default function AITalentMatchPage({
                     />
                   </td>
                   <td className="px-4 py-4">
-                    <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full font-bold text-base ${
-                      (candidate.rank || 0) >= 9 ? 'bg-green-100 text-green-700 border-2 border-green-300' :
-                      (candidate.rank || 0) >= 7 ? 'bg-blue-100 text-blue-700 border-2 border-blue-300' :
-                      (candidate.rank || 0) >= 5 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
-                      'bg-gray-100 text-gray-600 border-2 border-gray-200'
+                    <div className={`inline-flex items-center justify-center px-3 py-1 rounded-md font-bold text-sm ${
+                      (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
+                      (candidate.rank || 0) >= 4 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
+                      (candidate.rank || 0) >= 1 ? 'bg-gray-100 text-gray-700 border border-gray-300' :
+                      'bg-gray-50 text-gray-400 border border-gray-200'
                     }`}>
                       {candidate.rank || '-'}
                     </div>
@@ -1460,8 +1460,8 @@ export default function AITalentMatchPage({
                 onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
               >
-                <option value="rank">Sort by Rank</option>
-                <option value="name">Sort by Name</option>
+                <option value="rank">Sort by Rating (High to Low)</option>
+                <option value="name">Sort by Name (A to Z)</option>
                 <option value="score">Sort by Score</option>
                 <option value="experience">Sort by Experience</option>
               </select>
