@@ -23,12 +23,13 @@ import VersionBadge from './VersionBadge';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 
-// Helper function to format date/time in IST timezone
+// Helper function to format dates in IST timezone
 const formatDateTimeIST = (dateStr: string | null | undefined, options?: { includeTime?: boolean }) => {
   if (!dateStr) return '';
   const date = new Date(dateStr);
+
   const dateOptions: Intl.DateTimeFormatOptions = {
-    timeZone: 'Asia/Kolkata',
+    timeZone: 'Asia/Kolkata', // IST = UTC+5:30
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -45,7 +46,7 @@ const formatTimeIST = (dateStr: string | null | undefined) => {
   if (!dateStr) return '';
   const date = new Date(dateStr);
   return date.toLocaleTimeString('en-US', {
-    timeZone: 'Asia/Kolkata',
+    timeZone: 'Asia/Kolkata', // IST = UTC+5:30
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
@@ -56,7 +57,7 @@ const formatDateOnlyIST = (dateStr: string | null | undefined) => {
   if (!dateStr) return '';
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', {
-    timeZone: 'Asia/Kolkata',
+    timeZone: 'Asia/Kolkata', // IST = UTC+5:30
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -2072,7 +2073,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             )}
                             {assessment.created_at && (
                               <span className={(assessment.jd_short_id || assessment.created_by_name) ? "ml-2" : ""}>
-                                {(assessment.jd_short_id || assessment.created_by_name) ? "• " : ""}{formatDateOnlyIST(assessment.created_at)} at {formatTimeIST(assessment.created_at)} IST
+                                {(assessment.jd_short_id || assessment.created_by_name) ? "• " : ""}Created: {formatDateOnlyIST(assessment.created_at)} at {formatTimeIST(assessment.created_at)} IST (UTC+5:30)
                               </span>
                             )}
                           </div>
@@ -2470,7 +2471,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                       const formatDate = (dateStr: string | null) => {
                         if (!dateStr) return null;
-                        return formatDateTimeIST(dateStr, { includeTime: true });
+                        const formatted = formatDateTimeIST(dateStr, { includeTime: true });
+                        return `${formatted} IST`;
                       };
 
                       const initials = invitation.candidate_name
