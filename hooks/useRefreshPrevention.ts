@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 
 interface UseRefreshPreventionOptions {
   enabled?: boolean;
@@ -32,6 +32,9 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
     onAttempt,
     allowDevTools = false,
   } = options;
+
+  // Track if we've already pushed initial history state to prevent repeated calls
+  const hasInitializedHistoryRef = useRef(false);
 
   // Handle keyboard shortcuts (F5, Ctrl+R, Ctrl+Shift+R, Ctrl+W)
   const handleKeyDown = useCallback(
@@ -141,10 +144,17 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
   );
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      hasInitializedHistoryRef.current = false; // Reset when disabled
+      return;
+    }
 
     // Push initial state to enable back button detection
-    window.history.pushState(null, '', window.location.href);
+    // Only do this once to prevent "Too many calls" error in Firefox/Safari
+    if (!hasInitializedHistoryRef.current) {
+      window.history.pushState(null, '', window.location.href);
+      hasInitializedHistoryRef.current = true;
+    }
 
     // Add event listeners
     window.addEventListener('keydown', handleKeyDown, true);
@@ -159,6 +169,7 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
       window.removeEventListener('popstate', handlePopState);
       document.removeEventListener('contextmenu', handleContextMenu);
     };
+    // Only run when enabled changes or handlers change
   }, [enabled, handleKeyDown, handleBeforeUnload, handlePopState, handleContextMenu]);
 
   return {

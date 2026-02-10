@@ -22,28 +22,213 @@ const roleBadgeColors: Record<UserRole, string> = {
   viewer: 'bg-gray-100 text-gray-700',
 };
 
+// ✅ GRANULAR PERMISSION LABELS: Removed all "manage" labels, using only granular CRUD
 const permissionLabels: Record<keyof UserPermissions, string> = {
+  // JD Permissions
+  can_view_jd: 'View JD',
   can_create_jd: 'Create JD',
-  can_manage_jd: 'Manage JD',
-  can_upload_resumes: 'Upload Resumes',
+  can_update_jd: 'Update JD',
+  can_delete_jd: 'Delete JD',
+
+  // Resume Permissions
   can_view_resumes: 'View Resumes',
-  can_access_internal_db: 'Internal DB',
+  can_create_resumes: 'Create Resumes',
+  can_update_resumes: 'Update Resumes',
+  can_delete_resumes: 'Delete Resumes',
+  can_upload_resumes: 'Upload Resumes',
+
+  // Assessment Permissions
+  can_view_assessments: 'View Assessments',
   can_create_assessments: 'Create Assessments',
+  can_update_assessments: 'Update Assessments',
+  can_delete_assessments: 'Delete Assessments',
+
+  // Internal DB Permissions
+  can_view_internal_db: 'View Internal DB',
+  can_create_internal_db: 'Create Internal DB',
+  can_update_internal_db: 'Update Internal DB',
+  can_delete_internal_db: 'Delete Internal DB',
+  can_access_internal_db: 'Access Internal DB',
+
+  // Analytics Permissions
   can_view_analytics: 'View Analytics',
-  can_manage_settings: 'Manage Settings',
-  can_manage_users: 'Manage Users',
+  can_export_analytics: 'Export Analytics',
+
+  // Settings Permissions
+  can_view_settings: 'View Settings',
+  can_update_settings: 'Update Settings',
+
+  // User Management Permissions
+  can_view_users: 'View Users',
+  can_create_users: 'Create Users',
+  can_update_users: 'Update Users',
+  can_delete_users: 'Delete Users',
+
+  // Role Management Permissions
+  can_view_roles: 'View Roles',
+  can_create_roles: 'Create Roles',
+  can_update_roles: 'Update Roles',
+  can_delete_roles: 'Delete Roles',
+
+  // Billing Permissions
+  can_view_billing: 'View Billing',
+  can_update_billing: 'Update Billing',
+  can_view_invoices: 'View Invoices',
+  can_view_usage: 'View Usage',
+
+  // Feature Permissions
+  can_run_scoring: 'Run Scoring',
+  can_run_ai_interviews: 'AI Interviews',
+  can_run_ai_match: 'AI Match',
+  can_bulk_operations: 'Bulk Operations',
+  can_export: 'Export Data',
+  can_api_access: 'API Access',
+
+  // Dashboard & Support
+  can_view_dashboard: 'View Dashboard',
+  can_view_support: 'View Support',
 };
 
+// ✅ GRANULAR PERMISSIONS: 4 default permissions for ANY role with no permissions
+// View-only access to JD, Resumes, Dashboard, and Support
+const DEFAULT_MINIMUM_PERMISSIONS: Array<keyof UserPermissions> = [
+  'can_view_jd',          // View JD only (not create/update/delete)
+  'can_view_resumes',     // View resumes only (not create/update/delete)
+  'can_view_dashboard',   // View dashboard
+  'can_view_support',     // View support
+];
+
+// For recruiters, enforce the same 4 minimum permissions
+const RECRUITER_REQUIRED_PERMISSIONS: Array<keyof UserPermissions> = DEFAULT_MINIMUM_PERMISSIONS;
+
+// ✅ GRANULAR PERMISSIONS: Permission dependencies (auto-enable related permissions)
+const PERMISSION_DEPENDENCIES: Record<keyof UserPermissions, Array<keyof UserPermissions>> = {
+  // Resume dependencies
+  can_upload_resumes: ['can_view_resumes'],           // Upload requires view
+  can_create_resumes: ['can_view_resumes'],           // Create requires view
+  can_update_resumes: ['can_view_resumes'],           // Update requires view
+  can_delete_resumes: ['can_view_resumes'],           // Delete requires view
+  can_access_internal_db: ['can_view_resumes'],       // Internal DB requires resume view
+
+  // Assessment dependencies
+  can_create_assessments: ['can_view_assessments'],   // Create requires view
+  can_update_assessments: ['can_view_assessments'],   // Update requires view
+  can_delete_assessments: ['can_view_assessments'],   // Delete requires view
+
+  // JD dependencies
+  can_create_jd: ['can_view_jd'],                     // Create requires view
+  can_update_jd: ['can_view_jd'],                     // Update requires view
+  can_delete_jd: ['can_view_jd'],                     // Delete requires view
+
+  // User management dependencies
+  can_create_users: ['can_view_users'],               // Create requires view
+  can_update_users: ['can_view_users'],               // Update requires view
+  can_delete_users: ['can_view_users'],               // Delete requires view
+
+  // Role management dependencies
+  can_create_roles: ['can_view_roles'],               // Create requires view
+  can_update_roles: ['can_view_roles'],               // Update requires view
+  can_delete_roles: ['can_view_roles'],               // Delete requires view
+
+  // Settings dependencies
+  can_update_settings: ['can_view_settings'],         // Update requires view
+
+  // Internal DB dependencies
+  can_create_internal_db: ['can_view_internal_db'],   // Create requires view
+  can_update_internal_db: ['can_view_internal_db'],   // Update requires view
+  can_delete_internal_db: ['can_view_internal_db'],   // Delete requires view
+
+  // Billing dependencies
+  can_update_billing: ['can_view_billing'],           // Update requires view
+
+  // Default (no dependencies)
+  can_view_resumes: [],
+  can_view_jd: [],
+  can_view_assessments: [],
+  can_view_analytics: [],
+  can_view_dashboard: [],
+  can_view_support: [],
+  can_view_settings: [],
+  can_view_users: [],
+  can_view_roles: [],
+  can_view_billing: [],
+  can_view_invoices: [],
+  can_view_usage: [],
+  can_view_internal_db: [],
+  can_export_analytics: [],
+  can_run_scoring: [],
+  can_run_ai_interviews: [],
+  can_run_ai_match: [],
+  can_bulk_operations: [],
+  can_export: [],
+  can_api_access: [],
+};
+
+// ✅ GRANULAR PERMISSIONS: Default permissions with 4 minimum view-only permissions enabled
 const defaultPermissions: UserPermissions = {
+  // JD Permissions (view only by default)
+  can_view_jd: true,
   can_create_jd: false,
-  can_manage_jd: false,
-  can_upload_resumes: false,
+  can_update_jd: false,
+  can_delete_jd: false,
+
+  // Resume Permissions (view only by default)
   can_view_resumes: true,
-  can_access_internal_db: false,
+  can_create_resumes: false,
+  can_update_resumes: false,
+  can_delete_resumes: false,
+  can_upload_resumes: false,
+
+  // Assessment Permissions
+  can_view_assessments: false,
   can_create_assessments: false,
+  can_update_assessments: false,
+  can_delete_assessments: false,
+
+  // Internal DB Permissions
+  can_view_internal_db: false,
+  can_create_internal_db: false,
+  can_update_internal_db: false,
+  can_delete_internal_db: false,
+  can_access_internal_db: false,
+
+  // Analytics Permissions
   can_view_analytics: false,
-  can_manage_settings: false,
-  can_manage_users: false,
+  can_export_analytics: false,
+
+  // Settings Permissions
+  can_view_settings: false,
+  can_update_settings: false,
+
+  // User Management Permissions
+  can_view_users: false,
+  can_create_users: false,
+  can_update_users: false,
+  can_delete_users: false,
+
+  // Role Management Permissions
+  can_view_roles: false,
+  can_create_roles: false,
+  can_update_roles: false,
+  can_delete_roles: false,
+
+  // Billing Permissions
+  can_view_billing: false,
+  can_update_billing: false,
+  can_view_invoices: false,
+  can_view_usage: false,
+
+  // Feature Permissions
+  can_run_scoring: false,
+  can_run_ai_interviews: false,
+  can_run_ai_match: false,
+  can_bulk_operations: false,
+  can_export: false,
+  can_api_access: false,
+
+  // Dashboard & Support (default enabled for all)
+  can_view_dashboard: true,
+  can_view_support: true,
 };
 
 export default function UsersManagement({ currentUser, tenantId }: UsersManagementProps) {
@@ -85,33 +270,160 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
     user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // ✅ PERMISSION FIX: Check if a permission is required for a role
+  const isPermissionRequired = (
+    permission: keyof UserPermissions,
+    role: UserRole
+  ): boolean => {
+    if (role === 'recruiter') {
+      return RECRUITER_REQUIRED_PERMISSIONS.includes(permission);
+    }
+    return false;
+  };
+
+  // ✅ PERMISSION FIX: Handle permission toggle with dependency management
+  const handlePermissionToggle = (
+    permission: keyof UserPermissions,
+    currentPermissions: UserPermissions,
+    role: UserRole,
+    onUpdate: (permissions: UserPermissions) => void
+  ) => {
+    // Check if permission is required for role
+    if (isPermissionRequired(permission, role)) {
+      toast.error('This permission is required for recruiters and cannot be disabled');
+      return;
+    }
+
+    const newPermissions = { ...currentPermissions };
+    const isEnabling = !newPermissions[permission];
+
+    if (isEnabling) {
+      // Enable the permission
+      newPermissions[permission] = true;
+
+      // Auto-enable dependencies
+      const dependencies = PERMISSION_DEPENDENCIES[permission] || [];
+      const autoEnabled: string[] = [];
+
+      dependencies.forEach(dep => {
+        if (!newPermissions[dep]) {
+          newPermissions[dep] = true;
+          autoEnabled.push(permissionLabels[dep]);
+        }
+      });
+
+      if (autoEnabled.length > 0) {
+        toast.success(
+          `Auto-enabled dependent permissions: ${autoEnabled.join(', ')}`,
+          { duration: 4000 }
+        );
+      }
+    } else {
+      // Disabling - check if other permissions depend on this
+      const dependents = Object.entries(PERMISSION_DEPENDENCIES)
+        .filter(([, deps]) => deps.includes(permission))
+        .map(([perm]) => perm as keyof UserPermissions);
+
+      const enabledDependents = dependents.filter(
+        dep => newPermissions[dep]
+      );
+
+      if (enabledDependents.length > 0) {
+        const dependentNames = enabledDependents
+          .map(dep => permissionLabels[dep])
+          .join(', ');
+
+        toast.error(
+          `Cannot disable. Required by: ${dependentNames}`,
+          { duration: 4000 }
+        );
+        return; // Don't allow disabling
+      }
+
+      newPermissions[permission] = false;
+    }
+
+    onUpdate(newPermissions);
+  };
+
   const handleRoleChange = (role: UserRole) => {
     let permissions = { ...defaultPermissions };
+
     if (role === 'tenant_admin') {
+      // ✅ GRANULAR PERMISSIONS: Admin gets all permissions enabled
       permissions = {
+        // JD Permissions
+        can_view_jd: true,
         can_create_jd: true,
-        can_manage_jd: true,
-        can_upload_resumes: true,
+        can_update_jd: true,
+        can_delete_jd: true,
+
+        // Resume Permissions
         can_view_resumes: true,
-        can_access_internal_db: true,
+        can_create_resumes: true,
+        can_update_resumes: true,
+        can_delete_resumes: true,
+        can_upload_resumes: true,
+
+        // Assessment Permissions
+        can_view_assessments: true,
         can_create_assessments: true,
+        can_update_assessments: true,
+        can_delete_assessments: true,
+
+        // Internal DB Permissions
+        can_view_internal_db: true,
+        can_create_internal_db: true,
+        can_update_internal_db: true,
+        can_delete_internal_db: true,
+        can_access_internal_db: true,
+
+        // Analytics Permissions
         can_view_analytics: true,
-        can_manage_settings: true,
-        can_manage_users: true,
+        can_export_analytics: true,
+
+        // Settings Permissions
+        can_view_settings: true,
+        can_update_settings: true,
+
+        // User Management Permissions
+        can_view_users: true,
+        can_create_users: true,
+        can_update_users: true,
+        can_delete_users: true,
+
+        // Role Management Permissions
+        can_view_roles: true,
+        can_create_roles: true,
+        can_update_roles: true,
+        can_delete_roles: true,
+
+        // Billing Permissions
+        can_view_billing: true,
+        can_update_billing: true,
+        can_view_invoices: true,
+        can_view_usage: true,
+
+        // Feature Permissions
+        can_run_scoring: true,
+        can_run_ai_interviews: true,
+        can_run_ai_match: true,
+        can_bulk_operations: true,
+        can_export: true,
+        can_api_access: true,
+
+        // Dashboard & Support
+        can_view_dashboard: true,
+        can_view_support: true,
       };
     } else if (role === 'recruiter') {
+      // ✅ GRANULAR PERMISSIONS: Recruiters get 4 minimum view-only permissions
+      // All other permissions are optional (admin can enable if needed)
       permissions = {
-        can_create_jd: true,
-        can_manage_jd: true,
-        can_upload_resumes: true,
-        can_view_resumes: true,
-        can_access_internal_db: true,
-        can_create_assessments: true,
-        can_view_analytics: true,
-        can_manage_settings: false,
-        can_manage_users: false,
+        ...defaultPermissions,  // Start with 4 minimum permissions (view JD, view resumes, view dashboard, view support)
       };
     }
+
     setNewUser({ ...newUser, role, permissions });
   };
 
@@ -135,15 +447,37 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
         role: newUser.role,
       });
 
-      // Update permissions if they differ from role defaults
+      // ✅ GRANULAR PERMISSIONS: Update all granular permissions
       await userService.updateUser(createdUser.id, {
+        // JD Permissions
+        can_view_jd: newUser.permissions.can_view_jd,
         can_create_jd: newUser.permissions.can_create_jd,
-        can_manage_jd: newUser.permissions.can_manage_jd,
-        can_upload_resumes: newUser.permissions.can_upload_resumes,
+        can_update_jd: newUser.permissions.can_update_jd,
+        can_delete_jd: newUser.permissions.can_delete_jd,
+
+        // Resume Permissions
         can_view_resumes: newUser.permissions.can_view_resumes,
-        can_access_internal_db: newUser.permissions.can_access_internal_db,
+        can_create_resumes: newUser.permissions.can_create_resumes,
+        can_update_resumes: newUser.permissions.can_update_resumes,
+        can_delete_resumes: newUser.permissions.can_delete_resumes,
+        can_upload_resumes: newUser.permissions.can_upload_resumes,
+
+        // Assessment Permissions
+        can_view_assessments: newUser.permissions.can_view_assessments,
         can_create_assessments: newUser.permissions.can_create_assessments,
+        can_update_assessments: newUser.permissions.can_update_assessments,
+        can_delete_assessments: newUser.permissions.can_delete_assessments,
+
+        // Internal DB Permissions
+        can_view_internal_db: newUser.permissions.can_view_internal_db,
+        can_access_internal_db: newUser.permissions.can_access_internal_db,
+
+        // Analytics Permissions
         can_view_analytics: newUser.permissions.can_view_analytics,
+
+        // Settings Permissions (keeping legacy fields for compatibility)
+        can_view_settings: newUser.permissions.can_view_settings,
+        can_update_settings: newUser.permissions.can_update_settings,
       });
 
       toast.success('User created successfully');
@@ -496,26 +830,42 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   Permissions
                 </label>
                 <div className="grid grid-cols-2 gap-3">
-                  {(Object.entries(permissionLabels) as [keyof UserPermissions, string][]).map(([key, label]) => (
-                    <label
-                      key={key}
-                      className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={newUser.permissions[key]}
-                        onChange={(e) => setNewUser({
-                          ...newUser,
-                          permissions: {
-                            ...newUser.permissions,
-                            [key]: e.target.checked
-                          }
-                        })}
-                        className="w-4 h-4 text-gray-800 rounded focus:ring-gray-600"
-                      />
-                      <span className="text-sm text-gray-700">{label}</span>
-                    </label>
-                  ))}
+                  {(Object.entries(permissionLabels) as [keyof UserPermissions, string][]).map(([key, label]) => {
+                    const isRequired = isPermissionRequired(key, newUser.role);
+                    return (
+                      <label
+                        key={key}
+                        className={`flex items-center gap-2 p-3 bg-gray-50 rounded-lg ${
+                          isRequired ? 'cursor-not-allowed opacity-75' : 'cursor-pointer hover:bg-gray-100'
+                        }`}
+                        title={isRequired ? 'This permission is required for recruiters' : ''}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={newUser.permissions[key]}
+                          onChange={() => handlePermissionToggle(
+                            key,
+                            newUser.permissions,
+                            newUser.role,
+                            (updatedPermissions) => setNewUser({
+                              ...newUser,
+                              permissions: updatedPermissions
+                            })
+                          )}
+                          disabled={isRequired}
+                          className={`w-4 h-4 text-gray-800 rounded focus:ring-gray-600 ${
+                            isRequired ? 'cursor-not-allowed' : ''
+                          }`}
+                        />
+                        <span className="text-sm text-gray-700 flex-1">{label}</span>
+                        {isRequired && (
+                          <span className="text-xs text-gray-500 italic">
+                            (Required)
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -599,26 +949,42 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   Permissions
                 </label>
                 <div className="grid grid-cols-2 gap-3">
-                  {(Object.entries(permissionLabels) as [keyof UserPermissions, string][]).map(([key, label]) => (
-                    <label
-                      key={key}
-                      className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={editingUser.permissions[key]}
-                        onChange={(e) => setEditingUser({
-                          ...editingUser,
-                          permissions: {
-                            ...editingUser.permissions,
-                            [key]: e.target.checked
-                          }
-                        })}
-                        className="w-4 h-4 text-gray-800 rounded focus:ring-gray-600"
-                      />
-                      <span className="text-sm text-gray-700">{label}</span>
-                    </label>
-                  ))}
+                  {(Object.entries(permissionLabels) as [keyof UserPermissions, string][]).map(([key, label]) => {
+                    const isRequired = isPermissionRequired(key, editingUser.role);
+                    return (
+                      <label
+                        key={key}
+                        className={`flex items-center gap-2 p-3 bg-gray-50 rounded-lg ${
+                          isRequired ? 'cursor-not-allowed opacity-75' : 'cursor-pointer hover:bg-gray-100'
+                        }`}
+                        title={isRequired ? 'This permission is required for recruiters' : ''}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={editingUser.permissions[key]}
+                          onChange={() => handlePermissionToggle(
+                            key,
+                            editingUser.permissions,
+                            editingUser.role,
+                            (updatedPermissions) => setEditingUser({
+                              ...editingUser,
+                              permissions: updatedPermissions
+                            })
+                          )}
+                          disabled={isRequired}
+                          className={`w-4 h-4 text-gray-800 rounded focus:ring-gray-600 ${
+                            isRequired ? 'cursor-not-allowed' : ''
+                          }`}
+                        />
+                        <span className="text-sm text-gray-700 flex-1">{label}</span>
+                        {isRequired && (
+                          <span className="text-xs text-gray-500 italic">
+                            (Required)
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </div>

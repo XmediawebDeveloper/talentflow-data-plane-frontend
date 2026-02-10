@@ -5028,7 +5028,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 <div className="prose prose-sm max-w-none">
                   {/* Job Title & Quick Info */}
                   <div className="mb-6 pb-6 border-b border-gray-200">
-                    <h1 className="text-3xl text-gray-900 mb-3">{jobTitle}</h1>
+                    {effectiveEditingJD?.job_id && (
+                      <p className="text-sm font-medium text-gray-500 mb-1">{effectiveEditingJD.job_id}</p>
+                    )}
+                    <h1 className="text-3xl text-gray-900 mb-3 flex items-center gap-3">
+                      {jobTitle}
+                      {effectiveEditingJD?.current_version && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                          v{effectiveEditingJD.current_version}
+                        </span>
+                      )}
+                    </h1>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                       {extractedData.locations.length > 0 && extractedData.locations[0].city && (
                         <span className="flex items-center gap-1">📍 {extractedData.locations[0].city}</span>
@@ -5436,12 +5446,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
             {/* JD Name, Code and Version */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg px-6 py-3 mb-6 inline-flex items-center gap-3">
-              <span className="text-lg font-semibold text-gray-900">{jobTitle}</span>
               {publishedJobCode && (
                 <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
                   {publishedJobCode}
                 </span>
               )}
+              <span className="text-lg font-semibold text-gray-900">{jobTitle}</span>
               {publishedVersion && (
                 <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
                   v{publishedVersion}
@@ -5454,10 +5464,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 ? 'Your job description has been successfully republished with a new version.'
                 : 'Your job description has been successfully published and is now live.'}
             </p>
-            <p className="text-sm text-gray-500 mb-8">
+            {/* <p className="text-sm text-gray-500 mb-8">
               This JD is now locked and available to all authorized users within your tenant.
               This JD is now locked and available to all authorized users within your tenant.
-            </p>
+            </p> */}
             <div className="flex gap-4 justify-center">
               <button
                 onClick={() => {

@@ -9,6 +9,7 @@ import { Job } from '@/lib/types/types';
 import { jdService, JDResponse, JDUsageStatus } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { usePermissions } from '@/lib/hooks/usePermissions';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 // Extended Job type with additional fields for JD view
 interface ExtendedJob extends Job {
@@ -33,6 +34,9 @@ function JobDetailsContent() {
 
   // JD15: Get user role for disable/enable button visibility
   const { isTenantAdmin } = usePermissions();
+
+  // ✅ PERMISSIONS: Get user and tenant for Quick Actions permission checking
+  const { user, tenant } = useAuth();
 
   const [job, setJob] = useState<ExtendedJob | null>(null);
   const [loading, setLoading] = useState(true);
@@ -333,6 +337,8 @@ function JobDetailsContent() {
         onNavigateToAITalentMatch={handleNavigateToAITalentMatch}
         onRepublish={handleRepublish}  // JD13: Republish handler
         isTenantAdmin={isTenantAdmin}  // JD15: Pass role for disable/enable button visibility
+        user={user}  // ✅ PERMISSIONS: Pass user for permission checking
+        tenant={tenant}  // ✅ PERMISSIONS: Pass tenant for feature flag checking
       />
     </>
   );

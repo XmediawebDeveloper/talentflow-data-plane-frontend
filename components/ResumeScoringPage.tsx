@@ -173,6 +173,7 @@ export default function ResumeScoringPage({
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [showResumeSelectionModal, setShowResumeSelectionModal] = useState(false);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [experienceFilter, setExperienceFilter] = useState<string>('all');
   const [isScoring, setIsScoring] = useState(false);
@@ -1639,6 +1640,10 @@ export default function ResumeScoringPage({
                     className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-start gap-4">
+                      {/* Scoring icon - like AI Talent Match */}
+                      <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
+                        <Target className="w-6 h-6 text-white" />
+                      </div>
                       <div className="flex-1 min-w-0">
                         {/* Title row with job details - like JD card */}
                         <div className="flex items-center gap-3 mb-2">
@@ -1959,7 +1964,6 @@ export default function ResumeScoringPage({
                           onClick={() => {
                             setSelectedHistoryItem(item);
                             setViewMode('details');
-                            // Save to localStorage for persistence
                             try {
                               localStorage.setItem('lastViewedScoringJdId', item.jobId);
                             } catch (e) {
@@ -2221,7 +2225,12 @@ export default function ResumeScoringPage({
           databaseResumes={databaseResumes}
           folders={folders}
           availableUnits={availableUnits}
-          onClose={() => setShowResumeSelectionModal(false)}
+          error={selectionError}
+          onClearError={() => setSelectionError(null)}
+          onClose={() => {
+            setShowResumeSelectionModal(false);
+            setSelectionError(null); // Clear error when modal closes
+          }}
           onResumeUploaded={async (resume) => {
             // Add uploaded resume to local state temporarily for immediate display
             setUploadedResumes(prev => [resume, ...prev]);
@@ -2235,13 +2244,17 @@ export default function ResumeScoringPage({
             }
           }}
           onScoreResumes={async (selectedIds, source, versionSelections) => {
-            setShowResumeSelectionModal(false);
+            // Clear any previous error when attempting to score
+            setSelectionError(null);
 
             // Check for existing scores before proceeding
             try {
               toast.loading('Checking for existing scores...', { id: 'check-existing' });
               const checkResult = await scoringService.checkExistingScores(selectedJob, selectedIds);
               toast.dismiss('check-existing');
+
+              // Close modal only if check succeeds
+              setShowResumeSelectionModal(false);
 
               if (checkResult.existing_count > 0) {
                 // Build already-scored items for progress display
@@ -2279,10 +2292,33 @@ export default function ResumeScoringPage({
                 window.location.href = `/recruitment/resume-scoring?jd_id=${selectedJob}&start_scoring=true&show_progress=true`;
                 return;
               }
-            } catch (error) {
+            } catch (error: any) {
               console.error('Failed to check existing scores:', error);
               toast.dismiss('check-existing');
-              toast.error('Failed to verify existing scores. Please try again.');
+
+              // Extract detailed error message from API response
+              let errorMessage = 'Failed to verify existing scores. Please try again.';
+
+              if (error?.response?.status === 400 && error?.response?.data?.detail) {
+                const detail = error.response.data.detail;
+                if (typeof detail === 'string') {
+                  errorMessage = detail;
+                } else if (detail.message) {
+                  errorMessage = detail.message;
+                } else if (detail.error) {
+                  errorMessage = `${detail.error}: ${detail.message || 'Please check your selection and try again.'}`;
+                }
+              } else if (error?.response?.data?.message) {
+                errorMessage = error.response.data.message;
+              } else if (error?.message) {
+                errorMessage = error.message;
+              }
+
+              console.log('[ResumeScoringPage] Setting selection error:', errorMessage);
+
+              // Show error inline in the modal instead of toast
+              setSelectionError(errorMessage);
+              setShowResumeSelectionModal(true); // Keep/reopen modal with error
               return; // Don't proceed if check fails
             }
 

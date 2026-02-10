@@ -10,6 +10,8 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import JDCreation from '@/components/JDCreation';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
+// ✅ PERMISSION FIX: Import permission hook for CRUD checks
+import { useModulePermissions } from '@/lib/hooks/usePermissions';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -33,6 +35,8 @@ export default function JDListPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
+  // ✅ PERMISSION FIX: Get JD CRUD permissions
+  const jdPerms = useModulePermissions('jd');
   const [jds, setJds] = useState<JDResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -645,16 +649,19 @@ export default function JDListPage() {
                     </button>
 
                     {/* Edit Button - FIX-003: Open in sheet, icon only on mobile */}
-                    <button
-                      onClick={() => {
-                        setEditingJDId(jd.id);
-                        setShowJDSheet(true);
-                      }}
-                      className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 whitespace-nowrap"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      <span className="text-sm hidden sm:inline">Edit</span>
-                    </button>
+                    {/* ✅ PERMISSION FIX: Only show Edit button if user has canUpdateJD permission */}
+                    {jdPerms.canUpdate && (
+                      <button
+                        onClick={() => {
+                          setEditingJDId(jd.id);
+                          setShowJDSheet(true);
+                        }}
+                        className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 whitespace-nowrap"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        <span className="text-sm hidden sm:inline">Edit</span>
+                      </button>
+                    )}
 
                     {/* More Actions Dropdown (3-dot menu) */}
                     <div className="relative flex-shrink-0">
@@ -735,21 +742,24 @@ export default function JDListPage() {
                             </button>
                           )}
                           {/* Delete action */}
-                          <button
-                            onClick={() => {
-                              setConfirmDialog({
-                                isOpen: true,
-                                type: 'delete',
-                                jdId: jd.id,
-                                jdTitle: jd.title,
-                              });
-                              setActiveDropdown(null);
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
-                          </button>
+                          {/* ✅ PERMISSION FIX: Only show Delete button if user has canDeleteJD permission */}
+                          {jdPerms.canDelete && (
+                            <button
+                              onClick={() => {
+                                setConfirmDialog({
+                                  isOpen: true,
+                                  type: 'delete',
+                                  jdId: jd.id,
+                                  jdTitle: jd.title,
+                                });
+                                setActiveDropdown(null);
+                              }}
+                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

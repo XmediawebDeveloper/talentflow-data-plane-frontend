@@ -345,7 +345,20 @@ class ChatService {
       this.ws.close();
     }
 
-    const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8001'}/api/v1/chat/ws/${channelId}?token=${token}`;
+    // Auto-detect WebSocket protocol based on page protocol
+    const getWsBaseUrl = () => {
+      if (process.env.NEXT_PUBLIC_WS_URL) {
+        return process.env.NEXT_PUBLIC_WS_URL;
+      }
+      // Use wss:// for https://, ws:// for http://
+      if (typeof window !== 'undefined') {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${protocol}//localhost:8001`;
+      }
+      return 'ws://localhost:8001';
+    };
+
+    const wsUrl = `${getWsBaseUrl()}/api/v1/chat/ws/${channelId}?token=${token}`;
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {

@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -100,6 +100,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           if (/\b(kotlin|android)\b/i.test(skillsText)) detected.add('Kotlin');
           if (/\b(swift|ios)\b/i.test(skillsText)) detected.add('Swift');
           if (/\b(rust)\b/i.test(skillsText)) detected.add('Rust');
+          if (/\b(scala)\b/i.test(skillsText)) detected.add('Scala');
+          if (/\b(r\s*programming|r\s*language|rstudio|tidyverse|ggplot)\b/i.test(skillsText) ||
+              (/\br\b/i.test(skillsText) && /\b(statistics|data\s*science|analytics)\b/i.test(skillsText))) detected.add('R');
+          if (/\b(sql|pl\/?sql|t-sql|mysql|postgresql|oracle|database)\b/i.test(skillsText)) detected.add('SQL');
           return Array.from(detected);
         };
 
@@ -130,22 +134,32 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         // Store JD-extracted languages
         setJdExtractedLanguages(codingLanguages);
 
-        // Set sections with correct percentages based on coding requirement
-        if (shouldEnableCoding && codingLanguages.length > 0) {
+        // ✅ SIMPLIFIED LOGIC: Only enable coding if JD has supported languages
+        // No smart config lock - users can toggle manually
+        setIsCodingLockedBySmartConfig(false);
+        setCodingLockReason('');
+
+        // Only auto-enable if JD has languages we support
+        const hasValidLanguages = codingLanguages.length > 0;
+
+        if (hasValidLanguages) {
+          // JD has supported languages - enable coding with those languages
           setSections([
             { name: 'HR', percentage: 20, topics: [], enabled: true },
             { name: 'Technical', percentage: 70, topics: [], enabled: true },
             { name: 'Coding', percentage: 10, topics: [], enabled: true },
           ]);
           setSelectedCodingLanguages(codingLanguages);
+          console.log('[TalentFlow] Coding auto-enabled with languages:', codingLanguages);
         } else {
-          // No coding required - HR 30%, Technical 70%
+          // No supported languages found - disable coding (user can manually enable via toggle)
           setSections([
             { name: 'HR', percentage: 30, topics: [], enabled: true },
             { name: 'Technical', percentage: 70, topics: [], enabled: true },
             { name: 'Coding', percentage: 0, topics: [], enabled: false },
           ]);
           setSelectedCodingLanguages([]);
+          console.log('[TalentFlow] No supported languages detected - coding disabled (can be manually enabled)');
         }
 
         setSelectedJob(job);
@@ -279,6 +293,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Store JD-extracted languages separately so we can restore them when re-enabling coding
   const [jdExtractedLanguages, setJdExtractedLanguages] = useState<string[]>([]);
+
+  // ✅ SMART CONFIG: Track if coding was enabled/disabled by smart config (locked state)
+  const [isCodingLockedBySmartConfig, setIsCodingLockedBySmartConfig] = useState<boolean>(false);
+  const [codingLockReason, setCodingLockReason] = useState<string>('');
+
+  // ✅ SMART CONFIG: Track percentage changes (needs republish)
+  const [hasPercentageChanged, setHasPercentageChanged] = useState<boolean>(false);
+  const [isPublishing, setIsPublishing] = useState<boolean>(false);
 
   // Collapsible sections state
   const [isAIGenerationExpanded, setIsAIGenerationExpanded] = useState(false);
@@ -497,8 +519,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
 
     // ============ SQL ============
-    // Database programming (not just querying)
-    if (/\b(pl\/?sql|t-sql|stored\s*procedure|sql\s*server|oracle\s*(db|database|developer)|mysql|postgresql|database\s*(development|programming|developer))\b/i.test(skillsText)) {
+    // Database programming - SQL Developer, PL/SQL, T-SQL, or any database-related skills
+    if (/\b(sql|pl\/?sql|t-sql|stored\s*procedure|sql\s*server|sql\s*developer|oracle\s*(db|database|developer)?|mysql|postgresql|mariadb|database\s*(development|programming|developer|admin)?|nosql|mongodb|cassandra|redis)\b/i.test(skillsText)) {
       detectedLanguages.add('SQL');
     }
 
@@ -583,38 +605,27 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     // Store JD-extracted languages so we can restore them when re-enabling coding
     setJdExtractedLanguages(codingLanguages);
 
-    // Auto-configure sections based on coding requirement
-    if (shouldEnableCoding && codingLanguages.length > 0) {
-      // Coding is required AND we have languages - enable coding section with languages
+    // ✅ SIMPLIFIED LOGIC: Only enable coding if JD has supported languages
+    const hasValidLanguages = codingLanguages.length > 0;
+
+    if (hasValidLanguages) {
+      // JD has supported languages - enable coding with those languages
       setSections([
         { name: 'HR', percentage: 20, topics: [], enabled: true },
         { name: 'Technical', percentage: 70, topics: [], enabled: true },
         { name: 'Coding', percentage: 10, topics: [], enabled: true },
       ]);
       setSelectedCodingLanguages(codingLanguages);
-      console.log('[TalentFlow] Coding enabled with languages:', codingLanguages);
-    } else if (shouldEnableCoding && codingLanguages.length === 0) {
-      // Coding is required but NO languages detected - enable coding but show language popup
-      setSections([
-        { name: 'HR', percentage: 20, topics: [], enabled: true },
-        { name: 'Technical', percentage: 70, topics: [], enabled: true },
-        { name: 'Coding', percentage: 10, topics: [], enabled: true },
-      ]);
-      setSelectedCodingLanguages([]);
-      // Show language selection popup since JD requires coding but no languages were extracted
-      setTimeout(() => {
-        setCodingPopupMode('enable');
-        setShowCodingConfirm(true);
-      }, 100);
-      console.log('[TalentFlow] Coding enabled but no languages detected - showing popup');
+      console.log('[TalentFlow] Coding auto-enabled with languages:', codingLanguages);
     } else {
-      // JD does NOT require coding - coding section is hidden (not just disabled)
+      // No supported languages found - disable coding (user can manually enable via toggle)
       setSections([
         { name: 'HR', percentage: 30, topics: [], enabled: true },
         { name: 'Technical', percentage: 70, topics: [], enabled: true },
         { name: 'Coding', percentage: 0, topics: [], enabled: false },
       ]);
       setSelectedCodingLanguages([]);
+      console.log('[TalentFlow] No supported languages detected - coding disabled (can be manually enabled)');
     }
     setStep('configure', job.id);
   };
@@ -623,6 +634,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     setSections(sections.map(s =>
       s.name === sectionName ? { ...s, percentage: Math.max(0, Math.min(100, value)) } : s
     ));
+    // ✅ SMART CONFIG: Mark that percentage has changed (needs republish)
+    setHasPercentageChanged(true);
   };
 
   const handleDurationChange = (value: number) => {
@@ -636,6 +649,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   const addTopic = (sectionName: 'HR' | 'Technical' | 'Coding') => {
     if (!newTopic.value.trim()) return;
+
     setSections(sections.map(s =>
       s.name === sectionName
         ? { ...s, topics: [...s.topics, newTopic.value.trim()] }
@@ -982,6 +996,49 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     );
   };
 
+  // ✅ SMART CONFIG: Handle "Publish Changes" button click
+  const handlePublishChanges = async () => {
+    if (!selectedJob) {
+      toast.error('No job selected');
+      return;
+    }
+
+    setIsPublishing(true);
+
+    try {
+      // Calculate question count from percentages (total 30 questions)
+      const totalQuestions = 30;
+      const enabledSections = sections.filter(s => s.enabled);
+
+      const questionDistribution = enabledSections.map(section => ({
+        section: section.name.toLowerCase(),
+        count: Math.round((section.percentage / 100) * totalQuestions),
+        topics: section.topics,
+      }));
+
+      // Prepare regeneration request
+      const regenerateRequest = {
+        jd_id: selectedJob.id,
+        experience_level: selectedJob.experience || 'Mid-Level',
+        skills: selectedJob.skills || [],
+        question_distribution: questionDistribution,
+      };
+
+      console.log('[TalentFlow] Publishing changes - regenerating questions:', regenerateRequest);
+
+      // Call backend API to regenerate questions
+      await assessmentService.regenerateQuestions(regenerateRequest);
+
+      toast.success('Questions regenerated successfully based on new percentages!');
+      setHasPercentageChanged(false); // Reset the flag
+    } catch (error: any) {
+      console.error('Failed to regenerate questions:', error);
+      toast.error(error.message || 'Failed to regenerate questions. Please try again.');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
   const handleGenerateAssessment = async (saveAsDraft: boolean = false) => {
     setIsGenerating(true);
 
@@ -1055,14 +1112,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       setGeneratedAssessment(assessmentDefinition);
       setIsGenerating(false);
 
-      // Always show preview after saving/publishing - user navigates manually
-      setStep('preview');
-
-      // Show success message
+      // Show success message and redirect
       if (!saveAsDraft) {
         toast.success('Assessment published successfully! You can now invite candidates.');
+        // Let parent handle navigation to avoid double router.push()
+        onCreateAssessment(assessmentDefinition);
       } else {
         toast.success('Assessment saved as draft. You can publish it later.');
+        // Show preview page for drafts
+        setStep('preview');
       }
     } catch (error) {
       console.error('Failed to create/update assessment:', error);
@@ -1548,29 +1606,25 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     </div>
                   </div>
 
-                  {/* Coding Round Toggle - Only shown when JD requires coding or languages detected */}
+                  {/* Coding Round Toggle - Always visible but locked if no languages */}
                   {(() => {
                     // Determine if coding section should be shown at all
                     const isCodingDisabledBySettings = topicSettings?.coding_enabled === false;
 
-                    // Check if JD requires coding or languages were extracted/detected
-                    const jdRequiresCoding = selectedJob?.coding_required === true;
+                    // Check if languages were detected from JD skills
                     const hasExtractedLanguages = jdExtractedLanguages.length > 0;
 
-                    // Only show coding section if JD requires it OR languages were detected
-                    // Hide completely if JD doesn't require coding (no toggle at all)
-                    const shouldShowCodingSection = (jdRequiresCoding || hasExtractedLanguages) && !isCodingDisabledBySettings;
-
-                    if (!shouldShowCodingSection) {
-                      // Don't render the coding section at all - it's not needed for this JD
+                    // Hide only if disabled in tenant settings
+                    if (isCodingDisabledBySettings) {
                       return null;
                     }
 
                     const codingEnabled = sections.find(s => s.name === 'Coding')?.enabled;
-                    const wasAutoDetected = !jdRequiresCoding && hasExtractedLanguages;
+                    // ✅ ALWAYS LOCKED: User cannot change what's auto-detected
+                    const isLocked = true;
 
                     return (
-                      <div className={`p-4 border rounded-lg transition-all ${codingEnabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                      <div className={`p-4 border rounded-lg transition-all ${isLocked ? 'border-gray-200 bg-gray-100 opacity-60' : codingEnabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <Code className="w-5 h-5 text-gray-600" />
@@ -1582,27 +1636,35 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                                 ) : (
                                   <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Scored (0-10)</span>
                                 )}
-                                {wasAutoDetected && (
-                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-xs">Auto-Detected from Skills</span>
-                                )}
-                                {jdRequiresCoding && (
-                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Auto-Enabled</span>
-                                )}
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-xs">
+                                  {hasExtractedLanguages ? 'Auto-Enabled' : 'Not Available'}
+                                </span>
                               </div>
                               <p className="text-sm text-gray-500">
-                                {wasAutoDetected
-                                  ? `Programming languages detected from skills: ${selectedCodingLanguages.length > 0 ? selectedCodingLanguages.join(', ') : jdExtractedLanguages.join(', ')}`
-                                  : `Programming languages: ${selectedCodingLanguages.length > 0 ? selectedCodingLanguages.join(', ') : jdExtractedLanguages.join(', ')}`
+                                {hasExtractedLanguages
+                                  ? `Languages: ${selectedCodingLanguages.length > 0 ? selectedCodingLanguages.join(', ') : jdExtractedLanguages.join(', ')}`
+                                  : 'No programming languages detected in JD skills'
                                 }
                               </p>
                             </div>
                           </div>
-                          <button
-                            onClick={() => handleCodingToggle()}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${codingEnabled ? 'bg-gray-800' : 'bg-gray-300'}`}
-                          >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                          </button>
+                          {/* Toggle for enabling/disabling coding round - Locked but shows color */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={undefined}
+                              disabled={true}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-not-allowed ${
+                                codingEnabled ? 'bg-gray-800' : 'bg-gray-300'
+                              }`}
+                              title={
+                                hasExtractedLanguages
+                                  ? 'Coding round is auto-enabled based on JD languages (cannot be changed)'
+                                  : 'No programming languages detected in JD (cannot be enabled)'
+                              }
+                            >
+                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1614,7 +1676,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   <div className="flex items-start gap-2">
                     <Sparkles className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-blue-700">
-                      <strong>Smart Configuration:</strong> Coding round is only shown when the JD requires coding or programming languages are detected in the skills. Languages are automatically extracted from the JD and preserved when toggling the coding round. Disabled rounds are hidden from the section distribution below.
+                      <strong>Smart Configuration:</strong> Coding round is automatically enabled/disabled based on programming languages detected in JD skills (Python, JavaScript, TypeScript, Java, C++, C#, Go, Rust, Ruby, PHP, Swift, Kotlin, Scala, R, SQL). This cannot be changed manually - what is auto-detected is final. Disabled rounds are hidden from the section distribution below.
                     </p>
                   </div>
                 </div>
@@ -1837,6 +1899,42 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     </div>
                   ))}
                 </div>
+
+                {/* ✅ SMART CONFIG: Publish Changes button when percentage modified */}
+                {hasPercentageChanged && (
+                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-blue-900 mb-1">
+                            Percentage Configuration Changed
+                          </p>
+                          <p className="text-xs text-blue-700">
+                            You've modified the section percentages. Click "Publish Changes" to regenerate questions based on the new distribution. Questions will be adjusted to match the updated percentages and will be tailored to the candidate's experience level, skills, and specified topics.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handlePublishChanges}
+                        disabled={isPublishing}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isPublishing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Publishing...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            Publish Changes
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2334,7 +2432,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             </div>
             <button
               onClick={() => {
-                // Just notify parent and go back - assessment is already saved
+                // Let parent handle navigation to avoid double router.push()
                 onCreateAssessment(generatedAssessment);
               }}
               className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"

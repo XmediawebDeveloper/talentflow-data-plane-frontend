@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
 import ResumeTable from '@/components/ResumeTable';
+import Pagination from '@/components/Pagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
 import FolderTree from '@/components/FolderTree';
@@ -24,6 +25,8 @@ import UploadHistoryDetailModal, { UploadHistoryItem } from '@/components/Upload
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
 import ResumeVersionSelector from '@/components/ResumeVersionSelector';
+import BulkVersionResolutionModal from '@/components/BulkVersionResolutionModal';
+import type { VersionedBatchItem } from '@/components/BulkVersionResolutionModal';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
@@ -344,6 +347,11 @@ export default function MyResumesPage() {
   const [appliedSearchQuery, setAppliedSearchQuery] = useState(''); // For highlighting
   const [filters, setFilters] = useState({});
   const [sortBy, setSortBy] = useState('date');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isPaginating, setIsPaginating] = useState(false);
   const [folderTreeWidth, setFolderTreeWidth] = useState(240);
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
   const [cardViewFolder, setCardViewFolder] = useState<string | null>(null); // Selected folder in card view
@@ -363,6 +371,11 @@ export default function MyResumesPage() {
   const [isUploadHistoryModalOpen, setIsUploadHistoryModalOpen] = useState(false);
   const [isUploadHistoryMinimized, setIsUploadHistoryMinimized] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
+  const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | null>(null);
+
+  // Bulk version resolution state
+  const [selectedVersionedItems, setSelectedVersionedItems] = useState<Map<string, VersionedBatchItem>>(new Map());
+  const [isBulkResolveModalOpen, setIsBulkResolveModalOpen] = useState(false);
 
   // Apply to Job modal state
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
@@ -442,7 +455,7 @@ export default function MyResumesPage() {
     }
 
     // Create signature of params to detect ACTUAL changes (not just reference changes)
-    const currentParams = JSON.stringify({ appliedSearchQuery, filters, selectedFolder });
+    const currentParams = JSON.stringify({ appliedSearchQuery, filters, selectedFolder, currentPage, itemsPerPage, sortBy });
 
     // Skip if params haven't actually changed (prevents loop from object reference changes)
     if (currentParams === lastFetchParamsRef.current) {
@@ -450,26 +463,24 @@ export default function MyResumesPage() {
       return;
     }
 
-    // Skip if already fetching (prevents rapid successive calls)
-    if (isFetchingRef.current) {
-      console.log('[MyResumes] useEffect - Skipping (fetch in progress)');
-      return;
-    }
-
     console.log('[MyResumes] useEffect - Will fetch in 300ms', {
       appliedSearchQuery,
       filtersKeys: Object.keys(filters),
-      selectedFolder
+      selectedFolder,
+      currentPage,
+      itemsPerPage,
+      sortBy,
     });
 
     // Debounce: Wait 300ms before fetching
     const debounceTimer = setTimeout(() => {
       console.log('[MyResumes] useEffect - Fetching data now...');
       lastFetchParamsRef.current = currentParams;
-      isFetchingRef.current = true;
 
-      fetchData(appliedSearchQuery, filters, selectedFolder).finally(() => {
-        isFetchingRef.current = false;
+      // Use lighter loading for page/sort changes when data is already on screen
+      const isPageChange = resumes.length > 0;
+      fetchData(appliedSearchQuery, filters, selectedFolder, isPageChange ? true : false).finally(() => {
+        setIsPaginating(false);
         console.log('[MyResumes] useEffect - Fetch complete');
       });
     }, 300);
@@ -478,7 +489,7 @@ export default function MyResumesPage() {
       console.log('[MyResumes] useEffect - Cleanup (timer cleared)');
       clearTimeout(debounceTimer);
     };
-  }, [appliedSearchQuery, filters, selectedFolder]);
+  }, [appliedSearchQuery, filters, selectedFolder, currentPage, itemsPerPage, sortBy]);
 
   // Handle deep link from notifications
   useEffect(() => {
@@ -561,9 +572,10 @@ export default function MyResumesPage() {
       }
     }
 
-    // Close the modal
+    // Close the modal and reset filter
     setIsUploadHistoryModalOpen(false);
     setIsUploadHistoryMinimized(false);
+    setUploadHistoryFilter(null);
   };
 
   // Ref to store active polling intervals for cleanup
@@ -589,9 +601,19 @@ export default function MyResumesPage() {
     console.log('[FETCH] Starting fetch...');
     try {
       // Build search params for backend API
+      const sortByMap: Record<string, string> = {
+        'date': 'date-desc',
+        'latest': 'date-desc',
+        'oldest': 'date-asc',
+        'name-asc': 'name-asc',
+        'name-desc': 'name-desc',
+      };
+
       const searchParams: any = {
         source: 'my-resumes',
-        page_size: 100, // Backend API maximum limit
+        page: currentPage,
+        page_size: itemsPerPage,
+        sort_by: sortByMap[sortBy] || 'date-desc',
       };
 
       // Add folder filter if not viewing all
@@ -755,11 +777,13 @@ export default function MyResumesPage() {
       const allResumesFolder: FolderType = {
         id: 'all',
         name: 'All Resumes',
-        count: convertedResumes.length,
+        count: resumeResponse.total,
       };
       const convertedFolders: FolderType[] = [allResumesFolder, ...apiFolders];
 
       setResumes(convertedResumes);
+      setTotalItems(resumeResponse.total);
+      setTotalPages(resumeResponse.total_pages);
       setFolders(convertedFolders);
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -1834,210 +1858,15 @@ export default function MyResumesPage() {
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
     setAppliedSearchQuery(query);
+    setCurrentPage(1);
     // Don't call fetchData directly - let the useEffect handle it
     // This prevents double API calls
   }, []);
 
   // Client-side search helper - searches across all text fields including phone and skills
-  const matchesSearch = useCallback((resume: Resume, query: string): boolean => {
-    if (!query) return true;
-
-    // Split by spaces, commas, or both - and clean up each term
-    const searchTerms = query
-      .toLowerCase()
-      .split(/[\s,]+/)  // Split by spaces or commas
-      .map(term => term.trim())
-      .filter(term => term.length > 0);
-
-    if (searchTerms.length === 0) return true;
-
-    // Normalize phone number for searching (remove all non-alphanumeric chars)
-    const normalizePhone = (phone: string | undefined) => {
-      if (!phone) return '';
-      return phone.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    };
-
-    // Create searchable text from all relevant fields
-    const searchableFields = [
-      resume.name,
-      resume.email,
-      resume.phone,
-      normalizePhone(resume.phone), // Also add normalized phone
-      resume.title,
-      resume.location,
-      resume.currentCompany,
-      resume.experience,
-      resume.education,
-      ...(resume.skills || []),
-      ...(resume.technicalSkills || []),
-      ...(resume.softSkills || []),
-    ].filter(Boolean).map(field => field?.toLowerCase() || '');
-
-    const searchableText = searchableFields.join(' ');
-
-    // Normalize search term for phone matching (remove special chars)
-    const normalizeSearchTerm = (term: string) => {
-      // If term looks like a phone number (has digits), normalize it
-      if (/\d/.test(term)) {
-        return term.replace(/[^a-zA-Z0-9]/g, '');
-      }
-      return term;
-    };
-
-    // Check if ALL search terms match (AND logic for multiple terms)
-    return searchTerms.every(term => {
-      const normalizedTerm = normalizeSearchTerm(term);
-      return searchableText.includes(term) || searchableText.includes(normalizedTerm);
-    });
-  }, []);
-
-  // Filter and sort resumes client-side
-  const filteredResumes = useMemo(() => {
-    let filtered = resumes;
-
-    // Filter by folder (skip filtering if 'all' is selected - show all resumes)
-    if (selectedFolder && selectedFolder !== 'all') {
-      filtered = filtered.filter(r => r.folderId === selectedFolder);
-    }
-
-    // Apply search filter (name, email, phone, skills, keywords)
-    if (appliedSearchQuery) {
-      filtered = filtered.filter(resume => matchesSearch(resume, appliedSearchQuery));
-    }
-
-    // Apply filters from filter bar
-    if (filters && Object.keys(filters).length > 0) {
-      // Filter by skills (all selected skills must be present)
-      if (filters.skills && filters.skills.length > 0) {
-        filtered = filtered.filter(resume => {
-          const resumeSkills = [
-            ...(resume.skills || []),
-            ...(resume.technicalSkills || []),
-            ...(resume.softSkills || [])
-          ].map(s => s.toLowerCase());
-          return filters.skills.every((skill: string) =>
-            resumeSkills.some(rs => rs.includes(skill.toLowerCase()))
-          );
-        });
-      }
-
-      // Filter by experience range
-      if (filters.experienceRange) {
-        filtered = filtered.filter(resume => {
-          // Parse experience string to get years (e.g., "5 years", "3-5 years", "5+ years")
-          const expStr = resume.experience || '';
-          const expMatch = expStr.match(/(\d+)/);
-          if (!expMatch) return true; // If no experience data, include by default
-          const years = parseInt(expMatch[1], 10);
-          const { min, max } = filters.experienceRange;
-          if (min !== undefined && min !== null && years < min) return false;
-          if (max !== undefined && max !== null && years > max) return false;
-          return true;
-        });
-      }
-
-      // Filter by education
-      if (filters.education) {
-        filtered = filtered.filter(resume => {
-          const edu = (resume.education || '').toLowerCase();
-          const educationCode = filters.education.toLowerCase();
-
-          // Map backend codes to search patterns (matching backend logic)
-          if (educationCode === 'bachelors') {
-            return edu.includes('bachelor') || edu.includes('b.tech') ||
-                   edu.includes('b.e') || edu.includes('bca') ||
-                   edu.includes('b.a') || edu.includes('b.sc') || edu.includes('b.com');
-          } else if (educationCode === 'masters') {
-            return edu.includes('master') || edu.includes('m.tech') ||
-                   edu.includes('m.e') || edu.includes('mca') ||
-                   edu.includes('m.a') || edu.includes('m.sc') || edu.includes('mba');
-          } else if (educationCode === 'doctorate') {
-            return edu.includes('phd') || edu.includes('ph.d') ||
-                   edu.includes('doctorate') || edu.includes('doctor of');
-          } else if (educationCode === 'diploma') {
-            return edu.includes('diploma');
-          } else if (educationCode === 'associate') {
-            return edu.includes('associate');
-          } else {
-            // For other values, use substring match
-            return edu.includes(educationCode);
-          }
-        });
-      }
-
-      // Filter by location
-      if (filters.location) {
-        filtered = filtered.filter(resume => {
-          const loc = (resume.location || '').toLowerCase();
-          return loc.includes(filters.location.toLowerCase());
-        });
-      }
-
-      // Filter by current company
-      if (filters.currentCompany) {
-        filtered = filtered.filter(resume => {
-          const company = (resume.currentCompany || '').toLowerCase();
-          return company.includes(filters.currentCompany.toLowerCase());
-        });
-      }
-
-      // Filter by notice period
-      if (filters.noticePeriod) {
-        filtered = filtered.filter(resume => {
-          const notice = (resume.noticePeriod || '').toLowerCase();
-          return notice.includes(filters.noticePeriod.toLowerCase());
-        });
-      }
-
-      // Filter by source type
-      if (filters.sourceType) {
-        filtered = filtered.filter(resume => {
-          return resume.source === filters.sourceType;
-        });
-      }
-
-      // Filter by uploaded by
-      if (filters.uploadedBy) {
-        filtered = filtered.filter(resume => {
-          const uploader = (resume.uploadedBy || '').toLowerCase();
-          return uploader.includes(filters.uploadedBy.toLowerCase());
-        });
-      }
-
-      // Filter by upload date range
-      if (filters.uploadDateRange) {
-        filtered = filtered.filter(resume => {
-          const uploadDate = new Date(resume.uploadDate);
-          if (filters.uploadDateRange.start) {
-            const startDate = new Date(filters.uploadDateRange.start);
-            if (uploadDate < startDate) return false;
-          }
-          if (filters.uploadDateRange.end) {
-            const endDate = new Date(filters.uploadDateRange.end);
-            endDate.setHours(23, 59, 59, 999); // Include entire end day
-            if (uploadDate > endDate) return false;
-          }
-          return true;
-        });
-      }
-    }
-
-    // Sort resumes
-    const sorted = [...filtered];
-    switch (sortBy) {
-      case 'date':
-      case 'latest':
-        return sorted.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
-      case 'oldest':
-        return sorted.sort((a, b) => new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime());
-      case 'name-asc':
-        return sorted.sort((a, b) => a.name.localeCompare(b.name));
-      case 'name-desc':
-        return sorted.sort((a, b) => b.name.localeCompare(a.name));
-      default:
-        return sorted;
-    }
-  }, [resumes, selectedFolder, appliedSearchQuery, sortBy, matchesSearch, filters]);
+  // Server handles search, filtering, sorting, and pagination.
+  // filteredResumes is now just the server-returned page of resumes.
+  const filteredResumes = resumes;
 
   // Stats (all resumes returned are user's own resumes)
   const totalResumes = resumes.length;
@@ -2105,7 +1934,7 @@ export default function MyResumesPage() {
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-2xl font-semibold text-gray-900">My Resume Database</h1>
             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">
-              {resumes.length} Resumes
+              {totalItems} Resumes
             </span>
           </div>
           <p className="text-sm text-gray-600">Resumes uploaded by you</p>
@@ -2159,9 +1988,9 @@ export default function MyResumesPage() {
               searchQuery={searchQuery}
               onSearchChange={handleSearchChange}
               filters={filters}
-              onFiltersChange={setFilters}
+              onFiltersChange={(newFilters: any) => { setFilters(newFilters); setCurrentPage(1); }}
               sortBy={sortBy}
-              onSortChange={setSortBy}
+              onSortChange={(newSort: string) => { setSortBy(newSort); setCurrentPage(1); }}
             />
           </div>
           {/* View Toggle */}
@@ -2198,7 +2027,7 @@ export default function MyResumesPage() {
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-gray-500" />
               <span className="text-sm text-gray-700">
-                Found <span className="font-semibold">{filteredResumes.length}</span> matching resume{filteredResumes.length !== 1 ? 's' : ''}
+                Found <span className="font-semibold">{totalItems}</span> matching resume{totalItems !== 1 ? 's' : ''}
                 {appliedSearchQuery && (
                   <span> for "<span className="font-medium text-blue-600">{appliedSearchQuery}</span>"</span>
                 )}
@@ -2208,6 +2037,7 @@ export default function MyResumesPage() {
               onClick={() => {
                 setSearchQuery('');
                 setAppliedSearchQuery('');
+                setCurrentPage(1);
               }}
               className="text-sm text-red-600 hover:text-red-700 hover:underline"
             >
@@ -2222,7 +2052,7 @@ export default function MyResumesPage() {
             <FolderTree
               folders={folders}
               selectedFolder={selectedFolder}
-              onSelectFolder={setSelectedFolder}
+              onSelectFolder={(folderId: string) => { setSelectedFolder(folderId); setCurrentPage(1); }}
               onCreateFolder={handleCreateFolder}
               onRenameFolder={handleRenameFolder}
               onDeleteFolder={handleDeleteFolder}
@@ -2266,20 +2096,39 @@ export default function MyResumesPage() {
                 </div>
               )}
 
-              <ResumeTable
-                resumes={filteredResumes}
-                selectedResumes={selectedResumes}
-                onSelectResume={handleSelectResume}
-                onSelectAll={handleSelectAll}
-                onQuickView={(resume) => setQuickViewResume(resume)}
-                onApplyToJob={handleSingleResumeApplyToJob}
-                onDelete={(id) => handleDelete(id)}
-                onMoveToFolder={handleMoveToFolder}
-                folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
-                onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
-                highlightQuery={appliedSearchQuery}
-                onArchive={(resumeId) => handleArchiveResumes([resumeId])}
-              />
+              {/* Pagination overlay for lighter page transitions */}
+              <div className="relative">
+                {isPaginating && (
+                  <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-gray-600" />
+                  </div>
+                )}
+                <ResumeTable
+                  resumes={filteredResumes}
+                  selectedResumes={selectedResumes}
+                  onSelectResume={handleSelectResume}
+                  onSelectAll={handleSelectAll}
+                  onQuickView={(resume) => setQuickViewResume(resume)}
+                  onApplyToJob={handleSingleResumeApplyToJob}
+                  onDelete={(id) => handleDelete(id)}
+                  onMoveToFolder={handleMoveToFolder}
+                  folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
+                  onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
+                  highlightQuery={appliedSearchQuery}
+                  onArchive={(resumeId) => handleArchiveResumes([resumeId])}
+                  disablePagination={true}
+                />
+              </div>
+              {totalPages > 0 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={(page) => { setCurrentPage(page); setIsPaginating(true); }}
+                  onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); setIsPaginating(true); }}
+                />
+              )}
             </div>
           </div>
         ) : (
@@ -2459,7 +2308,7 @@ export default function MyResumesPage() {
                               </div>
                               <div className="flex-1">
                                 <h3 className="font-semibold text-gray-900">All Resumes</h3>
-                                <p className="text-sm text-gray-500">{filteredResumes.length} resume{filteredResumes.length !== 1 ? 's' : ''}</p>
+                                <p className="text-sm text-gray-500">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
                               </div>
                               <ChevronRight className="w-5 h-5 text-gray-400" />
                             </div>
@@ -2583,6 +2432,20 @@ export default function MyResumesPage() {
                           <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                           <h3 className="text-lg font-medium text-gray-900 mb-2">No resumes in this folder</h3>
                           <p className="text-gray-500">Upload resumes to this folder to get started</p>
+                        </div>
+                      )}
+
+                      {/* Card view pagination */}
+                      {totalPages > 0 && folderResumes.length > 0 && (
+                        <div className="mt-4">
+                          <Pagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            totalItems={totalItems}
+                            itemsPerPage={itemsPerPage}
+                            onPageChange={(page) => { setCurrentPage(page); setIsPaginating(true); }}
+                            onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); setIsPaginating(true); }}
+                          />
                         </div>
                       )}
                     </>
@@ -2924,10 +2787,15 @@ export default function MyResumesPage() {
 
                   return (
                     <>
-                      {/* Status Summary Cards - 6 Column Grid */}
+                      {/* Status Summary Cards - 6 Column Grid (Clickable Filters) */}
                       <div className="grid grid-cols-3 gap-3 mb-6">
                         {/* Completed */}
-                        <div className="bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200 rounded-xl p-4">
+                        <div
+                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'completed' ? null : 'completed')}
+                          className={`bg-gradient-to-br from-green-50 to-green-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                            uploadHistoryFilter === 'completed' ? 'border-green-500 ring-2 ring-green-300 shadow-md' : 'border-green-200'
+                          }`}
+                        >
                           <div className="flex items-center gap-3 mb-2">
                             <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
                               <CheckCircle className="w-4 h-4 text-white" />
@@ -2938,7 +2806,12 @@ export default function MyResumesPage() {
                         </div>
 
                         {/* Duplicates */}
-                        <div className="bg-gradient-to-br from-yellow-50 to-yellow-100/50 border border-yellow-200 rounded-xl p-4">
+                        <div
+                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'duplicated' ? null : 'duplicated')}
+                          className={`bg-gradient-to-br from-yellow-50 to-yellow-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                            uploadHistoryFilter === 'duplicated' ? 'border-yellow-500 ring-2 ring-yellow-300 shadow-md' : 'border-yellow-200'
+                          }`}
+                        >
                           <div className="flex items-center gap-3 mb-2">
                             <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
                               <Copy className="w-4 h-4 text-white" />
@@ -2949,7 +2822,12 @@ export default function MyResumesPage() {
                         </div>
 
                         {/* Versioned */}
-                        <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200 rounded-xl p-4">
+                        <div
+                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'versioned' ? null : 'versioned')}
+                          className={`bg-gradient-to-br from-purple-50 to-purple-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                            uploadHistoryFilter === 'versioned' ? 'border-purple-500 ring-2 ring-purple-300 shadow-md' : 'border-purple-200'
+                          }`}
+                        >
                           <div className="flex items-center gap-3 mb-2">
                             <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
                               <GitBranch className="w-4 h-4 text-white" />
@@ -2960,7 +2838,12 @@ export default function MyResumesPage() {
                         </div>
 
                         {/* Failed */}
-                        <div className="bg-gradient-to-br from-red-50 to-red-100/50 border border-red-200 rounded-xl p-4">
+                        <div
+                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'error' ? null : 'error')}
+                          className={`bg-gradient-to-br from-red-50 to-red-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                            uploadHistoryFilter === 'error' ? 'border-red-500 ring-2 ring-red-300 shadow-md' : 'border-red-200'
+                          }`}
+                        >
                           <div className="flex items-center gap-3 mb-2">
                             <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
                               <AlertCircle className="w-4 h-4 text-white" />
@@ -2971,7 +2854,12 @@ export default function MyResumesPage() {
                         </div>
 
                         {/* Pending */}
-                        <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-300 rounded-xl p-4">
+                        <div
+                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'pending' ? null : 'pending')}
+                          className={`bg-gradient-to-br from-gray-50 to-gray-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                            uploadHistoryFilter === 'pending' ? 'border-gray-600 ring-2 ring-gray-400 shadow-md' : 'border-gray-300'
+                          }`}
+                        >
                           <div className="flex items-center gap-3 mb-2">
                             <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center">
                               <Clock className="w-4 h-4 text-white" />
@@ -2992,6 +2880,65 @@ export default function MyResumesPage() {
                           <div className="text-2xl font-bold text-blue-700">{successRate}%</div>
                         </div>
                       </div>
+
+                      {/* Active Filter Indicator */}
+                      {uploadHistoryFilter && (
+                        <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                          <span className="text-xs text-gray-500">Filtering by:</span>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            uploadHistoryFilter === 'completed' ? 'bg-green-100 text-green-700' :
+                            uploadHistoryFilter === 'duplicated' ? 'bg-yellow-100 text-yellow-700' :
+                            uploadHistoryFilter === 'versioned' ? 'bg-purple-100 text-purple-700' :
+                            uploadHistoryFilter === 'error' ? 'bg-red-100 text-red-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {uploadHistoryFilter === 'completed' ? 'Completed' :
+                             uploadHistoryFilter === 'duplicated' ? 'Duplicates' :
+                             uploadHistoryFilter === 'versioned' ? 'Versioned' :
+                             uploadHistoryFilter === 'error' ? 'Failed' :
+                             'Pending'}
+                          </span>
+                          <button
+                            onClick={() => setUploadHistoryFilter(null)}
+                            className="ml-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Overall ETA Banner */}
+                      {(() => {
+                        const activeBatches = myResumesHistory.filter(r => r.pending > 0 && r.date);
+                        if (activeBatches.length === 0) return null;
+                        const totalPending = activeBatches.reduce((sum: number, r: any) => sum + r.pending, 0);
+                        const totalProcessed = activeBatches.reduce((sum: number, r: any) => sum + r.completed + r.errors + r.duplicated + (r.versioned || 0), 0);
+                        if (totalProcessed <= 0) {
+                          return (
+                            <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl animate-pulse">
+                              <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" />
+                              <span className="text-sm text-blue-700">Processing {totalPending} resume{totalPending !== 1 ? 's' : ''}... Estimating time remaining</span>
+                            </div>
+                          );
+                        }
+                        // Use the earliest active batch start time for overall ETA
+                        const earliestStart = Math.min(...activeBatches.map((r: any) => new Date(r.date).getTime()));
+                        const elapsed = Date.now() - earliestStart;
+                        const avgTimePerFile = elapsed / totalProcessed;
+                        const remainingMs = totalPending * avgTimePerFile;
+                        const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
+                        const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
+                        const etaText = lowMins === highMins
+                          ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
+                          : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
+                        return (
+                          <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+                            <Clock className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                            <span className="text-sm font-medium text-blue-700">{etaText}</span>
+                            <span className="text-xs text-blue-400 ml-auto">{totalPending} resume{totalPending !== 1 ? 's' : ''} left across {activeBatches.length} batch{activeBatches.length !== 1 ? 'es' : ''}</span>
+                          </div>
+                        );
+                      })()}
 
                       {/* Upload History List */}
                       <div className="flex items-center justify-between mb-4">
@@ -3078,11 +3025,11 @@ export default function MyResumesPage() {
                                     </div>
                                     <div className="text-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
                                       <div className="text-sm font-semibold text-yellow-700">{record.duplicated}</div>
-                                      <div className="text-xs text-gray-600">Dup</div>
+                                      <div className="text-xs text-gray-600">Duplicates</div>
                                     </div>
                                     <div className="text-center p-2 bg-purple-50 rounded-lg border border-purple-100">
                                       <div className="text-sm font-semibold text-purple-700">{record.versioned || 0}</div>
-                                      <div className="text-xs text-gray-600">Ver</div>
+                                      <div className="text-xs text-gray-600">Version</div>
                                     </div>
                                     <div className="text-center p-2 bg-red-50 rounded-lg border border-red-100">
                                       <div className="text-sm font-semibold text-red-700">{record.errors}</div>
@@ -3090,7 +3037,7 @@ export default function MyResumesPage() {
                                     </div>
                                     <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100">
                                       <div className="text-sm font-semibold text-blue-700">{record.pending}</div>
-                                      <div className="text-xs text-gray-600">Pend</div>
+                                      <div className="text-xs text-gray-600">Pending</div>
                                     </div>
                                   </div>
 
@@ -3113,11 +3060,89 @@ export default function MyResumesPage() {
                                     </div>
                                   </div>
 
+                                  {/* Estimated Time Remaining */}
+                                  {record.pending > 0 && record.date && (() => {
+                                    const elapsed = Date.now() - new Date(record.date).getTime();
+                                    if (processed <= 0 || elapsed <= 0) {
+                                      return (
+                                        <div className="flex items-center gap-1.5 mb-4 text-xs text-blue-600">
+                                          <Clock className="w-3.5 h-3.5" />
+                                          <span>Estimating time remaining...</span>
+                                        </div>
+                                      );
+                                    }
+                                    const avgTimePerFile = elapsed / processed;
+                                    const remainingMs = record.pending * avgTimePerFile;
+                                    const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
+                                    const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
+                                    const etaText = lowMins === highMins
+                                      ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
+                                      : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
+                                    return (
+                                      <div className="flex items-center gap-1.5 mb-4 text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
+                                        <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                                        <span>{etaText}</span>
+                                        <span className="text-blue-400 ml-auto">{record.pending} file{record.pending !== 1 ? 's' : ''} left</span>
+                                      </div>
+                                    );
+                                  })()}
+
                                   {/* Individual File Statuses */}
-                                  {record.statuses && record.statuses.length > 0 && (
+                                  {record.statuses && record.statuses.length > 0 && (() => {
+                                    const filteredStatuses = uploadHistoryFilter
+                                      ? record.statuses.filter((f: any) => {
+                                          if (uploadHistoryFilter === 'completed') return f.status === 'completed';
+                                          if (uploadHistoryFilter === 'duplicated') return f.status === 'duplicate' || f.status === 'duplicated';
+                                          if (uploadHistoryFilter === 'versioned') return f.status === 'versioned' || f.status === 'version';
+                                          if (uploadHistoryFilter === 'error') return f.status === 'error';
+                                          if (uploadHistoryFilter === 'pending') return f.status === 'pending' || f.status === 'processing';
+                                          return true;
+                                        })
+                                      : record.statuses;
+                                    return filteredStatuses.length > 0 ? (
                                     <div className="border-t border-gray-100 pt-4">
                                       <div className="flex items-center justify-between mb-3">
-                                        <div className="text-xs font-semibold text-gray-700">Files ({record.statuses.length})</div>
+                                        <div className="flex items-center gap-3">
+                                          <div className="text-xs font-semibold text-gray-700">
+                                            Files ({filteredStatuses.length}{uploadHistoryFilter ? ` of ${record.statuses.length}` : ''})
+                                          </div>
+                                          {/* Select All checkbox for versioned items */}
+                                          {uploadHistoryFilter === 'versioned' && filteredStatuses.length > 0 && (() => {
+                                            const versionedInBatch = filteredStatuses.filter((f: any) => f.status === 'versioned' || f.status === 'version');
+                                            if (versionedInBatch.length === 0) return null;
+                                            const allSelected = versionedInBatch.every((f: any) => selectedVersionedItems.has(f.id));
+                                            return (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const newSelected = new Map(selectedVersionedItems);
+                                                  if (allSelected) {
+                                                    versionedInBatch.forEach((f: any) => newSelected.delete(f.id));
+                                                  } else {
+                                                    versionedInBatch.forEach((f: any) => {
+                                                      newSelected.set(f.id, {
+                                                        id: f.id,
+                                                        fileName: f.fileName,
+                                                        candidateName: f.candidateName || '',
+                                                        resumeId: f.resumeId,
+                                                      });
+                                                    });
+                                                  }
+                                                  setSelectedVersionedItems(newSelected);
+                                                }}
+                                                className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded-md hover:bg-purple-100 transition-colors"
+                                              >
+                                                <input
+                                                  type="checkbox"
+                                                  checked={allSelected}
+                                                  readOnly
+                                                  className="w-3 h-3 rounded border-purple-400 text-purple-600 pointer-events-none"
+                                                />
+                                                Select All
+                                              </button>
+                                            );
+                                          })()}
+                                        </div>
                                         <div className="flex items-center gap-2 text-xs">
                                           <span className="flex items-center gap-1 text-green-600">
                                             <CheckCircle className="w-3 h-3" />
@@ -3134,13 +3159,24 @@ export default function MyResumesPage() {
                                         </div>
                                       </div>
                                       <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                                        {record.statuses.map((file: any, idx: number) => {
+                                        {filteredStatuses.map((file: any, idx: number) => {
                                           const isClickable = ['completed', 'versioned', 'duplicate', 'error'].includes(file.status);
+                                          const isVersioned = file.status === 'versioned' || file.status === 'version';
+                                          const isSelected = selectedVersionedItems.has(file.id);
                                           return (
                                           <div
                                             key={file.id || idx}
                                             onClick={() => {
-                                              if (isClickable) {
+                                              if (isVersioned) {
+                                                // Open resolution modal for this single versioned file
+                                                setSelectedVersionedItems(new Map([[file.id, {
+                                                  id: file.id,
+                                                  fileName: file.fileName,
+                                                  candidateName: file.candidateName || '',
+                                                  resumeId: file.resumeId,
+                                                }]]));
+                                                setIsBulkResolveModalOpen(true);
+                                              } else if (isClickable) {
                                                 setSelectedHistoryItem({
                                                   id: file.id,
                                                   fileName: file.fileName,
@@ -3152,6 +3188,7 @@ export default function MyResumesPage() {
                                               }
                                             }}
                                             className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+                                              isVersioned && isSelected ? 'bg-purple-100 border-purple-400 ring-1 ring-purple-300' :
                                               file.status === 'completed' ? 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300' :
                                               file.status === 'versioned' ? 'bg-purple-50 border-purple-200 hover:bg-purple-100 hover:border-purple-300' :
                                               file.status === 'processing' ? 'bg-blue-50 border-blue-200' :
@@ -3160,6 +3197,30 @@ export default function MyResumesPage() {
                                               'bg-gray-50 border-gray-200'
                                             } ${isClickable ? 'cursor-pointer' : ''}`}
                                           >
+                                            {/* Checkbox for versioned items */}
+                                            {isVersioned && (
+                                              <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onClick={(e) => e.stopPropagation()}
+                                                onChange={(e) => {
+                                                  e.stopPropagation();
+                                                  const newSelected = new Map(selectedVersionedItems);
+                                                  if (isSelected) {
+                                                    newSelected.delete(file.id);
+                                                  } else {
+                                                    newSelected.set(file.id, {
+                                                      id: file.id,
+                                                      fileName: file.fileName,
+                                                      candidateName: file.candidateName || '',
+                                                      resumeId: file.resumeId,
+                                                    });
+                                                  }
+                                                  setSelectedVersionedItems(newSelected);
+                                                }}
+                                                className="w-4 h-4 rounded border-purple-400 text-purple-600 focus:ring-purple-500 cursor-pointer flex-shrink-0"
+                                              />
+                                            )}
                                             {/* Status Icon */}
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                                               file.status === 'completed' ? 'bg-green-500' :
@@ -3209,7 +3270,18 @@ export default function MyResumesPage() {
                                         })}
                                       </div>
                                     </div>
-                                  )}
+                                    ) : uploadHistoryFilter ? (
+                                      <div className="border-t border-gray-100 pt-4">
+                                        <p className="text-xs text-gray-400 text-center py-3">No {
+                                          uploadHistoryFilter === 'completed' ? 'completed' :
+                                          uploadHistoryFilter === 'duplicated' ? 'duplicate' :
+                                          uploadHistoryFilter === 'versioned' ? 'versioned' :
+                                          uploadHistoryFilter === 'error' ? 'failed' :
+                                          'pending'
+                                        } files in this batch</p>
+                                      </div>
+                                    ) : null;
+                                  })()}
                                 </div>
                               );
                             })}
@@ -3219,6 +3291,38 @@ export default function MyResumesPage() {
                   );
                 })()}
               </div>
+
+              {/* Floating Resolve Selected Bar */}
+              {selectedVersionedItems.size > 0 && (
+                <div className="border-t border-purple-200 px-6 py-3 bg-gradient-to-r from-purple-50 to-violet-50 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+                      <GitBranch className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-purple-900">
+                        {selectedVersionedItems.size} versioned resume{selectedVersionedItems.size !== 1 ? 's' : ''} selected
+                      </span>
+                      <p className="text-xs text-purple-600">Choose how to resolve these version conflicts</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedVersionedItems(new Map())}
+                      className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-white transition-colors"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={() => setIsBulkResolveModalOpen(true)}
+                      className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-2"
+                    >
+                      <GitBranch className="w-4 h-4" />
+                      Resolve Selected ({selectedVersionedItems.size})
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Footer */}
               <div className="border-t border-gray-200 px-6 py-4 bg-white rounded-b-2xl">
@@ -3239,6 +3343,22 @@ export default function MyResumesPage() {
         <UploadHistoryDetailModal
           item={selectedHistoryItem}
           onClose={() => setSelectedHistoryItem(null)}
+        />
+      )}
+
+      {/* Bulk Version Resolution Modal */}
+      {isBulkResolveModalOpen && selectedVersionedItems.size > 0 && (
+        <BulkVersionResolutionModal
+          items={Array.from(selectedVersionedItems.values())}
+          onClose={() => setIsBulkResolveModalOpen(false)}
+          onResolved={() => {
+            setIsBulkResolveModalOpen(false);
+            setSelectedVersionedItems(new Map());
+            // Refresh batch data
+            fetchUploadHistory();
+            isFetchingRef.current = false;
+            fetchData();
+          }}
         />
       )}
 

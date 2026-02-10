@@ -177,6 +177,10 @@ export interface Tenant {
   isActive: boolean;
   // Tenant status for RBAC checks
   status?: 'ACTIVE' | 'SUSPENDED' | 'EXPIRED';
+  // Feature flags for tenant-level feature control
+  features?: {
+    [key: string]: boolean;
+  };
 }
 
 // Permission helper functions - Updated for RBAC01-07

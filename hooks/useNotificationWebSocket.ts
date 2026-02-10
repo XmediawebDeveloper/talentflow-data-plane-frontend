@@ -24,7 +24,20 @@ interface UseNotificationWebSocketReturn {
   reconnect: () => void;
 }
 
-const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8001';
+// Auto-detect WebSocket protocol based on page protocol (ws:// for http://, wss:// for https://)
+const getWebSocketBaseUrl = () => {
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL;
+  }
+  // Auto-detect: use wss:// for https://, ws:// for http://
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//localhost:8001`;
+  }
+  return 'ws://localhost:8001';
+};
+
+const WS_BASE_URL = getWebSocketBaseUrl();
 const RECONNECT_DELAY = 3000; // 3 seconds
 const PING_INTERVAL = 30000; // 30 seconds
 const MAX_RECONNECT_ATTEMPTS = 5;

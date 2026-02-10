@@ -28,7 +28,6 @@ export default function AITalentMatchProgressPanel({
     'Processing job criteria',
     'Scanning candidate database',
     'Computing match scores',
-    'AI filtering candidates',
     'Finalizing results'
   ];
 

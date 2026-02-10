@@ -286,7 +286,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired }: SidebarPr
         { id: 'user-management', label: 'Users', icon: Users, href: '/organization/user-management', permission: 'canManageUsers' },
         { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
         { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canManageUsers' },
-        { id: 'team-chat', label: 'Team Chat', icon: MessageCircle, href: '/organization/team-chat' },  // Available to all users
+        { id: 'team-chat', label: 'Chat', icon: MessageCircle, href: '/organization/team-chat' },  // ✅ Available to ALL users (bypass permission check)
       ]
     },
 

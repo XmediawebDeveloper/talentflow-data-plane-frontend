@@ -12,6 +12,8 @@ import VersionHistoryModal from './VersionHistoryModal';
 import ResumeVersionSelector from './ResumeVersionSelector';
 import { toast } from 'sonner';
 import { resumeService } from '@/lib/services/resumeService';
+// ✅ PERMISSION FIX: Import permission hook for CRUD checks
+import { useModulePermissions } from '@/lib/hooks/usePermissions';
 
 // Drag item type for resumes
 const RESUME_DRAG_TYPE = 'RESUME';
@@ -76,6 +78,7 @@ interface ResumeTableProps {
   onVersion?: (resume: Resume) => void;
   highlightQuery?: string;
   onArchive?: (resumeId: string) => void;
+  disablePagination?: boolean;
 }
 
 // Helper function to highlight matching text
@@ -122,8 +125,11 @@ export default function ResumeTable({
   onVersion,
   highlightQuery,
   onArchive,
+  disablePagination = false,
 }: ResumeTableProps) {
   const router = useRouter();
+  // ✅ PERMISSION FIX: Get Resume CRUD permissions
+  const resumePerms = useModulePermissions('resume');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [versionHistoryResume, setVersionHistoryResume] = useState<Resume | null>(null);
   const [versionSelectorResume, setVersionSelectorResume] = useState<Resume | null>(null);
@@ -139,9 +145,9 @@ export default function ResumeTable({
   const [showAddTagsModal, setShowAddTagsModal] = useState(false);
   const [selectedResumeForAction, setSelectedResumeForAction] = useState<Resume | null>(null);
 
-  // Pagination
+  // Pagination (skipped when parent handles pagination server-side)
   const {
-    paginatedItems,
+    paginatedItems: paginatedItemsFromHook,
     currentPage,
     totalPages,
     itemsPerPage,
@@ -151,6 +157,9 @@ export default function ResumeTable({
     startIndex,
     endIndex,
   } = usePagination({ items: resumes, initialItemsPerPage: 25 });
+
+  // When pagination is disabled (server-side pagination), render all passed items
+  const paginatedItems = disablePagination ? resumes : paginatedItemsFromHook;
 
   const allSelected = resumes.length > 0 && resumes.every(r => selectedResumes.includes(r.id));
   const someSelected = selectedResumes.length > 0 && !allSelected;
@@ -600,18 +609,21 @@ export default function ResumeTable({
                                 Archive Resume
                               </button>
                               <div className="border-t border-gray-100 my-1"></div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedResumeForAction(resume);
-                                  setShowDeleteModal(true);
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Delete Resume
-                              </button>
+                              {/* ✅ PERMISSION FIX: Only show Delete button if user has canDeleteResumes permission */}
+                              {resumePerms.canDelete && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedResumeForAction(resume);
+                                    setShowDeleteModal(true);
+                                    setActiveMenu(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete Resume
+                                </button>
+                              )}
                             </div>
                           </>
                         )}
@@ -707,7 +719,7 @@ export default function ResumeTable({
         ))}
       </div>
 
-      {totalPages > 1 && (
+      {!disablePagination && totalPages > 1 && (
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}

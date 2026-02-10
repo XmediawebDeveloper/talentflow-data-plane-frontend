@@ -812,6 +812,28 @@ export const assessmentService = {
       throw new Error(handleApiError(error));
     }
   },
+
+  /**
+   * ✅ SMART CONFIG: Regenerate questions based on new percentages
+   * Used when percentage config is modified and "Publish Changes" is clicked
+   */
+  async regenerateQuestions(data: {
+    jd_id: string;
+    experience_level: string;
+    skills: string[];
+    question_distribution: Array<{
+      section: string;
+      count: number;
+      topics: string[];
+    }>;
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await api.post('/assessments/regenerate-questions', data);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
 };
 
 // Candidate-facing services (public)

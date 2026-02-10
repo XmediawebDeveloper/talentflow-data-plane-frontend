@@ -110,6 +110,11 @@ export default function DashboardLayout({
   // Client-side authorization check for admin routes
   useEffect(() => {
     if (!isLoading && isAuthenticated && user) {
+      // Exception: Team Chat is accessible to all users, even though it's under /organization
+      if (pathname === '/organization/team-chat' || pathname.startsWith('/organization/team-chat/')) {
+        return; // Allow access to all users
+      }
+
       const isAdminRoute = adminRoutes.some(route =>
         pathname === route || pathname.startsWith(`${route}/`)
       );

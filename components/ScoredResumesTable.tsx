@@ -272,8 +272,8 @@ export default function ScoredResumesTable({
           typeof cert === 'string' ? cert : (cert?.name || '')
         ).join(', ') || '';
       case 'scoredDate':
-        const d = new Date(new Date(resume.scoredDate).getTime() + (5 * 60 + 30) * 60 * 1000);
-        return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+        const d = new Date(resume.scoredDate);
+        return `${d.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' })} ${d.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true })}`;
       case 'scoredBy':
         return resume.scoredBy || '';
       default:
@@ -834,22 +834,22 @@ export default function ScoredResumesTable({
                     );
                   }
                   if (col.id === 'scoredDate') {
-                    const rawDate = new Date(resume.scoredDate);
-                    // Convert UTC to IST (UTC + 5:30)
-                    const istDate = new Date(rawDate.getTime() + (5 * 60 + 30) * 60 * 1000);
+                    const date = new Date(resume.scoredDate);
                     return (
                       <td key={col.id} className="py-3 px-4">
                         <div className="flex items-center gap-1 text-sm text-gray-600">
                           <Calendar className="w-3.5 h-3.5" />
                           <span>
-                            {istDate.toLocaleDateString('en-US', {
+                            {date.toLocaleDateString('en-US', {
+                              timeZone: 'Asia/Kolkata',
                               month: 'short',
                               day: 'numeric',
                               year: 'numeric'
                             })}
                             {' '}
                             <span className="text-gray-400">
-                              {istDate.toLocaleTimeString('en-US', {
+                              {date.toLocaleTimeString('en-US', {
+                                timeZone: 'Asia/Kolkata',
                                 hour: 'numeric',
                                 minute: '2-digit',
                                 hour12: true
@@ -1035,20 +1035,21 @@ export default function ScoredResumesTable({
                 </div>
               )}
               {enabledColumns.find(c => c.id === 'scoredDate') && (() => {
-                const rawDate = new Date(resume.scoredDate);
-                const istDate = new Date(rawDate.getTime() + (5 * 60 + 30) * 60 * 1000);
+                const date = new Date(resume.scoredDate);
                 return (
                   <div className="flex items-center gap-2 text-gray-600">
                     <Calendar className="w-4 h-4" />
                     <span>
-                      {istDate.toLocaleDateString('en-US', {
+                      {date.toLocaleDateString('en-US', {
+                        timeZone: 'Asia/Kolkata',
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric'
                       })}
                       {' '}
                       <span className="text-gray-400">
-                        {istDate.toLocaleTimeString('en-US', {
+                        {date.toLocaleTimeString('en-US', {
+                          timeZone: 'Asia/Kolkata',
                           hour: 'numeric',
                           minute: '2-digit',
                           hour12: true

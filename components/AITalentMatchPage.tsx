@@ -23,6 +23,8 @@ interface Job {
   applicants: number;
   employmentType?: string;
   experience?: string;
+  jobId?: string;
+  currentVersion?: number;
 }
 
 // Extended interface for UI display (adds versions for modal)
@@ -1156,6 +1158,8 @@ export default function AITalentMatchPage({
               const goodCount = item.matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
               const moderateCount = item.matchedCandidates.filter(c => c.matchScore < 70).length;
 
+              const jobData = jobs.find(j => j.id === item.jobId);
+
               return (
                 <div
                   key={item.id}
@@ -1177,6 +1181,27 @@ export default function AITalentMatchPage({
                         <Sparkles className="w-6 h-6 text-white" />
                       </div>
                       <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          {jobData?.jobId && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                              {jobData.jobId}
+                            </span>
+                          )}
+                          {jobData?.currentVersion && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                              v{jobData.currentVersion}
+                            </span>
+                          )}
+                          {jobData?.currentVersion && (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+                              jobData.currentVersion > 1
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-green-50 text-green-700 border-green-200'
+                            }`}>
+                              {jobData.currentVersion > 1 ? 'Republished' : 'Published'}
+                            </span>
+                          )}
+                        </div>
                         <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-gray-800 transition-colors">
                           {item.jobTitle}
                         </h3>

@@ -474,7 +474,9 @@ export function AssessmentInterface({
         clearInterval(globalTimerRef.current);
       }
     };
-  }, [globalTimeRemaining, isGlobalTimeExpired, onComplete, isInitialized]);
+    // Note: globalTimeRemaining removed from deps to prevent infinite loop
+    // We use setGlobalTimeRemaining(prev => prev - 1) which doesn't need it
+  }, [isGlobalTimeExpired, onComplete, isInitialized]);
 
   // Automatic time-based unit deduction check (every 60 seconds)
   useEffect(() => {
@@ -1270,6 +1272,7 @@ export function AssessmentInterface({
                   onAnswerChange={setAnswer}
                   allowLanguageChange={false}
                   isLocked={isCurrentAnswerLocked}
+                  attemptId={assessmentInfo.attempt_id || ''}
                 />
               )}
             </div>

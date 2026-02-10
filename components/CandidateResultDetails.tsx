@@ -84,20 +84,24 @@ export default function CandidateResultDetails({
           status = 'Pending';
         }
 
-        // Map section scores - RoundScore only has percentages, not points
+        // Map section scores - Calculate using correct formula
         const sections = details.round_scores.map(round => {
-          // raw_score is already a percentage (0-100)
-          const rawPercentage = round.raw_score ?? 0;
-          const percentage = Math.min(Math.round(rawPercentage), 100);
+          // ✅ FIXED: Use formula: (total_obtained_marks / total_marks) * 100
+          // Each question is out of 10 points
+          const totalMarks = (round.questions_total || 0) * 10;
+          const obtainedMarks = (round.questions_correct || 0) * 10;
 
-          // Calculate the actual score out of 10 based on percentage
-          const score = Math.round((percentage / 100) * 10 * 10) / 10; // Round to 1 decimal
+          // Calculate percentage using the correct formula
+          const percentage = totalMarks > 0 ? Math.round((obtainedMarks / totalMarks) * 100) : 0;
+
+          // Score out of 10 for display
+          const score = totalMarks > 0 ? Math.round((obtainedMarks / round.questions_total) * 10) / 10 : 0;
 
           return {
             name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
-            score: score,
-            totalScore: 10,
-            percentage: percentage
+            score: obtainedMarks, // Total obtained marks
+            totalScore: totalMarks, // Total marks possible
+            percentage: Math.min(percentage, 100) // Cap at 100%
           };
         });
 
@@ -786,8 +790,14 @@ export default function CandidateResultDetails({
                         {round.round_type.toLowerCase() !== 'hr' && (
                           <div className="text-right">
                             <div className="text-sm text-gray-600 mb-1">Section Score</div>
-                            <div className={`text-3xl ${getScoreColor(Math.min(round.raw_score, 100))}`}>
-                              {Math.min(Math.round(round.raw_score), 100)}%
+                            <div className={`text-3xl ${getScoreColor(Math.min(
+                              round.questions_total > 0 ? Math.round((round.questions_correct / round.questions_total) * 100) : 0,
+                              100
+                            ))}`}>
+                              {Math.min(
+                                round.questions_total > 0 ? Math.round((round.questions_correct / round.questions_total) * 100) : 0,
+                                100
+                              )}%
                             </div>
                           </div>
                         )}
@@ -1127,33 +1137,35 @@ export default function CandidateResultDetails({
                         <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
-                      {/* Video Violations */}
-                      <div className={`rounded-xl p-5 border-2 ${
-                        detailedResult.proctoring_stats.video_violation_count > 0
-                          ? 'bg-purple-50 border-purple-200'
-                          : 'bg-gray-50 border-gray-200'
-                      }`}>
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                      {/* Video Violations - HIDDEN as per user request */}
+                      {false && (
+                        <div className={`rounded-xl p-5 border-2 ${
                           detailedResult.proctoring_stats.video_violation_count > 0
-                            ? 'bg-purple-100'
-                            : 'bg-gray-100'
+                            ? 'bg-purple-50 border-purple-200'
+                            : 'bg-gray-50 border-gray-200'
                         }`}>
-                          <Eye className={`w-6 h-6 ${
+                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                            detailedResult.proctoring_stats.video_violation_count > 0
+                              ? 'bg-purple-100'
+                              : 'bg-gray-100'
+                          }`}>
+                            <Eye className={`w-6 h-6 ${
+                              detailedResult.proctoring_stats.video_violation_count > 0
+                                ? 'text-purple-600'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="text-sm text-gray-600 mb-1">Video Violations</div>
+                          <div className={`text-3xl font-bold ${
                             detailedResult.proctoring_stats.video_violation_count > 0
                               ? 'text-purple-600'
                               : 'text-gray-400'
-                          }`} />
+                          }`}>
+                            {detailedResult.proctoring_stats.video_violation_count}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">occurrences</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Video Violations</div>
-                        <div className={`text-3xl font-bold ${
-                          detailedResult.proctoring_stats.video_violation_count > 0
-                            ? 'text-purple-600'
-                            : 'text-gray-400'
-                        }`}>
-                          {detailedResult.proctoring_stats.video_violation_count}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">occurrences</div>
-                      </div>
+                      )}
 
                       {/* Voice Violations */}
                       <div className={`rounded-xl p-5 border-2 ${

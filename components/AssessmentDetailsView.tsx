@@ -27,6 +27,9 @@ interface Section {
   icon: any;
 }
 
+// IST timezone constant
+const INDIA_TIMEZONE = 'Asia/Kolkata';
+
 export default function AssessmentDetailsView({
   assessment,
   onBack,
@@ -243,7 +246,10 @@ export default function AssessmentDetailsView({
                   <span className="flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
                     Created {assessment.created_at
-                      ? `${new Date(assessment.created_at).toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' })} at ${new Date(assessment.created_at).toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })} IST`
+                      ? (() => {
+                          const date = new Date(assessment.created_at);
+                          return `${date.toLocaleDateString('en-US', { timeZone: INDIA_TIMEZONE, month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString('en-US', { timeZone: INDIA_TIMEZONE, hour: '2-digit', minute: '2-digit', hour12: true })} IST (UTC+5:30)`;
+                        })()
                       : assessment.created}
                   </span>
                   {assessment.created_by_name && (
@@ -1102,8 +1108,9 @@ export default function AssessmentDetailsView({
               <div className="p-6 space-y-6">
                 {versionHistory.map((version: any, idx: number) => {
                   const isCurrentVersion = idx === 0;
-                  const versionDate = new Date(version.created_at).toLocaleString('en-US', {
-                    timeZone: 'Asia/Kolkata',
+                  const date = new Date(version.created_at);
+                  const versionDate = date.toLocaleString('en-US', {
+                    timeZone: INDIA_TIMEZONE, // IST = UTC+5:30
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',
@@ -1144,7 +1151,7 @@ export default function AssessmentDetailsView({
 
                           <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
                             <Calendar className="w-4 h-4 text-gray-500" />
-                            <span>Published on {versionDate} IST</span>
+                            <span>Published on {versionDate} IST (UTC+5:30)</span>
                           </div>
 
                           {/* Configuration Details */}
