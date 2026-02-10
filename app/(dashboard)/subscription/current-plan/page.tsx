@@ -1,6 +1,6 @@
 'use client';
 
-import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, ArrowUpRight, Crown, FileText, Mail } from 'lucide-react';
+import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, ArrowUpRight, Crown, FileText, Mail, ChevronDown, ChevronUp, Shield } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api, { handleUnauthorized } from '@/lib/services/api';
@@ -425,7 +425,7 @@ const formatQuotaValue = (value: number | string | undefined | null | Record<str
 function CurrentPlanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { logout, user, isBillingManager } = useAuth();
+  const { logout, user, isBillingManager, isTenantAdmin } = useAuth();
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
@@ -501,6 +501,7 @@ function CurrentPlanContent() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
+  const [showAdminMeta, setShowAdminMeta] = useState(false);
 
   // Use ref to track if data has been fetched to prevent duplicate calls
   const hasFetchedRef = useRef(false);
@@ -1686,6 +1687,112 @@ function CurrentPlanContent() {
                   <p className="text-xs text-gray-600">AI Interviews</p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Admin Plan Metadata - Collapsible, visible only to tenant admins */}
+          {isTenantAdmin && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <button
+                onClick={() => setShowAdminMeta(!showAdminMeta)}
+                className="flex w-full items-center justify-between text-left group"
+              >
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-indigo-600" />
+                  <h3 className="text-sm font-medium text-gray-700">Plan Details (Admin)</h3>
+                </div>
+                {showAdminMeta ? (
+                  <ChevronUp className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+                )}
+              </button>
+              {showAdminMeta && (
+                <div className="mt-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {companySettings?.current_plan_id && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Plan ID</p>
+                      <p className="text-sm font-medium text-gray-900">{companySettings.current_plan_id}</p>
+                    </div>
+                  )}
+                  {currentPlan?.planSlug && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Plan Slug</p>
+                      <p className="text-sm font-medium text-gray-900">{currentPlan.planSlug}</p>
+                    </div>
+                  )}
+                  {sharedQuotaData?.plan_info?.plan_tier && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Plan Tier</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{sharedQuotaData.plan_info.plan_tier}</p>
+                    </div>
+                  )}
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-500 mb-0.5">Billing Period</p>
+                    <p className="text-sm font-medium text-gray-900 capitalize">{currentPlanBillingPeriod?.toLowerCase() || '-'}</p>
+                  </div>
+                  {sharedQuotaData?.plan_info?.billing_interval && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Billing Interval</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{sharedQuotaData.plan_info.billing_interval.toLowerCase()}</p>
+                    </div>
+                  )}
+                  {sharedQuotaData?.plan_info?.isolation_type && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Isolation Type</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{sharedQuotaData.plan_info.isolation_type.toLowerCase()}</p>
+                    </div>
+                  )}
+                  {companySettings?.max_seats !== undefined && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Included Seats</p>
+                      <p className="text-sm font-medium text-gray-900">{formatQuotaValue(companySettings.max_seats)}</p>
+                    </div>
+                  )}
+                  {sharedQuotaData?.quota_source && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Quota Source</p>
+                      <p className="text-sm font-medium text-gray-900">{sharedQuotaData.quota_source.replace(/_/g, ' ')}</p>
+                    </div>
+                  )}
+                  {companySettings?.subscription_status && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Subscription Status</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{companySettings.subscription_status.toLowerCase().replace(/_/g, ' ')}</p>
+                    </div>
+                  )}
+                  {companySettings?.payment_status && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Payment Status</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{companySettings.payment_status.toLowerCase().replace(/_/g, ' ')}</p>
+                    </div>
+                  )}
+                  {companySettings?.payment_method && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Payment Method</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{companySettings.payment_method}</p>
+                    </div>
+                  )}
+                  {companySettings?.payment_reference && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Payment Reference</p>
+                      <p className="text-sm font-mono text-gray-900 text-xs">{companySettings.payment_reference}</p>
+                    </div>
+                  )}
+                  {sharedQuotaData?.tenant_id && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Tenant ID</p>
+                      <p className="text-sm font-mono text-gray-900 text-xs truncate" title={sharedQuotaData.tenant_id}>{sharedQuotaData.tenant_id}</p>
+                    </div>
+                  )}
+                  {companySettings?.last_synced_at && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Last Synced</p>
+                      <p className="text-sm font-medium text-gray-900">{formatDate(companySettings.last_synced_at)}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
