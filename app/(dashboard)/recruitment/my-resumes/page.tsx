@@ -3167,7 +3167,16 @@ export default function MyResumesPage() {
                                           <div
                                             key={file.id || idx}
                                             onClick={() => {
-                                              if (isClickable) {
+                                              if (isVersioned) {
+                                                // Open resolution modal for this single versioned file
+                                                setSelectedVersionedItems(new Map([[file.id, {
+                                                  id: file.id,
+                                                  fileName: file.fileName,
+                                                  candidateName: file.candidateName || '',
+                                                  resumeId: file.resumeId,
+                                                }]]));
+                                                setIsBulkResolveModalOpen(true);
+                                              } else if (isClickable) {
                                                 setSelectedHistoryItem({
                                                   id: file.id,
                                                   fileName: file.fileName,
