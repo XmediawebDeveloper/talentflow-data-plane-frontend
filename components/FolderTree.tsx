@@ -242,7 +242,8 @@ export default function FolderTree({
     const isExpanded = expandedFolders.includes(folder.id);
     const isSelected = selectedFolder === folder.id;
     const hasChildren = folder.children && folder.children.length > 0;
-    const count = getResumeCount(folder.id);
+    // Use folder.count from backend API instead of recalculating from current page resumes
+    const count = folder.count || 0;
     const isCreatingSubFolder = creatingSubFolderFor === folder.id;
     const hasMenu = showFolderMenu === folder.id;
     const isRenaming = renamingFolderId === folder.id;
