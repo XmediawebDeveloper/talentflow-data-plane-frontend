@@ -1785,7 +1785,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                             {/* Performed By Info */}
                             <div className="flex items-center gap-3 pt-3 border-t border-gray-200">
                               <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
-                                <User className="w-4 h-4 text-white" />
+                                <UserIcon className="w-4 h-4 text-white" />
                               </div>
                               <div className="flex-1">
                                 <p className="text-sm font-medium text-gray-900">{item.performedBy}</p>
