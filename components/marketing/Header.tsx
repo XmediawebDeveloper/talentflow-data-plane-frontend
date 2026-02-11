@@ -125,6 +125,7 @@ export function Header() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   onClick={() => setMobileMenuOpen(false)}
                   className={`text-left py-2 font-medium ${
                     pathname === item.href
@@ -141,10 +142,10 @@ export function Header() {
                   className="w-full border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
                   asChild
                 >
-                  <Link href="/login">Sign In</Link>
+                  <Link href="/login" prefetch={false}>Sign In</Link>
                 </Button>
                 <Button className="w-full bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200" asChild>
-                  <Link href="/signup">Start Free Trial</Link>
+                  <Link href="/signup" prefetch={false}>Start Free Trial</Link>
                 </Button>
               </div>
             </nav>

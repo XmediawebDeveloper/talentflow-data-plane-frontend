@@ -103,12 +103,14 @@ export default function HowItWorksPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/signup"
+              prefetch={false}
               className="h-12 px-8 inline-flex items-center justify-center rounded-lg bg-white text-gray-800 font-medium hover:bg-gray-100 transition-colors"
             >
               Start Free Trial
             </Link>
             <Link
               href="/demo"
+              prefetch={false}
               className="h-12 px-8 inline-flex items-center justify-center rounded-lg border border-white text-white font-medium hover:bg-white/10 transition-colors"
             >
               Watch Demo

@@ -792,6 +792,7 @@ export default function PricingPage() {
 
                         {/* CTA Button */}
                         <Link
+                          prefetch={false}
                           href={isTrialPlan
                             ? "/signup?plan=free_trial"
                             : ((plan.monthlyPrice || plan.yearlyPrice)
@@ -917,6 +918,7 @@ export default function PricingPage() {
           </p>
           <Link
             href="/contact"
+            prefetch={false}
             className="inline-block px-6 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
             Contact Us

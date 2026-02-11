@@ -245,18 +245,6 @@ export default function AdminDashboard({
                 >
                   {stats?.draft_jds || 0} Draft
                 </span>
-                {/* JD02B: Show "my JDs" for recruiters */}
-                {!canManageUsers && (stats?.my_jds ?? 0) > 0 && (
-                  <>
-                    <span className="text-xs text-gray-400">|</span>
-                    <span
-                      className="text-xs text-blue-600 cursor-pointer hover:underline hover:text-blue-700 transition-colors"
-                      onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?filter=mine'); }}
-                    >
-                      {stats?.my_jds || 0} My Job Descriptions
-                    </span>
-                  </>
-                )}
               </div>
             </div>
             <div
