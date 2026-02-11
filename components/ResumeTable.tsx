@@ -596,14 +596,26 @@ export default function ResumeTable({
                                 Add Tags
                               </button>
                               <div className="border-t border-gray-100 my-1"></div>
+                              {/* ✅ PERMISSION FIX: Archive requires delete permission */}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (!resumePerms.canDelete) {
+                                    toast.error('You do not have permission to archive resumes');
+                                    setActiveMenu(null);
+                                    return;
+                                  }
                                   setSelectedResumeForAction(resume);
                                   setShowArchiveModal(true);
                                   setActiveMenu(null);
                                 }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                                disabled={!resumePerms.canDelete}
+                                title={!resumePerms.canDelete ? 'You do not have permission to archive resumes' : ''}
+                                className={`w-full text-left px-4 py-2 text-sm flex items-center gap-3 ${
+                                  !resumePerms.canDelete
+                                    ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                    : 'text-gray-700 hover:bg-gray-50'
+                                }`}
                               >
                                 <Archive className="w-4 h-4 text-gray-600" />
                                 Archive Resume
@@ -614,11 +626,22 @@ export default function ResumeTable({
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (!resumePerms.canDelete) {
+                                      toast.error('You do not have permission to delete resumes');
+                                      setActiveMenu(null);
+                                      return;
+                                    }
                                     setSelectedResumeForAction(resume);
                                     setShowDeleteModal(true);
                                     setActiveMenu(null);
                                   }}
-                                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
+                                  disabled={!resumePerms.canDelete}
+                                  title={!resumePerms.canDelete ? 'You do not have permission to delete resumes' : ''}
+                                  className={`w-full text-left px-4 py-2 text-sm flex items-center gap-3 ${
+                                    !resumePerms.canDelete
+                                      ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                      : 'text-red-600 hover:bg-red-50'
+                                  }`}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                   Delete Resume

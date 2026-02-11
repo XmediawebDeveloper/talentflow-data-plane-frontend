@@ -83,6 +83,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const router = useRouter();
   const dialog = useGlobalDialog();
   const { user, isTenantAdmin, hasPermission } = useAuth();
+
+  // Permission checks for CRUD operations
+  const canCreateAssessment = user?.permissions?.canCreateAssessment ?? false;
+  const canUpdateAssessment = user?.permissions?.canUpdateAssessment ?? false;
+  const canDeleteAssessment = user?.permissions?.canDeleteAssessment ?? false;
+
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
   const [showCreation, setShowCreation] = useState(false);
@@ -790,6 +796,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             setSelectedAssessmentForDetails(null);
           }}
           onEdit={() => {
+            if (!canUpdateAssessment) {
+              toast.error('You do not have permission to edit assessments');
+              return;
+            }
             // Keep details view open, modal will overlay on top
             handleEditAssessment(selectedAssessmentForDetails);
           }}
@@ -953,11 +963,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             )}
             {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
               <button
-                onClick={handleOpenCreation}
-                disabled={!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0}
+                onClick={() => {
+                  if (!canCreateAssessment) {
+                    toast.error('You do not have permission to create assessments');
+                    return;
+                  }
+                  handleOpenCreation();
+                }}
+                disabled={!canCreateAssessment || (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0)}
+                title={!canCreateAssessment ? 'You do not have permission to create assessments' : (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 ? 'No assessment units available' : '')}
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-lg transition-colors shadow-sm ${
-                  !isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  !canCreateAssessment || (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0)
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
                     : 'bg-gray-800 text-white hover:bg-gray-900'
                 }`}
               >
@@ -1793,8 +1810,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No assessments yet</h3>
                 <p className="text-gray-600 mb-4">Create your first AI-powered assessment to start evaluating candidates</p>
                 <button
-                  onClick={handleOpenCreation}
-                  className="inline-flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-lg hover:bg-gray-900 transition-colors"
+                  onClick={() => {
+                    if (!canCreateAssessment) {
+                      toast.error('You do not have permission to create assessments');
+                      return;
+                    }
+                    handleOpenCreation();
+                  }}
+                  disabled={!canCreateAssessment}
+                  title={!canCreateAssessment ? 'You do not have permission to create assessments' : ''}
+                  className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-lg transition-colors ${
+                    !canCreateAssessment
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                      : 'bg-gray-800 text-white hover:bg-gray-900'
+                  }`}
                 >
                   <Sparkles className="w-5 h-5" />
                   Create Assessment
@@ -1808,6 +1837,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     key={assessment.id}
                     onClick={() => {
                       if (assessment.status === 'Draft') {
+                        if (!canUpdateAssessment) {
+                          toast.error('You do not have permission to edit assessments');
+                          return;
+                        }
                         // For drafts, open edit modal to continue editing
                         handleEditAssessment(assessment);
                       } else {
@@ -1948,10 +1981,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
                             <button
                               onClick={() => {
+                                if (!canUpdateAssessment) {
+                                  toast.error('You do not have permission to edit assessments');
+                                  setOpenMenuId(null);
+                                  return;
+                                }
                                 handleEditAssessment(assessment);
                                 setOpenMenuId(null);
                               }}
-                              className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                              disabled={!canUpdateAssessment}
+                              title={!canUpdateAssessment ? 'You do not have permission to edit assessments' : ''}
+                              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                                !canUpdateAssessment
+                                  ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                  : 'text-gray-700 hover:bg-gray-50'
+                              }`}
                             >
                               <Edit2 className="w-4 h-4 text-gray-600" />
                               Edit
@@ -2025,16 +2069,40 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </button>
                           )}
                           <button
-                            onClick={() => handleArchiveAssessment(assessment.id)}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                            onClick={() => {
+                              if (!canDeleteAssessment) {
+                                toast.error('You do not have permission to archive assessments');
+                                return;
+                              }
+                              handleArchiveAssessment(assessment.id);
+                            }}
+                            disabled={!canDeleteAssessment}
+                            title={!canDeleteAssessment ? 'You do not have permission to archive assessments' : ''}
+                            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                              !canDeleteAssessment
+                                ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`}
                           >
                             <Archive className="w-4 h-4 text-gray-600" />
                             Archive
                           </button>
                           {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (
                             <button
-                              onClick={() => handleDeleteAssessment(assessment.id)}
-                              className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2.5"
+                              onClick={() => {
+                                if (!canDeleteAssessment) {
+                                  toast.error('You do not have permission to delete assessments');
+                                  return;
+                                }
+                                handleDeleteAssessment(assessment.id);
+                              }}
+                              disabled={!canDeleteAssessment}
+                              title={!canDeleteAssessment ? 'You do not have permission to delete assessments' : ''}
+                              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                                !canDeleteAssessment
+                                  ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                  : 'text-red-600 hover:bg-red-50'
+                              }`}
                             >
                               <Trash2 className="w-4 h-4" />
                               Delete
@@ -2054,6 +2122,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     key={assessment.id}
                     onClick={() => {
                       if (assessment.status === 'Draft') {
+                        if (!canUpdateAssessment) {
+                          toast.error('You do not have permission to edit assessments');
+                          return;
+                        }
                         // For drafts, open edit modal to continue editing
                         handleEditAssessment(assessment);
                       } else {
@@ -2214,10 +2286,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
                                   <button
                                     onClick={() => {
+                                      if (!canUpdateAssessment) {
+                                        toast.error('You do not have permission to edit assessments');
+                                        setOpenMenuId(null);
+                                        return;
+                                      }
                                       handleEditAssessment(assessment);
                                       setOpenMenuId(null);
                                     }}
-                                    className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                    disabled={!canUpdateAssessment}
+                                    title={!canUpdateAssessment ? 'You do not have permission to edit assessments' : ''}
+                                    className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                                      !canUpdateAssessment
+                                        ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                        : 'text-gray-700 hover:bg-gray-50'
+                                    }`}
                                   >
                                     <Edit2 className="w-4 h-4 text-gray-600" />
                                     Edit Assessment
@@ -2319,8 +2402,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   </button>
                                 )}
                                 <button
-                                  onClick={() => handleArchiveAssessment(assessment.id)}
-                                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                  onClick={() => {
+                                    if (!canDeleteAssessment) {
+                                      toast.error('You do not have permission to archive assessments');
+                                      return;
+                                    }
+                                    handleArchiveAssessment(assessment.id);
+                                  }}
+                                  disabled={!canDeleteAssessment}
+                                  title={!canDeleteAssessment ? 'You do not have permission to archive assessments' : ''}
+                                  className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                                    !canDeleteAssessment
+                                      ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                      : 'text-gray-700 hover:bg-gray-50'
+                                  }`}
                                 >
                                   <Archive className="w-4 h-4 text-gray-600" />
                                   Archive
@@ -2328,8 +2423,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <div className="border-t border-gray-100 my-1"></div>
                                 {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (
                                   <button
-                                    onClick={() => handleDeleteAssessment(assessment.id)}
-                                    className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2.5"
+                                    onClick={() => {
+                                      if (!canDeleteAssessment) {
+                                        toast.error('You do not have permission to delete assessments');
+                                        return;
+                                      }
+                                      handleDeleteAssessment(assessment.id);
+                                    }}
+                                    disabled={!canDeleteAssessment}
+                                    title={!canDeleteAssessment ? 'You do not have permission to delete assessments' : ''}
+                                    className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                                      !canDeleteAssessment
+                                        ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                        : 'text-red-600 hover:bg-red-50'
+                                    }`}
                                   >
                                     <Trash2 className="w-4 h-4" />
                                     Delete

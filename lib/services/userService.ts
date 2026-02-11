@@ -59,8 +59,10 @@ export interface UserPermissions {
   can_view_usage: boolean;
 
   // Feature Permissions
+  can_view_scoring: boolean;  // View scoring results
   can_run_scoring: boolean;
   can_run_ai_interviews: boolean;
+  can_view_ai_match: boolean;  // View AI match results
   can_run_ai_match: boolean;
   can_bulk_operations: boolean;
   can_export: boolean;

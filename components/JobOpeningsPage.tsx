@@ -31,6 +31,7 @@ import {
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import api from '@/lib/services/api';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
 type ViewMode = 'grid' | 'list';
@@ -38,6 +39,12 @@ type ViewMode = 'grid' | 'list';
 export default function JobOpeningsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // ✅ RBAC: Get user permissions
+  const { user } = useAuth();
+  const canCreateJd = user?.permissions?.canCreateJD ?? false;
+  const canUpdateJd = user?.permissions?.canUpdateJD ?? false;
+  const canDeleteJd = user?.permissions?.canDeleteJD ?? false;
 
   const [jobs, setJobs] = useState<JDResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,6 +238,10 @@ export default function JobOpeningsPage() {
           <div className="flex flex-col items-end gap-1">
             <button
               onClick={() => {
+                if (!canCreateJd) {
+                  toast.error('You do not have permission to create job descriptions');
+                  return;
+                }
                 if (hasInsufficientUnits) {
                   setShowInsufficientUnitsModal(true);
                   return;
@@ -241,17 +252,21 @@ export default function JobOpeningsPage() {
                 }
                 router.push('/recruitment/jd-creation');
               }}
-              disabled={hasInsufficientUnits}
+              disabled={!canCreateJd || hasInsufficientUnits}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors font-medium shadow-sm ${
-                hasInsufficientUnits
+                !canCreateJd || hasInsufficientUnits
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-gray-800 text-white hover:bg-gray-900'
               }`}
+              title={!canCreateJd ? 'You do not have permission to create job descriptions' : ''}
             >
               <Plus className="w-4 h-4" />
               Create New Job
             </button>
-            {hasInsufficientUnits && (
+            {!canCreateJd && (
+              <span className="text-xs text-red-600 font-medium">No create permission</span>
+            )}
+            {canCreateJd && hasInsufficientUnits && (
               <span className="text-xs text-red-600 font-medium">Insufficient units</span>
             )}
           </div>
@@ -387,6 +402,10 @@ export default function JobOpeningsPage() {
               <div className="flex flex-col items-center gap-1">
                 <button
                   onClick={() => {
+                    if (!canCreateJd) {
+                      toast.error('You do not have permission to create job descriptions');
+                      return;
+                    }
                     if (hasInsufficientUnits) {
                       setShowInsufficientUnitsModal(true);
                       return;
@@ -397,17 +416,21 @@ export default function JobOpeningsPage() {
                     }
                     router.push('/recruitment/jd-creation');
                   }}
-                  disabled={hasInsufficientUnits}
+                  disabled={!canCreateJd || hasInsufficientUnits}
                   className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${
-                    hasInsufficientUnits
+                    !canCreateJd || hasInsufficientUnits
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : 'bg-gray-800 text-white hover:bg-gray-900'
                   }`}
+                  title={!canCreateJd ? 'You do not have permission to create job descriptions' : ''}
                 >
                   <Plus className="w-4 h-4" />
                   Create New Job
                 </button>
-                {hasInsufficientUnits && (
+                {!canCreateJd && (
+                  <span className="text-xs text-red-600 font-medium">No create permission</span>
+                )}
+                {canCreateJd && hasInsufficientUnits && (
                   <span className="text-xs text-red-600 font-medium">Insufficient units</span>
                 )}
               </div>
@@ -460,9 +483,15 @@ export default function JobOpeningsPage() {
                           </button>
                         )}
                         {/* Disable Job for published */}
-                        {job.status === 'published' && (
+                        {job.status === 'published' && canUpdateJd && (
                           <button
-                            onClick={() => handleStatusChange(job.id, 'disabled')}
+                            onClick={() => {
+                              if (!canUpdateJd) {
+                                toast.error('You do not have permission to update job descriptions');
+                                return;
+                              }
+                              handleStatusChange(job.id, 'disabled');
+                            }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
                           >
                             <Power className="w-4 h-4" />
@@ -470,9 +499,15 @@ export default function JobOpeningsPage() {
                           </button>
                         )}
                         {/* Re-enable JD for disabled */}
-                        {job.status === 'disabled' && (
+                        {job.status === 'disabled' && canUpdateJd && (
                           <button
-                            onClick={() => handleStatusChange(job.id, 'published')}
+                            onClick={() => {
+                              if (!canUpdateJd) {
+                                toast.error('You do not have permission to update job descriptions');
+                                return;
+                              }
+                              handleStatusChange(job.id, 'published');
+                            }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
                           >
                             <Power className="w-4 h-4" />
@@ -480,9 +515,15 @@ export default function JobOpeningsPage() {
                           </button>
                         )}
                         {/* Archive Job */}
-                        {job.status !== 'archived' && (
+                        {job.status !== 'archived' && canDeleteJd && (
                           <button
-                            onClick={() => handleStatusChange(job.id, 'archived')}
+                            onClick={() => {
+                              if (!canDeleteJd) {
+                                toast.error('You do not have permission to archive job descriptions');
+                                return;
+                              }
+                              handleStatusChange(job.id, 'archived');
+                            }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           >
                             <Archive className="w-4 h-4" />
@@ -528,8 +569,20 @@ export default function JobOpeningsPage() {
                   <div className="flex items-center gap-2">
                     {/* Edit Button */}
                     <button
-                      onClick={() => router.push(`/recruitment/jd-creation?id=${job.id}`)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                      onClick={() => {
+                        if (!canUpdateJd) {
+                          toast.error('You do not have permission to edit job descriptions');
+                          return;
+                        }
+                        router.push(`/recruitment/jd-creation?id=${job.id}`);
+                      }}
+                      disabled={!canUpdateJd}
+                      className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors border ${
+                        canUpdateJd
+                          ? 'text-gray-600 hover:bg-gray-100 border-gray-200 cursor-pointer'
+                          : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-60'
+                      }`}
+                      title={!canUpdateJd ? 'You do not have permission to edit job descriptions' : ''}
                     >
                       <Edit2 className="w-4 h-4" />
                       Edit
@@ -597,8 +650,20 @@ export default function JobOpeningsPage() {
                       <div className="flex items-center justify-end gap-2">
                         {/* Edit Button */}
                         <button
-                          onClick={() => router.push(`/recruitment/jd-creation?id=${job.id}`)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                          onClick={() => {
+                            if (!canUpdateJd) {
+                              toast.error('You do not have permission to edit job descriptions');
+                              return;
+                            }
+                            router.push(`/recruitment/jd-creation?id=${job.id}`);
+                          }}
+                          disabled={!canUpdateJd}
+                          className={`flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg transition-colors border ${
+                            canUpdateJd
+                              ? 'text-gray-600 hover:bg-gray-100 border-gray-200 cursor-pointer'
+                              : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-60'
+                          }`}
+                          title={!canUpdateJd ? 'You do not have permission to edit job descriptions' : ''}
                         >
                           <Edit2 className="w-4 h-4" />
                           Edit
@@ -643,9 +708,15 @@ export default function JobOpeningsPage() {
                                 </button>
                               )}
                               {/* Disable Job for published */}
-                              {job.status === 'published' && (
+                              {job.status === 'published' && canUpdateJd && (
                                 <button
-                                  onClick={() => handleStatusChange(job.id, 'disabled')}
+                                  onClick={() => {
+                                    if (!canUpdateJd) {
+                                      toast.error('You do not have permission to update job descriptions');
+                                      return;
+                                    }
+                                    handleStatusChange(job.id, 'disabled');
+                                  }}
                                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
                                 >
                                   <Power className="w-4 h-4" />
@@ -653,9 +724,15 @@ export default function JobOpeningsPage() {
                                 </button>
                               )}
                               {/* Re-enable JD for disabled */}
-                              {job.status === 'disabled' && (
+                              {job.status === 'disabled' && canUpdateJd && (
                                 <button
-                                  onClick={() => handleStatusChange(job.id, 'published')}
+                                  onClick={() => {
+                                    if (!canUpdateJd) {
+                                      toast.error('You do not have permission to update job descriptions');
+                                      return;
+                                    }
+                                    handleStatusChange(job.id, 'published');
+                                  }}
                                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
                                 >
                                   <Power className="w-4 h-4" />
@@ -663,9 +740,15 @@ export default function JobOpeningsPage() {
                                 </button>
                               )}
                               {/* Archive Job */}
-                              {job.status !== 'archived' && (
+                              {job.status !== 'archived' && canDeleteJd && (
                                 <button
-                                  onClick={() => handleStatusChange(job.id, 'archived')}
+                                  onClick={() => {
+                                    if (!canDeleteJd) {
+                                      toast.error('You do not have permission to archive job descriptions');
+                                      return;
+                                    }
+                                    handleStatusChange(job.id, 'archived');
+                                  }}
                                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Archive className="w-4 h-4" />

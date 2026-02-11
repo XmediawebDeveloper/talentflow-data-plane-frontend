@@ -138,9 +138,9 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     id: 'resume_scoring',
     name: 'Resume Scoring',
     description: 'Resume scoring and evaluation permissions',
-    viewCode: 'scoring:read',
+    viewCode: 'scoring:read',  // RBAC permission code that maps to can_view_scoring
     actions: [
-      { code: 'scoring:score', label: 'Score Resumes' },
+      { code: 'scoring:score', label: 'Score Resumes' },  // RBAC permission code that maps to can_run_scoring
       { code: 'scoring:export', label: 'Export' },
       { code: 'scoring:download', label: 'Download Scorecard' },
       { code: 'scoring:delete', label: 'Delete' },
@@ -154,9 +154,9 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     id: 'ai_talent_match',
     name: 'AI Talent Match',
     description: 'AI-powered talent matching permissions',
-    viewCode: 'ai_match:read',
+    viewCode: 'ai_match:read',  // RBAC permission code that maps to can_view_ai_match
     actions: [
-      { code: 'ai_match:run', label: 'Run AI Match' },
+      { code: 'ai_match:run', label: 'Run AI Match' },  // RBAC permission code that maps to can_run_ai_match
       { code: 'ai_match:apply', label: 'Apply for Job' },
       { code: 'ai_match:delete', label: 'Delete' },
       { code: 'ai_match:export', label: 'Export' },
@@ -1488,6 +1488,20 @@ export default function UserManagement() {
         // Usage
         if (perm.code === 'usage:read' && (freshUserData.permissions.can_view_usage || freshUserData.permissions.can_view_usage_granular)) hasPermission = true;
         if (perm.code === 'usage:manage' && freshUserData.permissions.can_manage_usage) hasPermission = true;
+
+        // ✅ FIX: Scoring permissions
+        if (perm.code === 'scoring:read' && freshUserData.permissions.can_view_scoring) hasPermission = true;
+        if (perm.code === 'scoring:score' && freshUserData.permissions.can_run_scoring) hasPermission = true;
+
+        // ✅ FIX: AI Match permissions
+        if (perm.code === 'ai_match:read' && freshUserData.permissions.can_view_ai_match) hasPermission = true;
+        if (perm.code === 'ai_match:run' && freshUserData.permissions.can_run_ai_match) hasPermission = true;
+
+        // ✅ FIX: Other feature permissions
+        if (perm.code === 'ai_interviews:run' && freshUserData.permissions.can_run_ai_interviews) hasPermission = true;
+        if (perm.code === 'bulk_operations:execute' && freshUserData.permissions.can_bulk_operations) hasPermission = true;
+        if (perm.code === 'export:execute' && freshUserData.permissions.can_export) hasPermission = true;
+        if (perm.code === 'api:access' && freshUserData.permissions.can_api_access) hasPermission = true;
 
         if (hasPermission) {
           currentPermissionIds.add(perm.id);

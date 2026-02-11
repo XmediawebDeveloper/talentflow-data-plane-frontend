@@ -285,6 +285,8 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
     const filtered = filterNavItems(allNavItems);
     console.log('[SIDEBAR] User:', user?.email, 'Role:', user?.role);
     console.log('[SIDEBAR] Permissions:', user?.permissions);
+    console.log('[SIDEBAR] 🔍 canViewScoring:', user?.permissions?.canViewScoring);
+    console.log('[SIDEBAR] 🔍 canViewAiMatch:', user?.permissions?.canViewAiMatch);
     console.log('[SIDEBAR] Visible menu items:', filtered.map(item => ({
       id: item.id,
       label: item.label,

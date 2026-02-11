@@ -66,7 +66,10 @@ export default function AITalentMatchPage({
 }: AITalentMatchPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { hasPermission, isTenantAdmin } = useAuth();
+  const { hasPermission, isTenantAdmin, user } = useAuth();
+
+  // ✅ RBAC: Check if user can run AI match operations
+  const canRunAiMatch = user?.permissions?.canRunAiMatch ?? false;
 
 
   const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'results'>('history');
@@ -763,13 +766,23 @@ export default function AITalentMatchPage({
                   {canRunAIMatch && (
                     <button
                       onClick={() => {
+                        if (!canRunAiMatch) {
+                          toast.error('You do not have permission to run AI matching operations');
+                          return;
+                        }
                         const jobId = selectedJob || selectedHistoryItem?.jobId;
                         if (jobId) {
                           handleRunAIMatch(jobId);
                           setSelectedCandidates([]);
                         }
                       }}
-                      className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2"
+                      disabled={!canRunAiMatch}
+                      className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2 ${
+                        canRunAiMatch
+                          ? 'bg-gray-800 text-white hover:bg-gray-900 cursor-pointer'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                      }`}
+                      title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
                     >
                       <Sparkles className="w-4 h-4" />
                       Run AI Match
@@ -1426,12 +1439,22 @@ export default function AITalentMatchPage({
             
             <button
               onClick={() => {
+                if (!canRunAiMatch) {
+                  toast.error('You do not have permission to run AI matching operations');
+                  return;
+                }
                 setViewMode('new');
                 setSelectedJob('');
                 setSelectedCandidates([]);
                 router.push('/recruitment/ai-talent-match', { scroll: false });
               }}
-              className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
+              disabled={!canRunAiMatch}
+              className={`px-5 py-2.5 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm ${
+                canRunAiMatch
+                  ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+              }`}
+              title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
             >
               <Sparkles className="w-4 h-4" />
               Run AI Match
@@ -1639,11 +1662,21 @@ export default function AITalentMatchPage({
               </p>
               <button
                 onClick={() => {
+                  if (!canRunAiMatch) {
+                    toast.error('You do not have permission to run AI matching operations');
+                    return;
+                  }
                   setViewMode('new');
                   setSelectedJob('');
                   router.push('/recruitment/ai-talent-match', { scroll: false });
                 }}
-                className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium shadow-sm hover:shadow-md inline-flex items-center gap-2"
+                disabled={!canRunAiMatch}
+                className={`px-6 py-3 rounded-lg transition-all font-medium shadow-sm inline-flex items-center gap-2 ${
+                  canRunAiMatch
+                    ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                }`}
+                title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
               >
                 <Sparkles className="w-5 h-5" />
                 Run AI Match Now
@@ -1877,9 +1910,19 @@ export default function AITalentMatchPage({
               </p>
               <button
                 onClick={() => {
+                  if (!canRunAiMatch) {
+                    toast.error('You do not have permission to run AI matching operations');
+                    return;
+                  }
                   setShowMatchingPanel(true);
                 }}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all font-medium flex items-center gap-2 shadow-md"
+                disabled={!canRunAiMatch}
+                className={`px-6 py-3 rounded-lg transition-all font-medium flex items-center gap-2 shadow-md ${
+                  canRunAiMatch
+                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                }`}
+                title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
               >
                 <Sparkles className="w-5 h-5" />
                 Run AI Talent Match

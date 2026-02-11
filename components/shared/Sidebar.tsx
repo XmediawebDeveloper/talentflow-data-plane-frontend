@@ -122,11 +122,14 @@ export default function Sidebar({ user, tenant, subscriptionExpired }: SidebarPr
   // ✅ Permission dependencies (must match backend)
   // If a permission has dependencies, ALL dependencies must be present for the feature to work
   const PERMISSION_DEPENDENCIES: Record<string, string[]> = {
-    // AI Talent Match requires both Internal DB and JD access
-    'canRunAiMatch': ['canViewInternalDB', 'canReadJD'],
+    // VIEW permissions don't need dependencies (just need to see the page)
+    // RUN permissions need dependencies (need access to required data)
 
-    // Resume Scoring requires JD and Resume access
-    'canRunScoring': ['canReadJD', 'canViewResumes'],
+    // AI Talent Match RUN requires both Internal DB and JD access
+    'canRunAiMatch': ['canViewAiMatch', 'canViewInternalDB', 'canReadJD'],
+
+    // Resume Scoring RUN requires JD and Resume access
+    'canRunScoring': ['canViewScoring', 'canReadJD', 'canViewResumes'],
 
     // Assessments require JD access
     'canCreateAssessments': ['canReadJD'],
@@ -244,8 +247,8 @@ export default function Sidebar({ user, tenant, subscriptionExpired }: SidebarPr
       label: 'RECRUITMENT',
       items: [
         { id: 'job-openings', label: 'Job Descriptions', icon: Briefcase, href: '/recruitment/job-openings', permissions: ['canReadJD', 'canCreateJD', 'canUpdateJD', 'canDeleteJD'] },
-        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permissions: ['canViewResumes', 'canRunScoring'] },
-        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permissions: ['canViewResumes', 'canRunAiMatch'] },
+        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permissions: ['canViewScoring'] },  // ✅ FIX: Check VIEW permission, not RUN
+        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permissions: ['canViewAiMatch'] },  // ✅ FIX: Check VIEW permission, not RUN
       ]
     },
 
