@@ -866,7 +866,7 @@ export default function ResumeSelectionModal({
               </button>
               <button
                 onClick={handleScore}
-                disabled={selectedResumes.length === 0}
+                disabled={selectedResumes.length === 0 || (availableUnits !== null && availableUnits !== undefined && selectedResumes.length > availableUnits)}
                 className={`px-6 py-2.5 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2 ${
                   selectedResumes.length > 0 && availableUnits !== null && availableUnits !== undefined && selectedResumes.length > availableUnits
                     ? 'bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800'

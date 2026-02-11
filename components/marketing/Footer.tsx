@@ -8,6 +8,7 @@ export function Footer() {
           <div>
             <Link
               href="/"
+              prefetch={false}
               className="flex items-center mb-4 hover:opacity-80 transition-opacity"
             >
              <img
@@ -28,6 +29,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/features"
+                  prefetch={false}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Features
@@ -36,6 +38,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/pricing"
+                  prefetch={false}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Pricing
@@ -44,6 +47,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/how-it-works"
+                  prefetch={false}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   How It Works
@@ -52,6 +56,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/demo"
+                  prefetch={false}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Request Demo
@@ -66,6 +71,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/about"
+                  prefetch={false}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   About Us
@@ -74,6 +80,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/contact"
+                  prefetch={false}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Contact
@@ -82,6 +89,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/faq"
+                  prefetch={false}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   FAQ
@@ -90,6 +98,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/careers"
+                  prefetch={false}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Careers
@@ -104,6 +113,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/privacy"
+                  prefetch={false}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Privacy Policy
@@ -112,6 +122,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/terms"
+                  prefetch={false}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Terms of Service

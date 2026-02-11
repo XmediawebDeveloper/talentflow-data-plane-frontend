@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { X, Clock, User, FileText, History, Loader2, ArrowLeft, Eye, Download } from 'lucide-react';
 import { jdService, JDVersion, JDVersionHistoryResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
 
 interface JDVersionHistoryModalProps {
   isOpen: boolean;
@@ -228,79 +229,71 @@ export default function JDVersionHistoryModal({
                   const currentDesc = selectedVersion.description || '';
                   const prevDesc = previousVersion?.description || '';
 
-                  // Helper function to convert a single line of markdown to HTML
-                  const convertLineToHtml = (line: string): string => {
-                    let html = line;
-                    // Convert headings
-                    if (html.match(/^### /)) {
-                      html = html.replace(/^### (.*)$/, '<h3 class="text-base font-semibold text-gray-900 mt-4 mb-2">$1</h3>');
-                    } else if (html.match(/^## /)) {
-                      html = html.replace(/^## (.*)$/, '<h2 class="text-lg font-semibold text-gray-900 mt-5 mb-3">$1</h2>');
-                    } else if (html.match(/^# /)) {
-                      html = html.replace(/^# (.*)$/, '<h1 class="text-xl font-bold text-gray-900 mt-6 mb-3">$1</h1>');
-                    }
-                    // Convert bold
-                    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>');
-                    // Convert list items
-                    if (html.match(/^- /)) {
-                      html = html.replace(/^- (.*)$/, '<li class="ml-4 text-gray-700 list-disc">$1</li>');
-                    }
-                    return html;
-                  };
-
                   // For v1 or no previous version, render without highlighting
                   if (isV1 || !prevDesc) {
-                    const processedLines = currentDesc.split('\n').map((line: string) => convertLineToHtml(line));
-                    let finalHtml = processedLines.join('<br/>');
-                    finalHtml = finalHtml.replace(/(<br\/>){2,}/g, '</p><p class="my-3 text-gray-700">');
-                    finalHtml = finalHtml.replace(/(<\/h[1-3]>)<br\/>/g, '$1');
-                    finalHtml = finalHtml.replace(/(<\/li>)<br\/>/g, '$1');
-
                     return (
-                      <div
-                        className="prose prose-sm max-w-none text-gray-700 leading-relaxed"
-                        dangerouslySetInnerHTML={{ __html: finalHtml }}
-                      />
+                      <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed markdown-content">
+                        <ReactMarkdown>{currentDesc}</ReactMarkdown>
+                      </div>
                     );
                   }
 
-                  // For v2+, compute diff and highlight new content
-                  const prevLinesSet = new Set(prevDesc.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0));
+                  // For v2+, use ReactMarkdown with custom components for diff highlighting
+                  const stripMarkdown = (line: string): string => {
+                    return line
+                      .replace(/^#{1,6}\s+/, '')
+                      .replace(/\*\*(.*?)\*\*/g, '$1')
+                      .replace(/\*(.*?)\*/g, '$1')
+                      .replace(/^[-*+]\s+/, '')
+                      .replace(/^\d+\.\s+/, '')
+                      .trim();
+                  };
 
-                  // Process each line: convert markdown to HTML first, then wrap in blue if new
-                  const processedLines = currentDesc.split('\n').map((line: string) => {
-                    const trimmedLine = line.trim();
-                    const isNewLine = trimmedLine.length > 0 && !prevLinesSet.has(trimmedLine);
+                  const prevLinesSet = new Set(
+                    prevDesc.split('\n')
+                      .map((l: string) => stripMarkdown(l))
+                      .filter((l: string) => l.length > 0)
+                  );
 
-                    // Convert markdown to HTML first
-                    let htmlLine = convertLineToHtml(line);
-
-                    // If it's a new line, wrap the content in blue highlight
-                    if (isNewLine) {
-                      // Check if it's a heading or list item (already wrapped in tags)
-                      if (htmlLine.match(/^<(h[1-3]|li)/)) {
-                        // Add blue background class to the existing tag
-                        htmlLine = htmlLine.replace(/^<(h[1-3]|li)([^>]*)class="([^"]*)"/, '<$1$2class="$3 bg-blue-100 text-blue-800 px-2 rounded"');
-                      } else if (trimmedLine.length > 0) {
-                        // Regular text - wrap in span
-                        htmlLine = `<span class="bg-blue-100 text-blue-800 px-1 rounded">${htmlLine}</span>`;
-                      }
+                  const getTextContent = (children: any): string => {
+                    if (typeof children === 'string') return children;
+                    if (typeof children === 'number') return String(children);
+                    if (Array.isArray(children)) return children.map(getTextContent).join('');
+                    if (children && typeof children === 'object' && children.props) {
+                      return getTextContent(children.props.children);
                     }
+                    return '';
+                  };
 
-                    return htmlLine;
-                  });
+                  const isNewContent = (children: any): boolean => {
+                    const text = getTextContent(children).trim();
+                    return text.length > 0 && !prevLinesSet.has(text);
+                  };
 
-                  // Join lines and handle paragraph breaks
-                  let finalHtml = processedLines.join('<br/>');
-                  finalHtml = finalHtml.replace(/(<br\/>){2,}/g, '</p><p class="my-3 text-gray-700">');
-                  finalHtml = finalHtml.replace(/(<\/h[1-3]>)<br\/>/g, '$1');
-                  finalHtml = finalHtml.replace(/(<\/li>)<br\/>/g, '$1');
+                  const highlightClass = 'bg-blue-100 text-blue-800 px-2 rounded';
+
+                  const diffComponents = {
+                    h1: ({ node, children, ...props }: any) => (
+                      <h1 className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</h1>
+                    ),
+                    h2: ({ node, children, ...props }: any) => (
+                      <h2 className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</h2>
+                    ),
+                    h3: ({ node, children, ...props }: any) => (
+                      <h3 className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</h3>
+                    ),
+                    p: ({ node, children, ...props }: any) => (
+                      <p className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</p>
+                    ),
+                    li: ({ node, children, ...props }: any) => (
+                      <li className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</li>
+                    ),
+                  };
 
                   return (
-                    <div
-                      className="prose prose-sm max-w-none text-gray-700 leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: finalHtml }}
-                    />
+                    <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed markdown-content">
+                      <ReactMarkdown components={diffComponents}>{currentDesc}</ReactMarkdown>
+                    </div>
                   );
                 })()}
               </div>

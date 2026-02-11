@@ -2358,9 +2358,8 @@ export default function MyResumesPage() {
                         )}
 
                         {foldersToDisplay.map((folder) => {
-                          const resumeCount = cardViewFolder === null
-                            ? (resumesByFolder.get(folder.id) || []).length
-                            : getResumeCountRecursive(folder);
+                          // Use folder.count from backend API (total count) instead of recalculating from current page
+                          const resumeCount = folder.count || 0;
                           const hasSubfolders = folder.children && folder.children.length > 0;
                           const isArchived = folder.name === 'Archived Resumes' && !folder.parentId;
                           const isRoot = folder.name.toLowerCase() === 'root' && !folder.parentId;
@@ -3284,7 +3283,7 @@ export default function MyResumesPage() {
                                               <div className="font-medium text-gray-900 text-sm truncate">{file.fileName}</div>
                                               <div className="text-xs text-gray-500 mt-0.5">
                                                 {file.status === 'completed' && (file.candidateName ? `✓ ${file.candidateName}` : '✓ Uploaded successfully')}
-                                                {file.status === 'versioned' && (file.candidateName ? `↑ ${file.candidateName} - New version` : '↑ Saved as new version')}
+                                                {file.status === 'versioned' && (file.candidateName ? `↑ ${file.candidateName} - Version update detected` : '↑ Version update detected - Pending resolution')}
                                                 {file.status === 'processing' && '⚡ Processing...'}
                                                 {file.status === 'pending' && '⏳ Waiting in queue...'}
                                                 {file.status === 'duplicate' && (file.errorMessage || '⚠ Duplicate - already exists')}
@@ -3795,65 +3794,107 @@ export default function MyResumesPage() {
                         </p>
 
                         <div className="mt-3 space-y-2">
-                          {/* Option 1: Move to parent folder */}
-                          <label
-                            className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                              deleteFolderConfirm.contentAction === 'move-parent'
-                                ? 'border-blue-500 bg-blue-50'
-                                : 'border-gray-200 hover:border-gray-300 bg-white'
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name="contentAction"
-                              value="move-parent"
-                              checked={deleteFolderConfirm.contentAction === 'move-parent'}
-                              onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-parent' }))}
-                              className="w-4 h-4 text-blue-600"
-                            />
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <FolderOpen className="w-4 h-4 text-gray-600" />
-                                <span className="text-sm font-medium text-gray-900">
-                                  Move to {deleteFolderConfirm.parentFolderName}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-500 mt-0.5">
-                                Resumes will be moved to the parent folder
-                              </p>
-                            </div>
-                          </label>
+                          {(() => {
+                            // Check if parent is root folder
+                            const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
+                            const parentIsRoot = deleteFolderConfirm.parentFolderId === rootFolder?.id;
 
-                          {/* Option 2: Move to root */}
-                          {deleteFolderConfirm.parentFolderId && (
-                            <label
-                              className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                                deleteFolderConfirm.contentAction === 'move-root'
-                                  ? 'border-blue-500 bg-blue-50'
-                                  : 'border-gray-200 hover:border-gray-300 bg-white'
-                              }`}
-                            >
-                              <input
-                                type="radio"
-                                name="contentAction"
-                                value="move-root"
-                                checked={deleteFolderConfirm.contentAction === 'move-root'}
-                                onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-root' }))}
-                                className="w-4 h-4 text-blue-600"
-                              />
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <Folder className="w-4 h-4 text-gray-600" />
-                                  <span className="text-sm font-medium text-gray-900">
-                                    Move to My Resumes (root)
-                                  </span>
-                                </div>
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                  Resumes will be moved to the root folder
-                                </p>
-                              </div>
-                            </label>
-                          )}
+                            // If parent is root, show only one option
+                            if (parentIsRoot) {
+                              return (
+                                <label
+                                  className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                                    deleteFolderConfirm.contentAction === 'move-parent'
+                                      ? 'border-blue-500 bg-blue-50'
+                                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="contentAction"
+                                    value="move-parent"
+                                    checked={deleteFolderConfirm.contentAction === 'move-parent'}
+                                    onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-parent' }))}
+                                    className="w-4 h-4 text-blue-600"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <Folder className="w-4 h-4 text-gray-600" />
+                                      <span className="text-sm font-medium text-gray-900">
+                                        Move to My Resumes (root)
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                      Resumes will be moved to the root folder
+                                    </p>
+                                  </div>
+                                </label>
+                              );
+                            }
+
+                            // If parent is NOT root, show both options
+                            return (
+                              <>
+                                {/* Option 1: Move to parent folder */}
+                                <label
+                                  className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                                    deleteFolderConfirm.contentAction === 'move-parent'
+                                      ? 'border-blue-500 bg-blue-50'
+                                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="contentAction"
+                                    value="move-parent"
+                                    checked={deleteFolderConfirm.contentAction === 'move-parent'}
+                                    onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-parent' }))}
+                                    className="w-4 h-4 text-blue-600"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <FolderOpen className="w-4 h-4 text-gray-600" />
+                                      <span className="text-sm font-medium text-gray-900">
+                                        Move to {deleteFolderConfirm.parentFolderName}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                      Resumes will be moved to the parent folder
+                                    </p>
+                                  </div>
+                                </label>
+
+                                {/* Option 2: Move to root */}
+                                <label
+                                  className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                                    deleteFolderConfirm.contentAction === 'move-root'
+                                      ? 'border-blue-500 bg-blue-50'
+                                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="contentAction"
+                                    value="move-root"
+                                    checked={deleteFolderConfirm.contentAction === 'move-root'}
+                                    onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-root' }))}
+                                    className="w-4 h-4 text-blue-600"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <Folder className="w-4 h-4 text-gray-600" />
+                                      <span className="text-sm font-medium text-gray-900">
+                                        Move to My Resumes (root)
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                      Resumes will be moved to the root folder
+                                    </p>
+                                  </div>
+                                </label>
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>

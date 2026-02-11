@@ -1000,12 +1000,14 @@ export default function ResumeScoringPage({
                   <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-600">
                     <span className="flex items-center gap-1">
                       <Clock className="w-4 h-4" />
-                      {new Date(new Date(selectedHistoryItem.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleDateString('en-US', {
+                      {new Date(selectedHistoryItem.scoredAt).toLocaleDateString('en-US', {
+                        timeZone: 'Asia/Kolkata',
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric'
                       })}{' '}
-                      {new Date(new Date(selectedHistoryItem.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleTimeString('en-US', {
+                      {new Date(selectedHistoryItem.scoredAt).toLocaleTimeString('en-US', {
+                        timeZone: 'Asia/Kolkata',
                         hour: 'numeric',
                         minute: '2-digit',
                         hour12: true
@@ -1744,12 +1746,14 @@ export default function ResumeScoringPage({
                           )}
                           <span className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                            Scored {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleDateString('en-US', {
+                            Scored {new Date(item.scoredAt).toLocaleDateString('en-US', {
+                              timeZone: 'Asia/Kolkata',
                               month: 'short',
                               day: 'numeric',
                               year: 'numeric'
                             })}{', '}
-                            {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleTimeString('en-US', {
+                            {new Date(item.scoredAt).toLocaleTimeString('en-US', {
+                              timeZone: 'Asia/Kolkata',
                               hour: 'numeric',
                               minute: '2-digit',
                               hour12: true

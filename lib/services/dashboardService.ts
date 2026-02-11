@@ -2,6 +2,8 @@ import api from './api';
 
 export interface DashboardStats {
   total_resumes: number;
+  my_resumes: number;
+  internal_db_resumes: number;
   resumes_this_week: number;
   total_jds: number;
   active_jds: number;

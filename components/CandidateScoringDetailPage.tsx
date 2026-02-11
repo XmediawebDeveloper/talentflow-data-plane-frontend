@@ -49,6 +49,7 @@ interface ScoredResume {
   portfolioUrl?: string;
   objective?: string;
   noticePeriod?: string;
+  resumeVersion?: number;  // Version of resume that was scored
 }
 
 interface CandidateScoringDetailPageProps {
@@ -384,7 +385,14 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
           <div className="flex items-start justify-between mb-6">
             <div className="flex-1">
               <h1 className="text-2xl text-gray-900 font-bold mb-2">{resume.candidateName}</h1>
-                <p className="text-lg text-gray-700 mb-3 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
+                <div className="flex items-center gap-3 mb-3">
+                  <p className="text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
+                  {resume.resumeVersion && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                      Version {resume.resumeVersion}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
                   <span className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
                     <Mail className="w-4 h-4 text-gray-800" />
@@ -606,7 +614,14 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                 <div>
                     <div className="mb-4">
                       <h2 className="text-2xl font-bold text-gray-900 mb-2">{fullResumeData.candidateName || resume.candidateName}</h2>
-                      <p className="text-lg text-gray-700 mb-3">{fullResumeData.title || resume.title || 'Candidate'}</p>
+                      <div className="flex items-center gap-3 mb-3">
+                        <p className="text-lg text-gray-700">{fullResumeData.title || resume.title || 'Candidate'}</p>
+                        {resume.resumeVersion && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                            Version {resume.resumeVersion}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
                         {fullResumeData.location && fullResumeData.location !== 'N/A' && (
                           <span className="flex items-center gap-1">

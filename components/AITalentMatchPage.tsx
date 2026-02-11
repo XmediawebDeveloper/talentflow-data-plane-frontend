@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, PlayCircle, Paperclip, ClipboardList } from 'lucide-react';
+import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -84,7 +84,7 @@ export default function AITalentMatchPage({
   const [filterLocation, setFilterLocation] = useState('');
   const [filterExperienceMin, setFilterExperienceMin] = useState<number | ''>('');
   const [filterExperienceMax, setFilterExperienceMax] = useState<number | ''>('');
-  const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank');
+  const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank'); // Sort by highest rating first (DevRMS style)
 
   // Pagination state for match results
   const [currentPage, setCurrentPage] = useState(1);
@@ -854,14 +854,28 @@ export default function AITalentMatchPage({
                 {filteredCandidates.length} candidates
               </div>
               {selectedCandidates.length > 0 && (
-                <>
+                <div className="flex items-center gap-2">
+                  {availableUnits !== null && selectedCandidates.length > availableUnits && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <span className="text-xs text-amber-700 font-medium">
+                        Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
+                      </span>
+                    </div>
+                  )}
+                  <>
                   <button
-                    onClick={handleSubmitToScoring}
-                    className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium text-sm flex items-center gap-2"
-                  >
-                    <Target className="w-4 h-4" />
-                    Score ({selectedCandidates.length})
-                  </button>
+                      onClick={handleSubmitToScoring}
+                      disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
+                    className={`px-4 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center gap-2 ${
+                      availableUnits !== null && selectedCandidates.length > availableUnits
+                        ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                        : 'bg-gray-800 hover:bg-gray-900'
+                    }`}
+                    >
+                      <Target className="w-4 h-4" />
+                      Score ({selectedCandidates.length})
+                    </button>
                   {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
                     <button
                       onClick={handleAssessment}
@@ -870,6 +884,7 @@ export default function AITalentMatchPage({
                       <ClipboardList className="w-4 h-4" />
                       Assessment ({selectedCandidates.length})
                     </button>
+                </div>
                   )}
                 </>
               )}
@@ -909,8 +924,8 @@ export default function AITalentMatchPage({
                 onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
               >
-                <option value="rank">Sort by Rank</option>
-                <option value="name">Sort by Name</option>
+                <option value="rank">Sort by Rating (High to Low)</option>
+                <option value="name">Sort by Name (A to Z)</option>
                 <option value="score">Sort by Score</option>
                 <option value="experience">Sort by Experience</option>
               </select>
@@ -941,7 +956,7 @@ export default function AITalentMatchPage({
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
-                  Matched Rating
+                  Match Rating
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
                   Candidate Name
@@ -989,11 +1004,11 @@ export default function AITalentMatchPage({
                     />
                   </td>
                   <td className="px-4 py-4">
-                    <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full font-bold text-base ${
-                      (candidate.rank || 0) >= 9 ? 'bg-green-100 text-green-700 border-2 border-green-300' :
-                      (candidate.rank || 0) >= 7 ? 'bg-blue-100 text-blue-700 border-2 border-blue-300' :
-                      (candidate.rank || 0) >= 5 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
-                      'bg-gray-100 text-gray-600 border-2 border-gray-200'
+                    <div className={`inline-flex items-center justify-center px-3 py-1 rounded-md font-bold text-sm ${
+                      (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
+                      (candidate.rank || 0) >= 4 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
+                      (candidate.rank || 0) >= 1 ? 'bg-gray-100 text-gray-700 border border-gray-300' :
+                      'bg-gray-50 text-gray-400 border border-gray-200'
                     }`}>
                       {candidate.rank || '-'}
                     </div>
@@ -1833,14 +1848,28 @@ export default function AITalentMatchPage({
                 {filteredCandidates.length} candidates
               </div>
               {selectedCandidates.length > 0 && (
-                <>
+                <div className="flex items-center gap-2">
+                  {availableUnits !== null && selectedCandidates.length > availableUnits && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <span className="text-xs text-amber-700 font-medium">
+                        Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
+                      </span>
+                    </div>
+                  )}
+                  <>
                   <button
-                    onClick={handleSubmitToScoring}
-                    className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium text-sm flex items-center gap-2"
-                  >
-                    <Target className="w-4 h-4" />
-                    Score ({selectedCandidates.length})
-                  </button>
+                      onClick={handleSubmitToScoring}
+                      disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
+                    className={`px-4 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center gap-2 ${
+                      availableUnits !== null && selectedCandidates.length > availableUnits
+                        ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                        : 'bg-gray-800 hover:bg-gray-900'
+                    }`}
+                    >
+                      <Target className="w-4 h-4" />
+                      Score ({selectedCandidates.length})
+                    </button>
                   {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
                     <button
                       onClick={handleAssessment}
@@ -1849,6 +1878,7 @@ export default function AITalentMatchPage({
                       <ClipboardList className="w-4 h-4" />
                       Assessment ({selectedCandidates.length})
                     </button>
+                </div>
                   )}
                 </>
               )}
@@ -1888,8 +1918,8 @@ export default function AITalentMatchPage({
                 onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
               >
-                <option value="rank">Sort by Rank</option>
-                <option value="name">Sort by Name</option>
+                <option value="rank">Sort by Rating (High to Low)</option>
+                <option value="name">Sort by Name (A to Z)</option>
                 <option value="score">Sort by Score</option>
                 <option value="experience">Sort by Experience</option>
               </select>
