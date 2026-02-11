@@ -13,6 +13,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Resume as SharedResume } from '@/lib/types/types';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Types
 interface Job {
@@ -145,6 +146,10 @@ export default function ResumeScoringPage({
   batchProgress = null
 }: ResumeScoringPageProps) {
   const router = useRouter();
+
+  // ✅ RBAC: Get user permissions
+  const { user } = useAuth();
+  const canRunScoring = user?.permissions?.canRunScoring ?? false;
 
   // Use persistent scoring progress context
   const {
@@ -1034,8 +1039,20 @@ export default function ResumeScoringPage({
               </div>
 
               <button
-                onClick={() => setViewMode('new')}
-                className="w-full sm:w-auto px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+                onClick={() => {
+                  if (!canRunScoring) {
+                    toast.error('You do not have permission to run scoring operations');
+                    return;
+                  }
+                  setViewMode('new');
+                }}
+                disabled={!canRunScoring}
+                className={`w-full sm:w-auto px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 shadow-sm ${
+                  canRunScoring
+                    ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                }`}
+                title={!canRunScoring ? 'You do not have permission to run scoring operations' : ''}
               >
                 <Target className="w-4 h-4" />
                 Score New Resumes
@@ -1371,12 +1388,22 @@ export default function ResumeScoringPage({
 
             <button
               onClick={() => {
+                if (!canRunScoring) {
+                  toast.error('You do not have permission to run scoring operations');
+                  return;
+                }
                 setViewMode('new');
                 setSelectedJob('');
                 setResumeSource(null);
                 setSelectedResumes([]);
               }}
-              className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
+              disabled={!canRunScoring}
+              className={`px-5 py-2.5 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm ${
+                canRunScoring
+                  ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+              }`}
+              title={!canRunScoring ? 'You do not have permission to run scoring operations' : ''}
             >
               <Target className="w-4 h-4" />
               Score Resumes
@@ -1999,12 +2026,22 @@ export default function ResumeScoringPage({
               </p>
               <button
                 onClick={() => {
+                  if (!canRunScoring) {
+                    toast.error('You do not have permission to run scoring operations');
+                    return;
+                  }
                   setViewMode('new');
                   setSelectedJob('');
                   setResumeSource(null);
                   setSelectedResumes([]);
                 }}
-                className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium shadow-sm hover:shadow-md inline-flex items-center gap-2"
+                disabled={!canRunScoring}
+                className={`px-6 py-3 rounded-lg transition-all font-medium shadow-sm inline-flex items-center gap-2 ${
+                  canRunScoring
+                    ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                }`}
+                title={!canRunScoring ? 'You do not have permission to run scoring operations' : ''}
               >
                 <Target className="w-5 h-5" />
                 Score Resumes Now
@@ -2209,8 +2246,20 @@ export default function ResumeScoringPage({
                 </div>
               </div>
               <button
-                onClick={() => setShowResumeSelectionModal(true)}
-                className="w-full sm:w-auto px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                onClick={() => {
+                  if (!canRunScoring) {
+                    toast.error('You do not have permission to run scoring operations');
+                    return;
+                  }
+                  setShowResumeSelectionModal(true);
+                }}
+                disabled={!canRunScoring}
+                className={`w-full sm:w-auto px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 ${
+                  canRunScoring
+                    ? 'bg-gray-800 text-white hover:bg-gray-700 cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                }`}
+                title={!canRunScoring ? 'You do not have permission to run scoring operations' : ''}
               >
                 <Target className="w-4 h-4" />
                 Select Resumes

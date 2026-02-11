@@ -39,7 +39,7 @@ export default function JobOpeningsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
-  const { user, isTenantAdmin } = useAuth();
+  const { user, isTenantAdmin, hasPermission } = useAuth();
 
   // Sync filter with URL parameter
   useEffect(() => {
@@ -313,17 +313,17 @@ export default function JobOpeningsPage() {
     <>
       <JobsListing
         jobs={jobs}
-        onCreateNew={user?.permissions?.canCreateJD || isTenantAdmin ? handleCreateNew : undefined}
+        onCreateNew={hasPermission('canCreateJD') || isTenantAdmin ? handleCreateNew : undefined}
         onViewJob={handleViewJob}
-        onAIMatch={user?.permissions?.canRunAiMatch || isTenantAdmin ? handleAIMatch : undefined}
+        onAIMatch={hasPermission('canRunAiMatch') || isTenantAdmin ? handleAIMatch : undefined}
         onUpdateJobStatus={handleUpdateJobStatus}
-        onEditJob={user?.permissions?.canUpdateJD || isTenantAdmin ? handleEditJob : undefined}
-        onPublishJob={user?.permissions?.canCreateJD || isTenantAdmin ? handlePublishJob : undefined}
+        onEditJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleEditJob : undefined}
+        onPublishJob={hasPermission('canCreateJD') || isTenantAdmin ? handlePublishJob : undefined}
         onDisableJob={isTenantAdmin ? handleDisableJob : undefined}
-        onRepublishJob={user?.permissions?.canUpdateJD || isTenantAdmin ? handleRepublishJob : undefined}
+        onRepublishJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleRepublishJob : undefined}
         onArchiveJob={isTenantAdmin ? handleArchiveJob : undefined}
-        onUnarchiveJob={user?.permissions?.canUpdateJD || isTenantAdmin ? handleUnarchiveJob : undefined}
-        onDeleteJob={user?.permissions?.canDeleteJD || isTenantAdmin ? handleDeleteJob : undefined}
+        onUnarchiveJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleUnarchiveJob : undefined}
+        onDeleteJob={hasPermission('canDeleteJD') || isTenantAdmin ? handleDeleteJob : undefined}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
       />

@@ -7,6 +7,7 @@ import { User, Tenant } from '@/lib/types/tenant';
 import { dashboardService, DashboardStats, RecentActivity, SubscriptionUnits, JDActivity } from '@/lib/services/dashboardService';
 import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useQuota } from '@/contexts/QuotaContext';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 interface AdminDashboardProps {
   user?: User;
@@ -28,6 +29,7 @@ export default function AdminDashboard({
   const router = useRouter();
   const { quotaData } = useQuota();
   const isTenantAdmin = user?.role === 'tenant_admin';
+  const { hasPermission } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [subscriptionUnits, setSubscriptionUnits] = useState<SubscriptionUnits | null>(null);  // JD02A
@@ -78,7 +80,7 @@ export default function AdminDashboard({
     fetchDashboard();
   }, []);
 
-  const canManageUsers = user?.permissions?.canManageUsers;
+  const canManageUsers = hasPermission('canManageUsers');
 
   // Filter activities to only show those from the last 24 hours
   const filterLast24Hours = <T extends { created_at: string }>(activities: T[]): T[] => {

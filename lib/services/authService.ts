@@ -57,13 +57,28 @@ export interface User {
     can_view_billing?: boolean;
     can_view_invoices?: boolean;
     can_view_usage?: boolean;
-    // RBAC06: Feature flags permissions
-    can_run_scoring?: boolean;
+    // RBAC06: Feature flags permissions - GRANULAR (VIEW + RUN)
+    can_view_scoring?: boolean;      // NEW: View resume scoring page/results
+    can_run_scoring?: boolean;       // Run scoring operations
     can_run_ai_interviews?: boolean;
-    can_run_ai_match?: boolean;
+    can_view_ai_match?: boolean;     // NEW: View AI talent match page/results
+    can_run_ai_match?: boolean;      // Run AI match operations
     can_bulk_operations?: boolean;
     can_export?: boolean;
     can_api_access?: boolean;
+    // Additional granular permissions from API
+    can_view_jd?: boolean;
+    can_update_jd?: boolean;
+    can_delete_jd?: boolean;
+    can_update_resumes?: boolean;
+    can_delete_resumes?: boolean;
+    can_view_internal_db?: boolean;
+    can_create_internal_db?: boolean;
+    can_update_internal_db?: boolean;
+    can_delete_internal_db?: boolean;
+    can_view_assessments?: boolean;
+    can_update_assessments?: boolean;
+    can_delete_assessments?: boolean;
   };
   // RBAC06: Feature flags
   feature_flags?: FeatureFlags;

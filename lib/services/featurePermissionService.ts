@@ -11,6 +11,7 @@ export type FeatureFlagCode =
   | 'resume_upload'
   | 'resume_database_access'
   | 'resume_scoring'
+  | 'view_scoring'
   | 'assessment'
   | 'ai_interview'
   | 'api_access'
@@ -18,6 +19,7 @@ export type FeatureFlagCode =
   | 'jd_create'
   | 'jd_manage'
   | 'ai_talent_match'
+  | 'view_ai_match'
   | 'bulk_operations'
   | 'export_data';
 
