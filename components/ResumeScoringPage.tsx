@@ -811,7 +811,8 @@ export default function ResumeScoringPage({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `TalentFlow_Scorecards_${new Date().toISOString().split('T')[0]}.zip`;
+      const jdName = (selectedHistoryItem?.jobTitle || 'TalentFlow').replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
+      a.download = `${jdName}_Scorecards.zip`;
       document.body.appendChild(a);
       a.click();
 
@@ -1653,7 +1654,7 @@ export default function ResumeScoringPage({
                             </span>
                           )}
                           <h3
-                            className="text-lg font-semibold text-gray-900 cursor-pointer hover:text-gray-700 transition-colors"
+                            className="text-lg font-semibold text-blue-600 cursor-pointer hover:text-blue-800 hover:underline transition-colors"
                             onClick={() => {
                               setSelectedHistoryItem(item);
                               setViewMode('details');
@@ -1810,7 +1811,7 @@ export default function ResumeScoringPage({
                           <Target className="w-6 h-6 text-white" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-xl text-gray-900 mb-2 group-hover:text-gray-800 transition-colors">
+                          <h3 className="text-xl text-blue-600 mb-2 group-hover:text-blue-800 group-hover:underline transition-colors">
                             {item.jobTitle}
                           </h3>
                           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 mb-3">
