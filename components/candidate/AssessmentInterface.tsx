@@ -174,20 +174,22 @@ export function AssessmentInterface({
     return () => clearTimeout(initTimeout);
   }, []); // Only run once on mount
 
-  // 💾 AUTO-SAVE: Periodically save draft every 30 seconds
+  // 💾 AUTO-SAVE: Immediate save after user stops typing (debounced 3 seconds)
   useEffect(() => {
-    const performAutoSave = async () => {
-      // Don't auto-save if:
-      // 1. Already submitting or navigating
-      // 2. Answer is already locked (submitted)
-      // 3. No answer to save
-      const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+    // Don't auto-save if:
+    // 1. Already submitting or navigating
+    // 2. Answer is already locked (submitted)
+    // 3. No answer to save
+    const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
 
-      if (isSubmitting || isNavigating || isCurrentAnswerLocked || !hasAnswer || isAutoSaving) {
-        return;
-      }
+    if (isSubmitting || isNavigating || isCurrentAnswerLocked || !hasAnswer || isAutoSaving) {
+      return;
+    }
 
-      console.log('[AUTO-SAVE] Starting auto-save...');
+    // Debounce: Wait 3 seconds after user stops typing before saving
+    console.log('[AUTO-SAVE] Answer changed, waiting 3 seconds before saving...');
+    const saveTimeout = setTimeout(async () => {
+      console.log('[AUTO-SAVE] User stopped typing, saving draft now...');
       setIsAutoSaving(true);
       setAutoSaveStatus('saving');
 
@@ -229,18 +231,12 @@ export function AssessmentInterface({
       } finally {
         setIsAutoSaving(false);
       }
-    };
+    }, 3000); // Save 3 seconds after user stops typing
 
-    // Set up auto-save timer (30 seconds)
-    autoSaveTimerRef.current = setInterval(() => {
-      performAutoSave();
-    }, 30000); // 30 seconds
-
-    // Cleanup on unmount
+    // Cleanup: Cancel save if user starts typing again or navigates
     return () => {
-      if (autoSaveTimerRef.current) {
-        clearInterval(autoSaveTimerRef.current);
-      }
+      console.log('[AUTO-SAVE] Debounce timer cleared (user still typing or navigated)');
+      clearTimeout(saveTimeout);
     };
   }, [
     answer,

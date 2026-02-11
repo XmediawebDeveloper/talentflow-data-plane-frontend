@@ -230,6 +230,9 @@ export interface CurrentQuestion {
   sample_input: string | null;
   sample_output: string | null;
   starter_code: Record<string, string> | null;
+  // Compiler configuration (for language filtering)
+  coding_enabled?: boolean | null;  // True if compiler is configured for this assessment
+  coding_languages?: string[] | null;  // Assigned languages for this assessment
   tags: string[];
   round_progress: {
     current: number;

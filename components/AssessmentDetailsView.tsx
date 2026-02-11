@@ -116,16 +116,34 @@ export default function AssessmentDetailsView({
       });
     }
 
+    // ==================== COMPILER AVAILABILITY CHECK ====================
+    // Only show coding section if coding_enabled AND at least one language has a compiler
     if (assessment.coding_enabled) {
-      result.push({
-        name: 'Coding',
-        type: 'coding',
-        enabled: true,
-        percentage: assessment.coding_percentage || 0,
-        topics: assessment.coding_topics || [],
-        languages: assessment.coding_languages || [],
-        icon: Code
-      });
+      // Languages with compilers (Piston API)
+      const compilerLanguages = [
+        'python', 'python3', 'javascript', 'js', 'java',
+        'typescript', 'ts', 'cpp', 'c++', 'c', 'csharp', 'cs',
+        'go', 'rust', 'ruby', 'php', 'kotlin', 'swift', 'sql'
+      ];
+
+      const codingLanguages = assessment.coding_languages || [];
+      const hasCompiler = codingLanguages.some((lang: string) =>
+        compilerLanguages.includes(lang.toLowerCase())
+      );
+
+      if (hasCompiler) {
+        result.push({
+          name: 'Coding',
+          type: 'coding',
+          enabled: true,
+          percentage: assessment.coding_percentage || 0,
+          topics: assessment.coding_topics || [],
+          languages: codingLanguages,
+          icon: Code
+        });
+      } else {
+        console.log('[COMPILER-CHECK] ❌ Coding round hidden - no compilers for languages:', codingLanguages);
+      }
     }
 
     return result;
@@ -405,7 +423,25 @@ export default function AssessmentDetailsView({
                     </div>
                   )}
 
-                  {assessment.coding_enabled && (
+                  {(() => {
+                    // ==================== COMPILER AVAILABILITY CHECK ====================
+                    // Only show coding section if coding_enabled AND at least one language has a compiler
+                    if (!assessment.coding_enabled) return null;
+
+                    const compilerLanguages = [
+                      'python', 'python3', 'javascript', 'js', 'java',
+                      'typescript', 'ts', 'cpp', 'c++', 'c', 'csharp', 'cs',
+                      'go', 'rust', 'ruby', 'php', 'kotlin', 'swift', 'sql'
+                    ];
+
+                    const codingLanguages = assessment.coding_languages || [];
+                    const hasCompiler = codingLanguages.some((lang: string) =>
+                      compilerLanguages.includes(lang.toLowerCase())
+                    );
+
+                    if (!hasCompiler) return null;
+
+                    return (
                     <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
                         <span className="px-3 py-1 bg-gray-700 text-white text-sm font-medium rounded">
@@ -432,7 +468,8 @@ export default function AssessmentDetailsView({
                         </div>
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 {/* Sections Details - Moved from Sections tab */}

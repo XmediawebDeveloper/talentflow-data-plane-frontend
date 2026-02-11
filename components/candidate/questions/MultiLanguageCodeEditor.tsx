@@ -172,10 +172,23 @@ export function MultiLanguageCodeEditor({
   }, []);
 
   // Fetch available languages from backend (compiler filtering)
+  // Only activate when coding_enabled is true (compiler is configured)
   useEffect(() => {
     const fetchAvailableLanguages = async () => {
+      // Check if compiler is enabled for this assessment
+      const compilerEnabled = question.coding_enabled === true;
+
+      if (!compilerEnabled) {
+        // Compiler not enabled - show all assigned languages (no filtering)
+        console.log('[LANGUAGE-FILTER] Compiler not enabled, showing all assigned languages');
+        setFilteredLanguages(assignedLanguages);
+        setIsLoadingLanguages(false);
+        return;
+      }
+
       if (!attemptId) {
-        // No attemptId provided, use all assigned languages
+        // No attemptId provided but compiler is enabled - use all assigned languages as fallback
+        console.log('[LANGUAGE-FILTER] No attemptId, showing all assigned languages');
         setFilteredLanguages(assignedLanguages);
         setIsLoadingLanguages(false);
         return;
@@ -183,6 +196,7 @@ export function MultiLanguageCodeEditor({
 
       try {
         setIsLoadingLanguages(true);
+        console.log('[LANGUAGE-FILTER] Compiler enabled, auto-selecting one language');
         const response = await candidateService.getAvailableLanguages(attemptId);
 
         // Extract available language codes
@@ -195,23 +209,49 @@ export function MultiLanguageCodeEditor({
           return availableCodes.includes(langCode);
         });
 
-        setFilteredLanguages(filtered);
+        // 🔑 COMPILER MODE: Auto-select ONLY the first available language
+        // No dropdown, no language switching allowed
+        if (filtered.length > 0) {
+          const autoSelectedLang = filtered[0];
+          console.log('[LANGUAGE-FILTER] Auto-selected language:', autoSelectedLang.id);
+          console.log('[LANGUAGE-FILTER] Compiler mode: Language locked (no dropdown)');
+
+          // Set only ONE language (no dropdown will appear)
+          setFilteredLanguages([autoSelectedLang]);
+
+          // Auto-select this language if not already selected
+          if (selectedLanguage !== autoSelectedLang.id) {
+            setSelectedLanguage(autoSelectedLang.id);
+          }
+        } else {
+          // No available languages with compiler - fallback to first assigned
+          console.warn('[LANGUAGE-FILTER] No available languages with compiler, using first assigned');
+          setFilteredLanguages([assignedLanguages[0]]);
+          if (selectedLanguage !== assignedLanguages[0].id) {
+            setSelectedLanguage(assignedLanguages[0].id);
+          }
+        }
+
         setUnavailableLanguages(unavailableCodes);
 
+        console.log('[LANGUAGE-FILTER] Compiler enabled: true');
         console.log('[LANGUAGE-FILTER] Available languages:', availableCodes);
-        console.log('[LANGUAGE-FILTER] Filtered to:', filtered.map(l => l.id));
+        console.log('[LANGUAGE-FILTER] Selected:', filtered[0]?.id || assignedLanguages[0]?.id);
         console.log('[LANGUAGE-FILTER] Unavailable:', unavailableCodes);
       } catch (error) {
         console.error('[LANGUAGE-FILTER] Failed to fetch available languages:', error);
-        // On error, fallback to showing all assigned languages
-        setFilteredLanguages(assignedLanguages);
+        // On error, fallback to first assigned language only
+        setFilteredLanguages([assignedLanguages[0]]);
+        if (selectedLanguage !== assignedLanguages[0].id) {
+          setSelectedLanguage(assignedLanguages[0].id);
+        }
       } finally {
         setIsLoadingLanguages(false);
       }
     };
 
     fetchAvailableLanguages();
-  }, [attemptId]);
+  }, [attemptId, question.coding_enabled]);
 
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor;
@@ -728,16 +768,25 @@ export function MultiLanguageCodeEditor({
         <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-b border-gray-700">
           {/* Language Selector */}
           <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => allowLanguageChange && setShowLanguageDropdown(!showLanguageDropdown)}
-              className={`flex items-center gap-2 px-3 py-1.5 bg-gray-700 rounded-lg text-sm font-medium text-gray-200 ${
-                allowLanguageChange ? 'hover:bg-gray-600 cursor-pointer' : 'cursor-default'
-              }`}
-            >
-              <Code className="w-4 h-4" />
-              <span>{currentLangConfig?.name || selectedLanguage}</span>
-              {allowLanguageChange && <ChevronDown className="w-4 h-4" />}
-            </button>
+            {/* Show locked language indicator when only one language (compiler mode) */}
+            {availableLanguages.length === 1 ? (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 rounded-lg text-sm font-medium text-gray-200 cursor-default">
+                <Code className="w-4 h-4" />
+                <span>{currentLangConfig?.name || selectedLanguage}</span>
+                <Lock className="w-3.5 h-3.5 text-gray-400" title="Language locked (compiler mode)" />
+              </div>
+            ) : (
+              <button
+                onClick={() => allowLanguageChange && setShowLanguageDropdown(!showLanguageDropdown)}
+                className={`flex items-center gap-2 px-3 py-1.5 bg-gray-700 rounded-lg text-sm font-medium text-gray-200 ${
+                  allowLanguageChange ? 'hover:bg-gray-600 cursor-pointer' : 'cursor-default'
+                }`}
+              >
+                <Code className="w-4 h-4" />
+                <span>{currentLangConfig?.name || selectedLanguage}</span>
+                {allowLanguageChange && <ChevronDown className="w-4 h-4" />}
+              </button>
+            )}
 
             {/* Dropdown */}
             {showLanguageDropdown && (
