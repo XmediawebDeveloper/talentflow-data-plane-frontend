@@ -884,9 +884,9 @@ export default function AITalentMatchPage({
                       <ClipboardList className="w-4 h-4" />
                       Assessment ({selectedCandidates.length})
                     </button>
-                </div>
                   )}
                 </>
+              </div>
               )}
             </div>
             {/* Additional Filters */}
@@ -1878,9 +1878,9 @@ export default function AITalentMatchPage({
                       <ClipboardList className="w-4 h-4" />
                       Assessment ({selectedCandidates.length})
                     </button>
-                </div>
                   )}
                 </>
+              </div>
               )}
             </div>
             {/* Additional Filters */}
