@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
+import { cacheExpiredPlan, getCachedExpiredPlan, clearExpiredPlanCache } from '@/lib/utils/expiredPlanCache';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -552,40 +553,98 @@ function CurrentPlanContent() {
       // The sharedQuotaData comes from QuotaContext which is fetched once at dashboard layout level
       const quotaData: any = sharedQuotaData;
       console.log('[CurrentPlan] Using shared quota data from context:', quotaData ? 'available' : 'not yet loaded');
+      console.log('[CurrentPlan] quotaData:', quotaData);
+      console.log('[CurrentPlan] quotaLoading:', quotaLoading);
 
       // Check is_trial from quota-status API (handle both boolean and string)
       const isTrial = quotaData?.is_trial === true || quotaData?.is_trial === 'true' || quotaData?.quota_source === 'FREE_TRIAL';
 
+      // Determine if subscription is expired (use local variable, not state)
+      let localSubscriptionStatus = 'active';
+
       // Set subscription status early (even if quotas are missing)
       if (isTrial) {
+        localSubscriptionStatus = 'trial';
         setQuotaSubscriptionStatus('trial');
         console.log('[CurrentPlan] Setting subscription_status as trial (is_trial detected)');
       } else if (quotaData) {
         // Not on trial - set to active (or use API status if available)
         const status = quotaData.subscription_status || 'active';
+        localSubscriptionStatus = status;
         setQuotaSubscriptionStatus(status);
         console.log('[CurrentPlan] Setting subscription_status as:', status, '(is_trial:', quotaData.is_trial, ')');
+      } else {
+        // quotaData is null - subscription is expired
+        localSubscriptionStatus = 'expired';
       }
 
-      // If quota-status API failed (likely due to expired subscription), set appropriate state
+      // If quota-status API failed (likely due to expired subscription), use cached expired plan details
       if (!quotaData) {
-        console.log('[CurrentPlan] Quota-status API failed - likely expired subscription, allowing plan selection');
+        console.log('[CurrentPlan] Quota-status API failed - checking for cached expired plan details');
         setQuotaSubscriptionStatus('expired');
-        setCompanySettings(prev => ({
-          ...(prev || {}),
-          current_plan_name: 'Subscription Expired',
-          subscription_status: 'expired',
-          status: 'expired',
-          max_seats: 0,
-          max_jobs: 0,
-          max_resume_uploads: 0,
-          max_resume_searches: 0,
-          max_assessments: 0,
-          max_ai_interviews: 0,
-          storage_limit_gb: 0,
-        } as CompanySettings));
+
+        // Try to use cached expired plan details first (avoids API call)
+        const cachedExpiredPlan = getCachedExpiredPlan();
+
+        if (cachedExpiredPlan) {
+          console.log('[CurrentPlan] Using cached expired plan details:', cachedExpiredPlan.plan_name);
+          setCompanySettings({
+            current_plan_name: cachedExpiredPlan.plan_name,
+            current_plan_id: cachedExpiredPlan.plan_id,
+            subscription_status: 'expired',
+            status: 'expired',
+            plan_expiry_date: cachedExpiredPlan.plan_expiry_date,
+            plan_start_date: cachedExpiredPlan.plan_start_date,
+            trial_end_date: cachedExpiredPlan.trial_end_date,
+            trial_start_date: cachedExpiredPlan.trial_start_date,
+            max_resume_searches: cachedExpiredPlan.quotas?.RS || 0,
+            max_assessments: cachedExpiredPlan.quotas?.AS || 0,
+            max_ai_interviews: cachedExpiredPlan.quotas?.AIU || 0,
+            max_resume_uploads: cachedExpiredPlan.quotas?.RU || 0,
+            max_seats: cachedExpiredPlan.quotas?.max_seats || 0,
+            max_jobs: cachedExpiredPlan.quotas?.max_jobs || 0,
+            storage_limit_gb: cachedExpiredPlan.quotas?.storage_gb || 0,
+            payment_status: 'expired',
+          } as CompanySettings);
+        } else {
+          // No cache - fetch from company-settings as last resort
+          console.log('[CurrentPlan] No cached data - fetching from company-settings');
+          try {
+            const csResponse = await api.get('/settings/company-settings');
+            const csData = csResponse.data?.data || csResponse.data;
+            if (csData) {
+              console.log('[CurrentPlan] Got expired plan details from company-settings:', csData);
+
+              // Cache it for next time
+              cacheExpiredPlan({
+                ...csData,
+                subscription_status: 'expired',
+              });
+
+              setCompanySettings(prev => ({
+                ...(prev || {}),
+                ...csData,
+                subscription_status: 'expired',
+                status: 'expired',
+              } as CompanySettings));
+            } else {
+              // No data at all - set minimal expired state
+              setCompanySettings(prev => ({
+                ...(prev || {}),
+                subscription_status: 'expired',
+                status: 'expired',
+              } as CompanySettings));
+            }
+          } catch (csError) {
+            console.error('[CurrentPlan] Failed to fetch company-settings fallback:', csError);
+            setCompanySettings(prev => ({
+              ...(prev || {}),
+              subscription_status: 'expired',
+              status: 'expired',
+            } as CompanySettings));
+          }
+        }
         // Don't set error - allow user to select a plan to renew
-        // setError('Unable to load subscription data. Please try again later.');
       }
 
       if (quotaData?.quotas || quotaData) {
@@ -634,6 +693,23 @@ function CurrentPlanContent() {
 
         console.log('[CurrentPlan] isTrial:', isTrial, 'quotas:', quotas);
 
+        // Cache expired plan details for future use (when Control Plane API might fail)
+        if (quotaData.subscription_status === 'expired') {
+          cacheExpiredPlan({
+            plan_name: quotaData.plan_name,
+            plan_id: quotaData.plan_info?.plan_id,
+            plan_tier: quotaData.plan_info?.plan_tier,
+            subscription_status: 'expired',
+            plan_expiry_date: planEndDate || trialEndDate,  // Use trial end date as fallback
+            plan_start_date: planStartDate || trialStartDate,  // Use trial start date as fallback
+            trial_end_date: trialEndDate,
+            trial_start_date: trialStartDate,
+            quotas: quotas,
+            plan_info: quotaData.plan_info,
+          });
+          console.log('[CurrentPlan] Cached expired plan details for future fallback');
+        }
+
         // Extract subscribed_price from plan_info (what user is actually paying)
         if (!isTrial && quotaData.plan_info?.subscribed_price !== undefined) {
           setCurrentPlanPrice(quotaData.plan_info.subscribed_price);
@@ -650,20 +726,32 @@ function CurrentPlanContent() {
         }
       }
 
+      // Check if subscription is expired to reduce wasteful API calls
+      // Use local variable instead of state (state updates are async)
+      const isExpired = localSubscriptionStatus === 'expired' ||
+                       quotaData?.subscription_status === 'expired';
+
+      console.log('[CurrentPlan] isExpired check:', isExpired, 'localSubscriptionStatus:', localSubscriptionStatus);
+
       // Fetch plan settings (yearly discount, database extra charge)
-      try {
-        const planSettingsResponse = await fetch(`${API_URL}/addons/plan-settings`);
-        if (planSettingsResponse.ok) {
-          const planSettingsResult = await planSettingsResponse.json();
-          const settings = planSettingsResult.data || planSettingsResult;
-          setPlanSettings({
-            yearlyDiscountPercentage: settings.yearlyDiscountPercentage,
-            databasePerTenantMonthlyPrice: settings.databasePerTenantMonthlyPrice,
-          });
-          console.log('[CurrentPlan] Plan settings:', settings);
+      // Skip if expired to reduce wasteful API calls logged in Admin Panel
+      if (!isExpired) {
+        try {
+          const planSettingsResponse = await fetch(`${API_URL}/addons/plan-settings`);
+          if (planSettingsResponse.ok) {
+            const planSettingsResult = await planSettingsResponse.json();
+            const settings = planSettingsResult.data || planSettingsResult;
+            setPlanSettings({
+              yearlyDiscountPercentage: settings.yearlyDiscountPercentage,
+              databasePerTenantMonthlyPrice: settings.databasePerTenantMonthlyPrice,
+            });
+            console.log('[CurrentPlan] Plan settings:', settings);
+          }
+        } catch (planSettingsError) {
+          console.log('Could not fetch plan settings');
         }
-      } catch (planSettingsError) {
-        console.log('Could not fetch plan settings');
+      } else {
+        console.log('[CurrentPlan] Skipping plan-settings API call - subscription expired');
       }
 
       // NOTE: All plan data now comes from /usage/quota-status API (Admin API)
@@ -677,6 +765,7 @@ function CurrentPlanContent() {
       }
 
       // Fetch plans from backend API (which proxies to external API)
+      // Always fetch to show renewal options even if expired
       const plansResponse = await fetch(`${API_URL}/subscription/public/plans`);
       if (!plansResponse.ok) {
         throw new Error('Failed to fetch plans');
@@ -777,6 +866,16 @@ function CurrentPlanContent() {
   // Fetch queued upgrades
   const fetchQueuedUpgrades = async () => {
     try {
+      // Skip if subscription is expired to reduce wasteful API calls
+      // If sharedQuotaData is null, it means quota-status API failed (likely expired)
+      const isExpired = !sharedQuotaData ||
+                       sharedQuotaData?.subscription_status === 'expired';
+
+      if (isExpired) {
+        console.log('[CurrentPlan] Skipping queued-upgrades API call - subscription expired or quota unavailable');
+        return;
+      }
+
       const token = localStorage.getItem('accessToken');
       if (!token) return;
 
@@ -1166,6 +1265,10 @@ function CurrentPlanContent() {
             description: `You're now on the ${result.plan_name} plan. All resources have been provisioned.`,
             duration: 5000,
           });
+
+          // Clear expired plan cache since subscription is now active
+          clearExpiredPlanCache();
+          console.log('[CurrentPlan] Cleared expired plan cache - subscription now active');
         }
 
         // Check if upgrade was queued (has active plan)
@@ -1267,6 +1370,10 @@ function CurrentPlanContent() {
 
       if (success) {
         setSuccessMessage('Payment successful! Your plan is now active.');
+
+        // Clear expired plan cache since subscription is now active
+        clearExpiredPlanCache();
+        console.log('[CurrentPlan] Cleared expired plan cache - subscription now active');
       } else {
         if (response.data.status === 'locked') {
           setError('Payment failed and trial has expired. Your account is now locked.');
@@ -1518,7 +1625,9 @@ function CurrentPlanContent() {
                       ? `You are on the ${(companySettings?.current_plan_name || currentPlan?.name || '').replace(/\s*\([^)]*\)\s*$/, '')} plan${!remainingTime.isExpired ? ` - ${remainingTime.displayText}` : ''}`
                       : isPendingPayment
                         ? 'Complete payment to activate your selected plan'
-                        : companySettings?.current_plan_name ? `You are on the ${companySettings.current_plan_name.replace(/\s*\([^)]*\)\s*$/, '')} plan` : ''
+                        : isExpiredSubscription
+                          ? `Your ${(companySettings?.current_plan_name || currentPlan?.name || 'subscription').replace(/\s*\([^)]*\)\s*$/, '')} plan has expired. Please renew to continue using all features.`
+                          : companySettings?.current_plan_name ? `You are on the ${companySettings.current_plan_name.replace(/\s*\([^)]*\)\s*$/, '')} plan` : ''
                 }
               </p>
             </div>
@@ -1581,13 +1690,52 @@ function CurrentPlanContent() {
           </div>
 
           {/* PS03 Fix: Renew Plan Button for Expired/Expiring Subscriptions */}
-          {!isOnTrial && !isPendingPayment && !isLocked && companySettings?.plan_expiry_date && currentPlan && (
+          {!isOnTrial && !isPendingPayment && !isLocked && (companySettings?.plan_expiry_date || isExpiredSubscription) && (
             (() => {
-              const expiryDate = new Date(companySettings.plan_expiry_date);
+              const planName = currentPlan?.name || companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || 'Your';
+
+              // If no expiry date but status is expired, show expired banner directly
+              if (!companySettings?.plan_expiry_date && isExpiredSubscription) {
+                return (
+                  <div className="mt-6 p-4 rounded-lg border-2 bg-red-50 border-red-300">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="w-6 h-6 text-red-600" />
+                        <div>
+                          <h4 className="font-medium text-red-800">Plan Expired</h4>
+                          <p className="text-sm text-red-700">
+                            Your {planName} plan has expired. Please renew to continue using all features.
+                          </p>
+                        </div>
+                      </div>
+                      {currentPlan && (
+                        <button
+                          onClick={() => {
+                            setSelectedPlanForPayment(currentPlan);
+                            setModalStep('isolation');
+                            setIsolationType('schema');
+                            setIsNewTenant(false);
+                            setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
+                            setTransactionResult(null);
+                            setError(null);
+                            setShowPaymentModal(true);
+                          }}
+                          className="px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white"
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                          Renew Current Plan
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              const expiryDate = new Date(companySettings!.plan_expiry_date!);
               const now = new Date();
               const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              const isExpired = daysUntilExpiry < 0;
-              const isExpiringSoon = daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
+              const isExpired = daysUntilExpiry < 0 || isExpiredSubscription;
+              const isExpiringSoon = !isExpired && daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
 
               if (isExpired || isExpiringSoon) {
                 return (
@@ -1611,32 +1759,34 @@ function CurrentPlanContent() {
                             isExpired ? 'text-red-700' : 'text-amber-700'
                           }`}>
                             {isExpired
-                              ? `Your ${currentPlan.name} plan expired ${Math.abs(daysUntilExpiry)} days ago`
-                              : `Your ${currentPlan.name} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
+                              ? `Your ${planName} plan expired ${Math.abs(daysUntilExpiry)} days ago. Please renew to continue using all features.`
+                              : `Your ${planName} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
                             }
                           </p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => {
-                          setSelectedPlanForPayment(currentPlan);
-                          setModalStep('isolation');
-                          setIsolationType('schema');
-                          setIsNewTenant(false);
-                          setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
-                          setTransactionResult(null);
-                          setError(null);
-                          setShowPaymentModal(true);
-                        }}
-                        className={`px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                          isExpired
-                            ? 'bg-red-600 hover:bg-red-700 text-white'
-                            : 'bg-amber-600 hover:bg-amber-700 text-white'
-                        }`}
-                      >
-                        <ArrowRight className="w-4 h-4" />
-                        Renew Current Plan
-                      </button>
+                      {currentPlan && (
+                        <button
+                          onClick={() => {
+                            setSelectedPlanForPayment(currentPlan);
+                            setModalStep('isolation');
+                            setIsolationType('schema');
+                            setIsNewTenant(false);
+                            setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
+                            setTransactionResult(null);
+                            setError(null);
+                            setShowPaymentModal(true);
+                          }}
+                          className={`px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                            isExpired
+                              ? 'bg-red-600 hover:bg-red-700 text-white'
+                              : 'bg-amber-600 hover:bg-amber-700 text-white'
+                          }`}
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                          Renew Current Plan
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

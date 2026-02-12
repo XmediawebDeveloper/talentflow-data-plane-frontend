@@ -393,6 +393,8 @@ export default function ResumeScoringRoute() {
       const validHistory: ScoredResumeData[] = [];
       scoresByJd.forEach((data, jdId) => {
         if (data.scores.length > 0) {
+          // Sort scored resumes by score descending for consistent ordering
+          data.scores.sort((a: any, b: any) => (b.overall_score || b.matchScore || 0) - (a.overall_score || a.matchScore || 0));
           validHistory.push({
             id: jdId,
             jobId: jdId,

@@ -30,7 +30,7 @@ import type { VersionedBatchItem } from '@/components/BulkVersionResolutionModal
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
-import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
+import { Resume as ApiResume, Folder as ApiFolder, FolderDeletionInfo } from '@/lib/services/resumeService';
 import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services';
@@ -433,8 +433,14 @@ export default function MyResumesPage() {
     resumeCount: number;
     parentFolderId: string | null;
     parentFolderName: string;
-    contentAction: 'move-parent' | 'move-root' | null;
-  }>({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null });
+    contentAction: 'move-parent' | 'move-root' | 'delete-all' | null;
+    hasSubfolders: boolean;
+    subfolderCount: number;
+    subfolderDetails: { id: string; name: string; resume_count: number }[];
+    totalResumeCount: number;
+    subfolderResumeCount: number;
+    loading: boolean;
+  }>({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null, hasSubfolders: false, subfolderCount: 0, subfolderDetails: [], totalResumeCount: 0, subfolderResumeCount: 0, loading: false });
 
   // Refs to prevent infinite loop and duplicate API calls
   const hasMountedRef = useRef(false);
@@ -1428,7 +1434,7 @@ export default function MyResumesPage() {
     }
   };
 
-  const handleDeleteFolder = (id: string) => {
+  const handleDeleteFolder = async (id: string) => {
     // Find the folder to check if it's a system folder
     const folderToDelete = folders.find(f => f.id === id);
 
@@ -1444,7 +1450,7 @@ export default function MyResumesPage() {
       return;
     }
 
-    // Count resumes in this folder
+    // Count resumes in this folder (local fallback)
     const resumesInFolder = resumes.filter(r => r.folderId === id);
 
     // Find parent folder info
@@ -1455,7 +1461,7 @@ export default function MyResumesPage() {
     // Find root folder
     const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
 
-    // Show confirmation dialog
+    // Open dialog immediately with loading state
     setDeleteFolderConfirm({
       isOpen: true,
       folderId: id,
@@ -1464,15 +1470,42 @@ export default function MyResumesPage() {
       parentFolderId: parentFolder?.id || rootFolder?.id || null,
       parentFolderName: parentFolder?.name || 'My Resumes (root)',
       contentAction: null,
+      hasSubfolders: false,
+      subfolderCount: 0,
+      subfolderDetails: [],
+      totalResumeCount: resumesInFolder.length,
+      subfolderResumeCount: 0,
+      loading: true,
     });
+
+    // Fetch accurate deletion info from backend
+    try {
+      const info = await folderService.getDeletionInfo(id);
+      setDeleteFolderConfirm(prev => ({
+        ...prev,
+        resumeCount: info.direct_resume_count,
+        hasSubfolders: info.subfolder_count > 0,
+        subfolderCount: info.subfolder_count,
+        subfolderDetails: info.subfolder_details,
+        totalResumeCount: info.total_resume_count,
+        subfolderResumeCount: info.subfolder_resume_count,
+        loading: false,
+      }));
+    } catch {
+      // Fallback to client-side data on API error
+      setDeleteFolderConfirm(prev => ({
+        ...prev,
+        loading: false,
+      }));
+    }
   };
 
   const confirmDeleteFolder = async () => {
-    const { folderId, resumeCount, contentAction, parentFolderId } = deleteFolderConfirm;
+    const { folderId, totalResumeCount, contentAction, parentFolderId, hasSubfolders } = deleteFolderConfirm;
     if (!folderId) return;
 
     // If folder has content and no action selected, don't proceed
-    if (resumeCount > 0 && !contentAction) {
+    if (totalResumeCount > 0 && !contentAction) {
       toast.error('Please select what to do with the resumes in this folder');
       return;
     }
@@ -1480,44 +1513,83 @@ export default function MyResumesPage() {
     // Find root folder for 'move-root' action
     const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
 
-    // Determine target folder for moving resumes
+    // Determine target folder for moving resumes and flags
     let moveResumesTo: string | undefined;
-    if (resumeCount > 0 && contentAction) {
+    let deleteSubfolders = hasSubfolders;
+    let deleteResumes = false;
+
+    if (totalResumeCount > 0 && contentAction) {
       if (contentAction === 'move-parent') {
         moveResumesTo = parentFolderId || rootFolder?.id;
       } else if (contentAction === 'move-root') {
         moveResumesTo = rootFolder?.id;
+      } else if (contentAction === 'delete-all') {
+        deleteResumes = true;
       }
     }
 
     try {
-      // Delete folder with move_resumes_to parameter (backend handles moving)
-      await folderService.delete(folderId, moveResumesTo);
+      const result = await folderService.delete(folderId, moveResumesTo, deleteSubfolders, deleteResumes);
 
-      // Update local state - move resumes to target folder
-      if (resumeCount > 0 && moveResumesTo) {
-        setResumes(prev => prev.map(r =>
-          r.folderId === folderId ? { ...r, folderId: moveResumesTo } : r
-        ));
+      // Refresh folders from backend for accurate state
+      try {
+        const folderResponse = await folderService.list();
+        type ApiFolder = { id: string; name: string; parent_id?: string; resume_count: number; children?: ApiFolder[]; created_at: string };
+        const convertApiFolder = (f: ApiFolder): FolderType => ({
+          id: f.id,
+          name: f.name,
+          count: f.resume_count || 0,
+          parentId: f.parent_id,
+          children: f.children?.map(convertApiFolder),
+        });
+        let apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+
+        // Ensure "root" folder always exists
+        const hasRootFolder = apiFolders.some(f => f.name.toLowerCase() === 'root' && !f.parentId);
+        if (!hasRootFolder) {
+          try {
+            const rootFolder = await folderService.create('root');
+            apiFolders.push(convertApiFolder(rootFolder as unknown as ApiFolder));
+          } catch { /* ignore */ }
+        }
+
+        // Ensure "All Resumes" virtual folder
+        const allResumesFolder: FolderType = {
+          id: 'all',
+          name: 'All Resumes',
+          count: 0,
+          children: [],
+        };
+        setFolders([allResumesFolder, ...apiFolders]);
+      } catch {
+        // Fallback: remove deleted folder from local state
+        setFolders(prev => prev.filter(f => f.id !== folderId));
       }
 
-      // Remove folder from state
-      setFolders(prev => prev.filter(f => f.id !== folderId));
-
-      // Update folder counts
-      if (moveResumesTo) {
-        setFolders(prev => prev.map(f =>
-          f.id === moveResumesTo ? { ...f, count: f.count + resumeCount } : f
-        ));
+      // If we deleted resumes, remove them from local state
+      if (deleteResumes && result.deleted_resumes > 0) {
+        setResumes(prev => prev.filter(r => r.folderId !== folderId));
       }
 
-      toast.success('Folder deleted successfully');
+      // If viewing a deleted folder, redirect to root
+      if (selectedFolder === folderId) {
+        const root = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
+        setSelectedFolder(root?.id || 'all');
+      }
+
+      // Dynamic toast with counts
+      const parts: string[] = [];
+      if (result.deleted_folders > 1) parts.push(`${result.deleted_folders} folders deleted`);
+      else parts.push('Folder deleted');
+      if (result.moved_resumes > 0) parts.push(`${result.moved_resumes} resume${result.moved_resumes !== 1 ? 's' : ''} moved`);
+      if (result.deleted_resumes > 0) parts.push(`${result.deleted_resumes} resume${result.deleted_resumes !== 1 ? 's' : ''} deleted`);
+      toast.success(parts.join(', '));
     } catch (error) {
       toast.error('Failed to delete folder');
     }
 
     // Close dialog
-    setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null });
+    setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null, hasSubfolders: false, subfolderCount: 0, subfolderDetails: [], totalResumeCount: 0, subfolderResumeCount: 0, loading: false });
   };
 
   // Helper function to find or create "root" folder
@@ -3765,7 +3837,7 @@ export default function MyResumesPage() {
         open={deleteFolderConfirm.isOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null });
+            setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null, hasSubfolders: false, subfolderCount: 0, subfolderDetails: [], totalResumeCount: 0, subfolderResumeCount: 0, loading: false });
           }
         }}
       >
@@ -3777,128 +3849,165 @@ export default function MyResumesPage() {
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-4">
-                <p>
-                  Are you sure you want to delete &quot;{deleteFolderConfirm.folderName}&quot;?
-                </p>
+                {deleteFolderConfirm.loading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                    <span className="ml-2 text-sm text-gray-500">Loading folder info...</span>
+                  </div>
+                ) : (
+                  <>
+                    <p>
+                      Are you sure you want to delete &quot;{deleteFolderConfirm.folderName}&quot;?
+                    </p>
 
-                {deleteFolderConfirm.resumeCount > 0 && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-amber-800">
-                          This folder contains {deleteFolderConfirm.resumeCount} resume{deleteFolderConfirm.resumeCount !== 1 ? 's' : ''}
-                        </p>
-                        <p className="text-sm text-amber-700 mt-1">
-                          Please choose where to move the resumes:
-                        </p>
-
-                        <div className="mt-3 space-y-2">
-                          {(() => {
-                            // Check if parent is root folder
-                            const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
-                            const parentIsRoot = deleteFolderConfirm.parentFolderId === rootFolder?.id;
-
-                            // If parent is root, show only one option
-                            if (parentIsRoot) {
-                              return (
-                                <label
-                                  className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                                    deleteFolderConfirm.contentAction === 'move-parent'
-                                      ? 'border-blue-500 bg-blue-50'
-                                      : 'border-gray-200 hover:border-gray-300 bg-white'
-                                  }`}
-                                >
-                                  <input
-                                    type="radio"
-                                    name="contentAction"
-                                    value="move-parent"
-                                    checked={deleteFolderConfirm.contentAction === 'move-parent'}
-                                    onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-parent' }))}
-                                    className="w-4 h-4 text-blue-600"
-                                  />
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <Folder className="w-4 h-4 text-gray-600" />
-                                      <span className="text-sm font-medium text-gray-900">
-                                        Move to My Resumes (root)
-                                      </span>
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-0.5">
-                                      Resumes will be moved to the root folder
-                                    </p>
-                                  </div>
-                                </label>
-                              );
-                            }
-
-                            // If parent is NOT root, show both options
-                            return (
-                              <>
-                                {/* Option 1: Move to parent folder */}
-                                <label
-                                  className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                                    deleteFolderConfirm.contentAction === 'move-parent'
-                                      ? 'border-blue-500 bg-blue-50'
-                                      : 'border-gray-200 hover:border-gray-300 bg-white'
-                                  }`}
-                                >
-                                  <input
-                                    type="radio"
-                                    name="contentAction"
-                                    value="move-parent"
-                                    checked={deleteFolderConfirm.contentAction === 'move-parent'}
-                                    onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-parent' }))}
-                                    className="w-4 h-4 text-blue-600"
-                                  />
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <FolderOpen className="w-4 h-4 text-gray-600" />
-                                      <span className="text-sm font-medium text-gray-900">
-                                        Move to {deleteFolderConfirm.parentFolderName}
-                                      </span>
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-0.5">
-                                      Resumes will be moved to the parent folder
-                                    </p>
-                                  </div>
-                                </label>
-
-                                {/* Option 2: Move to root */}
-                                <label
-                                  className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                                    deleteFolderConfirm.contentAction === 'move-root'
-                                      ? 'border-blue-500 bg-blue-50'
-                                      : 'border-gray-200 hover:border-gray-300 bg-white'
-                                  }`}
-                                >
-                                  <input
-                                    type="radio"
-                                    name="contentAction"
-                                    value="move-root"
-                                    checked={deleteFolderConfirm.contentAction === 'move-root'}
-                                    onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-root' }))}
-                                    className="w-4 h-4 text-blue-600"
-                                  />
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <Folder className="w-4 h-4 text-gray-600" />
-                                      <span className="text-sm font-medium text-gray-900">
-                                        Move to My Resumes (root)
-                                      </span>
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-0.5">
-                                      Resumes will be moved to the root folder
-                                    </p>
-                                  </div>
-                                </label>
-                              </>
-                            );
-                          })()}
+                    {/* Subfolder warning banner */}
+                    {deleteFolderConfirm.hasSubfolders && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-red-800">
+                              This folder contains {deleteFolderConfirm.subfolderCount} subfolder{deleteFolderConfirm.subfolderCount !== 1 ? 's' : ''}
+                            </p>
+                            <p className="text-sm text-red-700 mt-1">
+                              All subfolders will be permanently deleted:
+                            </p>
+                            <ul className="mt-2 space-y-1">
+                              {deleteFolderConfirm.subfolderDetails.map((sf) => (
+                                <li key={sf.id} className="flex items-center gap-2 text-sm text-red-700">
+                                  <Folder className="w-3.5 h-3.5 flex-shrink-0" />
+                                  <span className="font-medium">{sf.name}</span>
+                                  {sf.resume_count > 0 && (
+                                    <span className="text-red-500 text-xs">({sf.resume_count} resume{sf.resume_count !== 1 ? 's' : ''})</span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
+                    )}
+
+                    {/* Resume action section */}
+                    {deleteFolderConfirm.totalResumeCount > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-amber-800">
+                              {deleteFolderConfirm.totalResumeCount} resume{deleteFolderConfirm.totalResumeCount !== 1 ? 's' : ''} will be affected
+                              {deleteFolderConfirm.hasSubfolders && deleteFolderConfirm.subfolderResumeCount > 0 && (
+                                <span className="font-normal text-amber-700"> ({deleteFolderConfirm.resumeCount} in this folder, {deleteFolderConfirm.subfolderResumeCount} in subfolders)</span>
+                              )}
+                            </p>
+                            <p className="text-sm text-amber-700 mt-1">
+                              Please choose what to do with the resumes:
+                            </p>
+
+                            <div className="mt-3 space-y-2">
+                              {(() => {
+                                const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
+                                const parentIsRoot = deleteFolderConfirm.parentFolderId === rootFolder?.id;
+
+                                return (
+                                  <>
+                                    {/* Option: Move to parent folder */}
+                                    <label
+                                      className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                                        deleteFolderConfirm.contentAction === 'move-parent'
+                                          ? 'border-blue-500 bg-blue-50'
+                                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                                      }`}
+                                    >
+                                      <input
+                                        type="radio"
+                                        name="contentAction"
+                                        value="move-parent"
+                                        checked={deleteFolderConfirm.contentAction === 'move-parent'}
+                                        onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-parent' }))}
+                                        className="w-4 h-4 text-blue-600"
+                                      />
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <FolderOpen className="w-4 h-4 text-gray-600" />
+                                          <span className="text-sm font-medium text-gray-900">
+                                            Move to {parentIsRoot ? 'My Resumes (root)' : deleteFolderConfirm.parentFolderName}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-0.5">
+                                          All resumes will be moved to {parentIsRoot ? 'the root folder' : 'the parent folder'}
+                                        </p>
+                                      </div>
+                                    </label>
+
+                                    {/* Option: Move to root (only when parent is NOT root) */}
+                                    {!parentIsRoot && (
+                                      <label
+                                        className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                                          deleteFolderConfirm.contentAction === 'move-root'
+                                            ? 'border-blue-500 bg-blue-50'
+                                            : 'border-gray-200 hover:border-gray-300 bg-white'
+                                        }`}
+                                      >
+                                        <input
+                                          type="radio"
+                                          name="contentAction"
+                                          value="move-root"
+                                          checked={deleteFolderConfirm.contentAction === 'move-root'}
+                                          onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-root' }))}
+                                          className="w-4 h-4 text-blue-600"
+                                        />
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2">
+                                            <Folder className="w-4 h-4 text-gray-600" />
+                                            <span className="text-sm font-medium text-gray-900">
+                                              Move to My Resumes (root)
+                                            </span>
+                                          </div>
+                                          <p className="text-xs text-gray-500 mt-0.5">
+                                            All resumes will be moved to the root folder
+                                          </p>
+                                        </div>
+                                      </label>
+                                    )}
+
+                                    {/* Option: Delete all resumes */}
+                                    <label
+                                      className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                                        deleteFolderConfirm.contentAction === 'delete-all'
+                                          ? 'border-red-500 bg-red-50'
+                                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                                      }`}
+                                    >
+                                      <input
+                                        type="radio"
+                                        name="contentAction"
+                                        value="delete-all"
+                                        checked={deleteFolderConfirm.contentAction === 'delete-all'}
+                                        onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'delete-all' }))}
+                                        className="w-4 h-4 text-red-600"
+                                      />
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <Trash2 className="w-4 h-4 text-red-600" />
+                                          <span className="text-sm font-medium text-red-700">
+                                            Delete all resumes permanently
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-red-500 mt-0.5">
+                                          All {deleteFolderConfirm.totalResumeCount} resume{deleteFolderConfirm.totalResumeCount !== 1 ? 's' : ''} will be permanently deleted
+                                        </p>
+                                      </div>
+                                    </label>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </AlertDialogDescription>
@@ -3907,10 +4016,20 @@ export default function MyResumesPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteFolder}
-              disabled={deleteFolderConfirm.resumeCount > 0 && !deleteFolderConfirm.contentAction}
-              className="bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={deleteFolderConfirm.loading || (deleteFolderConfirm.totalResumeCount > 0 && !deleteFolderConfirm.contentAction)}
+              className={`text-white disabled:opacity-50 disabled:cursor-not-allowed ${
+                deleteFolderConfirm.contentAction === 'delete-all'
+                  ? 'bg-red-700 hover:bg-red-800 focus:ring-red-600'
+                  : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+              }`}
             >
-              {deleteFolderConfirm.resumeCount > 0 ? 'Move & Delete' : 'Delete'}
+              {deleteFolderConfirm.loading
+                ? 'Loading...'
+                : deleteFolderConfirm.contentAction === 'delete-all'
+                  ? 'Delete Everything'
+                  : deleteFolderConfirm.totalResumeCount > 0
+                    ? 'Move & Delete'
+                    : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

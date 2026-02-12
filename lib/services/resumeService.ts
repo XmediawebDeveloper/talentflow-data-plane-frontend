@@ -457,6 +457,23 @@ export const resumeService = {
   },
 };
 
+export interface FolderDeletionInfo {
+  folder_id: string;
+  folder_name: string;
+  parent_id: string | null;
+  direct_resume_count: number;
+  subfolder_count: number;
+  subfolder_details: { id: string; name: string; resume_count: number }[];
+  subfolder_resume_count: number;
+  total_resume_count: number;
+}
+
+export interface FolderDeleteResult {
+  deleted_folders: number;
+  moved_resumes: number;
+  deleted_resumes: number;
+}
+
 export const folderService = {
   /**
    * List all folders
@@ -476,6 +493,18 @@ export const folderService = {
   async get(id: string): Promise<Folder> {
     try {
       const response = await api.get<Folder>(`/folders/${id}`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Get deletion info for a folder (subfolder/resume counts)
+   */
+  async getDeletionInfo(id: string): Promise<FolderDeletionInfo> {
+    try {
+      const response = await api.get<FolderDeletionInfo>(`/folders/${id}/deletion-info`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -510,11 +539,23 @@ export const folderService = {
   },
 
   /**
-   * Delete folder
+   * Delete folder with optional subfolder/resume handling
    */
-  async delete(id: string, moveResumesTo?: string): Promise<void> {
+  async delete(
+    id: string,
+    moveResumesTo?: string,
+    deleteSubfolders?: boolean,
+    deleteResumes?: boolean,
+  ): Promise<FolderDeleteResult> {
     try {
-      await api.delete(`/folders/${id}`, { params: { move_resumes_to: moveResumesTo } });
+      const response = await api.delete<FolderDeleteResult>(`/folders/${id}`, {
+        params: {
+          move_resumes_to: moveResumesTo,
+          delete_subfolders: deleteSubfolders || undefined,
+          delete_resumes: deleteResumes || undefined,
+        },
+      });
+      return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
     }
