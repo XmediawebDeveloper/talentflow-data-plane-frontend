@@ -420,11 +420,11 @@ export default function Dashboard({
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <Crown className="w-6 h-6 text-gray-800" />
-                <h2 className="text-gray-900 text-2xl">{subscription?.planName || 'Agency Pro Plan'}</h2>
+                <h2 className="text-gray-900 text-2xl">{subscription?.planName || '-'}</h2>
               </div>
               <p className="text-sm text-gray-600">
-                {subscription?.status === 'active' 
-                  ? 'Your subscription is active and running smoothly' 
+                {subscription?.status === 'active'
+                  ? 'Your subscription is active and running smoothly'
                   : `Subscription ${subscription?.status || 'status unknown'}`}
               </p>
             </div>
@@ -433,7 +433,7 @@ export default function Dashboard({
               <div className="text-gray-900 mb-2">
                 {subscription?.renewalDate
                   ? new Date(subscription.renewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                  : 'Jan 15, 2026'}
+                  : 'Not available'}
               </div>
               {user?.can_upgrade_plan !== false && onUpgradePlan ? (
                 <button
