@@ -1,13 +1,23 @@
 import { parseAssessmentTitle, getVersionBadge } from '@/lib/utils/assessmentUtils';
 
 interface VersionBadgeProps {
-  title: string;
+  title?: string;
+  version?: number;  // Accept version directly from API
   size?: 'sm' | 'md' | 'lg';
   variant?: 'primary' | 'secondary' | 'success';
 }
 
-export default function VersionBadge({ title, size = 'sm', variant = 'primary' }: VersionBadgeProps) {
-  const { version, hasVersion } = parseAssessmentTitle(title);
+export default function VersionBadge({ title, version: versionProp, size = 'sm', variant = 'primary' }: VersionBadgeProps) {
+  // Prefer version prop over parsing from title
+  let version = versionProp;
+  let hasVersion = !!versionProp;
+
+  // Fallback to parsing from title if version not provided
+  if (!hasVersion && title) {
+    const parsed = parseAssessmentTitle(title);
+    version = parsed.version || undefined;
+    hasVersion = parsed.hasVersion;
+  }
 
   if (!hasVersion || !version) {
     return null;

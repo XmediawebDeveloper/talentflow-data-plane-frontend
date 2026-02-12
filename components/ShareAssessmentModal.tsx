@@ -438,7 +438,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               <h2 className="text-white">Share Assessment via Email</h2>
               <div className="flex items-center gap-2">
                 <p className="text-gray-100 text-sm">{assessmentTitleForEmail}</p>
-                <VersionBadge title={assessment.title} size="sm" variant="success" />
+                <VersionBadge version={assessment.version} size="sm" variant="success" />
               </div>
             </div>
           </div>
@@ -466,7 +466,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                     </span>
                   )}
                   <span className="text-gray-900">{assessmentTitleForEmail}</span>
-                  <VersionBadge title={assessment.title} size="sm" variant="secondary" />
+                  <VersionBadge version={assessment.version} size="sm" variant="secondary" />
                   {allAssessments.length > 1 && (
                     <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
                       +{allAssessments.length - 1} more

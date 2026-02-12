@@ -218,7 +218,7 @@ export default function AssessmentDetailsView({
                   <h1 className="text-2xl text-white font-semibold">
                     {assessment.jd_title || stripVersionFromTitle(assessment.title)} - Assessment
                   </h1>
-                  <VersionBadge title={assessment.title} size="md" variant="primary" />
+                  <VersionBadge version={assessment.version} size="md" variant="primary" />
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                     assessment.status === 'Active'
                       ? 'bg-gray-200/30 text-gray-100 border border-gray-300/30'

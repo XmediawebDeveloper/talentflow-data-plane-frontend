@@ -459,6 +459,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return 'text-red-600';
   };
 
+  // Reset to page 1 when filters change (MUST be before any early returns)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, passFailFilter, roundFilters]);
+
   // Use API results only (no mock data)
   const displayResults = candidateResults;
 
@@ -473,11 +478,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       </div>
     );
   }
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, statusFilter, passFailFilter, roundFilters]);
 
   // AS-23: Handle sort toggle
   const handleSort = (field: 'name' | 'score' | 'status' | 'date') => {

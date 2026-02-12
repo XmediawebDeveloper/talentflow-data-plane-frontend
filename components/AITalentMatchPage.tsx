@@ -68,8 +68,8 @@ export default function AITalentMatchPage({
   const searchParams = useSearchParams();
   const { hasPermission, isTenantAdmin, user } = useAuth();
 
-  // ✅ RBAC: Check if user can run AI match operations
-  const canRunAiMatch = user?.permissions?.canRunAiMatch ?? false;
+  // ✅ RBAC: Check if user can run AI match operations (bypass for tenant admin)
+  const canRunAiMatch = isTenantAdmin || (user?.permissions?.canRunAiMatch ?? false);
 
 
   const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'results'>('history');
@@ -886,7 +886,7 @@ export default function AITalentMatchPage({
                     </button>
                   )}
                 </>
-              </div>
+                </div>
               )}
             </div>
             {/* Additional Filters */}
@@ -1880,7 +1880,7 @@ export default function AITalentMatchPage({
                     </button>
                   )}
                 </>
-              </div>
+                </div>
               )}
             </div>
             {/* Additional Filters */}
