@@ -1,6 +1,6 @@
 'use client';
 
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronRight, Code, Languages, ArrowLeft, BarChart3, CheckSquare, MessageSquare, Minus } from 'lucide-react';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronRight, Code, Languages, ArrowLeft, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -60,10 +60,11 @@ interface CandidateScoringDetailPageProps {
 }
 
 export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onBack }: CandidateScoringDetailPageProps) {
-  const [activeTab, setActiveTab] = useState<'scoretable' | 'personalinfo'>('scoretable');
+  const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo'>('overview');
   const [isDataReady, setIsDataReady] = useState(false);
   const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
   const [fullResumeLoaded, setFullResumeLoaded] = useState(false);
+  const [jdDetails, setJdDetails] = useState<any>(null);
 
   // Debug: Check props
   console.log('[CandidateScoringDetailPage] Props:', {
@@ -86,6 +87,13 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
         try {
           const { jdService } = await import('@/lib/services/jdService');
           const { resumeService } = await import('@/lib/services/resumeService');
+
+          // Fetch JD details for Overview tab
+          jdService.get(jobId).then((jd: any) => {
+            setJdDetails(jd);
+          }).catch((err: any) => {
+            console.error('[CandidateScoringDetailPage] Failed to fetch JD details:', err);
+          });
 
           // First fetch scored resumes to get the actual resume_id
           const scoredResumes = await jdService.getScoredResumes(jobId, { page_size: 100 });
@@ -445,6 +453,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
         <div className="bg-white rounded-t-xl border-x-2 border-t-2 border-gray-200">
           <div className="flex gap-1 px-6 pt-2">
             {[
+              { id: 'overview', label: 'Overview' },
               { id: 'scoretable', label: 'Score Table' },
               { id: 'personalinfo', label: 'Personal Info' },
             ].map((tab) => (
@@ -566,6 +575,117 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               </div>
             </div>
           )} */}
+
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {/* JD Summary */}
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <BookOpen className="w-5 h-5 text-gray-700" />
+                  <h3 className="text-lg font-semibold text-gray-900">Job Description Summary</h3>
+                </div>
+                {jdDetails ? (
+                  <ul className="space-y-2">
+                    <li className="flex items-start gap-2 text-sm text-gray-700">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span><strong>Role:</strong> {jobTitle}{jdDetails.location ? ` — ${jdDetails.location}` : ''}{jdDetails.employment_type ? ` (${jdDetails.employment_type.replace(/_/g, ' ')})` : ''}</span>
+                    </li>
+                    {(jdDetails.experience_min || jdDetails.experience_max) && (
+                      <li className="flex items-start gap-2 text-sm text-gray-700">
+                        <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                        <span><strong>Experience:</strong> {jdDetails.experience_min && jdDetails.experience_max ? `${jdDetails.experience_min}–${jdDetails.experience_max} years` : jdDetails.experience_min ? `${jdDetails.experience_min}+ years` : `Up to ${jdDetails.experience_max} years`}</span>
+                      </li>
+                    )}
+                    {jdDetails.must_have_skills?.map((skill: string, i: number) => (
+                      <li key={`must-${i}`} className="flex items-start gap-2 text-sm text-gray-700">
+                        <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                        <span>{skill}</span>
+                      </li>
+                    ))}
+                    {jdDetails.must_have_comments?.map((comment: string, i: number) => (
+                      <li key={`mc-${i}`} className="flex items-start gap-2 text-sm text-gray-700">
+                        <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                        <span>{comment}</span>
+                      </li>
+                    ))}
+                    {jdDetails.nice_to_have_skills?.map((skill: string, i: number) => (
+                      <li key={`nice-${i}`} className="flex items-start gap-2 text-sm text-gray-500">
+                        <CheckCircle className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                        <span>{skill} <span className="text-xs text-gray-400">(preferred)</span></span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="flex items-center gap-2 text-gray-500 py-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                    <span className="text-sm">Loading job details...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Strengths & Weaknesses */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Strengths */}
+                <div className="bg-green-50 border border-green-200 rounded-xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <ThumbsUp className="w-5 h-5 text-green-600" />
+                    <h3 className="text-lg font-semibold text-gray-900">Strengths</h3>
+                  </div>
+                  {keyStrengths.length > 0 ? (
+                    <ul className="space-y-3">
+                      {keyStrengths.map((strength: string, idx: number) => (
+                        <li key={idx} className="flex items-start gap-3">
+                          <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <span className="text-sm text-gray-800">{strength}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-gray-500">No strengths data available.</p>
+                  )}
+                </div>
+
+                {/* Weaknesses */}
+                <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <ThumbsDown className="w-5 h-5 text-red-500" />
+                    <h3 className="text-lg font-semibold text-gray-900">Weaknesses</h3>
+                  </div>
+                  {(improvementAreas.length > 0 || missingSkills.length > 0) ? (
+                    <ul className="space-y-3">
+                      {improvementAreas.map((gap: string, idx: number) => (
+                        <li key={`gap-${idx}`} className="flex items-start gap-3">
+                          <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                          <span className="text-sm text-gray-800">{gap}</span>
+                        </li>
+                      ))}
+                      {missingSkills.length > 0 && (
+                        <li className="flex items-start gap-3">
+                          <AlertCircle className="w-4 h-4 text-orange-500 mt-0.5 flex-shrink-0" />
+                          <span className="text-sm text-gray-800">
+                            Missing skills: {missingSkills.join(', ')}
+                          </span>
+                        </li>
+                      )}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-gray-500">No weaknesses identified.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* AI Analysis Summary */}
+              {aiReasoning && (
+                <div className="bg-white border border-gray-200 rounded-xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <MessageSquare className="w-5 h-5 text-gray-700" />
+                    <h3 className="text-lg font-semibold text-gray-900">AI Analysis</h3>
+                  </div>
+                  <p className="text-sm text-gray-700 leading-relaxed">{aiReasoning}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {activeTab === 'scoretable' && (
             <DetailedScorecardTab
