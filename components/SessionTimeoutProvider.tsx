@@ -25,11 +25,12 @@ export const useSessionTimeout = () => {
 
 interface SessionTimeoutProviderProps {
   children: React.ReactNode;
+  skipSettingsLoad?: boolean;  // Skip loading settings when subscription expired
 }
 
 const WARNING_SECONDS = 60; // Show warning 60 seconds before logout
 
-export function SessionTimeoutProvider({ children }: SessionTimeoutProviderProps) {
+export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: SessionTimeoutProviderProps) {
   const router = useRouter();
   const [timeoutMinutes, setTimeoutMinutes] = useState(30); // Default 30 minutes
   const [isWarningVisible, setIsWarningVisible] = useState(false);
@@ -42,6 +43,12 @@ export function SessionTimeoutProvider({ children }: SessionTimeoutProviderProps
 
   // Load timeout setting from user settings
   useEffect(() => {
+    // Skip if subscription expired (no need for timeout settings in renewal flow)
+    if (skipSettingsLoad) {
+      console.log('[SessionTimeout] Skipping settings load - subscription expired');
+      return;
+    }
+
     const loadTimeoutSetting = async () => {
       try {
         const { accessToken } = getTokens();
@@ -57,7 +64,7 @@ export function SessionTimeoutProvider({ children }: SessionTimeoutProviderProps
     };
 
     loadTimeoutSetting();
-  }, []);
+  }, [skipSettingsLoad]);
 
   // Logout function
   const handleLogout = useCallback(() => {

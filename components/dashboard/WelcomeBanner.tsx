@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { User, Tenant, UserRole } from '@/lib/types/tenant';
 import { Clock, Building2, CreditCard, CalendarDays } from 'lucide-react';
+import { useQuota } from '@/contexts/QuotaContext';
 
 interface WelcomeBannerProps {
   user?: User;
@@ -77,6 +78,7 @@ function formatLastLogin(lastLogin: string): string {
 
 export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
   const [now, setNow] = useState(() => new Date());
+  const { quotaData } = useQuota();
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 60000);
@@ -114,10 +116,10 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
                   {tenant.name}
                 </span>
               )}
-              {tenant?.subscription?.planName && (
+              {(quotaData?.plan_name || tenant?.subscription?.planName) && (
                 <span className="inline-flex items-center gap-1 text-indigo-300">
                   <CreditCard className="h-3.5 w-3.5" />
-                  {tenant.subscription.planName}
+                  {quotaData?.plan_name || tenant?.subscription?.planName || '-'}
                 </span>
               )}
             </div>

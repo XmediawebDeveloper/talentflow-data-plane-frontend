@@ -48,7 +48,7 @@ import { User, Tenant } from '@/lib/types/tenant';
 interface SidebarProps {
   user?: User;
   tenant?: Tenant;
-  subscriptionExpired?: boolean;
+  subscriptionExpired?: boolean | undefined;  // undefined = loading/unknown (default to locked)
 }
 
 // Paths allowed even when subscription is expired
@@ -436,7 +436,9 @@ export default function Sidebar({ user, tenant, subscriptionExpired }: SidebarPr
             {/* Section Items */}
             <div className="space-y-0.5">
               {section.items.map((item) => {
-                const isItemAllowed = !subscriptionExpired || SUBSCRIPTION_ALLOWED_PATHS.includes(item.href || '');
+                // Lock menus if subscriptionExpired is true OR undefined (loading/unknown)
+                // Only unlock if explicitly false
+                const isItemAllowed = subscriptionExpired === false || SUBSCRIPTION_ALLOWED_PATHS.includes(item.href || '');
 
                 if (!isItemAllowed) {
                   return (
