@@ -4,6 +4,7 @@ import { User, UserRole } from '@/lib/types/tenant';
 import { userService, ApiUser, UserPermissions } from '../services/userService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 interface UsersManagementProps {
   currentUser?: User;
@@ -233,6 +234,13 @@ const defaultPermissions: UserPermissions = {
 
 export default function UsersManagement({ currentUser, tenantId }: UsersManagementProps) {
   const dialog = useGlobalDialog();
+  const { user } = useAuth();
+
+  // Permission checks for CRUD operations
+  const canCreateUser = user?.permissions?.canCreateUsers ?? false;
+  const canUpdateUser = user?.permissions?.canUpdateUsers ?? false;
+  const canDeleteUser = user?.permissions?.canDeleteUsers ?? false;
+
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -580,8 +588,20 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
             </div>
           </div>
           <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-md"
+            onClick={() => {
+              if (!canCreateUser) {
+                toast.error('You do not have permission to create users');
+                return;
+              }
+              setIsCreateModalOpen(true);
+            }}
+            disabled={!canCreateUser}
+            title={!canCreateUser ? 'You do not have permission to create users' : ''}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors shadow-md ${
+              !canCreateUser
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                : 'bg-gray-800 text-white hover:bg-gray-900'
+            }`}
           >
             <Plus className="w-5 h-5" />
             Add User
@@ -730,15 +750,38 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => setEditingUser(user)}
-                        className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
+                        onClick={() => {
+                          if (!canUpdateUser) {
+                            toast.error('You do not have permission to edit users');
+                            return;
+                          }
+                          setEditingUser(user);
+                        }}
+                        disabled={!canUpdateUser}
+                        title={!canUpdateUser ? 'You do not have permission to edit users' : ''}
+                        className={`p-2 rounded-lg transition-colors ${
+                          !canUpdateUser
+                            ? 'text-gray-400 cursor-not-allowed opacity-60'
+                            : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+                        }`}
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        disabled={user.id === currentUser?.id}
+                        onClick={() => {
+                          if (!canDeleteUser) {
+                            toast.error('You do not have permission to delete users');
+                            return;
+                          }
+                          handleDeleteUser(user.id);
+                        }}
+                        disabled={!canDeleteUser || user.id === currentUser?.id}
+                        title={!canDeleteUser ? 'You do not have permission to delete users' : (user.id === currentUser?.id ? 'Cannot delete yourself' : '')}
+                        className={`p-2 rounded-lg transition-colors ${
+                          !canDeleteUser || user.id === currentUser?.id
+                            ? 'text-gray-400 cursor-not-allowed opacity-60'
+                            : 'text-gray-500 hover:text-red-600 hover:bg-red-50'
+                        }`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

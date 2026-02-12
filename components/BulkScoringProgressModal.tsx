@@ -1,4 +1,4 @@
-import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader, Database, FolderOpen, Target, TrendingUp, RotateCcw } from 'lucide-react';
+import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 
@@ -62,6 +62,7 @@ export default function BulkScoringProgressModal({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
+  const [isMinimized, setIsMinimized] = useState(false);
 
   // Check if user has Internal DB access permission
   const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
@@ -188,6 +189,85 @@ export default function BulkScoringProgressModal({
     );
   };
 
+  // Minimized view - show small indicator at bottom right
+  if (isMinimized) {
+    return (
+      <div className="fixed bottom-6 right-6 z-50">
+        <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl shadow-2xl border-2 border-gray-700 p-4 min-w-[320px]">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
+                <Target className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white">
+                  {filterByJobId && filteredJobTitle ? filteredJobTitle : 'Bulk Scoring'}
+                </h3>
+                <p className="text-xs text-gray-300">
+                  {completedCount + failedCount}/{totalResumes} processed
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsMinimized(false)}
+                className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                aria-label="Maximize"
+              >
+                <Maximize2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={onClose}
+                className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden mb-2">
+            <div className="h-full flex">
+              <div
+                className="bg-green-500 transition-all duration-500"
+                style={{ width: `${totalResumes > 0 ? (completedCount / totalResumes) * 100 : 0}%` }}
+              />
+              <div
+                className="bg-red-500 transition-all duration-500"
+                style={{ width: `${totalResumes > 0 ? (failedCount / totalResumes) * 100 : 0}%` }}
+              />
+              <div
+                className="bg-blue-500 animate-pulse transition-all duration-500"
+                style={{ width: `${totalResumes > 0 ? (inProgressCount / totalResumes) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="flex items-center justify-between text-xs text-gray-300">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                Processing: {inProgressCount}
+              </span>
+              <span className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                Done: {completedCount}
+              </span>
+              {failedCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  Failed: {failedCount}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col">
@@ -236,6 +316,15 @@ export default function BulkScoringProgressModal({
                 Complete
               </div>
             )}
+
+            <button
+              onClick={() => setIsMinimized(true)}
+              className="w-9 h-9 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              aria-label="Minimize to background"
+              title="Run in background"
+            >
+              <Minus className="w-5 h-5" />
+            </button>
 
             <button
               onClick={onClose}

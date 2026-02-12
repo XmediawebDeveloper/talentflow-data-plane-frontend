@@ -42,6 +42,7 @@ import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import { User, Tenant } from '@/lib/types/tenant';
+import AssessmentsForJD from './AssessmentsForJD';
 
 type TabType = 'overview' | 'scored-resumes' | 'assessment-results';
 
@@ -532,34 +533,7 @@ ${job.certifications?.join(', ') || 'N/A'}
             )}
 
             {activeTab === 'assessment-results' && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-gray-900">Assessment Results</h2>
-                  <button
-                    onClick={() => router.push(`/recruitment/assessments?jd_id=${job.id}`)}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm"
-                  >
-                    <ClipboardList className="w-4 h-4" />
-                    Create Assessment
-                  </button>
-                </div>
-                {job.assessments_count === 0 ? (
-                  <div className="text-center py-12">
-                    <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No assessments yet</h3>
-                    <p className="text-gray-500 mb-4">Create assessments for candidates applying to this job</p>
-                    <button
-                      onClick={() => router.push(`/recruitment/assessments?jd_id=${job.id}`)}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
-                    >
-                      <ClipboardList className="w-4 h-4" />
-                      Create Assessment
-                    </button>
-                  </div>
-                ) : (
-                  <p className="text-gray-600">{job.assessments_count} assessments created</p>
-                )}
-              </div>
+              <AssessmentsForJD jdId={job.id} jdTitle={job.title} />
             )}
           </div>
 

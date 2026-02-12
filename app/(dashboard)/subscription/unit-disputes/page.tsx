@@ -12,30 +12,25 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1
 interface UnitDispute {
   id: string;
   tenant_id: string;
-  control_plane_dispute_id: string;
-  consumption_log_id: string;
-  unit_type: 'RS' | 'AS' | 'AIU';
+  consumption_log_id?: string;
+  unit_type: string;
   units_to_refund: number;
   reason: string;
-  description: string;
+  description?: string;
   status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
-  requested_by_id: string;
-  requested_by_name: string;
-  requested_by_email: string;
-  requested_by_role: string;
-  audit_trail: Record<string, unknown> | null;
-  resolution_notes: string | null;
+  requested_by_name: string | null;
+  requested_by_email: string | null;
+  resolution_notes?: string | null;
   units_restored: number | null;
-  refund_transaction_id: string | null;
-  resolved_by: string | null;
+  resolved_by_email?: string | null;
   resolved_at: string | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 interface ConsumptionLog {
   id: string;
-  unit_type: 'RS' | 'AS' | 'AIU';
+  unit_type: 'RU' | 'RS' | 'AS' | 'AIU' | 'max_seats';
   units_consumed: number;
   status: string;
   user_email: string | null;
@@ -69,9 +64,11 @@ const REASON_OPTIONS = [
 ];
 
 const UNIT_TYPE_LABELS: Record<string, string> = {
+  RU: 'Resume Upload',
   RS: 'Resume Scoring',
   AS: 'Assessment',
   AIU: 'AI Interview',
+  max_seats: 'Max Users',
 };
 
 // --- Component ---
@@ -138,7 +135,7 @@ export default function UnitDisputesPage() {
       if (!response.ok) throw new Error('Failed to fetch disputes');
 
       const result = await response.json();
-      setDisputes(result.data?.items || []);
+      setDisputes(result.data?.disputes || result.data?.items || []);
     } catch (err) {
       console.error('[UnitDisputes] Error:', err);
       setError('Failed to load unit disputes. Please try again.');
@@ -210,7 +207,14 @@ export default function UnitDisputesPage() {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => null);
-        throw new Error(errData?.detail || 'Failed to submit dispute');
+        const detail = errData?.detail || '';
+        if (detail.toLowerCase().includes('already exists') || detail.toLowerCase().includes('duplicate')) {
+          toast.error('A dispute has already been filed for this consumption record. Please check your existing disputes.');
+          closeFileModal();
+          fetchDisputes();
+          return;
+        }
+        throw new Error(detail || 'Failed to submit dispute');
       }
 
       toast.success('Dispute submitted successfully! It will be reviewed within 2-3 business days.');
@@ -695,7 +699,7 @@ export default function UnitDisputesPage() {
                 </div>
 
                 {/* Resolution Info */}
-                {(selectedDispute.resolution_notes || selectedDispute.resolved_by || selectedDispute.resolved_at) && (
+                {(selectedDispute.resolution_notes || selectedDispute.resolved_by_email || selectedDispute.resolved_at) && (
                   <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
                     <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
                       <p className="text-xs font-medium text-gray-500 uppercase">Resolution</p>
@@ -707,10 +711,10 @@ export default function UnitDisputesPage() {
                           <p className="text-sm text-gray-900 mt-1 bg-gray-50 rounded p-2">{selectedDispute.resolution_notes}</p>
                         </div>
                       )}
-                      {selectedDispute.resolved_by && (
+                      {selectedDispute.resolved_by_email && (
                         <div className="flex justify-between">
                           <span className="text-sm text-gray-600">Resolved By</span>
-                          <span className="text-sm font-medium text-gray-900">{selectedDispute.resolved_by}</span>
+                          <span className="text-sm font-medium text-gray-900">{selectedDispute.resolved_by_email}</span>
                         </div>
                       )}
                       {selectedDispute.resolved_at && (
@@ -719,19 +723,6 @@ export default function UnitDisputesPage() {
                           <span className="text-sm font-medium text-gray-900">{formatDateTime(selectedDispute.resolved_at)}</span>
                         </div>
                       )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Refund Transaction ID */}
-                {selectedDispute.refund_transaction_id && (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-6">
-                    <p className="text-xs text-green-600 font-medium">Refund Transaction ID</p>
-                    <div className="flex items-center gap-1">
-                      <p className="text-sm text-green-900 font-mono">{selectedDispute.refund_transaction_id}</p>
-                      <button onClick={() => copyToClipboard(selectedDispute.refund_transaction_id!)} className="p-0.5 text-green-600 hover:text-green-800">
-                        <Copy className="w-3 h-3" />
-                      </button>
                     </div>
                   </div>
                 )}

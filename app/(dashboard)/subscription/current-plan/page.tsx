@@ -567,25 +567,42 @@ function CurrentPlanContent() {
         console.log('[CurrentPlan] Setting subscription_status as:', status, '(is_trial:', quotaData.is_trial, ')');
       }
 
-      // If quota-status API failed (likely due to expired subscription), set appropriate state
+      // If quota-status API failed (likely due to expired subscription), fetch plan details from company-settings
       if (!quotaData) {
-        console.log('[CurrentPlan] Quota-status API failed - likely expired subscription, allowing plan selection');
+        console.log('[CurrentPlan] Quota-status API failed - fetching expired plan details from company-settings');
         setQuotaSubscriptionStatus('expired');
-        setCompanySettings(prev => ({
-          ...(prev || {}),
-          current_plan_name: 'Subscription Expired',
-          subscription_status: 'expired',
-          status: 'expired',
-          max_seats: 0,
-          max_jobs: 0,
-          max_resume_uploads: 0,
-          max_resume_searches: 0,
-          max_assessments: 0,
-          max_ai_interviews: 0,
-          storage_limit_gb: 0,
-        } as CompanySettings));
+
+        // Fetch actual plan details from company-settings (local tenant DB) as fallback
+        try {
+          const csResponse = await api.get('/settings/company-settings');
+          const csData = csResponse.data?.data || csResponse.data;
+          if (csData) {
+            console.log('[CurrentPlan] Got expired plan details from company-settings:', csData);
+            setCompanySettings(prev => ({
+              ...(prev || {}),
+              ...csData,
+              // Force expired status
+              subscription_status: 'expired',
+              status: 'expired',
+            } as CompanySettings));
+          } else {
+            // No company settings data - set minimal expired state
+            setCompanySettings(prev => ({
+              ...(prev || {}),
+              subscription_status: 'expired',
+              status: 'expired',
+            } as CompanySettings));
+          }
+        } catch (csError) {
+          console.error('[CurrentPlan] Failed to fetch company-settings fallback:', csError);
+          // Set expired status without zeroing data
+          setCompanySettings(prev => ({
+            ...(prev || {}),
+            subscription_status: 'expired',
+            status: 'expired',
+          } as CompanySettings));
+        }
         // Don't set error - allow user to select a plan to renew
-        // setError('Unable to load subscription data. Please try again later.');
       }
 
       if (quotaData?.quotas || quotaData) {
@@ -1518,7 +1535,9 @@ function CurrentPlanContent() {
                       ? `You are on the ${(companySettings?.current_plan_name || currentPlan?.name || '').replace(/\s*\([^)]*\)\s*$/, '')} plan${!remainingTime.isExpired ? ` - ${remainingTime.displayText}` : ''}`
                       : isPendingPayment
                         ? 'Complete payment to activate your selected plan'
-                        : companySettings?.current_plan_name ? `You are on the ${companySettings.current_plan_name.replace(/\s*\([^)]*\)\s*$/, '')} plan` : ''
+                        : isExpiredSubscription
+                          ? `Your ${(companySettings?.current_plan_name || currentPlan?.name || 'subscription').replace(/\s*\([^)]*\)\s*$/, '')} plan has expired. Please renew to continue using all features.`
+                          : companySettings?.current_plan_name ? `You are on the ${companySettings.current_plan_name.replace(/\s*\([^)]*\)\s*$/, '')} plan` : ''
                 }
               </p>
             </div>
@@ -1581,13 +1600,52 @@ function CurrentPlanContent() {
           </div>
 
           {/* PS03 Fix: Renew Plan Button for Expired/Expiring Subscriptions */}
-          {!isOnTrial && !isPendingPayment && !isLocked && companySettings?.plan_expiry_date && currentPlan && (
+          {!isOnTrial && !isPendingPayment && !isLocked && (companySettings?.plan_expiry_date || isExpiredSubscription) && (
             (() => {
-              const expiryDate = new Date(companySettings.plan_expiry_date);
+              const planName = currentPlan?.name || companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || 'Your';
+
+              // If no expiry date but status is expired, show expired banner directly
+              if (!companySettings?.plan_expiry_date && isExpiredSubscription) {
+                return (
+                  <div className="mt-6 p-4 rounded-lg border-2 bg-red-50 border-red-300">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="w-6 h-6 text-red-600" />
+                        <div>
+                          <h4 className="font-medium text-red-800">Plan Expired</h4>
+                          <p className="text-sm text-red-700">
+                            Your {planName} plan has expired. Please renew to continue using all features.
+                          </p>
+                        </div>
+                      </div>
+                      {currentPlan && (
+                        <button
+                          onClick={() => {
+                            setSelectedPlanForPayment(currentPlan);
+                            setModalStep('isolation');
+                            setIsolationType('schema');
+                            setIsNewTenant(false);
+                            setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
+                            setTransactionResult(null);
+                            setError(null);
+                            setShowPaymentModal(true);
+                          }}
+                          className="px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white"
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                          Renew Current Plan
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              const expiryDate = new Date(companySettings!.plan_expiry_date!);
               const now = new Date();
               const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              const isExpired = daysUntilExpiry < 0;
-              const isExpiringSoon = daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
+              const isExpired = daysUntilExpiry < 0 || isExpiredSubscription;
+              const isExpiringSoon = !isExpired && daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
 
               if (isExpired || isExpiringSoon) {
                 return (
@@ -1611,32 +1669,34 @@ function CurrentPlanContent() {
                             isExpired ? 'text-red-700' : 'text-amber-700'
                           }`}>
                             {isExpired
-                              ? `Your ${currentPlan.name} plan expired ${Math.abs(daysUntilExpiry)} days ago`
-                              : `Your ${currentPlan.name} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
+                              ? `Your ${planName} plan expired ${Math.abs(daysUntilExpiry)} days ago. Please renew to continue using all features.`
+                              : `Your ${planName} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
                             }
                           </p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => {
-                          setSelectedPlanForPayment(currentPlan);
-                          setModalStep('isolation');
-                          setIsolationType('schema');
-                          setIsNewTenant(false);
-                          setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
-                          setTransactionResult(null);
-                          setError(null);
-                          setShowPaymentModal(true);
-                        }}
-                        className={`px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                          isExpired
-                            ? 'bg-red-600 hover:bg-red-700 text-white'
-                            : 'bg-amber-600 hover:bg-amber-700 text-white'
-                        }`}
-                      >
-                        <ArrowRight className="w-4 h-4" />
-                        Renew Current Plan
-                      </button>
+                      {currentPlan && (
+                        <button
+                          onClick={() => {
+                            setSelectedPlanForPayment(currentPlan);
+                            setModalStep('isolation');
+                            setIsolationType('schema');
+                            setIsNewTenant(false);
+                            setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
+                            setTransactionResult(null);
+                            setError(null);
+                            setShowPaymentModal(true);
+                          }}
+                          className={`px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                            isExpired
+                              ? 'bg-red-600 hover:bg-red-700 text-white'
+                              : 'bg-amber-600 hover:bg-amber-700 text-white'
+                          }`}
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                          Renew Current Plan
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

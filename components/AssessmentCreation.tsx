@@ -1068,6 +1068,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         proctoring_enabled: proctoringEnabled,
       };
 
+      // 🔍 DEBUG: Log topics being sent to backend
+      console.log('[ASSESSMENT-CREATE] 🔍 Topics being sent to backend:');
+      console.log('  HR topics:', assessmentData.hr_topics);
+      console.log('  Technical topics:', assessmentData.technical_topics);
+      console.log('  Coding topics:', assessmentData.coding_topics);
+      console.log('  Sections state:', sections);
+
       let resultAssessment;
 
       if (isEditMode && editingAssessment) {

@@ -48,9 +48,11 @@ export interface Permission {
   canViewUsage?: boolean;
 
   // RBAC06: Feature flags
-  canRunScoring?: boolean;
+  canViewScoring?: boolean;      // NEW: View resume scoring page/results
+  canRunScoring?: boolean;       // Run scoring operations
   canRunAiInterviews?: boolean;
-  canRunAiMatch?: boolean;
+  canViewAiMatch?: boolean;      // NEW: View AI talent match page/results
+  canRunAiMatch?: boolean;       // Run AI match operations
   canBulkOperations?: boolean;
   canExport?: boolean;
   canApiAccess?: boolean;

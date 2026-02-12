@@ -18,6 +18,7 @@ import { ResultsScreen } from './ResultsScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { ErrorScreen } from './ErrorScreen';
 import { CompletedScreen } from './CompletedScreen';
+import { IdentityVerificationScreen } from './IdentityVerificationScreen';
 import { useRefreshPrevention } from '@/hooks/useRefreshPrevention';
 import { useProctoringMonitor, ProctoringWarning } from '@/hooks/useProctoringMonitor';
 import { ProctoringWarningModal, useProctoringWarnings } from './ProctoringWarningModal';
@@ -148,6 +149,7 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
 type AssessmentStep =
   | 'loading'
   | 'error'
+  | 'identity_verification'  // Security: Verify candidate identity before consent
   | 'landing'
   | 'consent'
   | 'system_check'
@@ -330,6 +332,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     // GUARD 3: Check current step using REF (not state - avoids stale closure)
     const currentStep = stepRef.current;
     const activeFlowSteps: AssessmentStep[] = [
+      'identity_verification',
       'system_check',
       'generating_questions',
       'assessment',
@@ -366,6 +369,9 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       });
       setAssessmentInfo(info);
 
+      // Check identity verification status (from session storage)
+      const isIdentityVerified = sessionStorage.getItem(`identity_verified_${token}`) === 'true';
+
       // Determine initial step based on status
       if (info.attempt_status === 'completed') {
         console.log('[DEBUG] Attempt status is COMPLETED');
@@ -387,6 +393,10 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
             setStepSafe('completed');
           }
         }
+      } else if (!isIdentityVerified) {
+        // Identity not verified - require verification first
+        console.log('[DEBUG] Identity not verified - showing verification screen');
+        setStepSafe('identity_verification');
       } else if (info.can_resume) {
         // Can resume existing attempt
         console.log('[DEBUG] Can resume - fetching current question');
@@ -482,6 +492,22 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       // Still proceed to system check - fallback will handle it
       console.log('[PORTAL] Proceeding to system check anyway - fallback will trigger prepare later');
       setStepSafe('system_check');
+    }
+  };
+
+  const handleIdentityVerified = () => {
+    // Identity verified successfully - proceed to consent or next step
+    console.log('[DEBUG] Identity verified, proceeding to next step');
+
+    if (!assessmentInfo?.consent_accepted) {
+      // Need to accept consent
+      setStepSafe('consent');
+    } else if (assessmentInfo?.can_start) {
+      // Consent already accepted, show landing
+      setStepSafe('landing');
+    } else if (assessmentInfo?.can_resume) {
+      // Can resume assessment directly
+      loadAssessmentInfo();
     }
   };
 
@@ -974,6 +1000,14 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
           }}
         />
       );
+
+      case 'identity_verification':
+        return (
+          <IdentityVerificationScreen
+            token={token}
+            onVerified={handleIdentityVerified}
+          />
+        );
 
     case 'landing':
       return (
