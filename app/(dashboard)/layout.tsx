@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
 import Sidebar from '@/components/shared/Sidebar';
 import Header from '@/components/Header';
 import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
@@ -65,26 +65,18 @@ export default function DashboardLayout({
 
   // Initialize as undefined to show locked state until we know for sure
   const [subscriptionExpired, setSubscriptionExpired] = useState<boolean | undefined>(undefined);
+  const unlockTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
 
-  // Initialize subscription status on mount from cache or tenant data
+  // Initialize subscription status - keep locked until proven active
   useEffect(() => {
     if (isLoading) return;
 
-    // Check localStorage for cached expired plan
-    const cachedExpiredPlan = localStorage.getItem('talentflow_expired_plan');
-    if (cachedExpiredPlan) {
-      try {
-        const data = JSON.parse(cachedExpiredPlan);
-        if (data.subscription_status === 'expired') {
-          console.log('[DASHBOARD] Found cached expired plan - locking menus');
-          setSubscriptionExpired(true);
-          return;
-        }
-      } catch (e) {
-        console.error('[DASHBOARD] Error parsing cached expired plan:', e);
-      }
+    // Clear any existing timer
+    if (unlockTimerRef.current) {
+      clearTimeout(unlockTimerRef.current);
+      unlockTimerRef.current = null;
     }
 
     // Check tenant subscription status
@@ -92,10 +84,26 @@ export default function DashboardLayout({
       const status = tenant.subscription.status?.toLowerCase();
       const isExpired = status === 'expired' || status === 'inactive';
       console.log('[DASHBOARD] Tenant subscription status:', status, 'isExpired:', isExpired);
-      setSubscriptionExpired(isExpired);
-    } else {
-      // No subscription data - assume not expired
-      setSubscriptionExpired(false);
+
+      if (isExpired) {
+        // Immediately lock if tenant data says expired
+        setSubscriptionExpired(true);
+      } else if (status === 'active') {
+        // If tenant says active, wait for API verification before unlocking
+        // Set a timer - if no SUBSCRIPTION_INACTIVE_EVENT fires within 2s, unlock menus
+        unlockTimerRef.current = setTimeout(() => {
+          console.log('[DASHBOARD] No subscription errors detected - unlocking menus');
+          setSubscriptionExpired(false);
+          unlockTimerRef.current = null;
+        }, 2000);
+
+        return () => {
+          if (unlockTimerRef.current) {
+            clearTimeout(unlockTimerRef.current);
+            unlockTimerRef.current = null;
+          }
+        };
+      }
     }
   }, [isLoading, tenant]);
 
@@ -103,6 +111,14 @@ export default function DashboardLayout({
   useEffect(() => {
     const handleSubscriptionInactive = (event: CustomEvent<SubscriptionInactiveDetail>) => {
       console.log('[DASHBOARD] Subscription inactive detected:', event.detail?.status);
+
+      // Clear unlock timer if it exists (prevent unlocking after error)
+      if (unlockTimerRef.current) {
+        clearTimeout(unlockTimerRef.current);
+        unlockTimerRef.current = null;
+        console.log('[DASHBOARD] Cancelled unlock timer - subscription is expired');
+      }
+
       setSubscriptionExpired(true);
     };
 
