@@ -208,12 +208,37 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     fetchAssessmentDetails();
   }, [assessmentId]);
 
-  // Fetch results from API
+  // Track total items from server (for pagination)
+  const [totalItems, setTotalItems] = useState(0);
+
+  // Fetch results from API with server-side pagination and filters
   useEffect(() => {
     const fetchResults = async () => {
       setIsLoading(true);
       try {
-        const response = await assessmentService.listResults(assessmentId);
+        // Build server-side filter parameters
+        const params: any = {
+          page: currentPage,
+          page_size: pageSize,
+        };
+
+        // Add server-supported filters
+        if (searchQuery.trim()) {
+          params.search = searchQuery.trim();
+        }
+
+        if (statusFilter !== 'all') {
+          params.status_filter = statusFilter.toLowerCase().replace(' ', '_');
+        }
+
+        // Pass/Fail filter (convert to score filter)
+        if (passFailFilter === 'pass') {
+          params.passed = true;
+        } else if (passFailFilter === 'fail') {
+          params.passed = false;
+        }
+
+        const response = await assessmentService.listResults(assessmentId, params);
         if (response?.items) {
           // Map API response to component format
           const mapped: CandidateResult[] = response.items.map((item: any, index: number) => {
@@ -298,6 +323,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           });
           setCandidateResults(mapped);
 
+          // Set total from server for pagination
+          setTotalItems(response.total || mapped.length);
+
           // Set stats from API
           setApiStats({
             completed_count: response.completed_count || mapped.filter((c: CandidateResult) => c.status === 'Completed').length,
@@ -310,13 +338,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         console.error('Failed to fetch assessment results:', error);
         // Keep empty results on error
         setCandidateResults([]);
+        setTotalItems(0);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchResults();
-  }, [assessmentId]);
+  }, [assessmentId, currentPage, pageSize, searchQuery, statusFilter, passFailFilter]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -445,6 +474,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     );
   }
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, passFailFilter, roundFilters]);
+
   // AS-23: Handle sort toggle
   const handleSort = (field: 'name' | 'score' | 'status' | 'date') => {
     if (sortField === field) {
@@ -453,13 +487,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       setSortField(field);
       setSortDirection('desc');
     }
-    setCurrentPage(1); // Reset to first page on sort change
+    // Note: Page reset handled by filter change effect above
   };
 
-  // AS-23: Filter candidates by round type, search, and status
+  // Server has already applied: search, status filter, pass/fail filter
+  // Only apply client-side filters that server doesn't support (round-based percentage ranges)
   let filteredCandidates = displayResults;
 
-  // Round-based filtering with percentage ranges
+  // Round-based filtering with percentage ranges (CLIENT-SIDE ONLY)
   if (Object.keys(roundFilters).length > 0) {
     filteredCandidates = filteredCandidates.filter(candidate => {
       // Check if candidate meets ALL specified round filters (HR removed - only Tech and Coding)
@@ -503,32 +538,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     });
   }
 
-  // Pass/Fail filter
-  if (passFailFilter !== 'all') {
-    filteredCandidates = filteredCandidates.filter(candidate => {
-      // A candidate passes if they have completed and their percentage is >= 50
-      const isPassed = candidate.status === 'Completed' && candidate.percentage >= 50;
-      return passFailFilter === 'pass' ? isPassed : !isPassed;
-    });
-  }
-
-  // Search filter (name, email, phone, or JD title)
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase().trim();
-    filteredCandidates = filteredCandidates.filter(c =>
-      c.name.toLowerCase().includes(query) ||
-      c.email.toLowerCase().includes(query) ||
-      (c.phone && c.phone.toLowerCase().includes(query)) ||
-      (jdTitle && jdTitle.toLowerCase().includes(query))
-    );
-  }
-
-  // Status filter (All, Completed, In Progress, Pending)
-  if (statusFilter !== 'all') {
-    filteredCandidates = filteredCandidates.filter(c => c.status === statusFilter);
-  }
-
-  // AS-23: Sort candidates
+  // Client-side sort (applied to current page only)
   filteredCandidates = [...filteredCandidates].sort((a, b) => {
     let comparison = 0;
     switch (sortField) {
@@ -548,12 +558,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return sortDirection === 'asc' ? comparison : -comparison;
   });
 
-  // AS-23: Pagination calculations
-  const totalItems = filteredCandidates.length;
+  // Use server-paginated results directly (no client-side slice needed)
+  const paginatedCandidates = filteredCandidates;
+
+  // Calculate pagination from server total
   const totalPages = Math.ceil(totalItems / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedCandidates = filteredCandidates.slice(startIndex, endIndex);
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
 
   // Use API stats if available, otherwise calculate from data
   const completedCount = candidateResults.length > 0 ? apiStats.completed_count : filteredCandidates.filter(c => c.status === 'Completed').length;
@@ -576,7 +587,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             <div>
               <h1 className="text-gray-900 mb-2">{assessmentTitle}</h1>
               <p className="text-sm text-gray-600">
-                Assessment Results - {displayResults.length} candidates completed
+                Assessment Results - {totalItems} total candidates
                 {selectedRows.length > 0 && (
                   <span className="ml-2 text-gray-800 font-medium">
                     • {selectedRows.length} selected

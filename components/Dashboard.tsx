@@ -37,6 +37,7 @@ import { handleUnauthorized } from '@/lib/services/api';
 
 import { User, Tenant, getRemainingUnits } from '@/lib/types/tenant';
 import UnitsWarningBanner from './UnitsWarningBanner';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -82,6 +83,8 @@ export default function Dashboard({
   user,
   tenant
 }: DashboardProps = {}) {
+  // Get permission helpers from auth context
+  const { hasPermission, isTenantAdmin } = useAuth();
 
   // Get usage data from tenant
   const subscription = tenant?.subscription;
@@ -105,7 +108,7 @@ export default function Dashboard({
   const [loadingActivities, setLoadingActivities] = useState(true);
 
   // Permission checks
-  const canCreateJD = user?.is_tenant_admin || user?.permissions?.canCreateJD;
+  const canCreateJD = hasPermission('canCreateJD') || isTenantAdmin;
 
   // Fetch Recent Activities
   const fetchRecentActivities = useCallback(async () => {
