@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, PlayCircle, Paperclip } from 'lucide-react';
+import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -13,6 +13,9 @@ import api from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
+import { assessmentService } from '@/lib/services';
+import ShareAssessmentModal from './ShareAssessmentModal';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 interface Job {
   id: string;
@@ -63,6 +66,11 @@ export default function AITalentMatchPage({
 }: AITalentMatchPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { hasPermission, isTenantAdmin, user } = useAuth();
+
+  // ✅ RBAC: Check if user can run AI match operations
+  const canRunAiMatch = user?.permissions?.canRunAiMatch ?? false;
+
 
   const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'results'>('history');
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<MatchHistory | null>(null);
@@ -76,11 +84,21 @@ export default function AITalentMatchPage({
   const [filterLocation, setFilterLocation] = useState('');
   const [filterExperienceMin, setFilterExperienceMin] = useState<number | ''>('');
   const [filterExperienceMax, setFilterExperienceMax] = useState<number | ''>('');
-  const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank');
+  const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank'); // Sort by highest rating first (DevRMS style)
 
   // Pagination state for match results
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+
+  // Assessment-related state
+  const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
+  const [assessments, setAssessments] = useState<any[]>([]);
+  const [selectedAssessments, setSelectedAssessments] = useState<any[]>([]); // Changed to store full assessment objects
+  const [assessmentSearchQuery, setAssessmentSearchQuery] = useState('');
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [currentAssessmentForShare, setCurrentAssessmentForShare] = useState<any>(null);
+  const [prefilledCandidates, setPrefilledCandidates] = useState<any[]>([]);
+
 
   // Track if we're in an active matching session to prevent URL effect interference
   const isMatchingInProgress = useRef(false);
@@ -466,6 +484,116 @@ export default function AITalentMatchPage({
     }
   };
 
+  // Assessment handlers
+  const handleAssessment = async () => {
+    if (selectedCandidates.length === 0) {
+      toast.warning('Please select at least one candidate');
+      return;
+    }
+
+    // Fetch active assessments (published status)
+    try {
+      const response = await assessmentService.list({ status: 'published', page_size: 100 });
+      const activeAssessments = response.items.map((a: any) => ({
+        ...a,
+        created_by_name: a.created_by_name || 'System',
+        short_id: a.short_id || `AS-${String(a.id).slice(0, 8).toUpperCase()}`,
+      }));
+
+      setAssessments(activeAssessments);
+      setIsAssessmentModalOpen(true);
+    } catch (error) {
+      console.error('[AITalentMatch] Failed to fetch assessments:', error);
+      toast.error('Failed to load assessments');
+    }
+  };
+
+  const handleAssessmentSelect = (assessment: any) => {
+    setSelectedAssessments(prev => {
+      const isSelected = prev.some(a => a.id === assessment.id);
+      if (isSelected) {
+        return prev.filter(a => a.id !== assessment.id);
+      } else {
+        return [...prev, assessment];
+      }
+    });
+  };
+
+  const handleProceedToInvite = () => {
+    if (selectedAssessments.length === 0) {
+      toast.error('Please select at least one assessment');
+      return;
+    }
+
+    // Extract candidate data from selected candidates
+    const currentCandidates = viewMode === 'results' ? matchedCandidates :
+                              selectedHistoryItem ? selectedHistoryItem.matchedCandidates : [];
+    const candidateData = currentCandidates
+      .filter(c => selectedCandidates.includes(c.id))
+      .map((c, index) => ({
+        id: `${Date.now()}-${index}`,
+        name: c.name,
+        email: c.email || '',
+        source: 'ai-match' as const,
+        candidateId: c.id
+      }))
+      .filter(c => c.email); // Only include candidates with email
+
+    if (candidateData.length === 0) {
+      toast.error('Selected candidates must have email addresses');
+      return;
+    }
+
+    // Open ShareAssessmentModal with first selected assessment
+    setPrefilledCandidates(candidateData);
+    setCurrentAssessmentForShare(selectedAssessments[0]);
+    setIsAssessmentModalOpen(false);
+    setIsShareModalOpen(true);
+  };
+
+  const handleSendInvitations = async (candidates: any[], message: string) => {
+    try {
+      let successCount = 0;
+      let failCount = 0;
+
+      // Bulk send invitations for all selected assessments
+      for (const assessment of selectedAssessments) {
+        for (const candidate of candidates) {
+          if (candidate.email) {
+            try {
+              await assessmentService.sendInvitation(assessment.id, {
+                candidate_email: candidate.email,
+                candidate_name: candidate.name,
+                resume_id: candidate.resumeId || candidate.candidateId,
+                custom_message: message,
+              });
+              successCount++;
+            } catch (err) {
+              console.error(`Failed to send invitation for ${candidate.email}:`, err);
+              failCount++;
+            }
+          }
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Sent ${successCount} invitation(s) for ${selectedAssessments.length} assessment(s)`);
+      }
+      if (failCount > 0) {
+        toast.error(`Failed to send ${failCount} invitation(s)`);
+      }
+
+      setIsShareModalOpen(false);
+      setSelectedAssessments([]);
+      setSelectedCandidates([]);
+      setPrefilledCandidates([]);
+      setAssessmentSearchQuery('');
+    } catch (error: any) {
+      console.error('Failed to send invitations:', error);
+      toast.error(error.message || 'Failed to send invitations');
+    }
+  };
+
   const getFilteredCandidates = (): MatchedCandidateWithVersions[] => {
     const candidates: MatchedCandidateWithVersions[] = viewMode === 'results' ? matchedCandidates :
                       selectedHistoryItem ? selectedHistoryItem.matchedCandidates : [];
@@ -638,13 +766,23 @@ export default function AITalentMatchPage({
                   {canRunAIMatch && (
                     <button
                       onClick={() => {
+                        if (!canRunAiMatch) {
+                          toast.error('You do not have permission to run AI matching operations');
+                          return;
+                        }
                         const jobId = selectedJob || selectedHistoryItem?.jobId;
                         if (jobId) {
                           handleRunAIMatch(jobId);
                           setSelectedCandidates([]);
                         }
                       }}
-                      className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium flex items-center gap-2"
+                      disabled={!canRunAiMatch}
+                      className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2 ${
+                        canRunAiMatch
+                          ? 'bg-gray-800 text-white hover:bg-gray-900 cursor-pointer'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                      }`}
+                      title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
                     >
                       <Sparkles className="w-4 h-4" />
                       Run AI Match
@@ -716,13 +854,39 @@ export default function AITalentMatchPage({
                 {filteredCandidates.length} candidates
               </div>
               {selectedCandidates.length > 0 && (
-                <button
-                  onClick={handleSubmitToScoring}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium text-sm flex items-center gap-2"
-                >
-                  <Target className="w-4 h-4" />
-                  Score ({selectedCandidates.length})
-                </button>
+                <div className="flex items-center gap-2">
+                  {availableUnits !== null && selectedCandidates.length > availableUnits && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <span className="text-xs text-amber-700 font-medium">
+                        Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
+                      </span>
+                    </div>
+                  )}
+                  <>
+                  <button
+                      onClick={handleSubmitToScoring}
+                      disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
+                    className={`px-4 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center gap-2 ${
+                      availableUnits !== null && selectedCandidates.length > availableUnits
+                        ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                        : 'bg-gray-800 hover:bg-gray-900'
+                    }`}
+                    >
+                      <Target className="w-4 h-4" />
+                      Score ({selectedCandidates.length})
+                    </button>
+                  {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
+                    <button
+                      onClick={handleAssessment}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-sm flex items-center gap-2"
+                    >
+                      <ClipboardList className="w-4 h-4" />
+                      Assessment ({selectedCandidates.length})
+                    </button>
+                  )}
+                </>
+              </div>
               )}
             </div>
             {/* Additional Filters */}
@@ -760,8 +924,8 @@ export default function AITalentMatchPage({
                 onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
               >
-                <option value="rank">Sort by Rank</option>
-                <option value="name">Sort by Name</option>
+                <option value="rank">Sort by Rating (High to Low)</option>
+                <option value="name">Sort by Name (A to Z)</option>
                 <option value="score">Sort by Score</option>
                 <option value="experience">Sort by Experience</option>
               </select>
@@ -792,7 +956,7 @@ export default function AITalentMatchPage({
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
-                  Matched Rating
+                  Match Rating
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
                   Candidate Name
@@ -840,11 +1004,11 @@ export default function AITalentMatchPage({
                     />
                   </td>
                   <td className="px-4 py-4">
-                    <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full font-bold text-base ${
-                      (candidate.rank || 0) >= 9 ? 'bg-green-100 text-green-700 border-2 border-green-300' :
-                      (candidate.rank || 0) >= 7 ? 'bg-blue-100 text-blue-700 border-2 border-blue-300' :
-                      (candidate.rank || 0) >= 5 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
-                      'bg-gray-100 text-gray-600 border-2 border-gray-200'
+                    <div className={`inline-flex items-center justify-center px-3 py-1 rounded-md font-bold text-sm ${
+                      (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
+                      (candidate.rank || 0) >= 4 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
+                      (candidate.rank || 0) >= 1 ? 'bg-gray-100 text-gray-700 border border-gray-300' :
+                      'bg-gray-50 text-gray-400 border border-gray-200'
                     }`}>
                       {candidate.rank || '-'}
                     </div>
@@ -993,6 +1157,254 @@ export default function AITalentMatchPage({
           }}
         />
       )}
+
+      {/* Assessment Selection Modal - for details/results view */}
+      {isAssessmentModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setIsAssessmentModalOpen(false);
+            setSelectedAssessments([]);
+            setAssessmentSearchQuery('');
+          }
+        }}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-2xl font-bold text-gray-900">Select Active Assessments</h2>
+                <button
+                  onClick={() => {
+                    setIsAssessmentModalOpen(false);
+                    setSelectedAssessments([]);
+                    setAssessmentSearchQuery('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Select one or more assessments to send to {selectedCandidates.length} candidate{selectedCandidates.length !== 1 ? 's' : ''}
+              </p>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={assessmentSearchQuery}
+                  onChange={(e) => setAssessmentSearchQuery(e.target.value)}
+                  placeholder="Search by Assessment ID, Name, JD ID, or JD Name..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                />
+              </div>
+
+              {/* Select All / Clear All */}
+              {assessments.length > 0 && (() => {
+                const filteredAssessments = assessments.filter(assessment => {
+                  if (!assessmentSearchQuery.trim()) return true;
+                  const query = assessmentSearchQuery.toLowerCase();
+                  return (
+                    assessment.short_id?.toLowerCase().includes(query) ||
+                    assessment.title?.toLowerCase().includes(query) ||
+                    assessment.jd_short_id?.toLowerCase().includes(query) ||
+                    assessment.jd_title?.toLowerCase().includes(query)
+                  );
+                });
+                return filteredAssessments.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (selectedAssessments.length === filteredAssessments.length) {
+                        setSelectedAssessments([]);
+                      } else {
+                        setSelectedAssessments(filteredAssessments);
+                      }
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-3"
+                  >
+                    {selectedAssessments.length === filteredAssessments.length && selectedAssessments.length > 0 ? 'Clear All' : 'Select All'}
+                  </button>
+                );
+              })()}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {(() => {
+                const filteredAssessments = assessments.filter(assessment => {
+                  if (!assessmentSearchQuery.trim()) return true;
+                  const query = assessmentSearchQuery.toLowerCase();
+                  return (
+                    assessment.short_id?.toLowerCase().includes(query) ||
+                    assessment.title?.toLowerCase().includes(query) ||
+                    assessment.jd_short_id?.toLowerCase().includes(query) ||
+                    assessment.jd_title?.toLowerCase().includes(query)
+                  );
+                });
+
+                return filteredAssessments.length === 0 ? (
+                  <div className="text-center py-12">
+                    <ClipboardList className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">{assessmentSearchQuery ? 'No assessments match your search' : 'No active assessments available'}</p>
+                    <p className="text-sm text-gray-400 mt-1">{assessmentSearchQuery ? 'Try different search terms' : 'Create and publish an assessment first'}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredAssessments.map((assessment) => {
+                      const isSelected = selectedAssessments.some(a => a.id === assessment.id);
+                      return (
+                        <button
+                          key={assessment.id}
+                          onClick={() => handleAssessmentSelect(assessment)}
+                          className={`w-full text-left border-2 rounded-lg p-4 transition-all ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            {/* Checkbox */}
+                            <div className="flex-shrink-0 mt-1">
+                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                isSelected
+                                  ? 'bg-blue-500 border-blue-500'
+                                  : 'bg-white border-gray-300'
+                              }`}>
+                                {isSelected && (
+                                  <CheckCircle className="w-4 h-4 text-white" />
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex-1">
+                              {/* Assessment ID, Title, and Active Badge */}
+                              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                {assessment.short_id && (
+                                  <span className="text-xs px-2 py-0.5 bg-gray-800 text-white rounded font-semibold">
+                                    {assessment.short_id}
+                                  </span>
+                                )}
+                                <h5 className="font-medium text-gray-900">{assessment.title}</h5>
+                                <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                                  Active
+                                </span>
+                              </div>
+
+                              {/* Linked JD Information */}
+                              {assessment.jd_short_id && (
+                                <div className="text-xs text-gray-600 mb-1.5">
+                                  <span className="font-medium">Linked to: </span>
+                                  <span className="text-gray-800">{assessment.jd_short_id}</span>
+                                  {assessment.jd_title && (
+                                    <span className="ml-1">- {assessment.jd_title}</span>
+                                  )}
+                                  {assessment.jd_version && (
+                                    <span className="ml-1 text-gray-500">v{assessment.jd_version}</span>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Duration and Sections */}
+                              <div className="flex items-center gap-3 text-sm text-gray-500">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {assessment.duration_minutes || 0} min
+                                </span>
+                              </div>
+
+                              {/* Created By and Date */}
+                              <div className="flex items-center gap-3 text-xs text-gray-500 mt-1.5">
+                                {assessment.created_by_name && (
+                                  <>
+                                    <span>Created by: <span className="text-gray-700 font-medium">{assessment.created_by_name}</span></span>
+                                    <span>•</span>
+                                  </>
+                                )}
+                                {assessment.created_at && (
+                                  <span>
+                                    {(() => {
+                                      const dateWithZ = assessment.created_at + (assessment.created_at.includes('Z') ? '' : 'Z');
+                                      const date = new Date(dateWithZ);
+                                      return `${date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}`;
+                                    })()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <div className="text-sm text-gray-600">
+                {selectedAssessments.length} assessment{selectedAssessments.length !== 1 ? 's' : ''} selected
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setIsAssessmentModalOpen(false);
+                    setSelectedAssessments([]);
+                    setAssessmentSearchQuery('');
+                  }}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleProceedToInvite}
+                  disabled={selectedAssessments.length === 0}
+                  className="flex items-center gap-2 px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Mail className="w-4 h-4" />
+                  Proceed to Send Invitations
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Assessment Modal - for details/results view */}
+      {isShareModalOpen && selectedAssessments.length > 0 && (
+        <ShareAssessmentModal
+          isOpen={isShareModalOpen}
+          onClose={() => {
+            setIsShareModalOpen(false);
+            setCurrentAssessmentForShare(null);
+            setSelectedAssessments([]);
+            setPrefilledCandidates([]);
+            setAssessmentSearchQuery('');
+          }}
+          assessment={{
+            id: selectedAssessments[0].id,
+            title: selectedAssessments[0].title,
+            duration: `${selectedAssessments[0].duration_minutes || 0} min`,
+            questions: (selectedAssessments[0].hr_enabled ? 1 : 0) +
+                      (selectedAssessments[0].technical_enabled ? 1 : 0) +
+                      (selectedAssessments[0].coding_enabled ? 1 : 0),
+            type: 'AI-Generated',
+            short_id: selectedAssessments[0].short_id,
+            jd_short_id: selectedAssessments[0].jd_short_id,
+            jd_title: selectedAssessments[0].jd_title,
+            jd_version: selectedAssessments[0].jd_version,
+          }}
+          assessments={selectedAssessments.map(a => ({
+            id: a.id,
+            title: a.title,
+            duration: `${a.duration_minutes || 0} min`,
+            questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
+            type: 'AI-Generated',
+            short_id: a.short_id,
+            jd_short_id: a.jd_short_id,
+            jd_title: a.jd_title,
+            jd_version: a.jd_version
+          }))}
+          prefilledCandidates={prefilledCandidates}
+        />
+      )}
       </>
     );
   }
@@ -1042,12 +1454,22 @@ export default function AITalentMatchPage({
             
             <button
               onClick={() => {
+                if (!canRunAiMatch) {
+                  toast.error('You do not have permission to run AI matching operations');
+                  return;
+                }
                 setViewMode('new');
                 setSelectedJob('');
                 setSelectedCandidates([]);
                 router.push('/recruitment/ai-talent-match', { scroll: false });
               }}
-              className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
+              disabled={!canRunAiMatch}
+              className={`px-5 py-2.5 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm ${
+                canRunAiMatch
+                  ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+              }`}
+              title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
             >
               <Sparkles className="w-4 h-4" />
               Run AI Match
@@ -1255,11 +1677,21 @@ export default function AITalentMatchPage({
               </p>
               <button
                 onClick={() => {
+                  if (!canRunAiMatch) {
+                    toast.error('You do not have permission to run AI matching operations');
+                    return;
+                  }
                   setViewMode('new');
                   setSelectedJob('');
                   router.push('/recruitment/ai-talent-match', { scroll: false });
                 }}
-                className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium shadow-sm hover:shadow-md inline-flex items-center gap-2"
+                disabled={!canRunAiMatch}
+                className={`px-6 py-3 rounded-lg transition-all font-medium shadow-sm inline-flex items-center gap-2 ${
+                  canRunAiMatch
+                    ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                }`}
+                title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
               >
                 <Sparkles className="w-5 h-5" />
                 Run AI Match Now
@@ -1416,13 +1848,39 @@ export default function AITalentMatchPage({
                 {filteredCandidates.length} candidates
               </div>
               {selectedCandidates.length > 0 && (
-                <button
-                  onClick={handleSubmitToScoring}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all font-medium text-sm flex items-center gap-2"
-                >
-                  <Target className="w-4 h-4" />
-                  Score ({selectedCandidates.length})
-                </button>
+                <div className="flex items-center gap-2">
+                  {availableUnits !== null && selectedCandidates.length > availableUnits && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <span className="text-xs text-amber-700 font-medium">
+                        Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
+                      </span>
+                    </div>
+                  )}
+                  <>
+                  <button
+                      onClick={handleSubmitToScoring}
+                      disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
+                    className={`px-4 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center gap-2 ${
+                      availableUnits !== null && selectedCandidates.length > availableUnits
+                        ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                        : 'bg-gray-800 hover:bg-gray-900'
+                    }`}
+                    >
+                      <Target className="w-4 h-4" />
+                      Score ({selectedCandidates.length})
+                    </button>
+                  {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
+                    <button
+                      onClick={handleAssessment}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-sm flex items-center gap-2"
+                    >
+                      <ClipboardList className="w-4 h-4" />
+                      Assessment ({selectedCandidates.length})
+                    </button>
+                  )}
+                </>
+              </div>
               )}
             </div>
             {/* Additional Filters */}
@@ -1460,8 +1918,8 @@ export default function AITalentMatchPage({
                 onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
               >
-                <option value="rank">Sort by Rank</option>
-                <option value="name">Sort by Name</option>
+                <option value="rank">Sort by Rating (High to Low)</option>
+                <option value="name">Sort by Name (A to Z)</option>
                 <option value="score">Sort by Score</option>
                 <option value="experience">Sort by Experience</option>
               </select>
@@ -1482,9 +1940,19 @@ export default function AITalentMatchPage({
               </p>
               <button
                 onClick={() => {
+                  if (!canRunAiMatch) {
+                    toast.error('You do not have permission to run AI matching operations');
+                    return;
+                  }
                   setShowMatchingPanel(true);
                 }}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all font-medium flex items-center gap-2 shadow-md"
+                disabled={!canRunAiMatch}
+                className={`px-6 py-3 rounded-lg transition-all font-medium flex items-center gap-2 shadow-md ${
+                  canRunAiMatch
+                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                }`}
+                title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
               >
                 <Sparkles className="w-5 h-5" />
                 Run AI Talent Match
@@ -1729,6 +2197,255 @@ export default function AITalentMatchPage({
           }}
         />
       )}
+
+      {/* Assessment Selection Modal */}
+      {isAssessmentModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setIsAssessmentModalOpen(false);
+            setSelectedAssessments([]);
+            setAssessmentSearchQuery('');
+          }
+        }}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-2xl font-bold text-gray-900">Select Active Assessments</h2>
+                <button
+                  onClick={() => {
+                    setIsAssessmentModalOpen(false);
+                    setSelectedAssessments([]);
+                    setAssessmentSearchQuery('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Select one or more assessments to send to {selectedCandidates.length} candidate{selectedCandidates.length !== 1 ? 's' : ''}
+              </p>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={assessmentSearchQuery}
+                  onChange={(e) => setAssessmentSearchQuery(e.target.value)}
+                  placeholder="Search by Assessment ID, Name, JD ID, or JD Name..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                />
+              </div>
+
+              {/* Select All / Clear All */}
+              {assessments.length > 0 && (() => {
+                const filteredAssessments = assessments.filter(assessment => {
+                  if (!assessmentSearchQuery.trim()) return true;
+                  const query = assessmentSearchQuery.toLowerCase();
+                  return (
+                    assessment.short_id?.toLowerCase().includes(query) ||
+                    assessment.title?.toLowerCase().includes(query) ||
+                    assessment.jd_short_id?.toLowerCase().includes(query) ||
+                    assessment.jd_title?.toLowerCase().includes(query)
+                  );
+                });
+                return filteredAssessments.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (selectedAssessments.length === filteredAssessments.length) {
+                        setSelectedAssessments([]);
+                      } else {
+                        setSelectedAssessments(filteredAssessments);
+                      }
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-3"
+                  >
+                    {selectedAssessments.length === filteredAssessments.length && selectedAssessments.length > 0 ? 'Clear All' : 'Select All'}
+                  </button>
+                );
+              })()}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {(() => {
+                const filteredAssessments = assessments.filter(assessment => {
+                  if (!assessmentSearchQuery.trim()) return true;
+                  const query = assessmentSearchQuery.toLowerCase();
+                  return (
+                    assessment.short_id?.toLowerCase().includes(query) ||
+                    assessment.title?.toLowerCase().includes(query) ||
+                    assessment.jd_short_id?.toLowerCase().includes(query) ||
+                    assessment.jd_title?.toLowerCase().includes(query)
+                  );
+                });
+
+                return filteredAssessments.length === 0 ? (
+                  <div className="text-center py-12">
+                    <ClipboardList className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">{assessmentSearchQuery ? 'No assessments match your search' : 'No active assessments available'}</p>
+                    <p className="text-sm text-gray-400 mt-1">{assessmentSearchQuery ? 'Try different search terms' : 'Create and publish an assessment first'}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredAssessments.map((assessment) => {
+                      const isSelected = selectedAssessments.some(a => a.id === assessment.id);
+                      return (
+                        <button
+                          key={assessment.id}
+                          onClick={() => handleAssessmentSelect(assessment)}
+                          className={`w-full text-left border-2 rounded-lg p-4 transition-all ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            {/* Checkbox */}
+                            <div className="flex-shrink-0 mt-1">
+                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                isSelected
+                                  ? 'bg-blue-500 border-blue-500'
+                                  : 'bg-white border-gray-300'
+                              }`}>
+                                {isSelected && (
+                                  <CheckCircle className="w-4 h-4 text-white" />
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex-1">
+                              {/* Assessment ID, Title, and Active Badge */}
+                              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                {assessment.short_id && (
+                                  <span className="text-xs px-2 py-0.5 bg-gray-800 text-white rounded font-semibold">
+                                    {assessment.short_id}
+                                  </span>
+                                )}
+                                <h5 className="font-medium text-gray-900">{assessment.title}</h5>
+                                <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                                  Active
+                                </span>
+                              </div>
+
+                              {/* Linked JD Information */}
+                              {assessment.jd_short_id && (
+                                <div className="text-xs text-gray-600 mb-1.5">
+                                  <span className="font-medium">Linked to: </span>
+                                  <span className="text-gray-800">{assessment.jd_short_id}</span>
+                                  {assessment.jd_title && (
+                                    <span className="ml-1">- {assessment.jd_title}</span>
+                                  )}
+                                  {assessment.jd_version && (
+                                    <span className="ml-1 text-gray-500">v{assessment.jd_version}</span>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Duration and Sections */}
+                              <div className="flex items-center gap-3 text-sm text-gray-500">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {assessment.duration_minutes || 0} min
+                                </span>
+                              </div>
+
+                              {/* Created By and Date */}
+                              <div className="flex items-center gap-3 text-xs text-gray-500 mt-1.5">
+                                {assessment.created_by_name && (
+                                  <>
+                                    <span>Created by: <span className="text-gray-700 font-medium">{assessment.created_by_name}</span></span>
+                                    <span>•</span>
+                                  </>
+                                )}
+                                {assessment.created_at && (
+                                  <span>
+                                    {(() => {
+                                      const dateWithZ = assessment.created_at + (assessment.created_at.includes('Z') ? '' : 'Z');
+                                      const date = new Date(dateWithZ);
+                                      return `${date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}`;
+                                    })()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <div className="text-sm text-gray-600">
+                {selectedAssessments.length} assessment{selectedAssessments.length !== 1 ? 's' : ''} selected
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setIsAssessmentModalOpen(false);
+                    setSelectedAssessments([]);
+                    setAssessmentSearchQuery('');
+                  }}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleProceedToInvite}
+                  disabled={selectedAssessments.length === 0}
+                  className="flex items-center gap-2 px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Mail className="w-4 h-4" />
+                  Proceed to Send Invitations
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Assessment Modal */}
+      {isShareModalOpen && selectedAssessments.length > 0 && (
+        <ShareAssessmentModal
+          isOpen={isShareModalOpen}
+          onClose={() => {
+            setIsShareModalOpen(false);
+            setCurrentAssessmentForShare(null);
+            setSelectedAssessments([]);
+            setPrefilledCandidates([]);
+            setAssessmentSearchQuery('');
+          }}
+          assessment={{
+            id: selectedAssessments[0].id,
+            title: selectedAssessments[0].title,
+            duration: `${selectedAssessments[0].duration_minutes || 0} min`,
+            questions: (selectedAssessments[0].hr_enabled ? 1 : 0) +
+                      (selectedAssessments[0].technical_enabled ? 1 : 0) +
+                      (selectedAssessments[0].coding_enabled ? 1 : 0),
+            type: 'AI-Generated',
+            short_id: selectedAssessments[0].short_id,
+            jd_short_id: selectedAssessments[0].jd_short_id,
+            jd_title: selectedAssessments[0].jd_title,
+            jd_version: selectedAssessments[0].jd_version,
+          }}
+          assessments={selectedAssessments.map(a => ({
+            id: a.id,
+            title: a.title,
+            duration: `${a.duration_minutes || 0} min`,
+            questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
+            type: 'AI-Generated',
+            short_id: a.short_id,
+            jd_short_id: a.jd_short_id,
+            jd_title: a.jd_title,
+            jd_version: a.jd_version
+          }))}
+          prefilledCandidates={prefilledCandidates}
+        />
+      )}
+
     </>
   );
 }

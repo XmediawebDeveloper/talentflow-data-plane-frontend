@@ -50,6 +50,10 @@ export default function AssessmentDetailsPage() {
           job: { title: response.jd_title || 'General Assessment', department: 'Engineering' },
           jd_id: response.jd_id,
           jd_title: response.jd_title,
+          jd_short_id: response.jd_short_id,
+          jd_version: response.jd_version,
+          sequence_number: response.sequence_number,
+          short_id: response.short_id,
           // Section configuration
           hr_enabled: response.hr_enabled,
           hr_percentage: response.hr_percentage,

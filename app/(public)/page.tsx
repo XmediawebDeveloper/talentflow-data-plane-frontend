@@ -16,12 +16,14 @@ export default function HomePage() {
             <div className="flex items-center gap-4">
               <Link
                 href="/login"
+                prefetch={false}
                 className="text-gray-600 hover:text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors"
               >
                 Sign In
               </Link>
               <Link
                 href="/signup"
+                prefetch={false}
                 className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 transition-colors"
               >
                 Get Started
@@ -46,12 +48,14 @@ export default function HomePage() {
           <div className="flex items-center justify-center gap-4">
             <Link
               href="/signup"
+              prefetch={false}
               className="bg-gray-800 text-white px-8 py-3 rounded-lg hover:bg-gray-900 transition-colors text-lg font-semibold"
             >
               Start Free Trial
             </Link>
             <Link
               href="/pricing"
+              prefetch={false}
               className="bg-white text-gray-900 px-8 py-3 rounded-lg hover:bg-gray-50 transition-colors text-lg font-semibold border border-gray-300"
             >
               View Pricing

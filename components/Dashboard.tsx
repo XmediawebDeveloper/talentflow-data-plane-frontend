@@ -37,6 +37,7 @@ import { handleUnauthorized } from '@/lib/services/api';
 
 import { User, Tenant, getRemainingUnits } from '@/lib/types/tenant';
 import UnitsWarningBanner from './UnitsWarningBanner';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -82,6 +83,8 @@ export default function Dashboard({
   user,
   tenant
 }: DashboardProps = {}) {
+  // Get permission helpers from auth context
+  const { hasPermission, isTenantAdmin } = useAuth();
 
   // Get usage data from tenant
   const subscription = tenant?.subscription;
@@ -105,7 +108,7 @@ export default function Dashboard({
   const [loadingActivities, setLoadingActivities] = useState(true);
 
   // Permission checks
-  const canCreateJD = user?.is_tenant_admin || user?.permissions?.canCreateJD;
+  const canCreateJD = hasPermission('canCreateJD') || isTenantAdmin;
 
   // Fetch Recent Activities
   const fetchRecentActivities = useCallback(async () => {
@@ -417,11 +420,11 @@ export default function Dashboard({
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <Crown className="w-6 h-6 text-gray-800" />
-                <h2 className="text-gray-900 text-2xl">{subscription?.planName || 'Agency Pro Plan'}</h2>
+                <h2 className="text-gray-900 text-2xl">{subscription?.planName || '-'}</h2>
               </div>
               <p className="text-sm text-gray-600">
-                {subscription?.status === 'active' 
-                  ? 'Your subscription is active and running smoothly' 
+                {subscription?.status === 'active'
+                  ? 'Your subscription is active and running smoothly'
                   : `Subscription ${subscription?.status || 'status unknown'}`}
               </p>
             </div>
@@ -430,7 +433,7 @@ export default function Dashboard({
               <div className="text-gray-900 mb-2">
                 {subscription?.renewalDate
                   ? new Date(subscription.renewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                  : 'Jan 15, 2026'}
+                  : 'Not available'}
               </div>
               {user?.can_upgrade_plan !== false && onUpgradePlan ? (
                 <button

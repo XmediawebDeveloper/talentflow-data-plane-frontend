@@ -24,7 +24,23 @@ interface ShareAssessmentModalProps {
     duration: string;
     questions: number;
     type: string;
+    short_id?: string; // Assessment ID like AS-022
+    jd_short_id?: string; // JD ID like JD-025
+    jd_title?: string; // JD title
+    jd_version?: number; // JD version number
   };
+  prefilledCandidates?: CandidateEmail[]; // Optional pre-filled candidates from resume selection
+  additionalAssessments?: Array<{
+    id: string;
+    title: string;
+    duration: string;
+    questions: number;
+    type: string;
+    short_id?: string; // Assessment ID like AS-022
+    jd_short_id?: string; // JD ID like JD-025
+    jd_title?: string; // JD title
+    jd_version?: number; // JD version number
+  }>; // Additional assessments for bulk invite
 }
 
 interface CandidateEmail {
@@ -45,23 +61,35 @@ interface Resume {
   skills: string[];
 }
 
-export default function ShareAssessmentModal({ isOpen, onClose, assessment }: ShareAssessmentModalProps) {
+export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, additionalAssessments }: ShareAssessmentModalProps) {
   const router = useRouter();
   const { user } = useAuth();
 
   // Remove "- Version X" from title for email display
   const assessmentTitleForEmail = stripVersionFromTitle(assessment.title);
 
+  // All assessments to send invitations for (main + additional)
+  const allAssessments = [assessment, ...(additionalAssessments || [])];
+
   const [inputMode, setInputMode] = useState<'manual' | 'database'>('manual');
-  const [candidates, setCandidates] = useState<CandidateEmail[]>([
-    { id: '1', name: '', email: '', source: 'manual' }
-  ]);
+  const [candidates, setCandidates] = useState<CandidateEmail[]>(
+    prefilledCandidates && prefilledCandidates.length > 0
+      ? prefilledCandidates
+      : [{ id: '1', name: '', email: '', source: 'manual' }]
+  );
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Resume database from API
   const [resumeDatabase, setResumeDatabase] = useState<Resume[]>([]);
   const [isLoadingResumes, setIsLoadingResumes] = useState(false);
+
+  // Update candidates when pre-filled candidates change
+  useEffect(() => {
+    if (prefilledCandidates && prefilledCandidates.length > 0) {
+      setCandidates(prefilledCandidates);
+    }
+  }, [prefilledCandidates]);
 
   // Load resumes from API when database mode is selected
   useEffect(() => {
@@ -222,6 +250,55 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
 
       const validCandidates = candidatesWithData;
 
+      // Check if we're sending to multiple assessments
+      if (allAssessments.length > 1) {
+        // Bulk invite for multiple assessments
+        const totalInvites = allAssessments.length * validCandidates.length;
+        let sentCount = 0;
+        let failedCount = 0;
+
+        toast.loading(`Sending ${totalInvites} invitation${totalInvites > 1 ? 's' : ''}...`, { id: 'bulk-invite-multi' });
+
+        for (const assessmentToInvite of allAssessments) {
+          try {
+            const candidateData = validCandidates.map(c => ({
+              candidate_name: c.name,
+              candidate_email: c.email,
+              resume_id: c.resumeId,
+            }));
+
+            await assessmentService.bulkInvite(assessmentToInvite.id, {
+              candidates: candidateData,
+              custom_message: customMessage,
+              expiry_days: expiryDays,
+            });
+
+            sentCount += validCandidates.length;
+            toast.loading(`Sent ${sentCount}/${totalInvites} invitations...`, { id: 'bulk-invite-multi' });
+          } catch (error: any) {
+            console.error(`Failed to send invitations for assessment ${assessmentToInvite.title}:`, error);
+            failedCount += validCandidates.length;
+          }
+        }
+
+        setIsSubmitting(false);
+
+        if (failedCount === 0) {
+          toast.success(`Successfully sent ${sentCount} invitation${sentCount > 1 ? 's' : ''} for ${allAssessments.length} assessment${allAssessments.length > 1 ? 's' : ''}!`, { id: 'bulk-invite-multi' });
+        } else {
+          toast.warning(`Sent ${sentCount} invitations successfully. ${failedCount} failed.`, { id: 'bulk-invite-multi' });
+        }
+
+        setSentCount(sentCount);
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          onClose();
+        }, 2000);
+        return;
+      }
+
+      // Single assessment invite (existing logic)
       if (validCandidates.length === 1) {
         // Single invite
         await assessmentService.invite(assessment.id, {
@@ -382,9 +459,19 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                 <FileText className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  {assessment.short_id && (
+                    <span className="text-xs px-2 py-0.5 bg-gray-800 text-white rounded font-semibold">
+                      {assessment.short_id}
+                    </span>
+                  )}
                   <span className="text-gray-900">{assessmentTitleForEmail}</span>
                   <VersionBadge title={assessment.title} size="sm" variant="secondary" />
+                  {allAssessments.length > 1 && (
+                    <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
+                      +{allAssessments.length - 1} more
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-4 text-sm text-gray-600">
                   <span className="flex items-center gap-1">
@@ -396,6 +483,42 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
                   <span>•</span>
                   <span>{assessment.type}</span>
                 </div>
+                {assessment.jd_short_id && (
+                  <div className="text-xs text-gray-600 mt-1">
+                    <span className="font-medium">Linked to: </span>
+                    <span className="text-gray-800">{assessment.jd_short_id}</span>
+                    {assessment.jd_title && (
+                      <span className="ml-1">- {assessment.jd_title}</span>
+                    )}
+                    {assessment.jd_version && (
+                      <span className="ml-1 text-gray-500">v{assessment.jd_version}</span>
+                    )}
+                  </div>
+                )}
+                {allAssessments.length > 1 && (
+                  <div className="mt-2 pt-2 border-t border-gray-300">
+                    <p className="text-xs text-gray-600 font-medium mb-1">
+                      Invitations will be sent for {allAssessments.length} assessments:
+                    </p>
+                    <div className="space-y-1">
+                      {allAssessments.map((a, idx) => (
+                        <div key={idx} className="text-xs px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {a.short_id && <span className="font-semibold">{a.short_id}</span>}
+                            <span>{stripVersionFromTitle(a.title)}</span>
+                          </div>
+                          {a.jd_short_id && (
+                            <div className="text-gray-500 mt-0.5">
+                              Linked to: {a.jd_short_id}
+                              {a.jd_title && ` - ${a.jd_title}`}
+                              {a.jd_version && ` v${a.jd_version}`}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -729,7 +852,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment }: Sh
         {/* Footer */}
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
           <div className="text-sm text-gray-600">
-            {candidates.length} candidate{candidates.length > 1 ? 's' : ''} will receive this assessment
+            {candidates.length} candidate{candidates.length > 1 ? 's' : ''} will receive {allAssessments.length > 1 ? `${allAssessments.length} assessments` : 'this assessment'}
           </div>
           <div className="flex items-center gap-3">
             <button

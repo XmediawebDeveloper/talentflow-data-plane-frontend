@@ -39,7 +39,7 @@ interface SearchFilters {
 
 export default function ResumeDatabasePage() {
   const router = useRouter();
-  const { user, isTenantAdmin } = useAuth();
+  const { user, isTenantAdmin, hasPermission } = useAuth();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -800,10 +800,10 @@ export default function ResumeDatabasePage() {
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
             onApplyToJob={handleBulkApplyToJob}
-            onDelete={user?.permissions?.canDeleteInternalDB || isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
-            onResumeScoring={user?.permissions?.canRunScoring || isTenantAdmin ? handleBulkResumeScoring : undefined}
-            onAssessment={user?.permissions?.canCreateAssessments || isTenantAdmin ? handleBulkAssessment : undefined}
-            onAITalentMatch={user?.permissions?.canRunAiMatch || isTenantAdmin ? handleBulkAITalentMatch : undefined}
+            onDelete={hasPermission('canDeleteInternalDB') || isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onResumeScoring={hasPermission('canRunScoring') || isTenantAdmin ? handleBulkResumeScoring : undefined}
+            onAssessment={hasPermission('canCreateAssessments') || isTenantAdmin ? handleBulkAssessment : undefined}
+            onAITalentMatch={hasPermission('canRunAiMatch') || isTenantAdmin ? handleBulkAITalentMatch : undefined}
           />
         </div>
       )}
@@ -860,7 +860,7 @@ export default function ResumeDatabasePage() {
           onSelectAll={handleSelectAll}
           onQuickView={(resume) => setQuickViewResume(resume)}
           onApplyToJob={handleApplyToJob}
-          onDelete={user?.permissions?.canDeleteInternalDB || isTenantAdmin ? (id) => handleDelete(id) : undefined}
+          onDelete={hasPermission('canDeleteInternalDB') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
           onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
           onVersion={handleShowVersionHistory}
           highlightQuery={appliedSearchQuery}
@@ -932,7 +932,7 @@ export default function ResumeDatabasePage() {
         <ResumeDetailView
           resume={viewingResume}
           onClose={() => setViewingResume(null)}
-          onDelete={user?.permissions?.canDeleteInternalDB || isTenantAdmin ? (id) => handleDelete(id) : undefined}
+          onDelete={hasPermission('canDeleteInternalDB') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
         />
       )}
 

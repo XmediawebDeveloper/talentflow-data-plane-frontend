@@ -417,7 +417,8 @@ export default function ScoredResumesTable({
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `TalentFlow_Scorecards_${new Date().toISOString().slice(0, 10)}.zip`;
+      const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
+      link.download = `${safeName}_Scorecards.zip`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

@@ -25,6 +25,8 @@ import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
 import { User, Tenant } from '@/lib/types/tenant';
+import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 // Module-level cache to prevent duplicate API calls across remounts
 const dashboardCache = {
@@ -75,6 +77,7 @@ interface QuotaStatusData {
 
 export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardProps) {
   const router = useRouter();
+  const { hasPermission, isTenantAdmin: isTenantAdminRole } = useAuth();
   const [publishedJDs, setPublishedJDs] = useState<JDResponse[]>([]);
   const [draftJDs, setDraftJDs] = useState<JDResponse[]>([]);
   const [loadingJDs, setLoadingJDs] = useState(true);
@@ -98,10 +101,9 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   const hasFetchedQuotaStatus = useRef(false);
 
   // Permission checks
-  const isTenantAdmin = user?.role === 'tenant_admin';
-  const canCreateJD = isTenantAdmin || user?.permissions?.canCreateJD;
-  const canUploadResumes = isTenantAdmin || user?.permissions?.canUploadResumes;
-  const canViewResumes = isTenantAdmin || user?.permissions?.canViewResumes;
+  const canCreateJD = hasPermission('canCreateJD') || isTenantAdminRole;
+  const canUploadResumes = hasPermission('canUploadResumes') || isTenantAdminRole;
+  const canViewResumes = hasPermission('canViewResumes') || isTenantAdminRole;
 
 
   // Fetch JDs and calculate stats
@@ -404,15 +406,8 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
   return (
     <div className="space-y-6 p-8 bg-gray-50">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">
-            Welcome back, {user?.name?.split(' ')[0] || 'there'}! Here's what's happening with your recruitment pipeline.
-          </p>
-        </div>
-      </div>
+      {/* Welcome Banner */}
+      <WelcomeBanner user={user} tenant={tenant} />
 
       {/* JD Status Boxes */}
       <Card className="border-gray-200">

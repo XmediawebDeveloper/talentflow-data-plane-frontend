@@ -111,12 +111,14 @@ export default function FeaturesPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/signup"
+              prefetch={false}
               className="h-12 px-8 inline-flex items-center justify-center rounded-lg bg-gray-800 text-white font-medium hover:bg-gray-900 transition-colors"
             >
               Start Free Trial
             </Link>
             <Link
               href="/demo"
+              prefetch={false}
               className="h-12 px-8 inline-flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Request Demo

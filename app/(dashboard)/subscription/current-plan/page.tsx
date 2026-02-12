@@ -1,6 +1,6 @@
 'use client';
 
-import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, ArrowUpRight, Crown, FileText, Mail } from 'lucide-react';
+import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, ArrowUpRight, Crown, FileText, Mail, ChevronDown, ChevronUp, Shield } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api, { handleUnauthorized } from '@/lib/services/api';
@@ -425,7 +425,7 @@ const formatQuotaValue = (value: number | string | undefined | null | Record<str
 function CurrentPlanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { logout, user, isBillingManager } = useAuth();
+  const { logout, user, isBillingManager, isTenantAdmin } = useAuth();
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
@@ -501,6 +501,7 @@ function CurrentPlanContent() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
+  const [showAdminMeta, setShowAdminMeta] = useState(false);
 
   // Use ref to track if data has been fetched to prevent duplicate calls
   const hasFetchedRef = useRef(false);
@@ -566,25 +567,42 @@ function CurrentPlanContent() {
         console.log('[CurrentPlan] Setting subscription_status as:', status, '(is_trial:', quotaData.is_trial, ')');
       }
 
-      // If quota-status API failed (likely due to expired subscription), set appropriate state
+      // If quota-status API failed (likely due to expired subscription), fetch plan details from company-settings
       if (!quotaData) {
-        console.log('[CurrentPlan] Quota-status API failed - likely expired subscription, allowing plan selection');
+        console.log('[CurrentPlan] Quota-status API failed - fetching expired plan details from company-settings');
         setQuotaSubscriptionStatus('expired');
-        setCompanySettings(prev => ({
-          ...(prev || {}),
-          current_plan_name: 'Subscription Expired',
-          subscription_status: 'expired',
-          status: 'expired',
-          max_seats: 0,
-          max_jobs: 0,
-          max_resume_uploads: 0,
-          max_resume_searches: 0,
-          max_assessments: 0,
-          max_ai_interviews: 0,
-          storage_limit_gb: 0,
-        } as CompanySettings));
+
+        // Fetch actual plan details from company-settings (local tenant DB) as fallback
+        try {
+          const csResponse = await api.get('/settings/company-settings');
+          const csData = csResponse.data?.data || csResponse.data;
+          if (csData) {
+            console.log('[CurrentPlan] Got expired plan details from company-settings:', csData);
+            setCompanySettings(prev => ({
+              ...(prev || {}),
+              ...csData,
+              // Force expired status
+              subscription_status: 'expired',
+              status: 'expired',
+            } as CompanySettings));
+          } else {
+            // No company settings data - set minimal expired state
+            setCompanySettings(prev => ({
+              ...(prev || {}),
+              subscription_status: 'expired',
+              status: 'expired',
+            } as CompanySettings));
+          }
+        } catch (csError) {
+          console.error('[CurrentPlan] Failed to fetch company-settings fallback:', csError);
+          // Set expired status without zeroing data
+          setCompanySettings(prev => ({
+            ...(prev || {}),
+            subscription_status: 'expired',
+            status: 'expired',
+          } as CompanySettings));
+        }
         // Don't set error - allow user to select a plan to renew
-        // setError('Unable to load subscription data. Please try again later.');
       }
 
       if (quotaData?.quotas || quotaData) {
@@ -1517,7 +1535,9 @@ function CurrentPlanContent() {
                       ? `You are on the ${(companySettings?.current_plan_name || currentPlan?.name || '').replace(/\s*\([^)]*\)\s*$/, '')} plan${!remainingTime.isExpired ? ` - ${remainingTime.displayText}` : ''}`
                       : isPendingPayment
                         ? 'Complete payment to activate your selected plan'
-                        : companySettings?.current_plan_name ? `You are on the ${companySettings.current_plan_name.replace(/\s*\([^)]*\)\s*$/, '')} plan` : ''
+                        : isExpiredSubscription
+                          ? `Your ${(companySettings?.current_plan_name || currentPlan?.name || 'subscription').replace(/\s*\([^)]*\)\s*$/, '')} plan has expired. Please renew to continue using all features.`
+                          : companySettings?.current_plan_name ? `You are on the ${companySettings.current_plan_name.replace(/\s*\([^)]*\)\s*$/, '')} plan` : ''
                 }
               </p>
             </div>
@@ -1580,13 +1600,52 @@ function CurrentPlanContent() {
           </div>
 
           {/* PS03 Fix: Renew Plan Button for Expired/Expiring Subscriptions */}
-          {!isOnTrial && !isPendingPayment && !isLocked && companySettings?.plan_expiry_date && currentPlan && (
+          {!isOnTrial && !isPendingPayment && !isLocked && (companySettings?.plan_expiry_date || isExpiredSubscription) && (
             (() => {
-              const expiryDate = new Date(companySettings.plan_expiry_date);
+              const planName = currentPlan?.name || companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || 'Your';
+
+              // If no expiry date but status is expired, show expired banner directly
+              if (!companySettings?.plan_expiry_date && isExpiredSubscription) {
+                return (
+                  <div className="mt-6 p-4 rounded-lg border-2 bg-red-50 border-red-300">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="w-6 h-6 text-red-600" />
+                        <div>
+                          <h4 className="font-medium text-red-800">Plan Expired</h4>
+                          <p className="text-sm text-red-700">
+                            Your {planName} plan has expired. Please renew to continue using all features.
+                          </p>
+                        </div>
+                      </div>
+                      {currentPlan && (
+                        <button
+                          onClick={() => {
+                            setSelectedPlanForPayment(currentPlan);
+                            setModalStep('isolation');
+                            setIsolationType('schema');
+                            setIsNewTenant(false);
+                            setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
+                            setTransactionResult(null);
+                            setError(null);
+                            setShowPaymentModal(true);
+                          }}
+                          className="px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white"
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                          Renew Current Plan
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              const expiryDate = new Date(companySettings!.plan_expiry_date!);
               const now = new Date();
               const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              const isExpired = daysUntilExpiry < 0;
-              const isExpiringSoon = daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
+              const isExpired = daysUntilExpiry < 0 || isExpiredSubscription;
+              const isExpiringSoon = !isExpired && daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
 
               if (isExpired || isExpiringSoon) {
                 return (
@@ -1610,32 +1669,34 @@ function CurrentPlanContent() {
                             isExpired ? 'text-red-700' : 'text-amber-700'
                           }`}>
                             {isExpired
-                              ? `Your ${currentPlan.name} plan expired ${Math.abs(daysUntilExpiry)} days ago`
-                              : `Your ${currentPlan.name} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
+                              ? `Your ${planName} plan expired ${Math.abs(daysUntilExpiry)} days ago. Please renew to continue using all features.`
+                              : `Your ${planName} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
                             }
                           </p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => {
-                          setSelectedPlanForPayment(currentPlan);
-                          setModalStep('isolation');
-                          setIsolationType('schema');
-                          setIsNewTenant(false);
-                          setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
-                          setTransactionResult(null);
-                          setError(null);
-                          setShowPaymentModal(true);
-                        }}
-                        className={`px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                          isExpired
-                            ? 'bg-red-600 hover:bg-red-700 text-white'
-                            : 'bg-amber-600 hover:bg-amber-700 text-white'
-                        }`}
-                      >
-                        <ArrowRight className="w-4 h-4" />
-                        Renew Current Plan
-                      </button>
+                      {currentPlan && (
+                        <button
+                          onClick={() => {
+                            setSelectedPlanForPayment(currentPlan);
+                            setModalStep('isolation');
+                            setIsolationType('schema');
+                            setIsNewTenant(false);
+                            setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
+                            setTransactionResult(null);
+                            setError(null);
+                            setShowPaymentModal(true);
+                          }}
+                          className={`px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                            isExpired
+                              ? 'bg-red-600 hover:bg-red-700 text-white'
+                              : 'bg-amber-600 hover:bg-amber-700 text-white'
+                          }`}
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                          Renew Current Plan
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1686,6 +1747,112 @@ function CurrentPlanContent() {
                   <p className="text-xs text-gray-600">AI Interviews</p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Admin Plan Metadata - Collapsible, visible only to tenant admins */}
+          {isTenantAdmin && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <button
+                onClick={() => setShowAdminMeta(!showAdminMeta)}
+                className="flex w-full items-center justify-between text-left group"
+              >
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-indigo-600" />
+                  <h3 className="text-sm font-medium text-gray-700">Plan Details (Admin)</h3>
+                </div>
+                {showAdminMeta ? (
+                  <ChevronUp className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+                )}
+              </button>
+              {showAdminMeta && (
+                <div className="mt-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {companySettings?.current_plan_id && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Plan ID</p>
+                      <p className="text-sm font-medium text-gray-900">{companySettings.current_plan_id}</p>
+                    </div>
+                  )}
+                  {currentPlan?.planSlug && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Plan Slug</p>
+                      <p className="text-sm font-medium text-gray-900">{currentPlan.planSlug}</p>
+                    </div>
+                  )}
+                  {sharedQuotaData?.plan_info?.plan_tier && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Plan Tier</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{sharedQuotaData.plan_info.plan_tier}</p>
+                    </div>
+                  )}
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-500 mb-0.5">Billing Period</p>
+                    <p className="text-sm font-medium text-gray-900 capitalize">{currentPlanBillingPeriod?.toLowerCase() || '-'}</p>
+                  </div>
+                  {sharedQuotaData?.plan_info?.billing_interval && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Billing Interval</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{sharedQuotaData.plan_info.billing_interval.toLowerCase()}</p>
+                    </div>
+                  )}
+                  {sharedQuotaData?.plan_info?.isolation_type && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Isolation Type</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{sharedQuotaData.plan_info.isolation_type.toLowerCase()}</p>
+                    </div>
+                  )}
+                  {companySettings?.max_seats !== undefined && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Included Seats</p>
+                      <p className="text-sm font-medium text-gray-900">{formatQuotaValue(companySettings.max_seats)}</p>
+                    </div>
+                  )}
+                  {sharedQuotaData?.quota_source && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Quota Source</p>
+                      <p className="text-sm font-medium text-gray-900">{sharedQuotaData.quota_source.replace(/_/g, ' ')}</p>
+                    </div>
+                  )}
+                  {companySettings?.subscription_status && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Subscription Status</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{companySettings.subscription_status.toLowerCase().replace(/_/g, ' ')}</p>
+                    </div>
+                  )}
+                  {companySettings?.payment_status && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Payment Status</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{companySettings.payment_status.toLowerCase().replace(/_/g, ' ')}</p>
+                    </div>
+                  )}
+                  {companySettings?.payment_method && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Payment Method</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{companySettings.payment_method}</p>
+                    </div>
+                  )}
+                  {companySettings?.payment_reference && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Payment Reference</p>
+                      <p className="text-sm font-mono text-gray-900 text-xs">{companySettings.payment_reference}</p>
+                    </div>
+                  )}
+                  {sharedQuotaData?.tenant_id && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Tenant ID</p>
+                      <p className="text-sm font-mono text-gray-900 text-xs truncate" title={sharedQuotaData.tenant_id}>{sharedQuotaData.tenant_id}</p>
+                    </div>
+                  )}
+                  {companySettings?.last_synced_at && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-0.5">Last Synced</p>
+                      <p className="text-sm font-medium text-gray-900">{formatDate(companySettings.last_synced_at)}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

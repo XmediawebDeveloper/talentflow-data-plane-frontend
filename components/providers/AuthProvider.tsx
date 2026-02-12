@@ -11,6 +11,7 @@ import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
 // Helper to store/retrieve user from localStorage
 const USER_STORAGE_KEY = 'talentflow_user';
 const TENANT_STORAGE_KEY = 'talentflow_tenant';
+const LAST_LOGIN_KEY = 'talentflow_last_login';
 
 const saveUserToStorage = (user: User) => {
   if (typeof window !== 'undefined') {
@@ -177,8 +178,10 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canViewInvoices: apiUser.permissions.can_view_invoices,
       canViewUsage: apiUser.permissions.can_view_usage,
       // RBAC06: Feature permissions
+      canViewScoring: apiUser.permissions.can_view_scoring,
       canRunScoring: apiUser.permissions.can_run_scoring,
       canRunAiInterviews: apiUser.permissions.can_run_ai_interviews,
+      canViewAiMatch: apiUser.permissions.can_view_ai_match,
       canRunAiMatch: apiUser.permissions.can_run_ai_match,
       canBulkOperations: apiUser.permissions.can_bulk_operations,
       canExport: apiUser.permissions.can_export,
@@ -257,6 +260,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[AUTH] Restoring session...');
       console.log('[AUTH] Has token:', authService.isAuthenticated());
 
+      // ✅ HARD REFRESH DETECTION: Clear user cache on hard refresh
+      // This ensures permissions are always fresh from API after Ctrl+Shift+R
+      if (typeof window !== 'undefined' && typeof performance !== 'undefined') {
+        const perfData = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+        const isHardRefresh = perfData && perfData.type === 'reload';
+
+        if (isHardRefresh) {
+          console.log('[AUTH] 🔄 Hard refresh detected - clearing user cache');
+          clearUserFromStorage();
+          localStorage.removeItem('permission_version');
+        }
+      }
+
       // Ensure cookies are synced with localStorage (cross-browser token recovery)
       // This fixes token loss in Firefox, Safari, iOS Safari, Arc, Brave, etc.
       const recovered = ensureTokenCookies();
@@ -303,6 +319,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 // Fetch updated user data with new permissions
                 const apiUserData = await authService.getCurrentUser();
                 const userData = mapApiUserToUser(apiUserData);
+                // Preserve lastLogin and createdAt from cached user if API doesn't return them
+                if (!userData.lastLogin && storedUser.lastLogin) {
+                  userData.lastLogin = storedUser.lastLogin;
+                }
+                if (!userData.createdAt && storedUser.createdAt) {
+                  userData.createdAt = storedUser.createdAt;
+                }
                 setUser(userData);
                 saveUserToStorage(userData);
                 setTenant(storedTenant || mockTenant);
@@ -335,6 +358,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const apiUserData = await authService.getCurrentUser();
           const userData = mapApiUserToUser(apiUserData);
+          // Preserve lastLogin and createdAt from cached user if API doesn't return them
+          if (!userData.lastLogin && storedUser.lastLogin) {
+            userData.lastLogin = storedUser.lastLogin;
+          }
+          if (!userData.createdAt && storedUser.createdAt) {
+            userData.createdAt = storedUser.createdAt;
+          }
           setUser(userData);
           saveUserToStorage(userData);
           console.log('[AUTH] User validated with API');
@@ -375,11 +405,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[AUTH] Fetching current user from API...');
           const apiUserData = await authService.getCurrentUser();
           console.log('[AUTH] Got user data:', apiUserData);
+          console.log('[AUTH] API Permissions:', apiUserData.permissions);
+          console.log('[AUTH] 🔍 API has can_view_scoring:', apiUserData.permissions.can_view_scoring);
+          console.log('[AUTH] 🔍 API has can_view_ai_match:', apiUserData.permissions.can_view_ai_match);
           const userData = mapApiUserToUser(apiUserData);
+          console.log('[AUTH] Mapped Permissions:', userData.permissions);
+          console.log('[AUTH] 🔍 Mapped has canViewScoring:', userData.permissions.canViewScoring);
+          console.log('[AUTH] 🔍 Mapped has canViewAiMatch:', userData.permissions.canViewAiMatch);
           setUser(userData);
           setTenant(mockTenant);
           saveUserToStorage(userData);
-          console.log('[AUTH] Session restored successfully');
+          console.log('[AUTH] ✅ Session restored with fresh permissions from API');
         } catch (error) {
           console.error('[AUTH] Session restore failed:', error);
           clearTokens();
@@ -405,6 +441,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Fetch fresh user data with new permissions
         const apiUserData = await authService.getCurrentUser();
         const userData = mapApiUserToUser(apiUserData);
+        // Preserve lastLogin and createdAt from current user if API doesn't return them
+        const currentUser = getUserFromStorage();
+        if (!userData.lastLogin && currentUser?.lastLogin) {
+          userData.lastLogin = currentUser.lastLogin;
+        }
+        if (!userData.createdAt && currentUser?.createdAt) {
+          userData.createdAt = currentUser.createdAt;
+        }
         setUser(userData);
         saveUserToStorage(userData);
         console.log('[AUTH] User data refreshed with new permissions:', userData.permissions);
@@ -426,13 +470,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []); // Empty deps - only register once on mount
 
-  // ✅ PERMISSION CACHE FIX: Periodic permission version check (fallback)
-  // Checks every 30 seconds if permission version changed on server
-  // This catches updates even when user doesn't make API calls
+  // ✅ SMART POLLING: Periodic permission version check with optimizations
+  // Checks if permission version changed on server with smart intervals
+  // Optimizations:
+  // - Only polls when tab is visible
+  // - Only polls when user is active (interacted in last 5 minutes)
+  // - Uses exponential backoff when idle
+  // - Stops polling after 30 minutes of inactivity
   useEffect(() => {
     if (!user) return;
 
+    let pollInterval = 5000; // Start with 5 seconds
+    let intervalId: NodeJS.Timeout | null = null;
+    let lastActivityTime = Date.now();
+    let consecutiveIdleChecks = 0;
+
+    // Update last activity time on user interaction
+    const updateActivity = () => {
+      lastActivityTime = Date.now();
+      consecutiveIdleChecks = 0;
+      // Reset to fast polling when user becomes active again
+      if (pollInterval > 5000) {
+        pollInterval = 5000;
+        restartPolling();
+      }
+    };
+
+    // Track user activity
+    if (typeof window !== 'undefined') {
+      window.addEventListener('mousemove', updateActivity);
+      window.addEventListener('keydown', updateActivity);
+      window.addEventListener('click', updateActivity);
+      window.addEventListener('scroll', updateActivity);
+    }
+
     const checkPermissions = async () => {
+      // Skip if tab is not visible
+      if (typeof document !== 'undefined' && document.hidden) {
+        console.debug('[AUTH] Skipping poll - tab not visible');
+        return;
+      }
+
+      // Check if user has been inactive for > 30 minutes
+      const inactiveTime = Date.now() - lastActivityTime;
+      if (inactiveTime > 30 * 60 * 1000) {
+        console.log('[AUTH] Stopping polling - user inactive for 30+ minutes');
+        if (intervalId) clearInterval(intervalId);
+        return;
+      }
+
+      // Use exponential backoff for idle users (inactive > 5 minutes)
+      if (inactiveTime > 5 * 60 * 1000) {
+        consecutiveIdleChecks++;
+        if (consecutiveIdleChecks > 3 && pollInterval < 10000) {
+          pollInterval = Math.min(pollInterval * 2, 10000); // Max 10 seconds
+          console.log(`[AUTH] User idle, increasing poll interval to ${pollInterval/1000}s`);
+          restartPolling();
+        }
+      }
+
       try {
         const storedVersion = localStorage.getItem('permission_version');
         if (!storedVersion) return;
@@ -441,16 +537,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const currentVersion = parseInt(storedVersion, 10);
 
         if (permission_version > currentVersion) {
-          console.log(`[AUTH] Detected permission change via polling: ${currentVersion} → ${permission_version}`);
+          console.log(`[AUTH] 🔄 Permission change detected via polling: ${currentVersion} → ${permission_version}`);
           // Update the stored version
           localStorage.setItem('permission_version', permission_version.toString());
 
           // Trigger user data refresh
           const apiUserData = await authService.getCurrentUser();
           const userData = mapApiUserToUser(apiUserData);
+          // Preserve lastLogin and createdAt from current user if API doesn't return them
+          const currentUser = getUserFromStorage();
+          if (!userData.lastLogin && currentUser?.lastLogin) {
+            userData.lastLogin = currentUser.lastLogin;
+          }
+          if (!userData.createdAt && currentUser?.createdAt) {
+            userData.createdAt = currentUser.createdAt;
+          }
           setUser(userData);
           saveUserToStorage(userData);
-          console.log('[AUTH] Permissions refreshed via polling ✅');
+          console.log('[AUTH] ✅ Permissions refreshed - sidebar & features updated!');
         }
       } catch (error) {
         // Silent fail - don't disrupt user experience with polling errors
@@ -458,18 +562,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    // Check every 30 seconds when user is active
-    const interval = setInterval(checkPermissions, 30000);
-    console.log('[AUTH] Permission polling started (30s interval)');
+    const restartPolling = () => {
+      if (intervalId) clearInterval(intervalId);
+      intervalId = setInterval(checkPermissions, pollInterval);
+    };
+
+    // Start polling
+    restartPolling();
+    console.log(`[AUTH] 🔄 Smart polling started (${pollInterval/1000}s interval)`);
 
     return () => {
-      clearInterval(interval);
-      console.log('[AUTH] Permission polling stopped');
+      if (intervalId) clearInterval(intervalId);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('mousemove', updateActivity);
+        window.removeEventListener('keydown', updateActivity);
+        window.removeEventListener('click', updateActivity);
+        window.removeEventListener('scroll', updateActivity);
+      }
+      console.log('[AUTH] Smart polling stopped');
     };
   }, [user]); // Re-run if user changes (login/logout)
 
   const login = (userData: User, tenantName?: string) => {
     console.log('[AUTH] Login called for:', userData.email, 'tenant:', tenantName);
+
+    // Track last login time client-side:
+    // Read the PREVIOUS login timestamp and set it as lastLogin (so user sees "Last login: X ago")
+    // Then save the CURRENT timestamp for the next login
+    if (typeof window !== 'undefined') {
+      const previousLogin = localStorage.getItem(LAST_LOGIN_KEY);
+      if (previousLogin) {
+        userData.lastLogin = previousLogin;
+      }
+      // Save current login time for next session
+      localStorage.setItem(LAST_LOGIN_KEY, new Date().toISOString());
+    }
+
     setUser(userData);
 
     // Create tenant object from login response
@@ -489,8 +617,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
     console.log('[AUTH] Logout called');
+
+    // Call backend logout API so the event is recorded in activity logs
+    try {
+      await authService.logout();
+      console.log('[AUTH] Backend logout successful');
+    } catch (error) {
+      console.warn('[AUTH] Backend logout failed (continuing with local cleanup):', error);
+    }
+
     setUser(null);
     setTenant(null);
     clearTokens();
@@ -500,6 +637,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // ✅ PERMISSION CACHE FIX: Clear permission version on logout
     if (typeof window !== 'undefined') {
       localStorage.removeItem('permission_version');
+      // Note: Keep LAST_LOGIN_KEY so it persists for next login by the same user
       console.log('[AUTH] Permission version cache cleared on logout');
     }
 
@@ -518,6 +656,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[AUTH] Refreshing user data...');
       const apiUserData = await authService.getCurrentUser();
       const userData = mapApiUserToUser(apiUserData);
+      // Preserve lastLogin and createdAt from current user if API doesn't return them
+      const currentUser = getUserFromStorage();
+      if (!userData.lastLogin && currentUser?.lastLogin) {
+        userData.lastLogin = currentUser.lastLogin;
+      }
+      if (!userData.createdAt && currentUser?.createdAt) {
+        userData.createdAt = currentUser.createdAt;
+      }
       setUser(userData);
       saveUserToStorage(userData);
       console.log('[AUTH] User data refreshed');
