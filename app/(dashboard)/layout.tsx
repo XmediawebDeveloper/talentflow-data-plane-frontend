@@ -62,9 +62,42 @@ export default function DashboardLayout({
   const { user, tenant, isAuthenticated, isLoading, logout, isTenantAdmin } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [subscriptionExpired, setSubscriptionExpired] = useState(false);
+
+  // Initialize as undefined to show locked state until we know for sure
+  const [subscriptionExpired, setSubscriptionExpired] = useState<boolean | undefined>(undefined);
 
   console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
+
+  // Initialize subscription status on mount from cache or tenant data
+  useEffect(() => {
+    if (isLoading) return;
+
+    // Check localStorage for cached expired plan
+    const cachedExpiredPlan = localStorage.getItem('talentflow_expired_plan');
+    if (cachedExpiredPlan) {
+      try {
+        const data = JSON.parse(cachedExpiredPlan);
+        if (data.subscription_status === 'expired') {
+          console.log('[DASHBOARD] Found cached expired plan - locking menus');
+          setSubscriptionExpired(true);
+          return;
+        }
+      } catch (e) {
+        console.error('[DASHBOARD] Error parsing cached expired plan:', e);
+      }
+    }
+
+    // Check tenant subscription status
+    if (tenant?.subscription) {
+      const status = tenant.subscription.status?.toLowerCase();
+      const isExpired = status === 'expired' || status === 'inactive';
+      console.log('[DASHBOARD] Tenant subscription status:', status, 'isExpired:', isExpired);
+      setSubscriptionExpired(isExpired);
+    } else {
+      // No subscription data - assume not expired
+      setSubscriptionExpired(false);
+    }
+  }, [isLoading, tenant]);
 
   // Listen for subscription-inactive events from API interceptor
   useEffect(() => {
@@ -88,7 +121,8 @@ export default function DashboardLayout({
 
   // Redirect to current-plan page when subscription is expired and user is on a non-allowed page
   useEffect(() => {
-    if (subscriptionExpired && pathname) {
+    // Only redirect if explicitly expired (not undefined/loading)
+    if (subscriptionExpired === true && pathname) {
       const isAllowed = SUBSCRIPTION_ALLOWED_PATHS.some(path =>
         pathname === path || pathname.startsWith(path + '/')
       );
@@ -257,7 +291,7 @@ export default function DashboardLayout({
 
   return (
     <QuotaProvider>
-      <SessionTimeoutProvider>
+      <SessionTimeoutProvider skipSettingsLoad={subscriptionExpired !== false}>
         <Suspense fallback={null}>
           <SearchParamsErrorHandler />
         </Suspense>

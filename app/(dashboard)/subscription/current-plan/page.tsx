@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
+import { cacheExpiredPlan, getCachedExpiredPlan, clearExpiredPlanCache } from '@/lib/utils/expiredPlanCache';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -552,55 +553,96 @@ function CurrentPlanContent() {
       // The sharedQuotaData comes from QuotaContext which is fetched once at dashboard layout level
       const quotaData: any = sharedQuotaData;
       console.log('[CurrentPlan] Using shared quota data from context:', quotaData ? 'available' : 'not yet loaded');
+      console.log('[CurrentPlan] quotaData:', quotaData);
+      console.log('[CurrentPlan] quotaLoading:', quotaLoading);
 
       // Check is_trial from quota-status API (handle both boolean and string)
       const isTrial = quotaData?.is_trial === true || quotaData?.is_trial === 'true' || quotaData?.quota_source === 'FREE_TRIAL';
 
+      // Determine if subscription is expired (use local variable, not state)
+      let localSubscriptionStatus = 'active';
+
       // Set subscription status early (even if quotas are missing)
       if (isTrial) {
+        localSubscriptionStatus = 'trial';
         setQuotaSubscriptionStatus('trial');
         console.log('[CurrentPlan] Setting subscription_status as trial (is_trial detected)');
       } else if (quotaData) {
         // Not on trial - set to active (or use API status if available)
         const status = quotaData.subscription_status || 'active';
+        localSubscriptionStatus = status;
         setQuotaSubscriptionStatus(status);
         console.log('[CurrentPlan] Setting subscription_status as:', status, '(is_trial:', quotaData.is_trial, ')');
+      } else {
+        // quotaData is null - subscription is expired
+        localSubscriptionStatus = 'expired';
       }
 
-      // If quota-status API failed (likely due to expired subscription), fetch plan details from company-settings
+      // If quota-status API failed (likely due to expired subscription), use cached expired plan details
       if (!quotaData) {
-        console.log('[CurrentPlan] Quota-status API failed - fetching expired plan details from company-settings');
+        console.log('[CurrentPlan] Quota-status API failed - checking for cached expired plan details');
         setQuotaSubscriptionStatus('expired');
 
-        // Fetch actual plan details from company-settings (local tenant DB) as fallback
-        try {
-          const csResponse = await api.get('/settings/company-settings');
-          const csData = csResponse.data?.data || csResponse.data;
-          if (csData) {
-            console.log('[CurrentPlan] Got expired plan details from company-settings:', csData);
-            setCompanySettings(prev => ({
-              ...(prev || {}),
-              ...csData,
-              // Force expired status
-              subscription_status: 'expired',
-              status: 'expired',
-            } as CompanySettings));
-          } else {
-            // No company settings data - set minimal expired state
+        // Try to use cached expired plan details first (avoids API call)
+        const cachedExpiredPlan = getCachedExpiredPlan();
+
+        if (cachedExpiredPlan) {
+          console.log('[CurrentPlan] Using cached expired plan details:', cachedExpiredPlan.plan_name);
+          setCompanySettings({
+            current_plan_name: cachedExpiredPlan.plan_name,
+            current_plan_id: cachedExpiredPlan.plan_id,
+            subscription_status: 'expired',
+            status: 'expired',
+            plan_expiry_date: cachedExpiredPlan.plan_expiry_date,
+            plan_start_date: cachedExpiredPlan.plan_start_date,
+            trial_end_date: cachedExpiredPlan.trial_end_date,
+            trial_start_date: cachedExpiredPlan.trial_start_date,
+            max_resume_searches: cachedExpiredPlan.quotas?.RS || 0,
+            max_assessments: cachedExpiredPlan.quotas?.AS || 0,
+            max_ai_interviews: cachedExpiredPlan.quotas?.AIU || 0,
+            max_resume_uploads: cachedExpiredPlan.quotas?.RU || 0,
+            max_seats: cachedExpiredPlan.quotas?.max_seats || 0,
+            max_jobs: cachedExpiredPlan.quotas?.max_jobs || 0,
+            storage_limit_gb: cachedExpiredPlan.quotas?.storage_gb || 0,
+            payment_status: 'expired',
+          } as CompanySettings);
+        } else {
+          // No cache - fetch from company-settings as last resort
+          console.log('[CurrentPlan] No cached data - fetching from company-settings');
+          try {
+            const csResponse = await api.get('/settings/company-settings');
+            const csData = csResponse.data?.data || csResponse.data;
+            if (csData) {
+              console.log('[CurrentPlan] Got expired plan details from company-settings:', csData);
+
+              // Cache it for next time
+              cacheExpiredPlan({
+                ...csData,
+                subscription_status: 'expired',
+              });
+
+              setCompanySettings(prev => ({
+                ...(prev || {}),
+                ...csData,
+                subscription_status: 'expired',
+                status: 'expired',
+              } as CompanySettings));
+            } else {
+              // No data at all - set minimal expired state
+              setCompanySettings(prev => ({
+                ...(prev || {}),
+                subscription_status: 'expired',
+                status: 'expired',
+              } as CompanySettings));
+            }
+          } catch (csError) {
+            console.error('[CurrentPlan] Failed to fetch company-settings fallback:', csError);
             setCompanySettings(prev => ({
               ...(prev || {}),
               subscription_status: 'expired',
               status: 'expired',
             } as CompanySettings));
           }
-        } catch (csError) {
-          console.error('[CurrentPlan] Failed to fetch company-settings fallback:', csError);
-          // Set expired status without zeroing data
-          setCompanySettings(prev => ({
-            ...(prev || {}),
-            subscription_status: 'expired',
-            status: 'expired',
-          } as CompanySettings));
         }
         // Don't set error - allow user to select a plan to renew
       }
@@ -651,6 +693,23 @@ function CurrentPlanContent() {
 
         console.log('[CurrentPlan] isTrial:', isTrial, 'quotas:', quotas);
 
+        // Cache expired plan details for future use (when Control Plane API might fail)
+        if (quotaData.subscription_status === 'expired') {
+          cacheExpiredPlan({
+            plan_name: quotaData.plan_name,
+            plan_id: quotaData.plan_info?.plan_id,
+            plan_tier: quotaData.plan_info?.plan_tier,
+            subscription_status: 'expired',
+            plan_expiry_date: planEndDate || trialEndDate,  // Use trial end date as fallback
+            plan_start_date: planStartDate || trialStartDate,  // Use trial start date as fallback
+            trial_end_date: trialEndDate,
+            trial_start_date: trialStartDate,
+            quotas: quotas,
+            plan_info: quotaData.plan_info,
+          });
+          console.log('[CurrentPlan] Cached expired plan details for future fallback');
+        }
+
         // Extract subscribed_price from plan_info (what user is actually paying)
         if (!isTrial && quotaData.plan_info?.subscribed_price !== undefined) {
           setCurrentPlanPrice(quotaData.plan_info.subscribed_price);
@@ -667,20 +726,32 @@ function CurrentPlanContent() {
         }
       }
 
+      // Check if subscription is expired to reduce wasteful API calls
+      // Use local variable instead of state (state updates are async)
+      const isExpired = localSubscriptionStatus === 'expired' ||
+                       quotaData?.subscription_status === 'expired';
+
+      console.log('[CurrentPlan] isExpired check:', isExpired, 'localSubscriptionStatus:', localSubscriptionStatus);
+
       // Fetch plan settings (yearly discount, database extra charge)
-      try {
-        const planSettingsResponse = await fetch(`${API_URL}/addons/plan-settings`);
-        if (planSettingsResponse.ok) {
-          const planSettingsResult = await planSettingsResponse.json();
-          const settings = planSettingsResult.data || planSettingsResult;
-          setPlanSettings({
-            yearlyDiscountPercentage: settings.yearlyDiscountPercentage,
-            databasePerTenantMonthlyPrice: settings.databasePerTenantMonthlyPrice,
-          });
-          console.log('[CurrentPlan] Plan settings:', settings);
+      // Skip if expired to reduce wasteful API calls logged in Admin Panel
+      if (!isExpired) {
+        try {
+          const planSettingsResponse = await fetch(`${API_URL}/addons/plan-settings`);
+          if (planSettingsResponse.ok) {
+            const planSettingsResult = await planSettingsResponse.json();
+            const settings = planSettingsResult.data || planSettingsResult;
+            setPlanSettings({
+              yearlyDiscountPercentage: settings.yearlyDiscountPercentage,
+              databasePerTenantMonthlyPrice: settings.databasePerTenantMonthlyPrice,
+            });
+            console.log('[CurrentPlan] Plan settings:', settings);
+          }
+        } catch (planSettingsError) {
+          console.log('Could not fetch plan settings');
         }
-      } catch (planSettingsError) {
-        console.log('Could not fetch plan settings');
+      } else {
+        console.log('[CurrentPlan] Skipping plan-settings API call - subscription expired');
       }
 
       // NOTE: All plan data now comes from /usage/quota-status API (Admin API)
@@ -694,6 +765,7 @@ function CurrentPlanContent() {
       }
 
       // Fetch plans from backend API (which proxies to external API)
+      // Always fetch to show renewal options even if expired
       const plansResponse = await fetch(`${API_URL}/subscription/public/plans`);
       if (!plansResponse.ok) {
         throw new Error('Failed to fetch plans');
@@ -794,6 +866,16 @@ function CurrentPlanContent() {
   // Fetch queued upgrades
   const fetchQueuedUpgrades = async () => {
     try {
+      // Skip if subscription is expired to reduce wasteful API calls
+      // If sharedQuotaData is null, it means quota-status API failed (likely expired)
+      const isExpired = !sharedQuotaData ||
+                       sharedQuotaData?.subscription_status === 'expired';
+
+      if (isExpired) {
+        console.log('[CurrentPlan] Skipping queued-upgrades API call - subscription expired or quota unavailable');
+        return;
+      }
+
       const token = localStorage.getItem('accessToken');
       if (!token) return;
 
@@ -1183,6 +1265,10 @@ function CurrentPlanContent() {
             description: `You're now on the ${result.plan_name} plan. All resources have been provisioned.`,
             duration: 5000,
           });
+
+          // Clear expired plan cache since subscription is now active
+          clearExpiredPlanCache();
+          console.log('[CurrentPlan] Cleared expired plan cache - subscription now active');
         }
 
         // Check if upgrade was queued (has active plan)
@@ -1284,6 +1370,10 @@ function CurrentPlanContent() {
 
       if (success) {
         setSuccessMessage('Payment successful! Your plan is now active.');
+
+        // Clear expired plan cache since subscription is now active
+        clearExpiredPlanCache();
+        console.log('[CurrentPlan] Cleared expired plan cache - subscription now active');
       } else {
         if (response.data.status === 'locked') {
           setError('Payment failed and trial has expired. Your account is now locked.');
