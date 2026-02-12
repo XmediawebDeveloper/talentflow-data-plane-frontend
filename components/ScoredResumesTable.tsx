@@ -173,13 +173,27 @@ export default function ScoredResumesTable({
     // Score range filter
     const matchesScore = resume.scorePercentage >= filterScoreMin && resume.scorePercentage <= filterScoreMax;
 
-    // Date range filter
+    // Date range filter - compare date portions in IST timezone
     let matchesDate = true;
-    if (filterDateFrom) {
-      matchesDate = matchesDate && new Date(resume.scoredDate) >= new Date(filterDateFrom);
-    }
-    if (filterDateTo) {
-      matchesDate = matchesDate && new Date(resume.scoredDate) <= new Date(filterDateTo);
+    if (filterDateFrom || filterDateTo) {
+      // Convert scored date to IST YYYY-MM-DD using Intl for reliable cross-browser output
+      const d = new Date(resume.scoredDate);
+      if (!isNaN(d.getTime())) {
+        const parts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Kolkata',
+          year: 'numeric', month: '2-digit', day: '2-digit'
+        }).formatToParts(d);
+        const y = parts.find(p => p.type === 'year')?.value ?? '';
+        const m = parts.find(p => p.type === 'month')?.value ?? '';
+        const dd = parts.find(p => p.type === 'day')?.value ?? '';
+        const scoredDateIST = `${y}-${m}-${dd}`; // guaranteed YYYY-MM-DD
+        if (filterDateFrom) {
+          matchesDate = matchesDate && scoredDateIST >= filterDateFrom;
+        }
+        if (filterDateTo) {
+          matchesDate = matchesDate && scoredDateIST <= filterDateTo;
+        }
+      }
     }
 
     // Recruiter filter
@@ -390,11 +404,14 @@ export default function ScoredResumesTable({
 
     setDownloadingId(resumeId);
     try {
-      const blob = await scoringService.downloadScorecard(resumeId);
+      const rawBlob = await scoringService.downloadScorecard(resumeId);
+      // Ensure blob has correct MIME type for cross-platform PDF rendering
+      const blob = new Blob([rawBlob], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${resume.candidateName.replace(/\s+/g, '_')}_Screening_Report.pdf`;
+      const safeCandidateName = (resume.candidateName || 'Candidate').replace(/[^\w\s\-]/g, '').trim().replace(/\s+/g, '_') || 'Candidate';
+      link.download = `${safeCandidateName}_Screening_Report.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -413,11 +430,13 @@ export default function ScoredResumesTable({
 
     setBulkDownloading(true);
     try {
-      const blob = await scoringService.exportScorecards(selectedResumes);
+      const rawBlob = await scoringService.exportScorecards(selectedResumes);
+      // Ensure blob has correct MIME type for cross-platform compatibility
+      const blob = new Blob([rawBlob], { type: 'application/zip' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
+      const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_') || 'Scorecards';
       link.download = `${safeName}_Scorecards.zip`;
       document.body.appendChild(link);
       link.click();
