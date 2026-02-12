@@ -595,6 +595,8 @@ function CurrentPlanContent() {
             status: 'expired',
             plan_expiry_date: cachedExpiredPlan.plan_expiry_date,
             plan_start_date: cachedExpiredPlan.plan_start_date,
+            trial_end_date: cachedExpiredPlan.trial_end_date,
+            trial_start_date: cachedExpiredPlan.trial_start_date,
             max_resume_searches: cachedExpiredPlan.quotas?.RS || 0,
             max_assessments: cachedExpiredPlan.quotas?.AS || 0,
             max_ai_interviews: cachedExpiredPlan.quotas?.AIU || 0,
@@ -698,8 +700,10 @@ function CurrentPlanContent() {
             plan_id: quotaData.plan_info?.plan_id,
             plan_tier: quotaData.plan_info?.plan_tier,
             subscription_status: 'expired',
-            plan_expiry_date: planEndDate,
-            plan_start_date: planStartDate,
+            plan_expiry_date: planEndDate || trialEndDate,  // Use trial end date as fallback
+            plan_start_date: planStartDate || trialStartDate,  // Use trial start date as fallback
+            trial_end_date: trialEndDate,
+            trial_start_date: trialStartDate,
             quotas: quotas,
             plan_info: quotaData.plan_info,
           });

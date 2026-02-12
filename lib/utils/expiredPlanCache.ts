@@ -14,6 +14,8 @@ interface ExpiredPlanData {
   subscription_status: 'expired';
   plan_expiry_date?: string;
   plan_start_date?: string;
+  trial_end_date?: string;     // For expired trials
+  trial_start_date?: string;   // For expired trials
   quotas?: {
     RS?: number;
     AS?: number;
@@ -48,6 +50,8 @@ export function cacheExpiredPlan(planData: any): void {
       subscription_status: 'expired',
       plan_expiry_date: planData.plan_expiry_date || planData.plan_info?.plan_expiry_date,
       plan_start_date: planData.plan_start_date || planData.plan_info?.plan_start_date,
+      trial_end_date: planData.trial_end_date,
+      trial_start_date: planData.trial_start_date,
       quotas: planData.quotas || {
         RS: planData.max_resume_searches,
         AS: planData.max_assessments,
