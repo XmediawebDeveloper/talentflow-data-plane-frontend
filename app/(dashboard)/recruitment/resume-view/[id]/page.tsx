@@ -230,6 +230,7 @@ export default function ResumeViewPage() {
   const [compareRightId, setCompareRightId] = useState<string | null>(null);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [compareChecked, setCompareChecked] = useState<string[]>([]);
+  const [compareViewMode, setCompareViewMode] = useState<'side-by-side' | 'unified'>('side-by-side');
 
   // Version preview state
   const [versionPreviewUrl, setVersionPreviewUrl] = useState<string | null>(null);
@@ -1546,7 +1547,7 @@ Best regards`);
         </div>
       </div>
 
-      {/* Version Changes Popup Modal - Unified diff with all content highlighted */}
+      {/* Version Compare Modal - Side-by-side or Unified diff */}
       {showCompareModal && compareLeftId && compareRightId && resume?.versions && (() => {
         const leftVersion = resume.versions.find(v => v.id === compareLeftId);
         const rightVersion = resume.versions.find(v => v.id === compareRightId);
@@ -1556,9 +1557,100 @@ Best regards`);
         const newerText = rightVersion.extractedText || '';
         const diff = buildUnifiedDiff(olderText, newerText);
 
+        // Build side-by-side aligned pairs from diff lines
+        type SidePair = { left: { text: string; type: 'added' | 'removed' | 'unchanged' } | null; right: { text: string; type: 'added' | 'removed' | 'unchanged' } | null };
+        const sidePairs: SidePair[] = [];
+        {
+          let i = 0;
+          while (i < diff.lines.length) {
+            if (diff.lines[i].type === 'unchanged') {
+              sidePairs.push({ left: diff.lines[i], right: diff.lines[i] });
+              i++;
+            } else {
+              const removed: typeof diff.lines = [];
+              const added: typeof diff.lines = [];
+              while (i < diff.lines.length && diff.lines[i].type === 'removed') {
+                removed.push(diff.lines[i]);
+                i++;
+              }
+              while (i < diff.lines.length && diff.lines[i].type === 'added') {
+                added.push(diff.lines[i]);
+                i++;
+              }
+              const maxLen = Math.max(removed.length, added.length);
+              for (let j = 0; j < maxLen; j++) {
+                sidePairs.push({
+                  left: j < removed.length ? removed[j] : null,
+                  right: j < added.length ? added[j] : null,
+                });
+              }
+            }
+          }
+        }
+
+        const compareSectionHeaders = [
+          'experience', 'work experience', 'employment', 'professional experience',
+          'education', 'academic', 'qualifications',
+          'skills', 'technical skills', 'core competencies', 'expertise', 'key skills',
+          'summary', 'professional summary', 'objective', 'profile', 'about',
+          'certifications', 'certificates', 'licenses',
+          'projects', 'key projects',
+          'achievements', 'accomplishments', 'awards',
+          'languages', 'contact', 'personal', 'references', 'hobbies', 'interests'
+        ];
+
+        const renderDiffLine = (line: { text: string; type: 'added' | 'removed' | 'unchanged' } | null, idx: number, side: 'left' | 'right') => {
+          if (!line) {
+            return <div key={idx} className="h-7 bg-gray-50" />;
+          }
+          const trimmed = line.text.trim();
+          if (!trimmed) return <div key={idx} className="h-3" />;
+
+          const lowerLine = trimmed.toLowerCase().replace(/[:\-_]/g, ' ').trim();
+          const isHeader = compareSectionHeaders.some(h =>
+            lowerLine === h || lowerLine.startsWith(h + ' ') || lowerLine.endsWith(' ' + h)
+          ) && trimmed.length < 50;
+
+          let bgClass = '';
+          let textColor = 'text-gray-800';
+          let borderClass = '';
+
+          if (line.type === 'removed' && side === 'left') {
+            bgClass = 'bg-red-50';
+            textColor = 'text-red-800';
+            borderClass = 'border-l-4 border-red-400 pl-2';
+          } else if (line.type === 'added' && side === 'right') {
+            bgClass = 'bg-green-50';
+            textColor = 'text-green-800';
+            borderClass = 'border-l-4 border-green-400 pl-2';
+          }
+
+          if (isHeader) {
+            return (
+              <h3 key={idx} className={`text-xs font-bold mt-4 mb-1.5 pb-1 border-b border-gray-300 uppercase tracking-wide ${bgClass} ${borderClass} ${textColor}`}>
+                {trimmed}
+              </h3>
+            );
+          }
+
+          if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
+            return (
+              <p key={idx} className={`text-xs leading-relaxed pl-3 mb-0.5 ${bgClass} ${borderClass} ${textColor}`}>
+                {trimmed}
+              </p>
+            );
+          }
+
+          return (
+            <p key={idx} className={`text-xs leading-relaxed mb-0.5 py-0.5 ${bgClass} ${borderClass} ${textColor}`}>
+              {trimmed}
+            </p>
+          );
+        };
+
         return (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden">
+            <div className={`bg-white rounded-2xl shadow-2xl w-full ${compareViewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85vh] flex flex-col overflow-hidden transition-all duration-300`}>
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white flex-shrink-0">
                 <div className="flex items-center gap-3">
@@ -1567,25 +1659,45 @@ Best regards`);
                   </div>
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900">
-                      Changes in Version {rightVersion.version || '?'}
+                      Version Comparison
                     </h2>
                     <p className="text-sm text-gray-500">
-                      Compared to Version {leftVersion.version || '?'}
+                      Version {leftVersion.version || '?'} vs Version {rightVersion.version || '?'}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-3 text-xs">
+                  {/* View mode toggle */}
+                  <div className="flex bg-gray-100 rounded-lg p-0.5">
+                    <button
+                      onClick={() => setCompareViewMode('side-by-side')}
+                      className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+                        compareViewMode === 'side-by-side'
+                          ? 'bg-white text-gray-800 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Side by Side
+                    </button>
+                    <button
+                      onClick={() => setCompareViewMode('unified')}
+                      className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+                        compareViewMode === 'unified'
+                          ? 'bg-white text-gray-800 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Unified
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
                     <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-200 rounded-full text-green-700">
                       <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                      +{diff.addedCount} added
+                      +{diff.addedCount}
                     </span>
                     <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 border border-red-200 rounded-full text-red-700">
                       <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                      −{diff.removedCount} removed
-                    </span>
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-full text-gray-600">
-                      {diff.unchangedCount} unchanged
+                      −{diff.removedCount}
                     </span>
                   </div>
                   <button
@@ -1600,8 +1712,8 @@ Best regards`);
                 </div>
               </div>
 
-              {/* Resume document with diff highlights */}
-              <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
+              {/* Content */}
+              <div className="flex-1 overflow-hidden bg-gray-100">
                 {!olderText && !newerText ? (
                   <div className="text-center text-gray-500 py-12">
                     <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -1613,20 +1725,45 @@ Best regards`);
                     <p className="font-medium">No changes detected</p>
                     <p className="text-sm mt-1">Content is identical between these versions.</p>
                   </div>
-                ) : (() => {
-                  const compareSectionHeaders = [
-                    'experience', 'work experience', 'employment', 'professional experience',
-                    'education', 'academic', 'qualifications',
-                    'skills', 'technical skills', 'core competencies', 'expertise', 'key skills',
-                    'summary', 'professional summary', 'objective', 'profile', 'about',
-                    'certifications', 'certificates', 'licenses',
-                    'projects', 'key projects',
-                    'achievements', 'accomplishments', 'awards',
-                    'languages', 'contact', 'personal', 'references', 'hobbies', 'interests'
-                  ];
-                  const firstNonEmpty = diff.lines.findIndex(l => l.text.trim().length > 0);
-
-                  return (
+                ) : compareViewMode === 'side-by-side' ? (
+                  /* Side-by-side view */
+                  <div className="flex h-full gap-0">
+                    {/* Left panel - Older version */}
+                    <div className="flex-1 flex flex-col border-r border-gray-300 min-w-0">
+                      <div className="px-4 py-2.5 bg-red-50 border-b border-gray-200 flex-shrink-0">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 bg-red-400 rounded-full"></span>
+                          <span className="text-sm font-semibold text-red-800">Version {leftVersion.version || '?'}</span>
+                          <span className="text-xs text-red-600 ml-1">(older)</span>
+                        </div>
+                        <p className="text-xs text-red-600 mt-0.5 truncate">{leftVersion.name}</p>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-4">
+                        <div className="bg-white rounded-lg border border-gray-200 p-5">
+                          {sidePairs.map((pair, idx) => renderDiffLine(pair.left, idx, 'left'))}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Right panel - Newer version */}
+                    <div className="flex-1 flex flex-col min-w-0">
+                      <div className="px-4 py-2.5 bg-green-50 border-b border-gray-200 flex-shrink-0">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                          <span className="text-sm font-semibold text-green-800">Version {rightVersion.version || '?'}</span>
+                          <span className="text-xs text-green-600 ml-1">(newer)</span>
+                        </div>
+                        <p className="text-xs text-green-600 mt-0.5 truncate">{rightVersion.name}</p>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-4">
+                        <div className="bg-white rounded-lg border border-gray-200 p-5">
+                          {sidePairs.map((pair, idx) => renderDiffLine(pair.right, idx, 'right'))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Unified view */
+                  <div className="h-full overflow-y-auto p-6">
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-3xl mx-auto">
                       {diff.lines.map((line, idx) => {
                         const trimmed = line.text.trim();
@@ -1637,7 +1774,6 @@ Best regards`);
                           lowerLine === h || lowerLine.startsWith(h + ' ') || lowerLine.endsWith(' ' + h)
                         ) && trimmed.length < 50;
 
-                        // Highlight classes based on diff type
                         const highlightClass = line.type === 'added'
                           ? 'bg-green-100 border-l-4 border-green-500 pl-3'
                           : line.type === 'removed'
@@ -1650,7 +1786,6 @@ Best regards`);
                           ? 'text-red-700'
                           : 'text-gray-800';
 
-                        // Section header
                         if (isHeader) {
                           return (
                             <h3 key={idx} className={`text-base font-bold mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide rounded ${highlightClass} ${textColor}`}>
@@ -1659,16 +1794,6 @@ Best regards`);
                           );
                         }
 
-                        // First line = candidate name
-                        if (idx === firstNonEmpty) {
-                          return (
-                            <h2 key={idx} className={`text-xl font-bold mb-1 rounded ${highlightClass} ${textColor}`}>
-                              {trimmed}
-                            </h2>
-                          );
-                        }
-
-                        // Bullet points
                         if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
                           return (
                             <p key={idx} className={`text-sm leading-relaxed pl-4 mb-0.5 rounded ${highlightClass} ${textColor}`}>
@@ -1677,7 +1802,6 @@ Best regards`);
                           );
                         }
 
-                        // Regular text
                         return (
                           <p key={idx} className={`text-sm leading-relaxed mb-0.5 rounded ${highlightClass} ${textColor}`}>
                             {trimmed}
@@ -1685,8 +1809,8 @@ Best regards`);
                         );
                       })}
                     </div>
-                  );
-                })()}
+                  </div>
+                )}
               </div>
 
               {/* Footer */}
