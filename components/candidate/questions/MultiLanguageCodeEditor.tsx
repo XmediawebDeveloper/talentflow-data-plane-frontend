@@ -882,21 +882,11 @@ export function MultiLanguageCodeEditor({
               Run
             </Button>
 
-            {/* Submit Button */}
-            <Button
-              onClick={handleSubmitCode}
-              disabled={isSubmitting || hasSubmitted || isLocked}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : hasSubmitted ? (
-                <CheckCircle className="w-4 h-4" />
-              ) : (
-                <Terminal className="w-4 h-4" />
-              )}
-              {hasSubmitted ? 'Submitted' : 'Submit Solution'}
-            </Button>
+            {/* Auto-save indicator */}
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <CheckCircle className="w-3 h-3 text-green-500" />
+              <span>Auto-saving...</span>
+            </div>
           </div>
         </div>
 

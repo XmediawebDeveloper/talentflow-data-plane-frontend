@@ -84,10 +84,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const dialog = useGlobalDialog();
   const { user, isTenantAdmin, hasPermission } = useAuth();
 
-  // Permission checks for CRUD operations
-  const canCreateAssessment = user?.permissions?.canCreateAssessment ?? false;
-  const canUpdateAssessment = user?.permissions?.canUpdateAssessment ?? false;
-  const canDeleteAssessment = user?.permissions?.canDeleteAssessment ?? false;
+  // Permission checks for CRUD operations (bypass for tenant admin)
+  const canCreateAssessment = isTenantAdmin || (user?.permissions?.canCreateAssessment ?? false);
+  const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessment ?? false);
+  const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessment ?? false);
 
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
@@ -1881,7 +1881,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <h3 className="text-sm font-medium text-gray-900 line-clamp-1">
                           {assessment.job?.title || stripVersionFromTitle(assessment.title)} - Assessment
                         </h3>
-                        <VersionBadge title={assessment.title} size="sm" variant="secondary" />
+                        <VersionBadge version={assessment.version} size="sm" variant="secondary" />
                         {assessment.sections && (
                           <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs flex items-center gap-1 flex-shrink-0">
                             <Sparkles className="w-3 h-3" />
@@ -2149,7 +2149,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <h3 className="text-sm font-medium text-gray-900">
                               {assessment.job?.title || stripVersionFromTitle(assessment.title)} - Assessment
                             </h3>
-                            <VersionBadge title={assessment.title} size="sm" variant="secondary" />
+                            <VersionBadge version={assessment.version} size="sm" variant="secondary" />
                             {assessment.sections && (
                               <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs flex items-center gap-1 flex-shrink-0">
                                 <Sparkles className="w-3 h-3" />
