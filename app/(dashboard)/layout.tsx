@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
 import Sidebar from '@/components/shared/Sidebar';
 import Header from '@/components/Header';
 import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
@@ -68,41 +68,33 @@ export default function DashboardLayout({
 
   console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
 
-  // Initialize subscription status on mount from cache or tenant data
+  // Initialize subscription status immediately based on tenant data
   useEffect(() => {
     if (isLoading) return;
-
-    // Check localStorage for cached expired plan
-    const cachedExpiredPlan = localStorage.getItem('talentflow_expired_plan');
-    if (cachedExpiredPlan) {
-      try {
-        const data = JSON.parse(cachedExpiredPlan);
-        if (data.subscription_status === 'expired') {
-          console.log('[DASHBOARD] Found cached expired plan - locking menus');
-          setSubscriptionExpired(true);
-          return;
-        }
-      } catch (e) {
-        console.error('[DASHBOARD] Error parsing cached expired plan:', e);
-      }
-    }
 
     // Check tenant subscription status
     if (tenant?.subscription) {
       const status = tenant.subscription.status?.toLowerCase();
       const isExpired = status === 'expired' || status === 'inactive';
       console.log('[DASHBOARD] Tenant subscription status:', status, 'isExpired:', isExpired);
-      setSubscriptionExpired(isExpired);
-    } else {
-      // No subscription data - assume not expired
-      setSubscriptionExpired(false);
+
+      if (isExpired) {
+        // Immediately lock if tenant data says expired
+        console.log('[DASHBOARD] Locking menus - subscription expired');
+        setSubscriptionExpired(true);
+      } else if (status === 'active' || status === 'trial') {
+        // Immediately unlock if tenant says active/trial
+        console.log('[DASHBOARD] Unlocking menus - subscription active');
+        setSubscriptionExpired(false);
+      }
     }
   }, [isLoading, tenant]);
 
   // Listen for subscription-inactive events from API interceptor
+  // If API reports expired (even if tenant data said active), lock the menus
   useEffect(() => {
     const handleSubscriptionInactive = (event: CustomEvent<SubscriptionInactiveDetail>) => {
-      console.log('[DASHBOARD] Subscription inactive detected:', event.detail?.status);
+      console.log('[DASHBOARD] API reported subscription expired - locking menus:', event.detail?.status);
       setSubscriptionExpired(true);
     };
 

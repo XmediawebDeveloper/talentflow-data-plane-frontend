@@ -40,11 +40,11 @@ export default function JobOpeningsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // ✅ RBAC: Get user permissions
-  const { user } = useAuth();
-  const canCreateJd = user?.permissions?.canCreateJD ?? false;
-  const canUpdateJd = user?.permissions?.canUpdateJD ?? false;
-  const canDeleteJd = user?.permissions?.canDeleteJD ?? false;
+  // ✅ RBAC: Get user permissions (bypass for tenant admin)
+  const { user, isTenantAdmin } = useAuth();
+  const canCreateJd = isTenantAdmin || (user?.permissions?.canCreateJD ?? false);
+  const canUpdateJd = isTenantAdmin || (user?.permissions?.canUpdateJD ?? false);
+  const canDeleteJd = isTenantAdmin || (user?.permissions?.canDeleteJD ?? false);
 
   const [jobs, setJobs] = useState<JDResponse[]>([]);
   const [loading, setLoading] = useState(true);
